@@ -19,6 +19,7 @@ let wt_initialized = false;
 // Timeout for lobby room join operations (in milliseconds)
 // This should be long enough for slow connections but short enough to not hang indefinitely
 const ROOM_JOIN_TIMEOUT_MS = 10000; // 10 seconds
+const LOBBY_IO_TIMEOUT_MS = 10000; // 10 seconds
 
 // Deno's WebTransport datagram receive path can wedge room processes when many
 // rooms/clients send clc_move over datagrams concurrently. Keep client->server
@@ -280,10 +281,6 @@ export async function WT_QueryRooms( serverUrl ) {
 
 	Con_DPrintf( 'Querying rooms from ' + url + '\n' );
 
-	// Clear any leftover buffer from previous connection
-	_readBuffer = null;
-	_readBufferOffset = 0;
-
 	let transport = null;
 
 	try {
@@ -305,8 +302,13 @@ export async function WT_QueryRooms( serverUrl ) {
 		await writer.write( request );
 
 		// Read response header
-		const headerResult = await _readExact( reader, 3 );
-		if ( ! headerResult ) {
+		const headerResult = await _readExactWithTimeout(
+			reader,
+			3,
+			LOBBY_IO_TIMEOUT_MS,
+			'Room list request timed out'
+		);
+		if ( headerResult === null ) {
 
 			throw new Error( 'Connection closed' );
 
@@ -314,6 +316,13 @@ export async function WT_QueryRooms( serverUrl ) {
 
 		const msgType = headerResult[ 0 ];
 		const msgLen = headerResult[ 1 ] | ( headerResult[ 2 ] << 8 );
+
+		if ( msgType === LOBBY_ERROR ) {
+
+			const errorMsg = await _readLobbyErrorMessage( reader, msgLen, 'Room list error payload timed out' );
+			throw new Error( errorMsg );
+
+		}
 
 		if ( msgType !== LOBBY_ROOMS ) {
 
@@ -325,11 +334,33 @@ export async function WT_QueryRooms( serverUrl ) {
 		let rooms = [];
 		if ( msgLen > 0 ) {
 
-			const data = await _readExact( reader, msgLen );
-			if ( data ) {
+			const data = await _readExactWithTimeout(
+				reader,
+				msgLen,
+				LOBBY_IO_TIMEOUT_MS,
+				'Room list response timed out'
+			);
+			if ( data === null ) {
+
+				throw new Error( 'Connection closed' );
+
+			}
+
+			try {
 
 				const json = new TextDecoder().decode( data );
-				rooms = JSON.parse( json );
+				const parsedRooms = JSON.parse( json );
+				if ( Array.isArray( parsedRooms ) === false ) {
+
+					throw new Error( 'Invalid room list response' );
+
+				}
+				rooms = parsedRooms;
+
+			} catch ( e ) {
+
+				const parseError = e instanceof Error ? e.message : String( e );
+				throw new Error( 'Failed to parse room list: ' + parseError );
 
 			}
 
@@ -392,10 +423,6 @@ export async function WT_CreateRoom( serverUrl, config ) {
 
 	Con_DPrintf( 'Creating room on ' + url + '\n' );
 
-	// Clear any leftover buffer
-	_readBuffer = null;
-	_readBufferOffset = 0;
-
 	let transport = null;
 
 	try {
@@ -420,8 +447,13 @@ export async function WT_CreateRoom( serverUrl, config ) {
 		await writer.write( request );
 
 		// Read response header
-		const headerResult = await _readExact( reader, 3 );
-		if ( ! headerResult ) {
+		const headerResult = await _readExactWithTimeout(
+			reader,
+			3,
+			LOBBY_IO_TIMEOUT_MS,
+			'Room creation timed out'
+		);
+		if ( headerResult === null ) {
 
 			throw new Error( 'Connection closed' );
 
@@ -429,6 +461,13 @@ export async function WT_CreateRoom( serverUrl, config ) {
 
 		const msgType = headerResult[ 0 ];
 		const msgLen = headerResult[ 1 ] | ( headerResult[ 2 ] << 8 );
+
+		if ( msgType === LOBBY_ERROR ) {
+
+			const errorMsg = await _readLobbyErrorMessage( reader, msgLen, 'Room create error payload timed out' );
+			throw new Error( errorMsg );
+
+		}
 
 		// Expect LOBBY_ROOMS response with the created room
 		if ( msgType !== LOBBY_ROOMS ) {
@@ -439,15 +478,58 @@ export async function WT_CreateRoom( serverUrl, config ) {
 
 		// Read room data
 		let room = null;
-		if ( msgLen > 0 ) {
+		if ( msgLen <= 0 ) {
 
-			const data = await _readExact( reader, msgLen );
-			if ( data ) {
+			throw new Error( 'Server returned empty room response' );
 
-				const json = new TextDecoder().decode( data );
-				room = JSON.parse( json );
+		}
+
+		const data = await _readExactWithTimeout(
+			reader,
+			msgLen,
+			LOBBY_IO_TIMEOUT_MS,
+			'Room create response timed out'
+		);
+		if ( data === null ) {
+
+			throw new Error( 'Connection closed' );
+
+		}
+
+		try {
+
+			const json = new TextDecoder().decode( data );
+			const parsed = JSON.parse( json );
+
+			// Legacy server compatibility: older builds returned a room list
+			// instead of the created room object.
+			if ( Array.isArray( parsed ) === true ) {
+
+				if ( parsed.length <= 0 ) {
+
+					throw new Error( 'Server returned an empty room list' );
+
+				}
+
+				const newestRoom = parsed[ parsed.length - 1 ];
+				room = newestRoom;
+
+			} else {
+
+				room = parsed;
 
 			}
+
+		} catch ( e ) {
+
+			const parseError = e instanceof Error ? e.message : String( e );
+			throw new Error( 'Failed to parse room create response: ' + parseError );
+
+		}
+
+		if ( room == null || typeof room !== 'object' || typeof room.id !== 'string' || room.id.length <= 0 ) {
+
+			throw new Error( 'Invalid room response from server' );
 
 		}
 
@@ -455,7 +537,7 @@ export async function WT_CreateRoom( serverUrl, config ) {
 		writer.close().catch( () => {} );
 		transport.close();
 
-		Con_Printf( 'Created room: ' + ( room ? room.id : 'unknown' ) + '\n' );
+		Con_Printf( 'Created room: ' + room.id + '\n' );
 		return room;
 
 	} catch ( e ) {
@@ -480,29 +562,88 @@ _readExact
 Read exactly n bytes from a stream reader
 =============
 */
-// Buffered reader state - stores leftover bytes between reads
-let _readBuffer = null;
-let _readBufferOffset = 0;
+// Per-reader buffer state (shared global buffer breaks concurrent lobby requests)
+const _lobbyReaderBuffers = new WeakMap();
+
+function _getLobbyReaderBuffer( reader ) {
+
+	let buf = _lobbyReaderBuffers.get( reader );
+	if ( buf == null ) {
+
+		buf = { data: null, offset: 0 };
+		_lobbyReaderBuffers.set( reader, buf );
+
+	}
+
+	return buf;
+
+}
+
+function _timeoutAfter( timeoutMs, timeoutMessage ) {
+
+	return new Promise( ( _, reject ) => {
+
+		setTimeout( () => reject( new Error( timeoutMessage ) ), timeoutMs );
+
+	} );
+
+}
+
+async function _readExactWithTimeout( reader, n, timeoutMs, timeoutMessage ) {
+
+	return await Promise.race( [
+		_readExact( reader, n ),
+		_timeoutAfter( timeoutMs, timeoutMessage )
+	] );
+
+}
+
+async function _readLobbyErrorMessage( reader, msgLen, timeoutMessage ) {
+
+	if ( msgLen <= 0 ) {
+
+		return 'Lobby request failed';
+
+	}
+
+	const errorData = await _readExactWithTimeout( reader, msgLen, LOBBY_IO_TIMEOUT_MS, timeoutMessage );
+	if ( errorData === null ) {
+
+		return 'Lobby request failed';
+
+	}
+
+	const errorMsg = new TextDecoder().decode( errorData ).trim();
+	if ( errorMsg.length <= 0 ) {
+
+		return 'Lobby request failed';
+
+	}
+
+	return errorMsg;
+
+}
 
 async function _readExact( reader, n ) {
 
 	const result = new Uint8Array( n );
 	let offset = 0;
+	const buf = _getLobbyReaderBuffer( reader );
 
 	// First, use any leftover bytes from previous read
-	if ( _readBuffer && _readBufferOffset < _readBuffer.length ) {
+	if ( buf.data !== null && buf.offset < buf.data.length ) {
 
-		const available = _readBuffer.length - _readBufferOffset;
+		const available = buf.data.length - buf.offset;
 		const bytesToCopy = Math.min( available, n );
-		result.set( _readBuffer.subarray( _readBufferOffset, _readBufferOffset + bytesToCopy ), 0 );
+		result.set( buf.data.subarray( buf.offset, buf.offset + bytesToCopy ), 0 );
 		offset = bytesToCopy;
-		_readBufferOffset += bytesToCopy;
+		buf.offset += bytesToCopy;
 
 		// Clear buffer if fully consumed
-		if ( _readBufferOffset >= _readBuffer.length ) {
+		if ( buf.offset >= buf.data.length ) {
 
-			_readBuffer = null;
-			_readBufferOffset = 0;
+			buf.data = null;
+			buf.offset = 0;
 
 		}
 
@@ -517,6 +658,11 @@ async function _readExact( reader, n ) {
 			return null;
 
 		}
+		if ( value == null ) {
+
+			return null;
+
+		}
 
 		const bytesToCopy = Math.min( value.length, n - offset );
 		result.set( value.subarray( 0, bytesToCopy ), offset );
@@ -525,8 +671,8 @@ async function _readExact( reader, n ) {
 		// Save leftover bytes for next read
 		if ( bytesToCopy < value.length ) {
 
-			_readBuffer = value;
-			_readBufferOffset = bytesToCopy;
+			buf.data = value;
+			buf.offset = bytesToCopy;
 
 		}
 

@@ -1366,9 +1366,16 @@ function M_GameOptions_Key( key ) {
 						hostName: _cl_name ? _cl_name.string : 'Player'
 					} ).then( ( room ) => {
 
-						if ( room && room.id ) {
+						if ( room != null && typeof room.id === 'string' && room.id.length > 0 ) {
 
-							Con_Printf( 'Room created: ' + room.id + ( room.port ? ' on port ' + room.port : '' ) + '\n' );
+							let roomInfo = room.id;
+							if ( room.port != null ) {
+
+								roomInfo += ' on port ' + room.port;
+
+							}
+
+							Con_Printf( 'Room created: ' + roomInfo + '\n' );
 							// Update browser URL so user can share it
 							const shareUrl = window.location.origin + window.location.pathname + '?room=' + room.id;
 							history.replaceState( null, '', shareUrl );
@@ -1380,7 +1387,7 @@ function M_GameOptions_Key( key ) {
 							// Connect to the remote server as a client (not local game)
 							// The remote server is the authoritative game server
 							let connectUrl;
-							if ( room.port ) {
+							if ( room.port != null ) {
 
 								// Connect directly to room server on its port
 								const urlObj = new URL( serverUrl.replace( /^wt(s)?:\/\//, 'https://' ) );
@@ -1396,8 +1403,12 @@ function M_GameOptions_Key( key ) {
 							}
 
 							Cbuf_AddText( 'connect "' + connectUrl + '"\n' );
+							return;
 
 						}
+
+						Con_Printf( 'Failed to create room: Invalid room response from server\n' );
+						if ( _SCR_EndLoadingPlaque ) _SCR_EndLoadingPlaque();
 
 					} ).catch( ( e ) => {
 
