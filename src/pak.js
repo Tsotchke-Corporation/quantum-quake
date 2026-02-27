@@ -41,6 +41,11 @@ const loadedPacks = [];
 // Virtual files (for loose files not in pak)
 const virtualFiles = new Map();
 
+// Base path for on-demand loose file fetching
+// Browser: '' (relative URLs like 'maps/foo.bsp')
+// Deno: '/opt/three-quake/' (absolute filesystem path)
+let looseFileBasePath = '';
+
 /*
 =================
 COM_LoadPackFile
@@ -179,6 +184,46 @@ export function COM_FindFile( filename ) {
 	}
 
 	return null;
+
+}
+
+/*
+=================
+COM_SetLooseFileBasePath
+
+Sets the base path for on-demand loose file fetching.
+Browser: '' (default, uses relative URLs)
+Deno: '/opt/three-quake/' (absolute filesystem path)
+=================
+*/
+export function COM_SetLooseFileBasePath( basePath ) {
+
+	looseFileBasePath = basePath;
+
+}
+
+/*
+=================
+COM_EnsureFile
+
+Checks if a file is available in pak or virtualFiles.
+If not, attempts to fetch it on demand and cache it.
+Returns a Promise<boolean>.
+=================
+*/
+export async function COM_EnsureFile( filename ) {
+
+	// Already available in pak or virtualFiles?
+	if ( COM_FindFile( filename ) !== null ) {
+
+		return true;
+
+	}
+
+	// Construct URL from base path + filename
+	const url = looseFileBasePath + filename;
+
+	return await COM_PreloadLooseFile( filename, url );
 
 }
 

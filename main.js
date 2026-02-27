@@ -4,7 +4,7 @@
 import { Sys_Init, Sys_Printf, Sys_Error } from './src/sys.js';
 import { COM_InitArgv } from './src/common.js';
 import { Host_Init, Host_Frame, Host_Shutdown } from './src/host.js';
-import { COM_FetchPak, COM_AddPack, COM_PreloadMaps } from './src/pak.js';
+import { COM_FetchPak, COM_AddPack } from './src/pak.js';
 import { Cbuf_AddText } from './src/cmd.js';
 import { cls, cl } from './src/client.js';
 import { sv } from './src/server.js';
@@ -54,19 +54,6 @@ async function main() {
 			Sys_Printf( 'Warning: pak0.pak not found - game data will be missing\\n' );
 
 		}
-
-
-		// Preload custom deathmatch maps (not in PAK files)
-		await COM_PreloadMaps( [
-			'spinev2',   // Headshot
-			'rapture1',  // Danimal
-			'naked5',    // Gandhi
-			'zed',       // Vondur
-			'efdm9',     // Mr Fribbles
-			'baldm6',    // Bal
-			'edc',       // Tyrann
-			'ultrav'     // Escher
-		] );
 
 		await Host_Init( parms );
 

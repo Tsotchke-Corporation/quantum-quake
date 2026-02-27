@@ -32,6 +32,7 @@ import { hostname } from './net_main.js';
 import { SV_LinkEdict } from './world.js';
 import { SV_ClientPrintf, SV_BroadcastPrintf,
 	Host_ShutdownServer, Host_Shutdown } from './host.js';
+import { COM_FindFile, COM_EnsureFile } from './pak.js';
 
 export let noclip_anglehack = false;
 
@@ -101,6 +102,31 @@ function Host_Map_f() {
 	if ( cmd_source !== src_command )
 		return;
 
+	const name = Cmd_Argv( 1 );
+	const filename = 'maps/' + name + '.bsp';
+
+	// If the map file isn't loaded yet, fetch it on demand
+	if ( COM_FindFile( filename ) === null ) {
+
+		Con_Printf( 'Fetching %s...\n', filename );
+		COM_EnsureFile( filename ).then( ( success ) => {
+
+			if ( success ) {
+
+				// Re-issue the map command now that the file is cached
+				Cbuf_AddText( 'map ' + name + '\n' );
+
+			} else {
+
+				Con_Printf( 'Couldn\'t find map: %s\n', name );
+
+			}
+
+		} );
+		return;
+
+	}
+
 	cls.demonum = - 1; // stop demo loop in case this fails
 
 	CL_Disconnect();
@@ -119,7 +145,6 @@ function Host_Map_f() {
 	cls.mapstring += '\n';
 
 	svs.serverflags = 0; // haven't completed an episode yet
-	const name = Cmd_Argv( 1 );
 
 	SV_SpawnServer( name );
 
@@ -158,8 +183,31 @@ function Host_Changelevel_f() {
 
 	}
 
-	SV_SaveSpawnparms();
 	const level = Cmd_Argv( 1 );
+	const filename = 'maps/' + level + '.bsp';
+
+	// If the map file isn't loaded yet, fetch it on demand
+	if ( COM_FindFile( filename ) === null ) {
+
+		Con_Printf( 'Fetching %s...\n', filename );
+		COM_EnsureFile( filename ).then( ( success ) => {
+
+			if ( success ) {
+
+				Cbuf_AddText( 'changelevel ' + level + '\n' );
+
+			} else {
+
+				Con_Printf( 'Couldn\'t find map: %s\n', level );
+
+			}
+
+		} );
+		return;
+
+	}
+
+	SV_SaveSpawnparms();
 	SV_SpawnServer( level );
 	// Note: SV_SpawnServer handles client reconnection internally via SV_SendReconnect
 	// which calls Host_Reconnect_f to reset cls.signon. We do NOT call CL_EstablishConnection
@@ -1054,6 +1102,29 @@ function Host_Loadgame_f() {
 
 	const mapname = nextLine();
 	const time = parseFloat( nextLine() ) || 0;
+
+	// If the map file isn't loaded yet, fetch it on demand
+	const mapfilename = 'maps/' + mapname + '.bsp';
+	if ( COM_FindFile( mapfilename ) === null ) {
+
+		Con_Printf( 'Fetching %s...\n', mapfilename );
+		COM_EnsureFile( mapfilename ).then( ( success ) => {
+
+			if ( success ) {
+
+				// Re-issue the load command (will re-parse save data from localStorage)
+				Cbuf_AddText( 'load ' + name + '\n' );
+
+			} else {
+
+				Con_Printf( 'Couldn\'t find map: %s\n', mapname );
+
+			}
+
+		} );
+		return;
+
+	}
 
 	CL_Disconnect();
 
