@@ -13,6 +13,7 @@ import { Con_Printf, Con_DPrintf, SZ_Clear,
 	msg_readcount, msg_badread,
 	net_message, standard_quake } from './common.js';
 import { Sys_Error, Sys_FloatTime } from './sys.js';
+import { COM_FindFile, COM_EnsureFile } from './pak.js';
 import { Cbuf_AddText } from './cmd.js';
 import { Cmd_ExecuteString } from './cmd.js';
 import { src_command } from './cmd.js';
@@ -328,6 +329,28 @@ export function CL_ParseServerInfo() {
 	//
 	// now we try to load everything else until a cache allocation fails
 	//
+
+	// Lazy-load: if the world BSP isn't cached yet, fetch it on demand and reconnect
+	if ( nummodels > 1 && COM_FindFile( model_precache[ 1 ] ) === null ) {
+
+		const addr = cls.netcon != null ? cls.netcon.address : null;
+		Con_Printf( 'Fetching %s...\n', model_precache[ 1 ] );
+		COM_EnsureFile( model_precache[ 1 ] ).then( ( success ) => {
+
+			if ( success && addr != null ) {
+
+				Cbuf_AddText( 'connect "' + addr + '"\n' );
+
+			} else {
+
+				Con_Printf( 'Couldn\'t fetch %s\n', model_precache[ 1 ] );
+
+			}
+
+		} );
+		return;
+
+	}
 
 	for ( i = 1; i < nummodels; i ++ ) {
 
