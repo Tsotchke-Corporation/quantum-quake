@@ -3,6 +3,7 @@ import { cvar_t, Cvar_RegisterVariable, Cvar_SetValue } from './cvar.js';
 import { renderer } from './vid.js';
 import { isXRActive } from './webxr.js';
 import { Con_Printf } from './common.js';
+import { cl, cl_dlights, cl_entities, cl_static_entities } from './client.js';
 
 const PHASE_TEXTURE_SIZE = 128;
 const PHASE_TEXEL_COUNT = PHASE_TEXTURE_SIZE * PHASE_TEXTURE_SIZE;
@@ -13,7 +14,9 @@ const RT_LEAF_TRIANGLES = 8;
 const RT_MAX_BVH_DEPTH = 24;
 const RT_BVH_REBUILD_INTERVAL = 45;
 const RT_TEX_WIDTH = 1024;
-const RT_MAX_EMISSIVE_LIGHTS = 24;
+const RT_MAX_EMISSIVE_LIGHTS = 40;
+const RT_RESERVED_DYNAMIC_LIGHTS = 12;
+const RT_RESERVED_MODEL_EMITTERS = 12;
 
 const _rtSize = new THREE.Vector2();
 const _savedClearColor = new THREE.Color();
@@ -85,6 +88,11 @@ for ( let i = 0; i < RT_MAX_EMISSIVE_LIGHTS; i ++ ) {
 
 }
 let _rtEmissiveLightCount = 0;
+let _rtStaticLightCount = 0;
+let _rtDynamicLightCount = 0;
+let _rtModelEmitterLightCount = 0;
+
+const _rtEmitterNameHints = [ 'flame', 'torch', 'candle', 'fire', 'brazier', 'lava' ];
 
 let _frameCounter = 0;
 let _fallbackSeed = 1;
@@ -322,6 +330,7 @@ uniform float uFrame;
 uniform float uSpp;
 uniform float uBounces;
 uniform float uStrength;
+uniform float uDebugWhite;
 uniform vec2 uPixelStep;
 
 const int MAX_SPP = 4;
@@ -435,10 +444,11 @@ vec3 sampleEmissiveLights( vec3 hitPos, vec3 hitNormal ) {
 		if ( distSq > radius * radius ) continue;
 		float invDist = inversesqrt( distSq + 1e-4 );
 		vec3 L = toLight * invDist;
-		float nDotL = abs( dot( hitNormal, L ) );
+		float nDotL = max( dot( hitNormal, L ), 0.0 );
 		if ( nDotL <= 0.0 ) continue;
 		float lightDist = 1.0 / max( invDist, 1e-5 );
-		float shadowMax = max( lightDist - 0.12, 0.001 );
+		float shadowInset = 0.12 + min( radius * 0.18, 10.0 );
+		float shadowMax = max( lightDist - shadowInset, 0.001 );
 		if ( traceAny( hitPos + hitNormal * 0.04, L, shadowMax ) ) continue;
 		float atten = 1.0 / ( 1.0 + distSq / ( radius * radius ) );
 		light += uEmissiveLightColor[ i ] * ( nDotL * atten );
@@ -569,13 +579,18 @@ bool traceAny( vec3 ro, vec3 rd, float tLimit ) {
 }
 
 void main() {
-	float sampleCount = max( 1.0, min( uSpp, float( MAX_SPP ) ) );
+	float debugMix = step( 0.5, uDebugWhite );
+	float sampleCount = debugMix > 0.5
+		? 1.0
+		: max( 1.0, min( uSpp, float( MAX_SPP ) ) );
 	vec3 total = vec3( 0.0 );
 
 	for ( int s = 0; s < MAX_SPP; s ++ ) {
 		if ( float( s ) >= sampleCount ) break;
 
-		vec2 jitter = ( hash22( vUv * vec2( 983.0, 577.0 ) + vec2( float( s ) * 13.0, uFrame * 0.19 ) ) - 0.5 ) * uPixelStep;
+		vec2 jitter = debugMix > 0.5
+			? vec2( 0.0 )
+			: ( hash22( vUv * vec2( 983.0, 577.0 ) + vec2( float( s ) * 13.0, uFrame * 0.19 ) ) - 0.5 ) * uPixelStep;
 		vec2 uv = clamp( vUv + jitter, vec2( 0.0005 ), vec2( 0.9995 ) );
 		vec3 basePrimary = texture2D( uBaseTex, uv ).rgb;
 		vec2 ndc = uv * 2.0 - 1.0;
@@ -617,16 +632,39 @@ void main() {
 			vec3 geoNormal = normalize( hitNormal );
 			vec3 bounceNormal = dot( geoNormal, rd ) < 0.0 ? geoNormal : - geoNormal;
 			vec3 lightDir = normalize( vec3( 0.32, 0.84, 0.21 ) );
-			float nDotL = abs( dot( geoNormal, lightDir ) );
+			float nDotL = max( dot( bounceNormal, lightDir ), 0.0 );
 			float sunVisibility = 1.0;
 			if ( nDotL > 0.0001 && traceAny( hitPos + bounceNormal * 0.04, lightDir, 2048.0 ) ) sunVisibility = 0.0;
-			float hemi = abs( geoNormal.y ) * 0.5 + 0.5;
-			vec3 direct = hitAlbedo * ( 0.006 + 1.02 * nDotL * sunVisibility );
-			vec3 ambient = hitAlbedo * ( 0.003 + 0.015 * hemi );
-			vec3 emissiveDirect = hitAlbedo * sampleEmissiveLights( hitPos + bounceNormal * 0.02, geoNormal ) * ( 0.46 + 0.52 * uStrength );
-			vec3 emissiveSelf = hitEmission * ( 0.42 + 0.46 * uStrength );
+			float hemi = bounceNormal.y * 0.5 + 0.5;
+			vec3 inspectDir = normalize( vec3( -0.42, 0.76, 0.37 ) );
+			float inspectN = max( dot( bounceNormal, inspectDir ), 0.0 );
+			float inspectVisibility = 1.0;
+			if ( inspectN > 0.0001 && traceAny( hitPos + bounceNormal * 0.04, inspectDir, 512.0 ) ) inspectVisibility = 0.0;
+			vec3 directSun = hitAlbedo * ( 0.010 + 0.82 * nDotL * sunVisibility );
+			vec3 directDebug = hitAlbedo * ( 0.070 + 1.08 * inspectN * inspectVisibility );
+			vec3 ambientBase = hitAlbedo * ( 0.022 + 0.060 * hemi );
+			vec3 ambientDebug = hitAlbedo * ( 0.050 + 0.160 * hemi );
+			vec3 direct = mix( directSun, directDebug, debugMix );
+			vec3 ambient = mix( ambientBase, ambientDebug, debugMix );
+			vec3 emissiveDirect = hitAlbedo * sampleEmissiveLights( hitPos + bounceNormal * 0.02, bounceNormal ) * ( 0.46 + 0.52 * uStrength ) * mix( 1.0, 1.35, debugMix );
+			vec3 emissiveSelf = hitEmission * ( 0.42 + 0.46 * uStrength ) * ( 1.0 - debugMix );
 			radiance += throughput * ( direct + ambient + emissiveDirect ) * ( 0.58 + 0.62 * uStrength );
 			radiance += throughput * emissiveSelf;
+
+			if ( debugMix > 0.5 ) {
+
+				float ao = 1.0;
+				vec3 t = normalize( abs( bounceNormal.z ) < 0.999 ? cross( vec3( 0.0, 0.0, 1.0 ), bounceNormal ) : cross( vec3( 1.0, 0.0, 0.0 ), bounceNormal ) );
+				vec3 b = cross( bounceNormal, t );
+				vec3 aoDir0 = normalize( bounceNormal * 0.84 + t * 0.39 );
+				vec3 aoDir1 = normalize( bounceNormal * 0.82 - t * 0.26 + b * 0.33 );
+				if ( traceAny( hitPos + bounceNormal * 0.04, aoDir0, 128.0 ) ) ao -= 0.18;
+				if ( traceAny( hitPos + bounceNormal * 0.04, aoDir1, 128.0 ) ) ao -= 0.16;
+				ao = clamp( ao, 0.32, 1.0 );
+				radiance *= ao;
+				break;
+
+			}
 
 			throughput *= clamp( hitAlbedo, vec3( 0.12 ), vec3( 1.35 ) ) * 0.74;
 			float maxCh = max( throughput.r, max( throughput.g, throughput.b ) );
@@ -701,9 +739,9 @@ void main() {
 	vec3 ray = texture2D( uRayTex, vUv ).rgb;
 
 	if ( uDebugWhite > 0.5 ) {
-		vec3 outColor = ray * ( uExposure * uGain * 1.15 );
+		vec3 outColor = ray * ( uExposure * uGain * 2.85 );
 		outColor = outColor / ( vec3( 1.0 ) + outColor );
-		outColor = pow( max( outColor, vec3( 0.0 ) ), vec3( 0.92 ) );
+		outColor = pow( max( outColor, vec3( 0.0 ) ), vec3( 0.86 ) );
 		gl_FragColor = vec4( outColor, 1.0 );
 		return;
 	}
@@ -711,14 +749,14 @@ void main() {
 	vec3 lumaW = vec3( 0.2126, 0.7152, 0.0722 );
 	float baseLum = max( dot( base, lumaW ), 0.0002 );
 	float rayLum = max( dot( ray, lumaW ), 0.0 );
-	float relLight = clamp( rayLum / baseLum, 0.30, 3.80 );
+	float relLight = clamp( rayLum / baseLum, 0.70, 3.80 );
 	vec3 litBase = base * mix( 1.0, relLight, 0.90 );
 	vec3 rayChroma = rayLum > 0.0001 ? ( ray / rayLum ) : vec3( 1.0 );
 	rayChroma = clamp( rayChroma, vec3( 0.65 ), vec3( 1.6 ) );
 	vec3 tinted = litBase * mix( vec3( 1.0 ), rayChroma, 0.16 + 0.20 * uStrength );
 	float blend = clamp( 0.20 + 0.22 * uStrength, 0.0, 0.62 );
 	vec3 outColor = mix( base, tinted, blend );
-	outColor = max( outColor, base * 0.08 );
+	outColor = max( outColor, base * 0.26 );
 	outColor *= ( uExposure * uGain );
 	outColor = outColor / ( vec3( 1.0 ) + outColor );
 	outColor = pow( max( outColor, vec3( 0.0 ) ), vec3( 0.92 ) );
@@ -977,6 +1015,9 @@ function _disposeBvhTextures() {
 	_bvhTriTexSize.set( 1, 1 );
 	_bvhNodeTexSize.set( 1, 1 );
 	_rtEmissiveLightCount = 0;
+	_rtStaticLightCount = 0;
+	_rtDynamicLightCount = 0;
+	_rtModelEmitterLightCount = 0;
 	for ( let i = 0; i < RT_MAX_EMISSIVE_LIGHTS; i ++ ) {
 
 		_rtEmissiveLightRadius[ i ] = 0;
@@ -987,9 +1028,38 @@ function _disposeBvhTextures() {
 
 }
 
-function _updateRaytraceEmissiveLights( emissiveBins ) {
+function _countActiveRuntimeDlights() {
+
+	if ( cl_dlights == null )
+		return 0;
+
+	const now = cl != null && typeof cl.time === 'number' ? cl.time : 0;
+	let active = 0;
+	for ( let i = 0; i < cl_dlights.length; i ++ ) {
+
+		const light = cl_dlights[ i ];
+		if ( light == null || light.origin == null )
+			continue;
+		const radius = _toNumber( light.radius, 0 );
+		if ( radius <= 12 )
+			continue;
+		const die = _toNumber( light.die, now + 1.0 );
+		if ( die + 0.015 < now )
+			continue;
+		active ++;
+
+	}
+
+	return active;
+
+}
+
+function _updateRaytraceEmissiveLights( emissiveBins, cameraX = 0, cameraY = 0, cameraZ = 0, useCameraBias = false ) {
 
 	_rtEmissiveLightCount = 0;
+	_rtStaticLightCount = 0;
+	_rtDynamicLightCount = 0;
+	_rtModelEmitterLightCount = 0;
 	if ( emissiveBins == null || emissiveBins.size === 0 ) {
 
 		for ( let i = 0; i < RT_MAX_EMISSIVE_LIGHTS; i ++ )
@@ -1012,39 +1082,88 @@ function _updateRaytraceEmissiveLights( emissiveBins ) {
 		const lum = r * 0.2126 + g * 0.7152 + b * 0.0722;
 		if ( lum < 0.025 ) continue;
 
-		const score = lum * Math.sqrt( Math.max( bin.weight, 1.0 ) );
-		const radius = _clamp( 72 + Math.sqrt( Math.max( bin.weight, 1.0 ) ) * 14, 72, 640 );
-		const intensity = _clamp( 0.9 + lum * 3.2, 0.7, 4.8 );
+			let distSq = 1e20;
+			let proximity = 1.0;
+			if ( useCameraBias ) {
+
+				const dx = x - cameraX;
+				const dy = y - cameraY;
+				const dz = z - cameraZ;
+				distSq = dx * dx + dy * dy + dz * dz;
+				proximity = 0.08 + 0.92 / ( 1.0 + distSq / ( 260 * 260 ) );
+
+			}
+			const score = lum * Math.sqrt( Math.max( bin.weight, 1.0 ) ) * proximity;
+			const radius = _clamp( 72 + Math.sqrt( Math.max( bin.weight, 1.0 ) ) * 14, 72, 640 );
+			const intensity = _clamp( 0.9 + lum * 3.2, 0.7, 4.8 );
 		lights.push( {
 			x: x,
 			y: y,
 			z: z,
 			r: r * intensity,
 			g: g * intensity,
-			b: b * intensity,
-			radius: radius,
-			score: score
+				b: b * intensity,
+				radius: radius,
+				score: score,
+				distSq: distSq
+			} );
+
+		}
+
+		const activeDlights = _countActiveRuntimeDlights();
+		const reserveDynamic = Math.min(
+			RT_RESERVED_DYNAMIC_LIGHTS,
+			Math.max( 2, activeDlights + 2 )
+		);
+		const reserveModelEmitters = _clampInt( RT_RESERVED_MODEL_EMITTERS, 0, RT_MAX_EMISSIVE_LIGHTS - reserveDynamic );
+		const mapLightBudget = Math.max( 1, RT_MAX_EMISSIVE_LIGHTS - reserveDynamic - reserveModelEmitters );
+		const count = Math.min( mapLightBudget, lights.length );
+		const selectedLights = [];
+		if ( useCameraBias && count > 4 && lights.length > count ) {
+
+			const nearBudget = Math.min( count, Math.max( 6, Math.floor( count * 0.45 ) ) );
+			const nearLights = lights.slice();
+			nearLights.sort( function ( a, b ) {
+
+				return a.distSq - b.distSq;
+
+			} );
+			for ( let i = 0; i < nearLights.length && selectedLights.length < nearBudget; i ++ ) {
+
+				selectedLights.push( nearLights[ i ] );
+
+			}
+
+		}
+
+		const rankedLights = lights.slice();
+		rankedLights.sort( function ( a, b ) {
+
+			return b.score - a.score;
+
 		} );
 
-	}
+		for ( let i = 0; i < rankedLights.length && selectedLights.length < count; i ++ ) {
 
-	lights.sort( function ( a, b ) {
+			const light = rankedLights[ i ];
+			if ( selectedLights.indexOf( light ) !== -1 )
+				continue;
+			selectedLights.push( light );
 
-		return b.score - a.score;
+		}
 
-	} );
+		const selectedCount = selectedLights.length;
+		_rtEmissiveLightCount = selectedCount;
+		_rtStaticLightCount = selectedCount;
+		for ( let i = 0; i < selectedCount; i ++ ) {
 
-	const count = Math.min( RT_MAX_EMISSIVE_LIGHTS, lights.length );
-	_rtEmissiveLightCount = count;
-	for ( let i = 0; i < count; i ++ ) {
+			const light = selectedLights[ i ];
+			_rtEmissiveLightPos[ i ].set( light.x, light.y, light.z );
+			_rtEmissiveLightColor[ i ].set( light.r, light.g, light.b );
+			_rtEmissiveLightRadius[ i ] = light.radius;
 
-		const light = lights[ i ];
-		_rtEmissiveLightPos[ i ].set( light.x, light.y, light.z );
-		_rtEmissiveLightColor[ i ].set( light.r, light.g, light.b );
-		_rtEmissiveLightRadius[ i ] = light.radius;
-
-	}
-	for ( let i = count; i < RT_MAX_EMISSIVE_LIGHTS; i ++ ) {
+		}
+		for ( let i = selectedCount; i < RT_MAX_EMISSIVE_LIGHTS; i ++ ) {
 
 		_rtEmissiveLightRadius[ i ] = 0;
 		_rtEmissiveLightPos[ i ].set( 0, 0, 0 );
@@ -1054,57 +1173,269 @@ function _updateRaytraceEmissiveLights( emissiveBins ) {
 
 }
 
-function _getMaterialEmissionHint( material, diffuseMap ) {
+function _isModelEmitterName( modelName ) {
 
-	let key = '';
-	if ( material != null && material.name != null )
-		key += String( material.name );
-	if ( diffuseMap != null ) {
+	if ( typeof modelName !== 'string' || modelName.length === 0 )
+		return false;
 
-		if ( diffuseMap.name != null )
-			key += ' ' + String( diffuseMap.name );
-		const mapData = diffuseMap.source != null ? diffuseMap.source.data : null;
-		if ( mapData != null ) {
+	const lower = modelName.toLowerCase();
+	for ( let i = 0; i < _rtEmitterNameHints.length; i ++ ) {
 
-			const src = mapData.currentSrc != null ? mapData.currentSrc : ( mapData.src != null ? mapData.src : ( mapData.id != null ? mapData.id : null ) );
-			if ( typeof src === 'string' && src.length > 0 )
-				key += ' ' + src.substring( 0, 96 );
-
-		}
+		if ( lower.indexOf( _rtEmitterNameHints[ i ] ) !== -1 )
+			return true;
 
 	}
 
-	key = key.toLowerCase();
-	if ( key.length === 0 ) return 0;
-	if ( /(torch|flame|fire|lava|glow|light|lamp|tele|portal|energy|bolt|plasma|rune)/.test( key ) )
-		return 1.0;
-	if ( /(window|slime|water|sky)/.test( key ) )
-		return 0.45;
-	return 0;
+	return false;
 
 }
 
-function _accumulateDiffuseEmission( r, g, b, hint, outEmission ) {
+function _injectRuntimeModelEmittersToRayLights( camera ) {
 
-	const lum = r * 0.2126 + g * 0.7152 + b * 0.0722;
-	const maxC = Math.max( r, Math.max( g, b ) );
-	const minC = Math.min( r, Math.min( g, b ) );
-	const chroma = maxC - minC;
-	if ( hint <= 0.001 && maxC < 0.58 ) return;
-	const threshold = hint > 0.001 ? 0.30 : 0.68;
-	const bright = _clamp( ( lum - threshold ) / Math.max( 1e-4, 1.0 - threshold ), 0.0, 1.0 );
-	if ( bright <= 0.0001 ) return;
+	let count = _clampInt( _rtStaticLightCount, 0, RT_MAX_EMISSIVE_LIGHTS );
+	_rtModelEmitterLightCount = 0;
+	_rtEmissiveLightCount = count;
 
-	const warmBoost = r > g * 1.08 && g > b * 1.02 ? 1.15 : 1.0;
-	const coolBoost = b > r * 1.10 ? 1.10 : 1.0;
-	const hueBoost = Math.max( warmBoost, coolBoost );
-	const chromaWeight = hint > 0.001 ? ( 0.45 + chroma * 0.9 ) : ( chroma * 1.7 );
-	const strength = bright * chromaWeight * ( 0.8 + hint * 2.4 ) * hueBoost;
-	if ( strength <= 0.0001 ) return;
+	const reserveDynamic = Math.min(
+		RT_RESERVED_DYNAMIC_LIGHTS,
+		Math.max( 2, _countActiveRuntimeDlights() + 2 )
+	);
+	const maxModelSlots = _clampInt(
+		RT_MAX_EMISSIVE_LIGHTS - count - reserveDynamic,
+		0,
+		RT_MAX_EMISSIVE_LIGHTS - count
+	);
+	if ( maxModelSlots <= 0 )
+		return;
 
-	outEmission[ 0 ] += r * strength;
-	outEmission[ 1 ] += g * strength;
-	outEmission[ 2 ] += b * strength;
+	const candidates = [];
+	const dedupe = new Set();
+	let cameraX = 0;
+	let cameraY = 0;
+	let cameraZ = 0;
+	let hasCamera = false;
+	if ( camera != null && camera.getWorldPosition != null ) {
+
+		camera.getWorldPosition( _tmpBvhCamPos );
+		cameraX = _tmpBvhCamPos.x;
+		cameraY = _tmpBvhCamPos.y;
+		cameraZ = _tmpBvhCamPos.z;
+		hasCamera = true;
+
+	}
+
+	const now = cl != null && typeof cl.time === 'number' ? cl.time : 0;
+
+	function pushEmitterCandidate( ent ) {
+
+		if ( ent == null || ent.model == null || ent.origin == null )
+			return;
+
+		const modelName = ent.model.name != null ? String( ent.model.name ) : '';
+		if ( _isModelEmitterName( modelName ) === false )
+			return;
+
+		const lower = modelName.toLowerCase();
+		const px = _toNumber( ent.origin[ 0 ], 0 );
+		const py = _toNumber( ent.origin[ 1 ], 0 );
+		const pz = _toNumber( ent.origin[ 2 ], 0 );
+		if (
+			Number.isFinite( px ) === false ||
+			Number.isFinite( py ) === false ||
+			Number.isFinite( pz ) === false
+		) return;
+
+		const dedupeKey =
+			String( Math.round( px * 0.1 ) ) + ':' +
+			String( Math.round( py * 0.1 ) ) + ':' +
+			String( Math.round( pz * 0.1 ) );
+		if ( dedupe.has( dedupeKey ) )
+			return;
+		dedupe.add( dedupeKey );
+
+		let radius = 180;
+		let warmR = 1.18;
+		let warmG = 0.78;
+		let warmB = 0.42;
+		let energy = 1.0;
+		if ( lower.indexOf( 'flame2' ) !== -1 ) {
+
+			radius = 240;
+			energy = 1.32;
+
+		} else if ( lower.indexOf( 'flame' ) !== -1 ) {
+
+			radius = 205;
+			energy = 1.08;
+
+		} else if ( lower.indexOf( 'brazier' ) !== -1 ) {
+
+			radius = 280;
+			energy = 1.44;
+
+		} else if ( lower.indexOf( 'torch' ) !== -1 ) {
+
+			radius = 185;
+			energy = 0.92;
+
+		} else if ( lower.indexOf( 'candle' ) !== -1 ) {
+
+			radius = 128;
+			energy = 0.58;
+
+		} else if ( lower.indexOf( 'lava' ) !== -1 ) {
+
+			radius = 220;
+			warmR = 1.05;
+			warmG = 0.54;
+			warmB = 0.18;
+			energy = 1.28;
+
+		} else if ( lower.indexOf( 'fire' ) !== -1 ) {
+
+			radius = 212;
+			energy = 1.12;
+
+		}
+
+		const phase = px * 0.013 + py * 0.009 + pz * 0.011;
+		const flicker = _clamp(
+			0.80 + 0.24 * Math.sin( now * 11.7 + phase ) + 0.18 * _pseudoRandom( phase + now * 7.31 ),
+			0.56,
+			1.34
+		);
+		const radiusPulse = _clamp(
+			0.90 + 0.22 * Math.sin( now * 4.2 + phase * 0.7 ),
+			0.72,
+			1.34
+		);
+		energy *= flicker;
+		radius *= radiusPulse;
+
+		let distSq = 0;
+		if ( hasCamera ) {
+
+			const dx = px - cameraX;
+			const dy = py - cameraY;
+			const dz = pz - cameraZ;
+			distSq = dx * dx + dy * dy + dz * dz;
+
+		}
+
+		candidates.push( {
+			x: px,
+			y: py,
+			z: pz,
+			r: warmR * energy,
+			g: warmG * energy,
+			b: warmB * energy,
+			radius: _clamp( radius, 72, 900 ),
+			distSq: distSq,
+			score: energy * radius
+		} );
+
+	}
+
+	if ( cl_static_entities != null ) {
+
+		const staticCount = _clampInt(
+			cl != null && cl.num_statics != null ? cl.num_statics : cl_static_entities.length,
+			0,
+			cl_static_entities.length
+		);
+		for ( let i = 0; i < staticCount; i ++ )
+			pushEmitterCandidate( cl_static_entities[ i ] );
+
+	}
+
+	if ( cl_entities != null ) {
+
+		const entityCount = _clampInt(
+			cl != null && cl.num_entities != null ? cl.num_entities : cl_entities.length,
+			0,
+			cl_entities.length
+		);
+		for ( let i = 1; i < entityCount; i ++ )
+			pushEmitterCandidate( cl_entities[ i ] );
+
+	}
+
+	if ( candidates.length <= 0 )
+		return;
+
+	candidates.sort( function ( a, b ) {
+
+		const scoreDelta = b.score - a.score;
+		if ( Math.abs( scoreDelta ) > 0.0001 )
+			return scoreDelta;
+		return a.distSq - b.distSq;
+
+	} );
+
+	const injectCount = Math.min( maxModelSlots, candidates.length );
+	for ( let i = 0; i < injectCount && count < RT_MAX_EMISSIVE_LIGHTS; i ++ ) {
+
+		const emitter = candidates[ i ];
+		_rtEmissiveLightPos[ count ].set( emitter.x, emitter.y, emitter.z );
+		_rtEmissiveLightColor[ count ].set( emitter.r, emitter.g, emitter.b );
+		_rtEmissiveLightRadius[ count ] = emitter.radius;
+		count ++;
+		_rtModelEmitterLightCount ++;
+
+	}
+
+	_rtEmissiveLightCount = count;
+
+}
+
+function _injectRuntimeDlightsToRayLights() {
+
+	if ( cl_dlights == null )
+		return;
+
+	const now = cl != null && typeof cl.time === 'number' ? cl.time : 0;
+	let count = _clampInt( _rtStaticLightCount + _rtModelEmitterLightCount, 0, RT_MAX_EMISSIVE_LIGHTS );
+	let injected = 0;
+
+	for ( let i = 0; i < cl_dlights.length && count < RT_MAX_EMISSIVE_LIGHTS; i ++ ) {
+
+		const light = cl_dlights[ i ];
+		if ( light == null || light.origin == null )
+			continue;
+
+		const radius = _toNumber( light.radius, 0 );
+		if ( radius <= 12 )
+			continue;
+
+		const die = _toNumber( light.die, now + 1.0 );
+		if ( die + 0.015 < now )
+			continue;
+
+		const timeLeft = Math.max( 0, die - now );
+		const fade = _clamp( timeLeft * 3.8, 0.18, 1.0 );
+		const energy = _clamp( radius / 190, 0.25, 4.2 ) * fade;
+		const px = _toNumber( light.origin[ 0 ], 0 );
+		const py = _toNumber( light.origin[ 1 ], 0 );
+		const pz = _toNumber( light.origin[ 2 ], 0 );
+
+		_rtEmissiveLightPos[ count ].set( px, py, pz );
+		// Quake dynamic lights are predominantly warm (muzzle/explosions/torches).
+		_rtEmissiveLightColor[ count ].set( energy * 1.18, energy * 0.78, energy * 0.42 );
+		_rtEmissiveLightRadius[ count ] = _clamp( radius * 1.65, 56, 900 );
+		count ++;
+		injected ++;
+
+	}
+
+	_rtEmissiveLightCount = count;
+	_rtDynamicLightCount = injected;
+	for ( let i = count; i < RT_MAX_EMISSIVE_LIGHTS; i ++ ) {
+
+		_rtEmissiveLightRadius[ i ] = 0;
+		_rtEmissiveLightPos[ i ].set( 0, 0, 0 );
+		_rtEmissiveLightColor[ i ].set( 0, 0, 0 );
+
+	}
 
 }
 
@@ -1192,14 +1523,14 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 
 	let remainingSourceTriangles = sourceTriangleEstimate;
 	const emissiveBins = new Map();
-	const buildMapWideLights = ( _rtEmissiveLightCount === 0 );
+	const buildMapWideLights = true;
 
 	function addEmissiveBin( x, y, z, emitR, emitG, emitB, area ) {
 
 		const emitLum = emitR * 0.2126 + emitG * 0.7152 + emitB * 0.0722;
 		if ( emitLum <= 0.03 ) return;
 
-		const binScale = 56;
+		const binScale = 40;
 		const bxKey = Math.floor( x / binScale );
 		const byKey = Math.floor( y / binScale );
 		const bzKey = Math.floor( z / binScale );
@@ -1229,19 +1560,18 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 
 			const entry = meshEntries[ entryIndex ];
 			const material = entry.material;
-			const diffuseMap = material.map != null ? material.map : null;
-			const emissiveMap = material.emissiveMap != null ? material.emissiveMap : null;
-			const diffuseSampler = diffuseMap != null ? _getTextureSampler( diffuseMap ) : null;
+			const emissiveMap = material.emissiveMap != null
+				? material.emissiveMap
+				: ( material.map != null && material.map._fullbright != null ? material.map._fullbright : null );
+			if ( emissiveMap == null ) continue;
 			const emissiveSampler = emissiveMap != null ? _getTextureSampler( emissiveMap ) : null;
-			if ( diffuseSampler == null && emissiveSampler == null ) continue;
+			if ( emissiveSampler == null ) continue;
 
-			if ( diffuseMap != null && diffuseMap.matrixAutoUpdate === true ) diffuseMap.updateMatrix();
 			if ( emissiveMap != null && emissiveMap.matrixAutoUpdate === true ) emissiveMap.updateMatrix();
 
 			const geometry = entry.geometry;
 			const uv = geometry.attributes != null ? geometry.attributes.uv : null;
 			if ( uv == null ) continue;
-			const diffuseHint = _getMaterialEmissionHint( material, diffuseMap );
 
 			const emissive = material.emissive != null ? material.emissive : null;
 			const emitScaleR = emissive != null ? _clamp( emissive.r, 0.5, 3.0 ) * 2.2 : 2.2;
@@ -1282,63 +1612,43 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 				const s1v = v0 * 0.2 + v1 * 0.6 + v2 * 0.2;
 				const s2u = u0 * 0.2 + u1 * 0.2 + u2 * 0.6;
 				const s2v = v0 * 0.2 + v1 * 0.2 + v2 * 0.6;
-				let emitR = 0;
-				let emitG = 0;
-				let emitB = 0;
-
-				if ( emissiveSampler != null ) {
-
+					let sampleCount = 0;
+					let peakR = 0;
+					let peakG = 0;
+					let peakB = 0;
 					if ( _sampleTextureRGB( emissiveMap, s0u, s0v, _tmpTexel0 ) ) {
 
-						_tmpTexel3[ 0 ] = _tmpTexel0[ 0 ];
-						_tmpTexel3[ 1 ] = _tmpTexel0[ 1 ];
-						_tmpTexel3[ 2 ] = _tmpTexel0[ 2 ];
-
-					} else {
-
-						_tmpTexel3[ 0 ] = 0;
-						_tmpTexel3[ 1 ] = 0;
-						_tmpTexel3[ 2 ] = 0;
+						peakR = Math.max( peakR, _tmpTexel0[ 0 ] );
+						peakG = Math.max( peakG, _tmpTexel0[ 1 ] );
+						peakB = Math.max( peakB, _tmpTexel0[ 2 ] );
+						sampleCount ++;
 
 					}
 					if ( _sampleTextureRGB( emissiveMap, s1u, s1v, _tmpTexel1 ) ) {
 
-						_tmpTexel3[ 0 ] = Math.max( _tmpTexel3[ 0 ], _tmpTexel1[ 0 ] );
-						_tmpTexel3[ 1 ] = Math.max( _tmpTexel3[ 1 ], _tmpTexel1[ 1 ] );
-						_tmpTexel3[ 2 ] = Math.max( _tmpTexel3[ 2 ], _tmpTexel1[ 2 ] );
+						peakR = Math.max( peakR, _tmpTexel1[ 0 ] );
+						peakG = Math.max( peakG, _tmpTexel1[ 1 ] );
+						peakB = Math.max( peakB, _tmpTexel1[ 2 ] );
+						sampleCount ++;
 
 					}
 					if ( _sampleTextureRGB( emissiveMap, s2u, s2v, _tmpTexel2 ) ) {
 
-						_tmpTexel3[ 0 ] = Math.max( _tmpTexel3[ 0 ], _tmpTexel2[ 0 ] );
-						_tmpTexel3[ 1 ] = Math.max( _tmpTexel3[ 1 ], _tmpTexel2[ 1 ] );
-						_tmpTexel3[ 2 ] = Math.max( _tmpTexel3[ 2 ], _tmpTexel2[ 2 ] );
+						peakR = Math.max( peakR, _tmpTexel2[ 0 ] );
+						peakG = Math.max( peakG, _tmpTexel2[ 1 ] );
+						peakB = Math.max( peakB, _tmpTexel2[ 2 ] );
+						sampleCount ++;
 
 					}
-					emitR += _tmpTexel3[ 0 ] * emitScaleR;
-					emitG += _tmpTexel3[ 1 ] * emitScaleG;
-					emitB += _tmpTexel3[ 2 ] * emitScaleB;
+					if ( sampleCount <= 0 ) continue;
 
-				}
+					const emitLum = peakR * 0.2126 + peakG * 0.7152 + peakB * 0.0722;
+					if ( emitLum <= 0.025 ) continue;
 
-				if ( diffuseSampler != null ) {
-
-					_tmpTexel3[ 0 ] = 0;
-					_tmpTexel3[ 1 ] = 0;
-					_tmpTexel3[ 2 ] = 0;
-
-					if ( _sampleTextureRGB( diffuseMap, s0u, s0v, _tmpTexel0 ) )
-						_accumulateDiffuseEmission( _tmpTexel0[ 0 ], _tmpTexel0[ 1 ], _tmpTexel0[ 2 ], diffuseHint, _tmpTexel3 );
-					if ( _sampleTextureRGB( diffuseMap, s1u, s1v, _tmpTexel1 ) )
-						_accumulateDiffuseEmission( _tmpTexel1[ 0 ], _tmpTexel1[ 1 ], _tmpTexel1[ 2 ], diffuseHint, _tmpTexel3 );
-					if ( _sampleTextureRGB( diffuseMap, s2u, s2v, _tmpTexel2 ) )
-						_accumulateDiffuseEmission( _tmpTexel2[ 0 ], _tmpTexel2[ 1 ], _tmpTexel2[ 2 ], diffuseHint, _tmpTexel3 );
-
-					emitR += _tmpTexel3[ 0 ] * 2.4;
-					emitG += _tmpTexel3[ 1 ] * 2.4;
-					emitB += _tmpTexel3[ 2 ] * 2.4;
-
-				}
+					const emitBoost = _clamp( ( emitLum - 0.025 ) * 2.6, 0.28, 3.2 );
+					const emitR = peakR * emitScaleR * emitBoost;
+					const emitG = peakG * emitScaleG * emitBoost;
+					const emitB = peakB * emitScaleB * emitBoost;
 
 				addEmissiveBin(
 					( _tmpTriangleV0.x + _tmpTriangleV1.x + _tmpTriangleV2.x ) / 3,
@@ -1354,7 +1664,7 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 
 		}
 
-		_updateRaytraceEmissiveLights( emissiveBins );
+			_updateRaytraceEmissiveLights( emissiveBins, cameraX, cameraY, cameraZ, false );
 
 	}
 
@@ -1369,12 +1679,13 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 		const triCount = entry.triCount;
 
 		const diffuseMap = material.map != null ? material.map : null;
-		const emissiveMap = material.emissiveMap != null ? material.emissiveMap : null;
+		const emissiveMap = material.emissiveMap != null
+			? material.emissiveMap
+			: ( material.map != null && material.map._fullbright != null ? material.map._fullbright : null );
 		const lightMap = material.lightMap != null ? material.lightMap : null;
 		const diffuseSampler = diffuseMap != null ? _getTextureSampler( diffuseMap ) : null;
 		const emissiveSampler = emissiveMap != null ? _getTextureSampler( emissiveMap ) : null;
 		const lightMapSampler = lightMap != null ? _getTextureSampler( lightMap ) : null;
-		const diffuseHint = _getMaterialEmissionHint( material, diffuseMap );
 		const uv = geometry.attributes != null ? geometry.attributes.uv : null;
 		const uv1 = geometry.attributes != null ? geometry.attributes.uv1 : null;
 		const uv2 = geometry.attributes != null ? geometry.attributes.uv2 : null;
@@ -1420,7 +1731,7 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 
 		}
 
-		function sampleMaterialAt( u, v, lu, lv, colorScaleR, colorScaleG, colorScaleB, outAlbedo, outEmission ) {
+			function sampleMaterialAt( u, v, lu, lv, colorScaleR, colorScaleG, colorScaleB, outAlbedo, outEmission ) {
 
 			let albedoR = debugWhite ? 1.0 : tintR * colorScaleR;
 			let albedoG = debugWhite ? 1.0 : tintG * colorScaleG;
@@ -1429,43 +1740,41 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 			let emitG = 0;
 			let emitB = 0;
 
-			if ( diffuseSampler != null && uv != null ) {
+				if ( diffuseSampler != null && uv != null ) {
 
-				if ( _sampleTextureRGB( diffuseMap, u, v, _tmpTexel0 ) ) {
+					if ( _sampleTextureRGB( diffuseMap, u, v, _tmpTexel0 ) ) {
 
-					if ( debugWhite === false ) {
+						if ( debugWhite === false ) {
 
 						albedoR *= _tmpTexel0[ 0 ];
 						albedoG *= _tmpTexel0[ 1 ];
 						albedoB *= _tmpTexel0[ 2 ];
 
-					}
+						}
 
-					_tmpTexel3[ 0 ] = 0;
-					_tmpTexel3[ 1 ] = 0;
-					_tmpTexel3[ 2 ] = 0;
-					_accumulateDiffuseEmission( _tmpTexel0[ 0 ], _tmpTexel0[ 1 ], _tmpTexel0[ 2 ], diffuseHint, _tmpTexel3 );
-					emitR += _tmpTexel3[ 0 ] * 1.35;
-					emitG += _tmpTexel3[ 1 ] * 1.35;
-					emitB += _tmpTexel3[ 2 ] * 1.35;
+					}
 
 				}
 
-			}
-
 			// Raytrace DWT replaces legacy Quake lightmaps, so keep albedo unlit here.
 
-			if ( emissiveSampler != null && uv != null ) {
+				if ( emissiveSampler != null && uv != null ) {
 
 					if ( _sampleTextureRGB( emissiveMap, u, v, _tmpTexel2 ) ) {
 
-						emitR += _tmpTexel2[ 0 ] * Math.max( emissiveR, 0.6 ) * 2.2;
-						emitG += _tmpTexel2[ 1 ] * Math.max( emissiveG, 0.6 ) * 2.2;
-						emitB += _tmpTexel2[ 2 ] * Math.max( emissiveB, 0.6 ) * 2.2;
+						const emitLum = _tmpTexel2[ 0 ] * 0.2126 + _tmpTexel2[ 1 ] * 0.7152 + _tmpTexel2[ 2 ] * 0.0722;
+						if ( emitLum > 0.05 ) {
+
+							const emitBoost = _clamp( ( emitLum - 0.05 ) * 3.0, 0.20, 3.0 );
+							emitR += _tmpTexel2[ 0 ] * Math.max( emissiveR, 0.65 ) * emitBoost;
+							emitG += _tmpTexel2[ 1 ] * Math.max( emissiveG, 0.65 ) * emitBoost;
+							emitB += _tmpTexel2[ 2 ] * Math.max( emissiveB, 0.65 ) * emitBoost;
+
+						}
 
 					}
 
-			}
+				}
 
 			outAlbedo[ 0 ] = _clamp( albedoR, 0.01, 2.5 );
 			outAlbedo[ 1 ] = _clamp( albedoG, 0.01, 2.5 );
@@ -1879,6 +2188,9 @@ function _ensureRaytraceBvh( scene, camera ) {
 
 		_rtLightBuildSignature = lightSignature;
 		_rtEmissiveLightCount = 0;
+		_rtStaticLightCount = 0;
+		_rtDynamicLightCount = 0;
+		_rtModelEmitterLightCount = 0;
 
 	}
 	const rebuildInterval = _bvhClipped ? 8 : RT_BVH_REBUILD_INTERVAL;
@@ -2038,6 +2350,7 @@ function _buildPostResources() {
 			uSpp: { value: 2 },
 			uBounces: { value: 2 },
 			uStrength: { value: 1.0 },
+			uDebugWhite: { value: 0 },
 			uPixelStep: { value: new THREE.Vector2( 1 / 640, 1 / 480 ) }
 		},
 		vertexShader: _fullscreenVertex,
@@ -2658,6 +2971,8 @@ function _ensureUi() {
 		_bvhLastBuildFrame = -99999;
 		_rtLightBuildSignature = '';
 		_rtEmissiveLightCount = 0;
+		_rtStaticLightCount = 0;
+		_rtDynamicLightCount = 0;
 
 	} );
 
@@ -2783,7 +3098,13 @@ function _syncUi() {
 
 		if ( _bvhReady ) {
 
-			_uiStatus.textContent = 'BVH: ' + _bvhTriCount + ' tris | ' + _bvhNodeCount + ' nodes | em ' + _rtEmissiveLightCount + ( rtDebugTex ? ' | white' : '' ) + ( _bvhClipped ? ' (capped)' : '' );
+			_uiStatus.textContent =
+					'BVH: ' + _bvhTriCount +
+					' tris | ' + _bvhNodeCount +
+					' nodes | em ' + _rtEmissiveLightCount +
+					' (' + _rtStaticLightCount + '+' + _rtModelEmitterLightCount + '+' + _rtDynamicLightCount + ')' +
+					( rtDebugTex ? ' | white' : '' ) +
+					( _bvhClipped ? ' (capped)' : '' );
 
 		} else {
 
@@ -2878,8 +3199,11 @@ export function QuantumRenderer_Render( scene, camera ) {
 	if ( mode === 3 ) {
 
 		_lastMoonlabMs = 0;
-		const bvhReady = _ensureRaytraceBvh( scene, camera );
-		if ( bvhReady === true ) {
+			const bvhReady = _ensureRaytraceBvh( scene, camera );
+			if ( bvhReady === true ) {
+
+				_injectRuntimeModelEmittersToRayLights( camera );
+				_injectRuntimeDlightsToRayLights();
 
 			_setupRaytraceCameraUniforms( camera );
 			_postQuad.material = _rayTraceMaterial;
@@ -2896,6 +3220,7 @@ export function QuantumRenderer_Render( scene, camera ) {
 			_rayTraceMaterial.uniforms.uSpp.value = spp;
 			_rayTraceMaterial.uniforms.uBounces.value = bounces;
 			_rayTraceMaterial.uniforms.uStrength.value = strength;
+			_rayTraceMaterial.uniforms.uDebugWhite.value = _rtDebugTexturesEnabled() ? 1 : 0;
 			_rayTraceMaterial.uniforms.uCameraNear.value = _clamp( camera.near != null ? camera.near : 1.0, 0.001, 1024.0 );
 			_rayTraceMaterial.uniforms.uCameraFar.value = Math.max(
 				_rayTraceMaterial.uniforms.uCameraNear.value + 0.01,
@@ -2926,7 +3251,7 @@ export function QuantumRenderer_Render( scene, camera ) {
 			_rayCompositeMaterial.uniforms.uRayTex.value = _waveletTarget.texture;
 			_rayCompositeMaterial.uniforms.uStrength.value = strength;
 			_rayCompositeMaterial.uniforms.uGain.value = gain;
-			_rayCompositeMaterial.uniforms.uExposure.value = _clamp( exposure * 0.45, 0.20, 2.25 );
+			_rayCompositeMaterial.uniforms.uExposure.value = _clamp( exposure * 0.75, 0.25, 3.20 );
 			_rayCompositeMaterial.uniforms.uDebugWhite.value = _rtDebugTexturesEnabled() ? 1 : 0;
 
 			renderer.setRenderTarget( null );
