@@ -17,6 +17,7 @@ const RT_MAX_EMISSIVE_LIGHTS = 24;
 
 const _rtSize = new THREE.Vector2();
 const _savedClearColor = new THREE.Color();
+const _whiteColor = new THREE.Color( 1, 1, 1 );
 
 let _initialized = false;
 let _cvarsRegistered = false;
@@ -70,6 +71,9 @@ const _tmpTexel3 = [ 0, 0, 0 ];
 const _tmpSampleAlbedo = [ 0, 0, 0 ];
 const _tmpSampleEmission = [ 0, 0, 0 ];
 const _textureSamplerCache = new WeakMap();
+const _rayAlbedoMaterialCache = new WeakMap();
+const _rayAlbedoSwapObjects = [];
+const _rayAlbedoSwapMaterials = [];
 const _rtEmissiveLightPos = [];
 const _rtEmissiveLightColor = [];
 const _rtEmissiveLightRadius = new Float32Array( RT_MAX_EMISSIVE_LIGHTS );
@@ -104,6 +108,7 @@ let _uiSpp = null;
 let _uiBounces = null;
 let _uiBundle = null;
 let _uiRtTris = null;
+let _uiRtDebugTex = null;
 let _uiWavelet = null;
 let _uiStrength = null;
 let _uiGain = null;
@@ -116,6 +121,7 @@ let _uiSppValue = null;
 let _uiBouncesValue = null;
 let _uiBundleValue = null;
 let _uiRtTrisValue = null;
+let _uiRtDebugTexValue = null;
 let _uiWaveletValue = null;
 let _uiStrengthValue = null;
 let _uiGainValue = null;
@@ -134,6 +140,7 @@ export const r_quantum_spp = new cvar_t( 'r_quantum_spp', '4', true );
 export const r_quantum_bounces = new cvar_t( 'r_quantum_bounces', '6', true );
 export const r_quantum_bundle = new cvar_t( 'r_quantum_bundle', '5', true );
 export const r_quantum_rt_tris = new cvar_t( 'r_quantum_rt_tris', String( RT_MAX_TRIANGLES_DEFAULT ), true );
+export const r_quantum_rt_debugtex = new cvar_t( 'r_quantum_rt_debugtex', '0', true );
 export const r_quantum_wavelet = new cvar_t( 'r_quantum_wavelet', '0.080', true );
 export const r_quantum_strength = new cvar_t( 'r_quantum_strength', '2.00', true );
 export const r_quantum_gain = new cvar_t( 'r_quantum_gain', '0.90', true );
@@ -392,7 +399,6 @@ bool intersectTriangle( vec3 ro, vec3 rd, vec3 v0, vec3 v1, vec3 v2, out float t
 	if ( hitT <= 0.0007 ) return false;
 	t = hitT;
 	n = normalize( cross( e1, e2 ) );
-	if ( dot( n, rd ) > 0.0 ) n = - n;
 	return true;
 }
 
@@ -416,6 +422,8 @@ float perspectiveDepthToViewZ( float depth, float nearPlane, float farPlane ) {
 	return ( nearPlane * farPlane ) / ( ( farPlane - nearPlane ) * depth - farPlane );
 }
 
+bool traceAny( vec3 ro, vec3 rd, float tLimit );
+
 vec3 sampleEmissiveLights( vec3 hitPos, vec3 hitNormal ) {
 	vec3 light = vec3( 0.0 );
 	int count = int( min( uEmissiveLightCount, float( ${RT_MAX_EMISSIVE_LIGHTS} ) ) );
@@ -423,11 +431,15 @@ vec3 sampleEmissiveLights( vec3 hitPos, vec3 hitNormal ) {
 		if ( i >= count ) break;
 		float radius = max( uEmissiveLightRadius[ i ], 1.0 );
 		vec3 toLight = uEmissiveLightPos[ i ] - hitPos;
-		float distSq = dot( toLight, toLight ) + 1.0;
-		float invDist = inversesqrt( distSq );
+		float distSq = dot( toLight, toLight );
+		if ( distSq > radius * radius ) continue;
+		float invDist = inversesqrt( distSq + 1e-4 );
 		vec3 L = toLight * invDist;
-		float nDotL = max( dot( hitNormal, L ), 0.0 );
+		float nDotL = abs( dot( hitNormal, L ) );
 		if ( nDotL <= 0.0 ) continue;
+		float lightDist = 1.0 / max( invDist, 1e-5 );
+		float shadowMax = max( lightDist - 0.12, 0.001 );
+		if ( traceAny( hitPos + hitNormal * 0.04, L, shadowMax ) ) continue;
 		float atten = 1.0 / ( 1.0 + distSq / ( radius * radius ) );
 		light += uEmissiveLightColor[ i ] * ( nDotL * atten );
 	}
@@ -503,6 +515,59 @@ bool traceScene( vec3 ro, vec3 rd, out vec3 hitPos, out vec3 hitNormal, out vec3
 	return true;
 }
 
+bool traceAny( vec3 ro, vec3 rd, float tLimit ) {
+	if ( uNodeCount < 1.0 || uTriCount < 1.0 ) return false;
+
+	vec3 invDir = 1.0 / ( rd + sign( rd ) * 1e-6 );
+	int stack[ MAX_STACK ];
+	int sp = 0;
+	stack[ 0 ] = 0;
+	float limit = max( tLimit, 0.001 );
+
+	for ( int step = 0; step < MAX_STEPS; step ++ ) {
+		if ( sp < 0 ) break;
+		int nodeIndex = stack[ sp ];
+		sp --;
+		if ( float( nodeIndex ) >= uNodeCount ) continue;
+
+		vec3 bmin;
+		vec3 bmax;
+		float a;
+		float b;
+		fetchNode( nodeIndex, bmin, bmax, a, b );
+		if ( intersectAabb( ro, invDir, bmin, bmax, limit ) == false ) continue;
+
+		if ( a < 0.0 ) {
+			int triCount = int( - a + 0.5 );
+			int triStart = int( b + 0.5 );
+
+			for ( int t = 0; t < MAX_LEAF_TRIS; t ++ ) {
+				if ( t >= triCount ) break;
+				int triIndex = triStart + t;
+				if ( float( triIndex ) >= uTriCount ) break;
+				vec3 v0;
+				vec3 v1;
+				vec3 v2;
+				vec3 alb;
+				vec3 emit;
+				fetchTriangle( triIndex, v0, v1, v2, alb, emit );
+				float triT;
+				vec3 triN;
+				if ( intersectTriangle( ro, rd, v0, v1, v2, triT, triN ) && triT < limit ) return true;
+			}
+		} else {
+			int left = int( a + 0.5 );
+			int right = int( b + 0.5 );
+			if ( sp + 2 < MAX_STACK ) {
+				stack[ ++ sp ] = right;
+				stack[ ++ sp ] = left;
+			}
+		}
+	}
+
+	return false;
+}
+
 void main() {
 	float sampleCount = max( 1.0, min( uSpp, float( MAX_SPP ) ) );
 	vec3 total = vec3( 0.0 );
@@ -549,13 +614,18 @@ void main() {
 				}
 			}
 
+			vec3 geoNormal = normalize( hitNormal );
+			vec3 bounceNormal = dot( geoNormal, rd ) < 0.0 ? geoNormal : - geoNormal;
 			vec3 lightDir = normalize( vec3( 0.32, 0.84, 0.21 ) );
-			float nDotL = max( dot( hitNormal, lightDir ), 0.0 );
-			vec3 direct = hitAlbedo * ( 0.14 + 0.72 * nDotL );
-			vec3 ambient = hitAlbedo * 0.14;
-			vec3 emissiveDirect = hitAlbedo * sampleEmissiveLights( hitPos + hitNormal * 0.02, hitNormal ) * ( 0.34 + 0.46 * uStrength );
+			float nDotL = abs( dot( geoNormal, lightDir ) );
+			float sunVisibility = 1.0;
+			if ( nDotL > 0.0001 && traceAny( hitPos + bounceNormal * 0.04, lightDir, 2048.0 ) ) sunVisibility = 0.0;
+			float hemi = abs( geoNormal.y ) * 0.5 + 0.5;
+			vec3 direct = hitAlbedo * ( 0.006 + 1.02 * nDotL * sunVisibility );
+			vec3 ambient = hitAlbedo * ( 0.003 + 0.015 * hemi );
+			vec3 emissiveDirect = hitAlbedo * sampleEmissiveLights( hitPos + bounceNormal * 0.02, geoNormal ) * ( 0.46 + 0.52 * uStrength );
 			vec3 emissiveSelf = hitEmission * ( 0.42 + 0.46 * uStrength );
-			radiance += throughput * ( direct + ambient + emissiveDirect ) * ( 0.62 + 0.64 * uStrength );
+			radiance += throughput * ( direct + ambient + emissiveDirect ) * ( 0.58 + 0.62 * uStrength );
 			radiance += throughput * emissiveSelf;
 
 			throughput *= clamp( hitAlbedo, vec3( 0.12 ), vec3( 1.35 ) ) * 0.74;
@@ -568,8 +638,8 @@ void main() {
 			}
 
 			vec2 xi = hash22( hitPos.xy * 0.173 + vec2( float( bounce ) * 2.7, uFrame * 0.13 + float( s ) * 0.37 ) );
-			rd = cosineHemisphere( hitNormal, xi );
-			ro = hitPos + hitNormal * 0.01;
+			rd = cosineHemisphere( bounceNormal, xi );
+			ro = hitPos + bounceNormal * 0.01;
 		}
 
 		total += radiance;
@@ -624,10 +694,20 @@ uniform sampler2D uRayTex;
 uniform float uStrength;
 uniform float uGain;
 uniform float uExposure;
+uniform float uDebugWhite;
 
 void main() {
 	vec3 base = texture2D( uBaseTex, vUv ).rgb;
 	vec3 ray = texture2D( uRayTex, vUv ).rgb;
+
+	if ( uDebugWhite > 0.5 ) {
+		vec3 outColor = ray * ( uExposure * uGain * 1.15 );
+		outColor = outColor / ( vec3( 1.0 ) + outColor );
+		outColor = pow( max( outColor, vec3( 0.0 ) ), vec3( 0.92 ) );
+		gl_FragColor = vec4( outColor, 1.0 );
+		return;
+	}
+
 	vec3 lumaW = vec3( 0.2126, 0.7152, 0.0722 );
 	float baseLum = max( dot( base, lumaW ), 0.0002 );
 	float rayLum = max( dot( ray, lumaW ), 0.0 );
@@ -638,7 +718,7 @@ void main() {
 	vec3 tinted = litBase * mix( vec3( 1.0 ), rayChroma, 0.16 + 0.20 * uStrength );
 	float blend = clamp( 0.20 + 0.22 * uStrength, 0.0, 0.62 );
 	vec3 outColor = mix( base, tinted, blend );
-	outColor = max( outColor, base * 0.35 );
+	outColor = max( outColor, base * 0.08 );
 	outColor *= ( uExposure * uGain );
 	outColor = outColor / ( vec3( 1.0 ) + outColor );
 	outColor = pow( max( outColor, vec3( 0.0 ) ), vec3( 0.92 ) );
@@ -785,6 +865,94 @@ function _createFloatDataTexture( data, width, height ) {
 
 }
 
+function _rtDebugTexturesEnabled() {
+
+	return r_quantum_rt_debugtex.value !== 0;
+
+}
+
+function _getRayAlbedoMaterial( sourceMaterial ) {
+
+	if ( sourceMaterial == null )
+		return null;
+
+	let mat = _rayAlbedoMaterialCache.get( sourceMaterial );
+	if ( mat == null ) {
+
+		mat = new THREE.MeshBasicMaterial();
+		_rayAlbedoMaterialCache.set( sourceMaterial, mat );
+
+	}
+
+	const debugWhite = _rtDebugTexturesEnabled();
+	mat.map = debugWhite ? null : ( sourceMaterial.map != null ? sourceMaterial.map : null );
+	mat.color.copy( debugWhite ? _whiteColor : ( sourceMaterial.color != null ? sourceMaterial.color : _whiteColor ) );
+	mat.transparent = sourceMaterial.transparent === true || ( sourceMaterial.opacity != null && sourceMaterial.opacity < 0.999 );
+	mat.opacity = sourceMaterial.opacity != null ? sourceMaterial.opacity : 1.0;
+	mat.alphaTest = sourceMaterial.alphaTest != null ? sourceMaterial.alphaTest : 0.0;
+	mat.side = sourceMaterial.side != null ? sourceMaterial.side : THREE.FrontSide;
+	mat.depthWrite = sourceMaterial.depthWrite !== false;
+	mat.depthTest = sourceMaterial.depthTest !== false;
+	mat.blending = sourceMaterial.blending != null ? sourceMaterial.blending : THREE.NormalBlending;
+	mat.premultipliedAlpha = sourceMaterial.premultipliedAlpha === true;
+	mat.polygonOffset = sourceMaterial.polygonOffset === true;
+	mat.polygonOffsetFactor = sourceMaterial.polygonOffsetFactor != null ? sourceMaterial.polygonOffsetFactor : 0;
+	mat.polygonOffsetUnits = sourceMaterial.polygonOffsetUnits != null ? sourceMaterial.polygonOffsetUnits : 0;
+	mat.visible = sourceMaterial.visible !== false;
+	mat.needsUpdate = false;
+	return mat;
+
+}
+
+function _renderSceneAlbedoPass( scene, camera, target ) {
+
+	if ( renderer == null || scene == null || camera == null || target == null )
+		return;
+
+	_rayAlbedoSwapObjects.length = 0;
+	_rayAlbedoSwapMaterials.length = 0;
+
+	scene.traverseVisible( function ( object ) {
+
+		if ( object == null || object.isMesh !== true || object.material == null )
+			return;
+		if ( object.renderOrder >= 900 )
+			return;
+
+		const original = object.material;
+		_rayAlbedoSwapObjects.push( object );
+		_rayAlbedoSwapMaterials.push( original );
+
+		if ( Array.isArray( original ) ) {
+
+			const next = new Array( original.length );
+			for ( let i = 0; i < original.length; i ++ )
+				next[ i ] = _getRayAlbedoMaterial( original[ i ] );
+			object.material = next;
+
+		} else {
+
+			object.material = _getRayAlbedoMaterial( original );
+
+		}
+
+	} );
+
+	renderer.setRenderTarget( target );
+	renderer.clear( true, true, false );
+	renderer.render( scene, camera );
+
+	for ( let i = _rayAlbedoSwapObjects.length - 1; i >= 0; i -- ) {
+
+		_rayAlbedoSwapObjects[ i ].material = _rayAlbedoSwapMaterials[ i ];
+
+	}
+
+	_rayAlbedoSwapObjects.length = 0;
+	_rayAlbedoSwapMaterials.length = 0;
+
+}
+
 function _disposeBvhTextures() {
 
 	if ( _bvhTriTexture != null ) {
@@ -886,6 +1054,60 @@ function _updateRaytraceEmissiveLights( emissiveBins ) {
 
 }
 
+function _getMaterialEmissionHint( material, diffuseMap ) {
+
+	let key = '';
+	if ( material != null && material.name != null )
+		key += String( material.name );
+	if ( diffuseMap != null ) {
+
+		if ( diffuseMap.name != null )
+			key += ' ' + String( diffuseMap.name );
+		const mapData = diffuseMap.source != null ? diffuseMap.source.data : null;
+		if ( mapData != null ) {
+
+			const src = mapData.currentSrc != null ? mapData.currentSrc : ( mapData.src != null ? mapData.src : ( mapData.id != null ? mapData.id : null ) );
+			if ( typeof src === 'string' && src.length > 0 )
+				key += ' ' + src.substring( 0, 96 );
+
+		}
+
+	}
+
+	key = key.toLowerCase();
+	if ( key.length === 0 ) return 0;
+	if ( /(torch|flame|fire|lava|glow|light|lamp|tele|portal|energy|bolt|plasma|rune)/.test( key ) )
+		return 1.0;
+	if ( /(window|slime|water|sky)/.test( key ) )
+		return 0.45;
+	return 0;
+
+}
+
+function _accumulateDiffuseEmission( r, g, b, hint, outEmission ) {
+
+	const lum = r * 0.2126 + g * 0.7152 + b * 0.0722;
+	const maxC = Math.max( r, Math.max( g, b ) );
+	const minC = Math.min( r, Math.min( g, b ) );
+	const chroma = maxC - minC;
+	if ( hint <= 0.001 && maxC < 0.58 ) return;
+	const threshold = hint > 0.001 ? 0.30 : 0.68;
+	const bright = _clamp( ( lum - threshold ) / Math.max( 1e-4, 1.0 - threshold ), 0.0, 1.0 );
+	if ( bright <= 0.0001 ) return;
+
+	const warmBoost = r > g * 1.08 && g > b * 1.02 ? 1.15 : 1.0;
+	const coolBoost = b > r * 1.10 ? 1.10 : 1.0;
+	const hueBoost = Math.max( warmBoost, coolBoost );
+	const chromaWeight = hint > 0.001 ? ( 0.45 + chroma * 0.9 ) : ( chroma * 1.7 );
+	const strength = bright * chromaWeight * ( 0.8 + hint * 2.4 ) * hueBoost;
+	if ( strength <= 0.0001 ) return;
+
+	outEmission[ 0 ] += r * strength;
+	outEmission[ 1 ] += g * strength;
+	outEmission[ 2 ] += b * strength;
+
+}
+
 function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 
 	const triangles = [];
@@ -897,6 +1119,7 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 	}
 
 	scene.updateMatrixWorld( true );
+	const debugWhite = _rtDebugTexturesEnabled();
 
 	const prioritizeByCamera = camera != null;
 	let cameraX = 0;
@@ -969,7 +1192,7 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 
 	let remainingSourceTriangles = sourceTriangleEstimate;
 	const emissiveBins = new Map();
-	const buildMapWideLights = _rtEmissiveLightCount === 0;
+	const buildMapWideLights = ( _rtEmissiveLightCount === 0 );
 
 	function addEmissiveBin( x, y, z, emitR, emitG, emitB, area ) {
 
@@ -1006,16 +1229,19 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 
 			const entry = meshEntries[ entryIndex ];
 			const material = entry.material;
+			const diffuseMap = material.map != null ? material.map : null;
 			const emissiveMap = material.emissiveMap != null ? material.emissiveMap : null;
-			if ( emissiveMap == null ) continue;
+			const diffuseSampler = diffuseMap != null ? _getTextureSampler( diffuseMap ) : null;
+			const emissiveSampler = emissiveMap != null ? _getTextureSampler( emissiveMap ) : null;
+			if ( diffuseSampler == null && emissiveSampler == null ) continue;
 
-			const emissiveSampler = _getTextureSampler( emissiveMap );
-			if ( emissiveSampler == null ) continue;
-			if ( emissiveMap.matrixAutoUpdate === true ) emissiveMap.updateMatrix();
+			if ( diffuseMap != null && diffuseMap.matrixAutoUpdate === true ) diffuseMap.updateMatrix();
+			if ( emissiveMap != null && emissiveMap.matrixAutoUpdate === true ) emissiveMap.updateMatrix();
 
 			const geometry = entry.geometry;
 			const uv = geometry.attributes != null ? geometry.attributes.uv : null;
 			if ( uv == null ) continue;
+			const diffuseHint = _getMaterialEmissionHint( material, diffuseMap );
 
 			const emissive = material.emissive != null ? material.emissive : null;
 			const emitScaleR = emissive != null ? _clamp( emissive.r, 0.5, 3.0 ) * 2.2 : 2.2;
@@ -1056,38 +1282,64 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 				const s1v = v0 * 0.2 + v1 * 0.6 + v2 * 0.2;
 				const s2u = u0 * 0.2 + u1 * 0.2 + u2 * 0.6;
 				const s2v = v0 * 0.2 + v1 * 0.2 + v2 * 0.6;
+				let emitR = 0;
+				let emitG = 0;
+				let emitB = 0;
 
-				if ( _sampleTextureRGB( emissiveMap, s0u, s0v, _tmpTexel0 ) ) {
+				if ( emissiveSampler != null ) {
 
-					_tmpTexel3[ 0 ] = _tmpTexel0[ 0 ];
-					_tmpTexel3[ 1 ] = _tmpTexel0[ 1 ];
-					_tmpTexel3[ 2 ] = _tmpTexel0[ 2 ];
+					if ( _sampleTextureRGB( emissiveMap, s0u, s0v, _tmpTexel0 ) ) {
 
-				} else {
+						_tmpTexel3[ 0 ] = _tmpTexel0[ 0 ];
+						_tmpTexel3[ 1 ] = _tmpTexel0[ 1 ];
+						_tmpTexel3[ 2 ] = _tmpTexel0[ 2 ];
+
+					} else {
+
+						_tmpTexel3[ 0 ] = 0;
+						_tmpTexel3[ 1 ] = 0;
+						_tmpTexel3[ 2 ] = 0;
+
+					}
+					if ( _sampleTextureRGB( emissiveMap, s1u, s1v, _tmpTexel1 ) ) {
+
+						_tmpTexel3[ 0 ] = Math.max( _tmpTexel3[ 0 ], _tmpTexel1[ 0 ] );
+						_tmpTexel3[ 1 ] = Math.max( _tmpTexel3[ 1 ], _tmpTexel1[ 1 ] );
+						_tmpTexel3[ 2 ] = Math.max( _tmpTexel3[ 2 ], _tmpTexel1[ 2 ] );
+
+					}
+					if ( _sampleTextureRGB( emissiveMap, s2u, s2v, _tmpTexel2 ) ) {
+
+						_tmpTexel3[ 0 ] = Math.max( _tmpTexel3[ 0 ], _tmpTexel2[ 0 ] );
+						_tmpTexel3[ 1 ] = Math.max( _tmpTexel3[ 1 ], _tmpTexel2[ 1 ] );
+						_tmpTexel3[ 2 ] = Math.max( _tmpTexel3[ 2 ], _tmpTexel2[ 2 ] );
+
+					}
+					emitR += _tmpTexel3[ 0 ] * emitScaleR;
+					emitG += _tmpTexel3[ 1 ] * emitScaleG;
+					emitB += _tmpTexel3[ 2 ] * emitScaleB;
+
+				}
+
+				if ( diffuseSampler != null ) {
 
 					_tmpTexel3[ 0 ] = 0;
 					_tmpTexel3[ 1 ] = 0;
 					_tmpTexel3[ 2 ] = 0;
 
-				}
-				if ( _sampleTextureRGB( emissiveMap, s1u, s1v, _tmpTexel1 ) ) {
+					if ( _sampleTextureRGB( diffuseMap, s0u, s0v, _tmpTexel0 ) )
+						_accumulateDiffuseEmission( _tmpTexel0[ 0 ], _tmpTexel0[ 1 ], _tmpTexel0[ 2 ], diffuseHint, _tmpTexel3 );
+					if ( _sampleTextureRGB( diffuseMap, s1u, s1v, _tmpTexel1 ) )
+						_accumulateDiffuseEmission( _tmpTexel1[ 0 ], _tmpTexel1[ 1 ], _tmpTexel1[ 2 ], diffuseHint, _tmpTexel3 );
+					if ( _sampleTextureRGB( diffuseMap, s2u, s2v, _tmpTexel2 ) )
+						_accumulateDiffuseEmission( _tmpTexel2[ 0 ], _tmpTexel2[ 1 ], _tmpTexel2[ 2 ], diffuseHint, _tmpTexel3 );
 
-					_tmpTexel3[ 0 ] = Math.max( _tmpTexel3[ 0 ], _tmpTexel1[ 0 ] );
-					_tmpTexel3[ 1 ] = Math.max( _tmpTexel3[ 1 ], _tmpTexel1[ 1 ] );
-					_tmpTexel3[ 2 ] = Math.max( _tmpTexel3[ 2 ], _tmpTexel1[ 2 ] );
-
-				}
-				if ( _sampleTextureRGB( emissiveMap, s2u, s2v, _tmpTexel2 ) ) {
-
-					_tmpTexel3[ 0 ] = Math.max( _tmpTexel3[ 0 ], _tmpTexel2[ 0 ] );
-					_tmpTexel3[ 1 ] = Math.max( _tmpTexel3[ 1 ], _tmpTexel2[ 1 ] );
-					_tmpTexel3[ 2 ] = Math.max( _tmpTexel3[ 2 ], _tmpTexel2[ 2 ] );
+					emitR += _tmpTexel3[ 0 ] * 2.4;
+					emitG += _tmpTexel3[ 1 ] * 2.4;
+					emitB += _tmpTexel3[ 2 ] * 2.4;
 
 				}
 
-				const emitR = _tmpTexel3[ 0 ] * emitScaleR;
-				const emitG = _tmpTexel3[ 1 ] * emitScaleG;
-				const emitB = _tmpTexel3[ 2 ] * emitScaleB;
 				addEmissiveBin(
 					( _tmpTriangleV0.x + _tmpTriangleV1.x + _tmpTriangleV2.x ) / 3,
 					( _tmpTriangleV0.y + _tmpTriangleV1.y + _tmpTriangleV2.y ) / 3,
@@ -1122,6 +1374,7 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 		const diffuseSampler = diffuseMap != null ? _getTextureSampler( diffuseMap ) : null;
 		const emissiveSampler = emissiveMap != null ? _getTextureSampler( emissiveMap ) : null;
 		const lightMapSampler = lightMap != null ? _getTextureSampler( lightMap ) : null;
+		const diffuseHint = _getMaterialEmissionHint( material, diffuseMap );
 		const uv = geometry.attributes != null ? geometry.attributes.uv : null;
 		const uv1 = geometry.attributes != null ? geometry.attributes.uv1 : null;
 		const uv2 = geometry.attributes != null ? geometry.attributes.uv2 : null;
@@ -1129,9 +1382,6 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 		const lightMapUv = lightMap == null
 			? null
 			: ( lightMap.channel === 1 ? ( uv1 != null ? uv1 : uv2 ) : uv );
-		const lightMapIntensity = material != null && material.lightMapIntensity != null
-			? _clamp( material.lightMapIntensity, 0.0, 4.0 )
-			: 1.0;
 
 		if ( diffuseMap != null && diffuseMap.matrixAutoUpdate === true ) diffuseMap.updateMatrix();
 		if ( emissiveMap != null && emissiveMap.matrixAutoUpdate === true ) emissiveMap.updateMatrix();
@@ -1172,9 +1422,9 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 
 		function sampleMaterialAt( u, v, lu, lv, colorScaleR, colorScaleG, colorScaleB, outAlbedo, outEmission ) {
 
-			let albedoR = tintR * colorScaleR;
-			let albedoG = tintG * colorScaleG;
-			let albedoB = tintB * colorScaleB;
+			let albedoR = debugWhite ? 1.0 : tintR * colorScaleR;
+			let albedoG = debugWhite ? 1.0 : tintG * colorScaleG;
+			let albedoB = debugWhite ? 1.0 : tintB * colorScaleB;
 			let emitR = 0;
 			let emitG = 0;
 			let emitB = 0;
@@ -1183,37 +1433,37 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 
 				if ( _sampleTextureRGB( diffuseMap, u, v, _tmpTexel0 ) ) {
 
-					albedoR *= _tmpTexel0[ 0 ];
-					albedoG *= _tmpTexel0[ 1 ];
-					albedoB *= _tmpTexel0[ 2 ];
+					if ( debugWhite === false ) {
+
+						albedoR *= _tmpTexel0[ 0 ];
+						albedoG *= _tmpTexel0[ 1 ];
+						albedoB *= _tmpTexel0[ 2 ];
+
+					}
+
+					_tmpTexel3[ 0 ] = 0;
+					_tmpTexel3[ 1 ] = 0;
+					_tmpTexel3[ 2 ] = 0;
+					_accumulateDiffuseEmission( _tmpTexel0[ 0 ], _tmpTexel0[ 1 ], _tmpTexel0[ 2 ], diffuseHint, _tmpTexel3 );
+					emitR += _tmpTexel3[ 0 ] * 1.35;
+					emitG += _tmpTexel3[ 1 ] * 1.35;
+					emitB += _tmpTexel3[ 2 ] * 1.35;
 
 				}
 
 			}
 
-			if ( lightMapSampler != null && lightMapUv != null ) {
-
-				if ( _sampleTextureRGB( lightMap, lu, lv, _tmpTexel1 ) ) {
-
-					const lm = ( _tmpTexel1[ 0 ] + _tmpTexel1[ 1 ] + _tmpTexel1[ 2 ] ) / 3;
-					const lmScale = _clamp( 0.62 + lm * ( 0.58 + 0.38 * lightMapIntensity ), 0.45, 2.6 );
-					albedoR *= lmScale;
-					albedoG *= lmScale;
-					albedoB *= lmScale;
-
-				}
-
-			}
+			// Raytrace DWT replaces legacy Quake lightmaps, so keep albedo unlit here.
 
 			if ( emissiveSampler != null && uv != null ) {
 
-				if ( _sampleTextureRGB( emissiveMap, u, v, _tmpTexel2 ) ) {
+					if ( _sampleTextureRGB( emissiveMap, u, v, _tmpTexel2 ) ) {
 
-					emitR = _tmpTexel2[ 0 ] * Math.max( emissiveR, 0.6 ) * 2.2;
-					emitG = _tmpTexel2[ 1 ] * Math.max( emissiveG, 0.6 ) * 2.2;
-					emitB = _tmpTexel2[ 2 ] * Math.max( emissiveB, 0.6 ) * 2.2;
+						emitR += _tmpTexel2[ 0 ] * Math.max( emissiveR, 0.6 ) * 2.2;
+						emitG += _tmpTexel2[ 1 ] * Math.max( emissiveG, 0.6 ) * 2.2;
+						emitB += _tmpTexel2[ 2 ] * Math.max( emissiveB, 0.6 ) * 2.2;
 
-				}
+					}
 
 			}
 
@@ -1612,6 +1862,7 @@ function _uploadRaytraceBvh( triangles, bvh ) {
 function _ensureRaytraceBvh( scene, camera ) {
 
 	const maxTriangles = _clampInt( r_quantum_rt_tris.value, 512, 131072 );
+	const debugWhite = _rtDebugTexturesEnabled() ? 1 : 0;
 	let cameraKey = '0:0:0';
 	if ( camera != null ) {
 
@@ -1622,7 +1873,7 @@ function _ensureRaytraceBvh( scene, camera ) {
 		cameraKey = String( cx ) + ':' + String( cy ) + ':' + String( cz );
 
 	}
-	const signature = String( scene != null && scene.children != null ? scene.children.length : 0 ) + ':' + maxTriangles + ':' + cameraKey;
+	const signature = String( scene != null && scene.children != null ? scene.children.length : 0 ) + ':' + maxTriangles + ':' + cameraKey + ':' + debugWhite;
 	const lightSignature = String( scene != null && scene.children != null ? scene.children.length : 0 ) + ':' + maxTriangles;
 	if ( _rtLightBuildSignature !== lightSignature ) {
 
@@ -1696,6 +1947,7 @@ function _registerCvars() {
 	Cvar_RegisterVariable( r_quantum_bounces );
 	Cvar_RegisterVariable( r_quantum_bundle );
 	Cvar_RegisterVariable( r_quantum_rt_tris );
+	Cvar_RegisterVariable( r_quantum_rt_debugtex );
 	Cvar_RegisterVariable( r_quantum_wavelet );
 	Cvar_RegisterVariable( r_quantum_strength );
 	Cvar_RegisterVariable( r_quantum_gain );
@@ -1812,7 +2064,8 @@ function _buildPostResources() {
 			uRayTex: { value: null },
 			uStrength: { value: 1.0 },
 			uGain: { value: 1.10 },
-			uExposure: { value: 2.5 }
+			uExposure: { value: 2.5 },
+			uDebugWhite: { value: 0 }
 		},
 		vertexShader: _fullscreenVertex,
 		fragmentShader: _rayCompositeFragment,
@@ -2286,6 +2539,11 @@ function _ensureUi() {
 			</select>
 			<span id="qc-mode-value"></span>
 		</label>
+		<label class="qc-row" title="Debug mode for raytracing: disables texture sampling and forces white albedo to inspect lighting and shadows.">
+			<span>RT Debug Tex</span>
+			<input id="qc-rt-debugtex" type="checkbox" title="When enabled, Raytrace DWT uses white surfaces and ignores all texture color.">
+			<span id="qc-rt-debugtex-value"></span>
+		</label>
 		<label class="qc-row" title="Circuit width. Higher qubits produce richer phase structure and more variation.">
 			<span>Qubits</span>
 			<input id="qc-qubits" type="range" min="2" max="12" step="1" title="Number of simulated qubits driving the phase/noise field.">
@@ -2345,6 +2603,7 @@ function _ensureUi() {
 
 	_uiEnabled = document.getElementById( 'qc-enabled' );
 	_uiMode = document.getElementById( 'qc-mode' );
+	_uiRtDebugTex = document.getElementById( 'qc-rt-debugtex' );
 	_uiQubits = document.getElementById( 'qc-qubits' );
 	_uiDepth = document.getElementById( 'qc-depth' );
 	_uiSpp = document.getElementById( 'qc-spp' );
@@ -2357,6 +2616,7 @@ function _ensureUi() {
 	_uiExposure = document.getElementById( 'qc-exposure' );
 	_uiEnabledValue = document.getElementById( 'qc-enabled-value' );
 	_uiModeValue = document.getElementById( 'qc-mode-value' );
+	_uiRtDebugTexValue = document.getElementById( 'qc-rt-debugtex-value' );
 	_uiQubitsValue = document.getElementById( 'qc-qubits-value' );
 	_uiDepthValue = document.getElementById( 'qc-depth-value' );
 	_uiSppValue = document.getElementById( 'qc-spp-value' );
@@ -2389,6 +2649,15 @@ function _ensureUi() {
 	_uiMode.addEventListener( 'change', function () {
 
 		Cvar_SetValue( 'r_quantum_mode', parseInt( _uiMode.value ) || 3 );
+
+	} );
+
+	_uiRtDebugTex.addEventListener( 'change', function () {
+
+		Cvar_SetValue( 'r_quantum_rt_debugtex', _uiRtDebugTex.checked ? 1 : 0 );
+		_bvhLastBuildFrame = -99999;
+		_rtLightBuildSignature = '';
+		_rtEmissiveLightCount = 0;
 
 	} );
 
@@ -2466,6 +2735,7 @@ function _syncUi() {
 	_lastUiSync = now;
 
 	const mode = _clampInt( r_quantum_mode.value, 0, 3 );
+	const rtDebugTex = r_quantum_rt_debugtex.value !== 0;
 	const qubits = _clampInt( r_quantum_qubits.value, 2, 12 );
 	const depth = _clampInt( r_quantum_depth.value, 1, 24 );
 	const spp = _clampInt( r_quantum_spp.value, 1, 4 );
@@ -2479,6 +2749,7 @@ function _syncUi() {
 
 	_uiEnabled.checked = r_quantum.value !== 0;
 	_uiMode.value = String( mode );
+	_uiRtDebugTex.checked = rtDebugTex;
 	_uiQubits.value = String( qubits );
 	_uiDepth.value = String( depth );
 	_uiSpp.value = String( spp );
@@ -2496,6 +2767,7 @@ function _syncUi() {
 		: ( mode === 1
 			? 'interference'
 			: ( mode === 2 ? 'observed' : 'raytrace+dwt' ) );
+	_uiRtDebugTexValue.textContent = rtDebugTex ? 'on' : 'off';
 	_uiQubitsValue.textContent = String( qubits );
 	_uiDepthValue.textContent = String( depth );
 	_uiSppValue.textContent = String( spp );
@@ -2511,7 +2783,7 @@ function _syncUi() {
 
 		if ( _bvhReady ) {
 
-			_uiStatus.textContent = 'BVH: ' + _bvhTriCount + ' tris | ' + _bvhNodeCount + ' nodes | em ' + _rtEmissiveLightCount + ( _bvhClipped ? ' (capped)' : '' );
+			_uiStatus.textContent = 'BVH: ' + _bvhTriCount + ' tris | ' + _bvhNodeCount + ' nodes | em ' + _rtEmissiveLightCount + ( rtDebugTex ? ' | white' : '' ) + ( _bvhClipped ? ' (capped)' : '' );
 
 		} else {
 
@@ -2591,9 +2863,17 @@ export function QuantumRenderer_Render( scene, camera ) {
 	const exposure = _clamp( r_quantum_exposure.value, 0.8, 5.0 );
 	const bundle = _clampInt( r_quantum_bundle.value, 1, 10 );
 
-	renderer.setRenderTarget( _sceneTarget );
-	renderer.clear( true, true, false );
-	renderer.render( scene, camera );
+	if ( mode === 3 ) {
+
+		_renderSceneAlbedoPass( scene, camera, _sceneTarget );
+
+	} else {
+
+		renderer.setRenderTarget( _sceneTarget );
+		renderer.clear( true, true, false );
+		renderer.render( scene, camera );
+
+	}
 
 	if ( mode === 3 ) {
 
@@ -2647,6 +2927,7 @@ export function QuantumRenderer_Render( scene, camera ) {
 			_rayCompositeMaterial.uniforms.uStrength.value = strength;
 			_rayCompositeMaterial.uniforms.uGain.value = gain;
 			_rayCompositeMaterial.uniforms.uExposure.value = _clamp( exposure * 0.45, 0.20, 2.25 );
+			_rayCompositeMaterial.uniforms.uDebugWhite.value = _rtDebugTexturesEnabled() ? 1 : 0;
 
 			renderer.setRenderTarget( null );
 			renderer.render( _postScene, _postCamera );
