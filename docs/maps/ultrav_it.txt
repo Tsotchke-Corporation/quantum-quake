@@ -1,0 +1,49 @@
+Prima versione: 19/06/97
+
+==================================================
+Titolo                  : UltraViolence
+
+Nome del file           : UltraV.bsp
+
+Autore                  : Adriano Lorenzini
+Indirizzo Email         : bib2002@iperbole.bologna.it
+Descrizione             : Il paradiso del rocket jumping. 
+
+
+Si ringraziano          : Yahn Bernier per BSP, un grande editor
+                          Tutti i miei beta testers
+                          Steve Polge per il ReaperBot
+                          Tom "Woofer" Grandgent (tgrand@ultra.net)
+                          Paolo Petrini (http://quake.shiny.it/), il punto di riferimento
+                          per tutti i quakers italiani
+                          La Rogue per le textures
+                          L'iD Software naturalmente.
+===================================================
+* Informazioni sul gioco *
+
+Versione                : Richiede la versione registrata di Quake dalla 1.01 in su
+Nome della Mappa        : UltraViolence
+Gioco Singolo           : NO
+Cooperativo             : NO
+Deathmatch 2-4          : Sono disponibili fino a 6 punti di partenza
+Settaggio Difficoltà    : Non disponibile
+Informazioni Addizionali: Non ci sono uscite. In ogni caso impostando un timelimit
+                          ci si ritrova nel DM4
+==================================================
+* Costruzione *
+
+Base                    : Livello totalmente nuovo
+Editor usato            : BSP 0.75  (http://www.planetquake.com/bsp/index.shtm)
+Tempo Totale            : 1 settimana + la fase di test
+Bugs conosciuti         : Nessuno
+
+==================================================
+
+* Varie ed eventuali *
+
+Se ti scappa un commento o hai una richiesta scrivi a:
+bib2002@iperbole.bologna.it
+
+* Copyright / Permissions *
+
+Non ci sono limiti per la distribuzione a meno che non sia a scopo di lucro

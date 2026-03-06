@@ -24,6 +24,7 @@ import {
 } from './r_part.js';
 import { Debug_UpdateOverlay, Debug_ClearLabels } from './debug_overlay.js';
 import { isXRActive, getXRRig, XR_SetCamera, XR_SCALE, XR_GetControllerWorldPose } from './webxr.js';
+import { QuantumRenderer_Init, QuantumRenderer_Render, QuantumRenderer_Reset } from './quantum_renderer.js';
 import {
 	cl, cl_visedicts, cl_numvisedicts, cl_dlights, cl_entities,
 	cl_lightstyle
@@ -1172,7 +1173,11 @@ export function R_RenderView() {
 	// Present the frame via Three.js
 	if ( renderer && scene && camera ) {
 
-		renderer.render( scene, camera );
+		if ( QuantumRenderer_Render( scene, camera ) !== true ) {
+
+			renderer.render( scene, camera );
+
+		}
 
 	}
 
@@ -1245,6 +1250,7 @@ export function R_Init() {
 
 	R_InitParticles();
 	R_SetParticleExternals( { scene: scene } );
+	QuantumRenderer_Init();
 
 	Con_Printf( 'R_Init: Three.js renderer ready' );
 
@@ -1285,6 +1291,7 @@ export function R_NewMap() {
 	_spriteMaterialCache.clear();
 
 	Debug_ClearLabels();
+	QuantumRenderer_Reset();
 
 	// rebuild lightmaps
 	GL_BuildLightmaps_rsurf();

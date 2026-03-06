@@ -1,0 +1,140 @@
+
+                 
+}---------->(((º>----------< Electric Fish >----------<º)))<----------{
+
+			Date: 20th of April, 1999
+		       Title: Tangerine Dream
+		    Filename: efdm9.bsp
+		        Game: Quake 1
+		      Author: Mr Fribbles (Van Ricketts)
+		       Email: fribbles@planetquake.com
+		         ICQ: 1952617
+		   Home Page: http://www.planetquake.com/frib/
+
+
+}---------->(((º>----------< About The Map >----------<º)))<----------{
+
+The scenario: you're doing routine maintenence work on the lower level 
+of this facility when you say to your mates, "bugger this work shit, 
+let's have a deathmatch intead". Your eloquent proposal is greeted with 
+great enthusiasm, and the motion is thus unanimously passed.
+
+Designed for 1on1 (with either dm1 or dm3 rules), FFA 3-6 (defenitely
+use dm3 rules here), you might even want to try 2on2... it could work.
+
+I was inspired in part by id's 'The Slimy Place' (q2dm something), I 
+really dig the orange pipes/bright green slime combination. I believe
+the layout and architecture are my own though (well, with the exception
+of the pipes of course :)
+
+I thought up the name 'Tangerine Dream', because I wanted to suggest
+something orange of course, and because it sounds cool. Apparently it's
+the name of some band (I found this out from a quick search of the web)
+but I have never heard their music... probably some dodgy 70's stuff.
+In any case, I must have heard of them somewhere, and I recalled the 
+phrase when I was doing the word-association thing with 'Tangerine'. :)
+
+Fun things to do in efdm9 include standing under the RA and lobbing
+grenades down the pipe to the MH area (you get a bonus frag sometimes :)
+and picking people out of the air in the outdoor area... as they 
+respawn and jump down for the RL. Overall efdm9 is not as intense and
+hectic as efdm8, which is a bit of a shame imho... but it's a little
+different, and hopefully you'll dig it anyway. If you enjoy it, please
+send me an email to let me know (I still haven't played it, d'oh).
+
+Tangerine Dream also probably makes for a very pretty slideshow if you
+have a p133 or under. If you're getting less than 30 fps, I apologise,
+and I want you to know that I feel your pain, brother. 
+
+
+}----------->(((º>------------< Credits >------------<º)))<-----------{
+
+ ¤ David Jewsbury, as always, for Stoneless... THE Q1 level editor.
+ ¤ id for Quake, for the Q2 textures which I enjoy using in my Quake
+   levels, and for making me want to do a map with orange pipes, 
+   ladders, and slime.
+ ¤ Jeff Yost, for his continued dedication to providing the bestest and
+   most kickass DM level reviews on the planet.
+ ¤ Danny McGillick (bomr) for a shitload of things, going back many 
+   many years... but mostly just for being a mate.
+ ¤ Gibfactory, for his cool textures.
+ ¤ DaMaul and Pingu, for the ladder concept from their UKPAK maps.
+ ¤ Mr Shambler, for the excellent feedback and encouragement.
+ ¤ Peej, for the texture, and cos he's a dude.
+ ¤ Junior, for being there from the start, and humouring me by looking
+   at the level when it was comprised of like 6 brushes. His maps rock
+   too, go get them at http://junior.quakeintosh.com
+ ¤ All the beta testers... if I try to list everyone, I'll forget 
+   someone, and I'd rather not do that. You know who you are though, 
+   and I greatly appreciate your efforts.
+ ¤ Whoever thought up this text file concept... giving me yet another
+   excuse to crap on forever. Whoever you are, you da man!
+     
+                
+}---------->(((º>---------< Play Information >---------<º)))<---------{
+
+Requirements:        quake 1.01 or higher
+Single player:       hehe.. well you might find some fish to kill, but 
+		     I don't like your chances of finding the exit
+Cooperative:         I guess you could cooperatively decimate the fish
+		     population, but there's no coop player starts, so
+	             then again maybe not?
+Deathmatch:          2-6 players... 8 DM starts
+Difficulty Settings: no
+New sounds:          no
+New Graphics:        custom textures
+
+
+}---------->(((º>----------< Construction >----------<º)))<-----------{
+
+Base:               new map from scratch
+Editor:             stoneless (v 1.01)
+Other Utils:        ArghLite 2.0 and q2towad by Tim Wright
+Textures used:      some from q2, some I've modified, peej_mt3 by Peej, 
+	            *Rteleport13 and Rstone60 by Gibfactory, dirt1_1 
+	            from markswad.wad, dunno where the sky is from.
+Bugs:               none that I'm aware of
+Build time:         about a month, on and off
+Compile machine:    p120 32mb
+Compile time:       lots
+
+
+}--------->(((º>----------< My Quake Levels >----------<º)))<---------{
+                                                                      
+		     Electric Fish Deathmatch One
+ 		     Electric Fish Deathmatch Two
+                    Electric Fish Deathmatch Three
+                     Electric Fish Deathmatch Four
+			    Efdm5 - Vortex
+			   Efdm6 - Gunmetal
+ 			   Efdm7 - Biohazard
+			Efdm8 - Cryptosporidium
+			Efdm9 - Tangerine Dream
+		    Efdm10 - WhiteChocolateSpaceEgg
+
+			 Fribdev1 - Powder Keg
+		Fribweb1 - Webby's World Special Edition
+	  Mrftig01 - Frib and Tigger-oN's arena (rocket arena)
+
+	  All available from http://www.planetquake.com/frib/
+	  plus ftp.cdrom.com and its plethora of mirror sites
+
+
+}--------->(((º>----------< Copyright Stuff >----------<º)))<---------{
+
+Authors may not use this level as a base to build additional levels.
+You may NOT decompile the level into a .map file for any reason 
+whatsoever.
+You may modify the .bsp (adding bot route files, gl-vis it, replacing 
+textures, whatever) for you OWN PERSONAL USE only; do not distribute 
+any modified versions of this level.
+
+You are not allowed to commercially exploit this level, i.e. put it on 
+a CD or any other electronic format that is sold for money, without my 
+explicit permission.
+You MAY distribute this BSP through any electronic network, provided 
+you include this text file and leave the archive intact.
+
+Basically, please don't fuck with the map, and don't fuck ME around.
+I put a lot of time and effort into creating these levels, for free;
+all I ask for in return is a little respect and common courtesy.

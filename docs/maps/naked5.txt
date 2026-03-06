@@ -1,0 +1,76 @@
+================================================================
+1998-11-26		  Info
+================================================================
+Title                   : Kinky Afro			       
+Filename                : naked5.bsp			       
+Author                  : Martin Mastomäki		        
+Email Address           : gandhi@fragzone.se		       	
+Description             : e1m2'ish map, designed with teamplay
+			  games in mind.					  
+
+
+
+================================================================
+			  Author Info
+================================================================
+Name			: Martin Mastomäki
+Aka			: Gandhi, bABy rOo!
+Email			: gandhi@fragzone.se
+Homepage		: http://www.fragzone.se/gandhi
+Clans			: Swedish Peace & Arbitration Society
+			  tHe pOOh cLAn
+Other Maps		: The Emperors New Clothes  - naked
+			  Walking the Dog           - naked2
+ 			  Naked Cows On Stage       - naked3
+ 			  My Parents Don't Like You - naked4
+
+
+
+================================================================
+			  Map Info
+================================================================
+Single Player           : Yeah right...
+Cooperative             : No
+Deathmatch 2-8          : Yes! Kill kill kill!
+Difficulty Settings     : No
+Base                    : New level from scratch
+Editor(s) used          : Worldcraft 1.6 
+Known Bugs              : none
+Build Time              : 14 days + 14 days beta testing
+
+
+
+================================================================
+			  Thanks
+================================================================
+Big Hug to		: ziffon <sy6jors@cse.hks.se>
+
+			  tiGGr <spk@algonet.se>
+
+			  Paul James (Peej) 
+			  http://www.llamanet.net/peej/
+
+Thanks to		: Olivier over at The Great Green Heron
+			  http://www.gibbed.com/1on1/
+
+			  Jeff Yost & Ramshackle Crew
+			  http://www.planetquake.com/ramshackle
+
+			  GeN
+			  http://www.telefragged.com/genclasses/
+
+			  Swedish Peace & Arbitration Society
+			  http://www.fragzone.se/spas
+
+			  tHe pOOh cLAn
+			  http://tpc.demolition.org
+
+
+
+================================================================
+		  Copyright & Permissions shit
+================================================================
+This BSP may be distributed ONLY over the Internet and/or BBS 
+systems. You are NOT authorized to put this BSP on any CD or 
+distribute it in any way without my permission.
+

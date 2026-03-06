@@ -1,0 +1,58 @@
+18th April 1998
+
+-------------------------------------------------------------------------------------
+Title                   : Eternal Dismemberment Complex
+Filename                : edc.bsp
+Author                  : Kevin Shanahan
+Aka                     : Tyrann
+Email Address           : kmshanah@senet.com.au
+Home Page               : http://users.senet.com.au/~kmshanah
+-------------------------------------------------------------------------------------
+
+* Play Information *
+
+Single Player           : No
+Cooperative             : No
+Deathmatch              : Yes
+Difficulty Settings     : No
+New Sounds              : No
+New Graphics            : Mostly converted Quake2 textures, some modified slightly.
+                          - Textures 'HEAD_MT7' and 'DLIGHT_8' by Headshot.
+
+* Construction *
+
+Base                    : New level from scratch
+Editor(s) used          : BSP 0.93b
+Build Time              : Umm, I don't want to talk about it ;)
+
+
+* Description *
+
+Futuristic base style map, designed for 1-on-1 play and small FFA (2-6 recommended).
+
+
+* Credits *
+
+Thanks to:
+    Christoph "Gonzo" Werner for betatesting and giving loads of suggestions.
+        You can read a review of the map at his site, Gonz-O-Matic
+        ---> http://www.planetquake.com/gonzomatic/
+
+    Skorpion for betatesting and making kick ass Omi-routes for the map.
+        You can find the omicron route at his site,
+        ---> http://www.planetquake.com/skorpion
+
+    Gibbie for betatesting and making frogbot route for the map.
+        Visit fmods for the frogbot route,
+        ---> http://www.botepidemic.com/fmods/
+
+
+* Copyright / Permissions *
+
+Authors may NOT use this level as a base to build additional
+levels. And it must not be sold, without permission from the author.
+
+You MAY distribute this BSP, provided you include this file, with
+no modifications.  You may distribute this file in any electronic
+format (BBS, Diskette, CD, etc) as long as you include this file 
+intact.

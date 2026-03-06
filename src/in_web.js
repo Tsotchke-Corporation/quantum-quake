@@ -73,12 +73,53 @@ let isQuest = false;
 // XR trigger edge detection
 let _xrPrevLeftTrigger = false;
 let _xrPrevRightTrigger = false;
+let _suppressEscapeForUnlock = false;
+
+function isQuantumUiEvent( event ) {
+
+	const target = event != null ? event.target : null;
+	if ( target == null || typeof target.closest !== 'function' )
+		return false;
+
+	return target.closest( '#quantum-controls, #qc-screen-toggle' ) != null;
+
+}
 
 function requestPointerLock() {
 
-	if ( pointerLocked || isQuest || targetElement == null ) return;
+	if ( pointerLocked || isQuest ) return;
 
-	targetElement.requestPointerLock();
+	const primaryTarget = targetElement || document.body;
+	const fallbackTarget = document.body;
+
+	function tryLock( element ) {
+
+		if ( element == null || typeof element.requestPointerLock !== 'function' ) return false;
+
+		try {
+
+			const maybePromise = element.requestPointerLock();
+			if ( maybePromise && typeof maybePromise.catch === 'function' ) {
+
+				maybePromise.catch( () => {
+
+					// Pointer lock can be denied without crashing gameplay.
+
+				} );
+
+			}
+			return true;
+
+		} catch ( _error ) {
+
+			return false;
+
+		}
+
+	}
+
+	if ( tryLock( primaryTarget ) ) return;
+	if ( fallbackTarget !== primaryTarget ) tryLock( fallbackTarget );
 
 }
 
@@ -145,6 +186,13 @@ function mapBrowserKeyToQuake( event ) {
 function handleKeyDown( event ) {
 
 	if ( ! in_initialized ) return;
+	if ( isQuantumUiEvent( event ) ) return;
+	if ( event.code === 'Escape' && pointerLocked ) {
+
+		_suppressEscapeForUnlock = true;
+		return;
+
+	}
 
 	// Unlock audio on first user gesture
 	S_UnlockAudio();
@@ -195,6 +243,13 @@ function handleKeyDown( event ) {
 function handleKeyUp( event ) {
 
 	if ( ! in_initialized ) return;
+	if ( isQuantumUiEvent( event ) ) return;
+	if ( event.code === 'Escape' && _suppressEscapeForUnlock ) {
+
+		_suppressEscapeForUnlock = false;
+		return;
+
+	}
 
 	const qkey = mapBrowserKeyToQuake( event );
 	if ( qkey ) {
@@ -208,6 +263,7 @@ function handleKeyUp( event ) {
 function handleMouseMove( event ) {
 
 	if ( ! in_initialized || ! mouseactive ) return;
+	if ( isQuantumUiEvent( event ) ) return;
 
 	// Pointer Lock API gives us movementX/Y directly
 	mx_accum += event.movementX || 0;
@@ -218,6 +274,7 @@ function handleMouseMove( event ) {
 function handleMouseDown( event ) {
 
 	if ( ! in_initialized ) return;
+	if ( isQuantumUiEvent( event ) ) return;
 
 	// Unlock audio on first user gesture
 	S_UnlockAudio();
@@ -289,6 +346,7 @@ function handleMouseDown( event ) {
 function handleMouseUp( event ) {
 
 	if ( ! in_initialized ) return;
+	if ( isQuantumUiEvent( event ) ) return;
 
 	let qkey;
 	switch ( event.button ) {
@@ -307,6 +365,7 @@ function handleMouseUp( event ) {
 function handleWheel( event ) {
 
 	if ( ! in_initialized ) return;
+	if ( isQuantumUiEvent( event ) ) return;
 
 	if ( event.deltaY < 0 ) {
 
@@ -324,7 +383,6 @@ function handleWheel( event ) {
 
 function handlePointerLockChange() {
 
-	const wasLocked = pointerLocked;
 	pointerLocked = document.pointerLockElement === targetElement;
 
 	if ( pointerLocked ) {
@@ -335,22 +393,13 @@ function handlePointerLockChange() {
 
 		mouseactive = false;
 
-		// Show the menu when pointer lock is lost while in-game,
-		// but only if we actually had pointer lock before (not on failed requests)
-		// Skip this on mobile - touch controls handle menu via pause button
-		if ( ! isMobile && wasLocked && key_dest === key_game ) {
-
-			Key_Event( K_ESCAPE, true );
-			Key_Event( K_ESCAPE, false );
-
-		}
-
 	}
 
 }
 
 function handleContextMenu( event ) {
 
+	if ( isQuantumUiEvent( event ) ) return;
 	event.preventDefault();
 
 }
@@ -364,6 +413,7 @@ function handleVisibilityChange() {
 function handleTouchStart( event ) {
 
 	if ( ! in_initialized ) return;
+	if ( isQuantumUiEvent( event ) ) return;
 
 	// Unlock audio on first user gesture
 	S_UnlockAudio();

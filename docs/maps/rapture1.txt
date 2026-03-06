@@ -1,0 +1,43 @@
+------------------------------------------------------------------
+ Title                   : imminent boom
+ Filename                : rapture1.bsp
+ Author                  : danimal [dan proietti] 
+ Email Address           : dannyp@wpi.edu
+ Description             : small, open, base-type level.                           
+                          
+ Additional Credits to   : id, ben morris
+------------------------------------------------------------------
+
+
+* Play Information *
+
+ Settings                : deathmatch 3 if available
+ Deathmatch 2-4          : definitely
+ Deathmatch 5-16         : very bloody
+
+
+* Construction *
+
+ Build Time      : a couple weeks
+ Compile Time    : only 165 seconds total on my little p133
+ Editor(s) used  : worldcraft, edit
+ Known Bugs      : none...let me know if you find any.
+                   
+
+* Other Info *
+
+ assuming i have enough time to devote to it, rapture will be
+ a multi-level series geared towards fast-paced, high-intensity
+ action, suitable for one-on-one play.  
+
+ this level does have a quad powerup, but for those people
+ that feel it imbalances 1-on-1 matches, it is easily avoidable.
+
+ any comments, positive or negative, are welcome.
+
+
+* Distribution *
+
+ this is to be freely distributed...if you payed money
+ for it then you more than likely got dicked over.
+

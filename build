@@ -1,0 +1,109 @@
+#!/usr/bin/env -S deno run
+
+import { dirname, join } from "node:path";
+
+const ROOT = Deno.cwd();
+const DOCS_DIR = join( ROOT, "docs" );
+
+const COPY_ENTRIES = [
+	"index.html",
+	"main.js",
+	"icon.svg",
+	"icon.png",
+	"mainmenu.png",
+	"moonlab.js",
+	"moonlab.wasm",
+	"pak0.pak",
+	"LICENSE",
+	"README.md",
+	"maps",
+	"src",
+];
+
+async function ensurePermission( descriptor: Deno.PermissionDescriptor ): Promise<void> {
+
+	const current = await Deno.permissions.query( descriptor );
+	if ( current.state === "granted" ) return;
+
+	const requested = await Deno.permissions.request( descriptor );
+	if ( requested.state !== "granted" ) {
+
+		throw new Error( `Missing permission: ${descriptor.name}` );
+
+	}
+
+}
+
+async function ensureDirectory( path: string ): Promise<void> {
+
+	await Deno.mkdir( path, { recursive: true } );
+
+}
+
+async function copyEntry( sourcePath: string, destinationPath: string ): Promise<void> {
+
+	const stat = await Deno.stat( sourcePath );
+	if ( stat.isDirectory ) {
+
+		await ensureDirectory( destinationPath );
+		for await ( const entry of Deno.readDir( sourcePath ) ) {
+
+			await copyEntry( join( sourcePath, entry.name ), join( destinationPath, entry.name ) );
+
+		}
+		return;
+
+	}
+
+	await ensureDirectory( dirname( destinationPath ) );
+	await Deno.copyFile( sourcePath, destinationPath );
+
+}
+
+async function normalizeIndexForGitHubPages( indexPath: string ): Promise<void> {
+
+	let html = await Deno.readTextFile( indexPath );
+
+	if ( html.includes( '<base href="./">' ) === false ) {
+
+		html = html.replace(
+			/<meta[^>]*name="viewport"[^>]*>\s*/i,
+			( match ) => `${match}\t<base href="./">\n`,
+		);
+
+	}
+
+	html = html
+		.replace( /href="(?:\.\/)?icon\.svg"/g, 'href="./icon.svg"' )
+		.replace( /href="(?:\.\/)?icon\.png"/g, 'href="./icon.png"' )
+		.replace( /src="(?:\.\/)?moonlab\.js"/g, 'src="./moonlab.js"' )
+		.replace( /src="(?:\.\/)?main\.js"/g, 'src="./main.js"' );
+
+	await Deno.writeTextFile( indexPath, html );
+
+}
+
+await ensurePermission( { name: "read", path: ROOT } );
+await ensurePermission( { name: "write", path: ROOT } );
+
+await Deno.remove( DOCS_DIR, { recursive: true } ).catch( ( error: unknown ) => {
+
+	if ( error instanceof Deno.errors.NotFound ) return;
+	throw error;
+
+} );
+
+await ensureDirectory( DOCS_DIR );
+
+for ( const entry of COPY_ENTRIES ) {
+
+	const sourcePath = join( ROOT, entry );
+	const destinationPath = join( DOCS_DIR, entry );
+	await copyEntry( sourcePath, destinationPath );
+
+}
+
+await normalizeIndexForGitHubPages( join( DOCS_DIR, "index.html" ) );
+
+console.log( "Build complete." );
+console.log( `Static site output: ${DOCS_DIR}` );

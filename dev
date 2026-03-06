@@ -1,0 +1,154 @@
+#!/usr/bin/env -S deno run
+
+import { extname, join } from "node:path";
+
+const ROOT = Deno.cwd();
+const HOST = "127.0.0.1";
+const PORT = 8080;
+
+const MIME_TYPES: Record<string, string> = {
+	".html": "text/html; charset=utf-8",
+	".js": "text/javascript; charset=utf-8",
+	".json": "application/json; charset=utf-8",
+	".css": "text/css; charset=utf-8",
+	".svg": "image/svg+xml",
+	".png": "image/png",
+	".jpg": "image/jpeg",
+	".jpeg": "image/jpeg",
+	".wasm": "application/wasm",
+	".map": "application/json; charset=utf-8",
+	".txt": "text/plain; charset=utf-8",
+	".pak": "application/octet-stream",
+	".bsp": "application/octet-stream",
+};
+
+async function ensurePermission( descriptor: Deno.PermissionDescriptor ): Promise<void> {
+
+	const current = await Deno.permissions.query( descriptor );
+	if ( current.state === "granted" ) return;
+
+	const requested = await Deno.permissions.request( descriptor );
+	if ( requested.state !== "granted" ) {
+
+		throw new Error( `Missing permission: ${descriptor.name}` );
+
+	}
+
+}
+
+function mimeTypeForPath( path: string ): string {
+
+	const ext = extname( path ).toLowerCase();
+	return MIME_TYPES[ ext ] || "application/octet-stream";
+
+}
+
+function sanitizePathname( pathname: string ): string | null {
+
+	let decoded = "";
+	try {
+
+		decoded = decodeURIComponent( pathname );
+
+	} catch ( _error ) {
+
+		return null;
+
+	}
+
+	const isDirectoryHint = decoded.endsWith( "/" );
+	if ( decoded.includes( "\0" ) ) return null;
+
+	const parts = decoded.split( "/" ).filter( ( part ) => part.length > 0 );
+	for ( const part of parts ) {
+
+		if ( part === "." || part === ".." ) return null;
+
+	}
+
+	let relativePath = parts.join( "/" );
+	if ( relativePath.length === 0 || isDirectoryHint ) {
+
+		relativePath = join( relativePath, "index.html" );
+
+	}
+
+	return relativePath;
+
+}
+
+async function resolveRequestPath( pathname: string ): Promise<string | null> {
+
+	const relativePath = sanitizePathname( pathname );
+	if ( relativePath === null ) return null;
+
+	let absolutePath = join( ROOT, relativePath );
+
+	try {
+
+		const stat = await Deno.stat( absolutePath );
+		if ( stat.isDirectory ) {
+
+			absolutePath = join( absolutePath, "index.html" );
+			await Deno.stat( absolutePath );
+
+		}
+
+		return absolutePath;
+
+	} catch ( error ) {
+
+		if ( error instanceof Deno.errors.NotFound ) return null;
+		if ( error instanceof Deno.errors.NotADirectory ) return null;
+		if ( typeof error === "object" && error != null && "code" in error && ( error as { code?: string } ).code === "ENOTDIR" ) return null;
+		throw error;
+
+	}
+
+}
+
+await ensurePermission( { name: "read", path: ROOT } );
+await ensurePermission( { name: "net" } );
+
+console.log( `Three-Quake dev server: http://${HOST}:${PORT}/` );
+
+Deno.serve( { hostname: HOST, port: PORT }, async ( request ) => {
+
+	try {
+
+		if ( request.method !== "GET" && request.method !== "HEAD" ) {
+
+			return new Response( "Method Not Allowed", { status: 405 } );
+
+		}
+
+		const url = new URL( request.url );
+		const absolutePath = await resolveRequestPath( url.pathname );
+		if ( absolutePath === null ) {
+
+			return new Response( "Not Found", { status: 404 } );
+
+		}
+
+		const fileInfo = await Deno.stat( absolutePath );
+		const headers = new Headers();
+		headers.set( "content-type", mimeTypeForPath( absolutePath ) );
+		headers.set( "content-length", String( fileInfo.size ) );
+		headers.set( "cache-control", "no-store" );
+
+		if ( request.method === "HEAD" ) {
+
+			return new Response( null, { status: 200, headers } );
+
+		}
+
+		const file = await Deno.open( absolutePath, { read: true } );
+		return new Response( file.readable, { status: 200, headers } );
+
+	} catch ( error ) {
+
+		console.error( "Dev server request error:", request.url, error );
+		return new Response( "Internal Server Error", { status: 500 } );
+
+	}
+} );

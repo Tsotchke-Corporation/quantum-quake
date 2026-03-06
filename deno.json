@@ -4,6 +4,8 @@
 		"three/addons/renderers/CSS3DRenderer.js": "./server/browser_shim.js"
 	},
 	"tasks": {
-		"server": "deno run --allow-net --allow-read --unstable-net game_server.js"
+		"dev": "deno run dev",
+		"build": "deno run build",
+		"server": "deno run --allow-net --allow-read --unstable-net server/game_server.js"
 	}
 }

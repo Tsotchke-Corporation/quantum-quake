@@ -10,6 +10,16 @@ https://mrdoob.github.io/three-quake/
 
 https://x.com/mrdoob/status/2015076521531355583
 
+### Deno Workflow
+
+Run a local static server:
+
+`deno run dev`
+
+Build a GitHub Pages deployment into `docs/`:
+
+`deno run build`
+
 ### Assets
 
 Shareware `pak0.pak` included (Episode 1).  

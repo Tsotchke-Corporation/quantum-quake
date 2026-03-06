@@ -1,0 +1,146 @@
+                  ·· I N F O R M A T I O N ··
+
+Title                  : [ Z E D ]
+
+Date of release        : 24 May 1999
+
+Filename               : zed.bsp
+                         zed_o.bsp  -  with  Omicron Bot support
+
+Author                 : [ v o n d u r ]  aka  Dmitry Svetlichny 
+
+Email address          : sda@elbrus.ru	
+
+Homepage               : Vondur's War Supply
+                         http://www.elbrus.ru/~vondur       	
+
+Description            : Quake 1  Rusty  Style  Deathmatch level
+
+Other maps by author   : Q1dm - dokkur1-6; sannur[q1ra]; [ferrum]
+                         Q2dm - svartur1-3; compass second ed.
+                         HLsp - sigur
+
+Single Player          : Yes, for  discover secret place between 
+                         bloody deathmatches...
+                        [it  became  a  little  tradition  tho =]
+
+Cooperative            : Sure! why not?  Walk  with  friends and 
+                         talk  about weather and items placement. 
+                         Or play  in  game - who first will find 
+                         those damned secret =]
+
+Deathmatch             : Designed for it...
+                        
+Difficulty Settings    : Don't forget to type  "skill 3"  before 
+                         fighting with Omicrons =]
+
+Base                   : New level directly from my brains...
+
+Editor(s) used         : Worldcraft 1.6 
+                         Wally 1.3x
+                         Photoshop 
+                         Quake Name Maker
+                         Bred2b
+
+Textures               : jf1.wad by John Fitzgibbons, 
+                         quake2.wad,  shrak.wad [sky],  zed.wad 
+                         by me  [some  edited tex from  jf1.wad 
+                         for those stars and logos]
+
+Known Bugs             : None
+
+Build Time             : 2 weeks or so
+
+Additional utils used  : Arghlite
+                         Q2toWad
+                        				
+
+                         ·· N O T E S ··
+
+This map  was made  under the strong unfluence of textures. This 
+level  exist only thanks to  John Fitzgibbons'  "Rubicon" single 
+player map.  [zed] made for duels  primarily, but  also suitable 
+for 4ffa. If you'll decide to play with  more players...methinks 
+that it will be pure massacre.
+
+
+I made this map in the two versions:
+
+   First  - common map                            -   zed.bsp
+   Second - with built in OmicronBot support 	  - zed_o.bsp       *
+	
+* - Second version you can download from my page only [see above]
+
+
+                    ·· C R E D I T S   T O: ··
+
+Ben Morris for WC sure [Pro canceled - this is our doom, friends.
+But there will be 2.2 - this is our only hope]
+[www.worldcraft.com]
+
+id software for this dark and magnetic game
+[www.idsoftware.com]
+
+Jeff Yost and Ramshackle crew for playtesting, support and notes. 
+[Good luck, Jeff] [www.planetquake.com/ramshackle]
+
+Quantum Acces for beautiful sky textures from their Shrak add-on
+[www.shrak.com]
+
+John Fitzgibbons for  awesome  textures  and  sp  level  Rubicon
+[students.washington.edu/johnfitz]
+
+Tim  "Argh!"  Wright  for  his  excellent  Arghlite  and Q2toWad 
+utilities
+[www.planetquake.com/arghrad]
+
+Neal White III and Ty Matthews for superb Wally
+[www.planetquake.com/wally]
+
+Mr.Shambler  for  support and for his awesome site [without your 
+review of Rubicon I wouldn't made this map, really...]
+[www.planetquake.com/teamshambler]
+
+Blod for support [quake.kazan.ru]
+
+Paul for support [www.planetquake.com/mpq]
+
+Peek for support [peek.terrafusion.com]
+
+ALL mappers appeared at Qboard - Keep good discussion guys! [and 
+levels too =]
+[headshot.terrafusion.com/board.htm]
+
+ALL  guys  who sent me good feedback regarding [ferrum]- without 
+you I haven't energy for further creation
+
+Mr.Elusive for strange mod, when skinned player  models  appears 
+in  the  levels  and  kills  you  from  rocketlauncher and other 
+various weapons. This mod known also as Omicron Bot. 
+[www.botepidemic.com/gladiator]
+
+Ashley Bone  for  his exellent progz - Pak Explorer and QStart - 
+VERY useful! [Without Qstart I become nervous and dangerous]
+[quakestuff.telefragged.com]
+
+ALL  musicians  who  inspired  me during level making. Legendary 
+Pink Dots, Beherit and Necros especially.
+
+Purusa  for being there and for great modz.  ["Shrink/Expand" is 
+my fave now!]
+[members.xoom.com/purusa]
+
+
+                   ·· L E G A L  S T U F F ··
+
+This  BSP  may  be  distributed ONLY via the Internet and/or BBS 
+systems. You are NOT authorized to put this BSP  on  any  CD  or 
+distribute it in any way without my permission. And don't remove 
+this .txt file from the .zip archive!
+
+
+        Enjoy, and thank you, True Quaker, for reading  
+                   these 4929 bytes to the end!
+
+
+                         [ v o n d u r ]

@@ -1,0 +1,73 @@
+================================================================
+Title                   : Scrap Metal
+BSP Name                : Baldm6.bsp
+Author                  : Benoit "Bal" Stordeur
+Release Date            : June 17, 1999
+Email Address           : Bal@planetquake.com
+ICQ number              : 23048847
+Home Page               : http://www.planetquake.com/bal
+File size               : 280 kb
+
+Description             : This map was quick in the making, 
+			  Its very grey/blue, has a sorta sewer facility feel to it. Its a bit hard to
+			  learn at first but the layout is actually pretty simple, u just have to think
+			  of it as 4 2 story rooms set around one big outside atrium, the map might feel
+			  big but ull see that it actually plays the coolest in 1on1, more then 4
+			  players is a bit of a mess. U can do lots of cool rocket jumps in this map, 
+			  and they are lotsa of ways to predict where ur opponent is headed.
+
+Additional Thanks to    : Ben Morris, for Worldcraft, the best level editor I know of.
+                          ID for quake, the game that rocks my world!
+                          All the great mappers that made me wanna start mapping
+                          (GeN, Headshot, Ztn, Frib, Peej...)
+			  Headshot for coding the Qboard, great work man!
+  			  (headshot.terrafusion.com/qboard.html)
+			  Pox for the great textures (www.planetquake.com/paroxysm)
+			  Vigilante, Xori, Paul, Zephys, Preacher and Gibbie for giving me feedback
+			  All the people on the Qboard
+ 			  And all the people that hang around telefragged.3dnet.net #terrafusion
+
+Other stuff             : Please send me feedback, and warn me if u review it or put it on
+ 			  a server!
+                                          
+By the same author      : [Q1] Baldm1 - Horror at Red Hook
+                          [Q1] Baldm2 - In The Vault
+                          [Q1] Baldm3 - Tainted Meat
+			  [Q1] Baldm4 - Eternal Life
+			  [Q1] Baldm5 - When the Beast Prevails
+                                                    
+================================================================
+
+* Play Information *
+
+Game                    : Quake
+Single Player           : No way
+Cooperative Play        : look above for the answer =)
+Deathmatch Play         : probably
+Difficulty Settings     : uhm...
+
+* MAP Information *
+
+New Textures            : Yep, great textures made by Pox.
+New sounds              : uhm...
+
+* Construction *
+
+Base                    : from scratch
+Construction Time       : Around 2 week + beta testing.
+Build programs          : Qbsp, Arghlite, Rvis
+Build Time              : very little
+Compile machine         : P2 448mhz, 128mg RAM... oh yeah! 
+Editor used             : Worldcraft 1.6b
+Other programs          : Quark, Quart, bsp2wad, mergewad, psp5...
+Known Bugs              : Dont think so, tell me if u find any of course =)
+
+* Copyright / Permissions *
+
+All textures in this level remain property of their respective owners.
+
+You may NOT use this level as a base to build additional levels without
+explicit permission of me! (the author =).
+You may distribute this BSP in any electronic format (BBS, Internet,
+CD, etc) but u may NOT by any means use it to gain money.
+If u paid to get this, then u got totally riped off! =)
