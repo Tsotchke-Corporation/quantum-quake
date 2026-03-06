@@ -8,7 +8,7 @@ const PHASE_TEXTURE_SIZE = 128;
 const PHASE_TEXEL_COUNT = PHASE_TEXTURE_SIZE * PHASE_TEXTURE_SIZE;
 const STATE_STRUCT_SIZE = 256;
 const AMPLITUDE_PTR_OFFSET = 8; // quantum_state_t.amplitudes pointer (WASM32 layout)
-const RT_MAX_TRIANGLES_DEFAULT = 24576;
+const RT_MAX_TRIANGLES_DEFAULT = 19456;
 const RT_LEAF_TRIANGLES = 8;
 const RT_MAX_BVH_DEPTH = 24;
 const RT_BVH_REBUILD_INTERVAL = 45;
@@ -127,17 +127,17 @@ let _uiToggle = null;
 let _uiMinimized = false;
 
 export const r_quantum = new cvar_t( 'r_quantum', '1', true );
-export const r_quantum_mode = new cvar_t( 'r_quantum_mode', '1', true );
-export const r_quantum_qubits = new cvar_t( 'r_quantum_qubits', '8', true );
-export const r_quantum_depth = new cvar_t( 'r_quantum_depth', '8', true );
-export const r_quantum_spp = new cvar_t( 'r_quantum_spp', '3', true );
-export const r_quantum_bounces = new cvar_t( 'r_quantum_bounces', '2', true );
-export const r_quantum_bundle = new cvar_t( 'r_quantum_bundle', '1', true );
+export const r_quantum_mode = new cvar_t( 'r_quantum_mode', '3', true );
+export const r_quantum_qubits = new cvar_t( 'r_quantum_qubits', '12', true );
+export const r_quantum_depth = new cvar_t( 'r_quantum_depth', '24', true );
+export const r_quantum_spp = new cvar_t( 'r_quantum_spp', '4', true );
+export const r_quantum_bounces = new cvar_t( 'r_quantum_bounces', '6', true );
+export const r_quantum_bundle = new cvar_t( 'r_quantum_bundle', '5', true );
 export const r_quantum_rt_tris = new cvar_t( 'r_quantum_rt_tris', String( RT_MAX_TRIANGLES_DEFAULT ), true );
-export const r_quantum_wavelet = new cvar_t( 'r_quantum_wavelet', '0.075', true );
-export const r_quantum_strength = new cvar_t( 'r_quantum_strength', '1.0', true );
-export const r_quantum_gain = new cvar_t( 'r_quantum_gain', '1.10', true );
-export const r_quantum_exposure = new cvar_t( 'r_quantum_exposure', '2.5', true );
+export const r_quantum_wavelet = new cvar_t( 'r_quantum_wavelet', '0.080', true );
+export const r_quantum_strength = new cvar_t( 'r_quantum_strength', '2.00', true );
+export const r_quantum_gain = new cvar_t( 'r_quantum_gain', '0.90', true );
+export const r_quantum_exposure = new cvar_t( 'r_quantum_exposure', '3.10', true );
 
 const _fullscreenVertex = `
 varying vec2 vUv;
@@ -2388,37 +2388,37 @@ function _ensureUi() {
 
 	_uiMode.addEventListener( 'change', function () {
 
-		Cvar_SetValue( 'r_quantum_mode', parseInt( _uiMode.value ) || 0 );
+		Cvar_SetValue( 'r_quantum_mode', parseInt( _uiMode.value ) || 3 );
 
 	} );
 
 	_uiQubits.addEventListener( 'input', function () {
 
-		Cvar_SetValue( 'r_quantum_qubits', parseInt( _uiQubits.value ) || 8 );
+		Cvar_SetValue( 'r_quantum_qubits', parseInt( _uiQubits.value ) || 12 );
 
 	} );
 
 	_uiDepth.addEventListener( 'input', function () {
 
-		Cvar_SetValue( 'r_quantum_depth', parseInt( _uiDepth.value ) || 8 );
+		Cvar_SetValue( 'r_quantum_depth', parseInt( _uiDepth.value ) || 24 );
 
 	} );
 
 	_uiSpp.addEventListener( 'input', function () {
 
-		Cvar_SetValue( 'r_quantum_spp', parseInt( _uiSpp.value ) || 3 );
+		Cvar_SetValue( 'r_quantum_spp', parseInt( _uiSpp.value ) || 4 );
 
 	} );
 
 	_uiBounces.addEventListener( 'input', function () {
 
-		Cvar_SetValue( 'r_quantum_bounces', parseInt( _uiBounces.value ) || 2 );
+		Cvar_SetValue( 'r_quantum_bounces', parseInt( _uiBounces.value ) || 6 );
 
 	} );
 
 	_uiBundle.addEventListener( 'input', function () {
 
-		Cvar_SetValue( 'r_quantum_bundle', parseInt( _uiBundle.value ) || 1 );
+		Cvar_SetValue( 'r_quantum_bundle', parseInt( _uiBundle.value ) || 5 );
 
 	} );
 
@@ -2431,25 +2431,25 @@ function _ensureUi() {
 
 	_uiWavelet.addEventListener( 'input', function () {
 
-		Cvar_SetValue( 'r_quantum_wavelet', parseFloat( _uiWavelet.value ) || 0.075 );
+		Cvar_SetValue( 'r_quantum_wavelet', parseFloat( _uiWavelet.value ) || 0.080 );
 
 	} );
 
 	_uiStrength.addEventListener( 'input', function () {
 
-		Cvar_SetValue( 'r_quantum_strength', parseFloat( _uiStrength.value ) || 1.2 );
+		Cvar_SetValue( 'r_quantum_strength', parseFloat( _uiStrength.value ) || 2.0 );
 
 	} );
 
 	_uiGain.addEventListener( 'input', function () {
 
-		Cvar_SetValue( 'r_quantum_gain', parseFloat( _uiGain.value ) || 1.1 );
+		Cvar_SetValue( 'r_quantum_gain', parseFloat( _uiGain.value ) || 0.9 );
 
 	} );
 
 	_uiExposure.addEventListener( 'input', function () {
 
-		Cvar_SetValue( 'r_quantum_exposure', parseFloat( _uiExposure.value ) || 2.5 );
+		Cvar_SetValue( 'r_quantum_exposure', parseFloat( _uiExposure.value ) || 3.1 );
 
 	} );
 
