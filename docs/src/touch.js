@@ -58,8 +58,24 @@ Detect if we're on a mobile device
 */
 export function Touch_IsMobile() {
 
-	return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test( navigator.userAgent ) ||
-		( navigator.maxTouchPoints && navigator.maxTouchPoints > 2 );
+	const userAgentMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test( navigator.userAgent );
+	const touchPoints = _toInt( navigator.maxTouchPoints, 0 );
+	const coarsePointer = ( typeof window !== 'undefined' && typeof window.matchMedia === 'function' )
+		? window.matchMedia( '(hover: none) and (pointer: coarse)' ).matches
+		: false;
+
+	// Do not treat touch-enabled laptops as mobile. Require a coarse pointer
+	// for touch-based fallback unless the UA is explicitly mobile.
+	return userAgentMobile || ( coarsePointer && touchPoints > 1 );
+
+}
+
+function _toInt( value, fallback ) {
+
+	const num = Number( value );
+	if ( Number.isFinite( num ) === false )
+		return fallback;
+	return num | 0;
 
 }
 

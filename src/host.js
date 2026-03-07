@@ -401,6 +401,8 @@ export async function Host_Init( parms ) {
 	Cbuf_AddText( 'bind s +back\n' );
 	Cbuf_AddText( 'bind a +moveleft\n' );
 	Cbuf_AddText( 'bind d +moveright\n' );
+	Cbuf_AddText( 'bind UPARROW +lookup\n' );
+	Cbuf_AddText( 'bind DOWNARROW +lookdown\n' );
 	Cbuf_AddText( 'bind SPACE +jump\n' );
 	Cbuf_AddText( 'bind MOUSE1 +attack\n' );
 
@@ -423,6 +425,11 @@ export async function Host_Init( parms ) {
 
 		// localStorage may be unavailable
 	}
+
+	// Force look-up / look-down arrows after loading persisted config so
+	// desktop keyboard look is consistent by default.
+	Cbuf_AddText( 'bind UPARROW +lookup\n' );
+	Cbuf_AddText( 'bind DOWNARROW +lookdown\n' );
 
 	// Save config on page unload
 	if ( typeof window !== 'undefined' ) {

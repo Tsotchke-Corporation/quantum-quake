@@ -1649,6 +1649,8 @@ function M_Options_Key( key ) {
 					Cbuf_AddText( 'bind s +back\n' );
 					Cbuf_AddText( 'bind a +moveleft\n' );
 					Cbuf_AddText( 'bind d +moveright\n' );
+					Cbuf_AddText( 'bind UPARROW +lookup\n' );
+					Cbuf_AddText( 'bind DOWNARROW +lookdown\n' );
 					Cbuf_AddText( 'bind SPACE +jump\n' );
 					Cbuf_AddText( 'bind MOUSE1 +attack\n' );
 					Cbuf_AddText( 'cl_forwardspeed 400\n' );

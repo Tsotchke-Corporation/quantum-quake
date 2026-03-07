@@ -63,6 +63,7 @@ let mouseactive = false;
 // Pointer lock state
 let pointerLocked = false;
 let targetElement = null;
+let pointerLockTarget = null;
 
 // Mobile/touch state
 let isMobile = false;
@@ -85,41 +86,47 @@ function isQuantumUiEvent( event ) {
 
 }
 
+function getPointerLockElement() {
+
+	return document.pointerLockElement ||
+		document.mozPointerLockElement ||
+		document.webkitPointerLockElement ||
+		null;
+
+}
+
+function isPointerLockedToGameSurface() {
+
+	const lockedElement = getPointerLockElement();
+	return lockedElement != null && lockedElement === pointerLockTarget;
+
+}
+
 function requestPointerLock() {
 
-	if ( pointerLocked || isQuest ) return;
+	if ( pointerLocked || isQuest || isMobile ) return;
 
-	const primaryTarget = targetElement || document.body;
-	const fallbackTarget = document.body;
+	const lockTarget = pointerLockTarget || targetElement || document.body;
+	if ( lockTarget == null || typeof lockTarget.requestPointerLock !== 'function' ) return;
 
-	function tryLock( element ) {
+	try {
 
-		if ( element == null || typeof element.requestPointerLock !== 'function' ) return false;
+		const maybePromise = lockTarget.requestPointerLock();
+		if ( maybePromise && typeof maybePromise.catch === 'function' ) {
 
-		try {
+			maybePromise.catch( () => {
 
-			const maybePromise = element.requestPointerLock();
-			if ( maybePromise && typeof maybePromise.catch === 'function' ) {
+				// Pointer lock can be denied without crashing gameplay.
 
-				maybePromise.catch( () => {
-
-					// Pointer lock can be denied without crashing gameplay.
-
-				} );
-
-			}
-			return true;
-
-		} catch ( _error ) {
-
-			return false;
+			} );
 
 		}
 
-	}
+	} catch ( _error ) {
 
-	if ( tryLock( primaryTarget ) ) return;
-	if ( fallbackTarget !== primaryTarget ) tryLock( fallbackTarget );
+		// Ignore hard failures to keep input responsive.
+
+	}
 
 }
 
@@ -310,8 +317,18 @@ function handleMouseDown( event ) {
 
 	}
 
-	// On mobile, request fullscreen + landscape and enable touch controls
-	// Only when actually playing, not during demo playback
+	// On desktop, use first click to acquire pointer lock just like the
+	// Three.js pointer lock example. Do not forward that click to gameplay.
+	if ( ! isMobile && key_dest === key_game && ! cls.demoplayback && ! pointerLocked ) {
+
+		requestPointerLock();
+		event.preventDefault();
+		return;
+
+	}
+
+	// On mobile, request fullscreen + landscape and enable touch controls.
+	// Only when actually playing, not during demo playback.
 	if ( isMobile ) {
 
 		// Request fullscreen only when actually playing a map (not menu, demo, or idle state)
@@ -358,6 +375,14 @@ function handleMouseUp( event ) {
 
 	}
 
+	// Ignore release events when gameplay is unlocked; this pairs with the
+	// "first click only locks pointer" behavior above.
+	if ( ! isMobile && key_dest === key_game && ! cls.demoplayback && ! pointerLocked ) {
+
+		return;
+
+	}
+
 	Key_Event( qkey, false );
 
 }
@@ -383,7 +408,7 @@ function handleWheel( event ) {
 
 function handlePointerLockChange() {
 
-	pointerLocked = document.pointerLockElement === targetElement;
+	pointerLocked = isPointerLockedToGameSurface();
 
 	if ( pointerLocked ) {
 
@@ -392,8 +417,20 @@ function handlePointerLockChange() {
 	} else {
 
 		mouseactive = false;
+		mx_accum = 0;
+		my_accum = 0;
+		Key_Event( K_MOUSE1, false );
+		Key_Event( K_MOUSE2, false );
+		Key_Event( K_MOUSE3, false );
 
 	}
+
+}
+
+function handlePointerLockError() {
+
+	pointerLocked = false;
+	mouseactive = false;
 
 }
 
@@ -451,6 +488,9 @@ IN_Init
 export function IN_Init( element ) {
 
 	targetElement = element || document.body;
+	pointerLockTarget = ( targetElement && typeof targetElement.requestPointerLock === 'function' ) ?
+		targetElement :
+		document.body;
 
 	// Build key mapping (deferred from module scope to avoid circular dep in Deno)
 	codeToQuakeKey = {
@@ -501,13 +541,15 @@ export function IN_Init( element ) {
 	document.addEventListener( 'keydown', handleKeyDown );
 	document.addEventListener( 'keyup', handleKeyUp );
 
-	targetElement.addEventListener( 'mousemove', handleMouseMove );
+	// Pointer-lock mousemove is most reliable on document in Chromium/Firefox.
+	document.addEventListener( 'mousemove', handleMouseMove );
 	targetElement.addEventListener( 'mousedown', handleMouseDown );
 	targetElement.addEventListener( 'mouseup', handleMouseUp );
 	targetElement.addEventListener( 'wheel', handleWheel );
 	targetElement.addEventListener( 'contextmenu', handleContextMenu );
 
 	document.addEventListener( 'pointerlockchange', handlePointerLockChange );
+	document.addEventListener( 'pointerlockerror', handlePointerLockError );
 
 	// Add global touch handler for showing menu during demos
 	targetElement.addEventListener( 'touchstart', handleTouchStart, { passive: false } );
@@ -549,7 +591,6 @@ export function IN_Shutdown() {
 
 	if ( targetElement ) {
 
-		targetElement.removeEventListener( 'mousemove', handleMouseMove );
 		targetElement.removeEventListener( 'mousedown', handleMouseDown );
 		targetElement.removeEventListener( 'mouseup', handleMouseUp );
 		targetElement.removeEventListener( 'wheel', handleWheel );
@@ -557,7 +598,9 @@ export function IN_Shutdown() {
 
 	}
 
+	document.removeEventListener( 'mousemove', handleMouseMove );
 	document.removeEventListener( 'pointerlockchange', handlePointerLockChange );
+	document.removeEventListener( 'pointerlockerror', handlePointerLockError );
 	document.removeEventListener( 'visibilitychange', handleVisibilityChange );
 
 	if ( pointerLocked && document.exitPointerLock ) {

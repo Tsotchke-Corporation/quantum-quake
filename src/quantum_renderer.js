@@ -3,20 +3,22 @@ import { cvar_t, Cvar_RegisterVariable, Cvar_SetValue } from './cvar.js';
 import { renderer } from './vid.js';
 import { isXRActive } from './webxr.js';
 import { Con_Printf } from './common.js';
-import { cl, cl_dlights, cl_entities, cl_static_entities } from './client.js';
+import { cl, cl_dlights, cl_static_entities, cl_lightstyle } from './client.js';
+import { d_lightstylevalue } from './glquake.js';
 
 const PHASE_TEXTURE_SIZE = 128;
 const PHASE_TEXEL_COUNT = PHASE_TEXTURE_SIZE * PHASE_TEXTURE_SIZE;
 const STATE_STRUCT_SIZE = 256;
 const AMPLITUDE_PTR_OFFSET = 8; // quantum_state_t.amplitudes pointer (WASM32 layout)
-const RT_MAX_TRIANGLES_DEFAULT = 19456;
+const RT_MAX_TRIANGLES_DEFAULT = 49152;
 const RT_LEAF_TRIANGLES = 8;
 const RT_MAX_BVH_DEPTH = 24;
 const RT_BVH_REBUILD_INTERVAL = 45;
 const RT_TEX_WIDTH = 1024;
-const RT_MAX_EMISSIVE_LIGHTS = 40;
-const RT_RESERVED_DYNAMIC_LIGHTS = 12;
-const RT_RESERVED_MODEL_EMITTERS = 12;
+const RT_MAX_EMISSIVE_LIGHTS = 64;
+const RT_RESERVED_DYNAMIC_LIGHTS = 16;
+const RT_RESERVED_MODEL_EMITTERS = 16;
+const RT_LIGHTSTYLE_NORMAL_VALUE = 264;
 
 const _rtSize = new THREE.Vector2();
 const _savedClearColor = new THREE.Color();
@@ -79,12 +81,18 @@ const _rayAlbedoSwapObjects = [];
 const _rayAlbedoSwapMaterials = [];
 const _rtEmissiveLightPos = [];
 const _rtEmissiveLightColor = [];
+const _rtEmissiveLightBaseColor = [];
 const _rtEmissiveLightRadius = new Float32Array( RT_MAX_EMISSIVE_LIGHTS );
+const _rtEmissiveLightStyleIndex = new Int16Array( RT_MAX_EMISSIVE_LIGHTS );
+const _rtEmissiveLightStyleStrength = new Float32Array( RT_MAX_EMISSIVE_LIGHTS );
 for ( let i = 0; i < RT_MAX_EMISSIVE_LIGHTS; i ++ ) {
 
 	_rtEmissiveLightPos.push( new THREE.Vector3() );
 	_rtEmissiveLightColor.push( new THREE.Vector3() );
+	_rtEmissiveLightBaseColor.push( new THREE.Vector3() );
 	_rtEmissiveLightRadius[ i ] = 0;
+	_rtEmissiveLightStyleIndex[ i ] = 0;
+	_rtEmissiveLightStyleStrength[ i ] = 0;
 
 }
 let _rtEmissiveLightCount = 0;
@@ -92,7 +100,8 @@ let _rtStaticLightCount = 0;
 let _rtDynamicLightCount = 0;
 let _rtModelEmitterLightCount = 0;
 
-const _rtEmitterNameHints = [ 'flame', 'torch', 'candle', 'fire', 'brazier', 'lava' ];
+const _rtEmitterNameHints = [ 'flame', 'torch', 'candle', 'brazier' ];
+const _rtAnimatedStyleIndices = [];
 
 let _frameCounter = 0;
 let _fallbackSeed = 1;
@@ -117,6 +126,7 @@ let _uiBounces = null;
 let _uiBundle = null;
 let _uiRtTris = null;
 let _uiRtDebugTex = null;
+let _uiFlashlight = null;
 let _uiWavelet = null;
 let _uiStrength = null;
 let _uiGain = null;
@@ -130,6 +140,7 @@ let _uiBouncesValue = null;
 let _uiBundleValue = null;
 let _uiRtTrisValue = null;
 let _uiRtDebugTexValue = null;
+let _uiFlashlightValue = null;
 let _uiWaveletValue = null;
 let _uiStrengthValue = null;
 let _uiGainValue = null;
@@ -149,6 +160,7 @@ export const r_quantum_bounces = new cvar_t( 'r_quantum_bounces', '6', true );
 export const r_quantum_bundle = new cvar_t( 'r_quantum_bundle', '5', true );
 export const r_quantum_rt_tris = new cvar_t( 'r_quantum_rt_tris', String( RT_MAX_TRIANGLES_DEFAULT ), true );
 export const r_quantum_rt_debugtex = new cvar_t( 'r_quantum_rt_debugtex', '0', true );
+export const r_quantum_flashlight = new cvar_t( 'r_quantum_flashlight', '0', true );
 export const r_quantum_wavelet = new cvar_t( 'r_quantum_wavelet', '0.080', true );
 export const r_quantum_strength = new cvar_t( 'r_quantum_strength', '2.00', true );
 export const r_quantum_gain = new cvar_t( 'r_quantum_gain', '0.90', true );
@@ -450,8 +462,10 @@ vec3 sampleEmissiveLights( vec3 hitPos, vec3 hitNormal ) {
 		float shadowInset = 0.12 + min( radius * 0.18, 10.0 );
 		float shadowMax = max( lightDist - shadowInset, 0.001 );
 		if ( traceAny( hitPos + hitNormal * 0.04, L, shadowMax ) ) continue;
-		float atten = 1.0 / ( 1.0 + distSq / ( radius * radius ) );
-		light += uEmissiveLightColor[ i ] * ( nDotL * atten );
+		float falloff = distSq / ( radius * radius );
+		float atten = 1.0 / ( ( 1.0 + falloff ) * ( 1.0 + falloff ) );
+		vec3 lcol = uEmissiveLightColor[ i ];
+		light += lcol * ( nDotL * atten );
 	}
 	return light;
 }
@@ -710,6 +724,8 @@ void main() {
 	vec3 hx = ( c00 - c10 + c01 - c11 ) * 0.25;
 	vec3 hy = ( c00 + c10 - c01 - c11 ) * 0.25;
 	vec3 hd = ( c00 - c10 - c01 + c11 ) * 0.25;
+	vec3 nMin = min( min( c00, c10 ), min( c01, c11 ) );
+	vec3 nMax = max( max( c00, c10 ), max( c01, c11 ) );
 
 	hx = shrink( hx, uThreshold );
 	hy = shrink( hy, uThreshold );
@@ -720,6 +736,7 @@ void main() {
 	float sy = parity.y < 0.5 ? 1.0 : -1.0;
 
 	vec3 reconstructed = a + hx * sx + hy * sy + hd * sx * sy;
+	reconstructed = clamp( reconstructed, nMin - vec3( 0.05 ), nMax + vec3( 0.05 ) );
 	gl_FragColor = vec4( max( reconstructed, vec3( 0.0 ) ), 1.0 );
 }
 `;
@@ -734,9 +751,9 @@ uniform float uGain;
 uniform float uExposure;
 uniform float uDebugWhite;
 
-void main() {
-	vec3 base = texture2D( uBaseTex, vUv ).rgb;
-	vec3 ray = texture2D( uRayTex, vUv ).rgb;
+	void main() {
+		vec3 base = texture2D( uBaseTex, vUv ).rgb;
+		vec3 ray = clamp( texture2D( uRayTex, vUv ).rgb, vec3( 0.0 ), vec3( 5.0 ) );
 
 	if ( uDebugWhite > 0.5 ) {
 		vec3 outColor = ray * ( uExposure * uGain * 2.85 );
@@ -747,19 +764,18 @@ void main() {
 	}
 
 	vec3 lumaW = vec3( 0.2126, 0.7152, 0.0722 );
-	float baseLum = max( dot( base, lumaW ), 0.0002 );
 	float rayLum = max( dot( ray, lumaW ), 0.0 );
-	float relLight = clamp( rayLum / baseLum, 0.70, 3.80 );
-	vec3 litBase = base * mix( 1.0, relLight, 0.90 );
+	float lightScale = clamp( 0.16 + rayLum * ( 1.15 + 0.52 * uStrength ), 0.06, 4.60 );
+	vec3 litBase = base * lightScale;
 	vec3 rayChroma = rayLum > 0.0001 ? ( ray / rayLum ) : vec3( 1.0 );
-	rayChroma = clamp( rayChroma, vec3( 0.65 ), vec3( 1.6 ) );
-	vec3 tinted = litBase * mix( vec3( 1.0 ), rayChroma, 0.16 + 0.20 * uStrength );
-	float blend = clamp( 0.20 + 0.22 * uStrength, 0.0, 0.62 );
-	vec3 outColor = mix( base, tinted, blend );
-	outColor = max( outColor, base * 0.26 );
-	outColor *= ( uExposure * uGain );
+	rayChroma = clamp( rayChroma, vec3( 0.60 ), vec3( 1.7 ) );
+		vec3 chromaTint = mix( vec3( 1.0 ), rayChroma, 0.18 + 0.24 * uStrength );
+		vec3 bounced = ray * ( 0.08 + 0.16 * uStrength );
+		vec3 outColor = litBase * chromaTint + bounced;
+		outColor = max( outColor, base * 0.08 );
+		outColor *= ( uExposure * uGain );
 	outColor = outColor / ( vec3( 1.0 ) + outColor );
-	outColor = pow( max( outColor, vec3( 0.0 ) ), vec3( 0.92 ) );
+	outColor = pow( max( outColor, vec3( 0.0 ) ), vec3( 0.90 ) );
 	gl_FragColor = vec4( outColor, 1.0 );
 }
 `;
@@ -1023,6 +1039,9 @@ function _disposeBvhTextures() {
 		_rtEmissiveLightRadius[ i ] = 0;
 		_rtEmissiveLightPos[ i ].set( 0, 0, 0 );
 		_rtEmissiveLightColor[ i ].set( 0, 0, 0 );
+		_rtEmissiveLightBaseColor[ i ].set( 0, 0, 0 );
+		_rtEmissiveLightStyleIndex[ i ] = 0;
+		_rtEmissiveLightStyleStrength[ i ] = 0;
 
 	}
 
@@ -1054,16 +1073,163 @@ function _countActiveRuntimeDlights() {
 
 }
 
+function _isAnimatedLightstyle( styleIndex ) {
+
+	if ( styleIndex <= 0 )
+		return false;
+
+	if ( cl_lightstyle != null && styleIndex < cl_lightstyle.length ) {
+
+		const style = cl_lightstyle[ styleIndex ];
+		const map = style != null ? style.map : null;
+		if ( typeof map === 'string' && map.length > 1 )
+			return true;
+
+	}
+
+	if ( d_lightstylevalue != null && styleIndex < d_lightstylevalue.length ) {
+
+		const value = _toNumber( d_lightstylevalue[ styleIndex ], RT_LIGHTSTYLE_NORMAL_VALUE );
+		return Math.abs( value - RT_LIGHTSTYLE_NORMAL_VALUE ) > 1;
+
+	}
+
+	return false;
+
+}
+
+function _refreshAnimatedLightstyles() {
+
+	_rtAnimatedStyleIndices.length = 0;
+
+	if ( cl_lightstyle != null ) {
+
+		const maxStyles = Math.min( cl_lightstyle.length, 64 );
+		for ( let i = 1; i < maxStyles; i ++ ) {
+
+			if ( _isAnimatedLightstyle( i ) )
+				_rtAnimatedStyleIndices.push( i );
+
+		}
+
+	}
+
+	if ( _rtAnimatedStyleIndices.length === 0 && d_lightstylevalue != null && d_lightstylevalue.length > 1 ) {
+
+		if ( _isAnimatedLightstyle( 1 ) )
+			_rtAnimatedStyleIndices.push( 1 );
+
+	}
+
+}
+
+function _resolvePreferredStyleIndex( preferred, fallback ) {
+
+	if ( _isAnimatedLightstyle( preferred ) )
+		return preferred;
+	if ( _isAnimatedLightstyle( fallback ) )
+		return fallback;
+	if ( _rtAnimatedStyleIndices.length > 0 )
+		return _rtAnimatedStyleIndices[ 0 ];
+	return 0;
+
+}
+
+function _resolveEmitterStyle( lowerName ) {
+
+	const name = typeof lowerName === 'string' ? lowerName : '';
+	if ( name.indexOf( 'candle' ) !== -1 )
+		return { styleIndex: _resolvePreferredStyleIndex( 3, 7 ), styleStrength: 0.45 };
+	if ( name.indexOf( 'torch' ) !== -1 || name.indexOf( 'flame' ) !== -1 || name.indexOf( 'fire' ) !== -1 )
+		return { styleIndex: _resolvePreferredStyleIndex( 1, 6 ), styleStrength: 0.58 };
+	if ( name.indexOf( 'brazier' ) !== -1 )
+		return { styleIndex: _resolvePreferredStyleIndex( 1, 6 ), styleStrength: 0.52 };
+	if ( name.indexOf( 'lava' ) !== -1 )
+		return { styleIndex: _resolvePreferredStyleIndex( 5, 11 ), styleStrength: 0.32 };
+	return { styleIndex: 0, styleStrength: 0.0 };
+
+}
+
+function _readLightstyleScale( styleIndex ) {
+
+	if ( styleIndex <= 0 )
+		return 1.0;
+
+	if ( d_lightstylevalue != null && styleIndex < d_lightstylevalue.length ) {
+
+		const value = _toNumber( d_lightstylevalue[ styleIndex ], RT_LIGHTSTYLE_NORMAL_VALUE );
+		return _clamp( value / RT_LIGHTSTYLE_NORMAL_VALUE, 0.10, 2.40 );
+
+	}
+
+	if ( cl_lightstyle != null && styleIndex < cl_lightstyle.length ) {
+
+		const style = cl_lightstyle[ styleIndex ];
+		const map = style != null ? style.map : null;
+		if ( typeof map === 'string' && map.length > 0 ) {
+
+			const k = _clampInt( map.charCodeAt( 0 ) - 97, 0, 25 ) * 22;
+			return _clamp( k / RT_LIGHTSTYLE_NORMAL_VALUE, 0.10, 2.40 );
+
+		}
+
+	}
+
+	return 1.0;
+
+}
+
+function _applyRaytraceLightstyleAnimation() {
+
+	const count = _clampInt( _rtEmissiveLightCount, 0, RT_MAX_EMISSIVE_LIGHTS );
+	const now = cl != null && typeof cl.time === 'number' ? cl.time : 0;
+
+	for ( let i = 0; i < count; i ++ ) {
+
+		const base = _rtEmissiveLightBaseColor[ i ];
+		let scale = 1.0;
+		const styleStrength = _clamp( _rtEmissiveLightStyleStrength[ i ], 0.0, 1.0 );
+		const styleIndex = _rtEmissiveLightStyleIndex[ i ] | 0;
+		if ( styleStrength > 0.001 ) {
+
+			const styleScale = _readLightstyleScale( styleIndex );
+			scale *= 1.0 + ( styleScale - 1.0 ) * styleStrength;
+
+			// Keep a slight local throb so flames are alive without obvious strobing.
+			const pos = _rtEmissiveLightPos[ i ];
+			const seed = pos.x * 0.013 + pos.y * 0.017 + pos.z * 0.019 + i * 0.47;
+			const noise = ( _pseudoRandom( seed + now * 2.13 ) - 0.5 ) * 0.03;
+			const throb = 1.0 + Math.sin( now * 4.4 + seed ) * 0.035 + noise;
+			scale *= _clamp( throb, 0.90, 1.10 );
+
+		}
+
+		scale = _clamp( scale, 0.05, 4.0 );
+		_rtEmissiveLightColor[ i ].copy( base ).multiplyScalar( scale );
+
+	}
+
+}
+
 function _updateRaytraceEmissiveLights( emissiveBins, cameraX = 0, cameraY = 0, cameraZ = 0, useCameraBias = false ) {
 
 	_rtEmissiveLightCount = 0;
 	_rtStaticLightCount = 0;
 	_rtDynamicLightCount = 0;
 	_rtModelEmitterLightCount = 0;
+	_refreshAnimatedLightstyles();
 	if ( emissiveBins == null || emissiveBins.size === 0 ) {
 
-		for ( let i = 0; i < RT_MAX_EMISSIVE_LIGHTS; i ++ )
+		for ( let i = 0; i < RT_MAX_EMISSIVE_LIGHTS; i ++ ) {
+
 			_rtEmissiveLightRadius[ i ] = 0;
+			_rtEmissiveLightPos[ i ].set( 0, 0, 0 );
+			_rtEmissiveLightColor[ i ].set( 0, 0, 0 );
+			_rtEmissiveLightBaseColor[ i ].set( 0, 0, 0 );
+			_rtEmissiveLightStyleIndex[ i ] = 0;
+			_rtEmissiveLightStyleStrength[ i ] = 0;
+
+		}
 		return;
 
 	}
@@ -1080,94 +1246,105 @@ function _updateRaytraceEmissiveLights( emissiveBins, cameraX = 0, cameraY = 0, 
 		const g = bin.g * invW;
 		const b = bin.b * invW;
 		const lum = r * 0.2126 + g * 0.7152 + b * 0.0722;
-		if ( lum < 0.025 ) continue;
+		if ( lum < 0.040 ) continue;
 
-			let distSq = 1e20;
-			let proximity = 1.0;
-			if ( useCameraBias ) {
+		let distSq = 1e20;
+		let proximity = 1.0;
+		if ( useCameraBias ) {
 
-				const dx = x - cameraX;
-				const dy = y - cameraY;
-				const dz = z - cameraZ;
-				distSq = dx * dx + dy * dy + dz * dz;
-				proximity = 0.08 + 0.92 / ( 1.0 + distSq / ( 260 * 260 ) );
+			const dx = x - cameraX;
+			const dy = y - cameraY;
+			const dz = z - cameraZ;
+			distSq = dx * dx + dy * dy + dz * dz;
+			proximity = 0.08 + 0.92 / ( 1.0 + distSq / ( 260 * 260 ) );
 
-			}
-			const score = lum * Math.sqrt( Math.max( bin.weight, 1.0 ) ) * proximity;
-			const radius = _clamp( 72 + Math.sqrt( Math.max( bin.weight, 1.0 ) ) * 14, 72, 640 );
-			const intensity = _clamp( 0.9 + lum * 3.2, 0.7, 4.8 );
+		}
+		const score = lum * Math.sqrt( Math.max( bin.weight, 1.0 ) ) * proximity;
+		const radius = _clamp( 56 + Math.sqrt( Math.max( bin.weight, 1.0 ) ) * 10, 56, 320 );
+		const intensity = _clamp( 0.55 + lum * 1.9, 0.45, 2.4 );
+		const warmness = _clamp( ( r - b ) * 1.2, 0.0, 1.0 );
+		const mapStyleIndex = warmness > 0.12 ? _resolvePreferredStyleIndex( 1, 6 ) : 0;
+		const mapStyleStrength = mapStyleIndex > 0 ? _clamp( 0.22 + warmness * 0.28, 0.0, 0.55 ) : 0.0;
 		lights.push( {
 			x: x,
 			y: y,
 			z: z,
 			r: r * intensity,
 			g: g * intensity,
-				b: b * intensity,
-				radius: radius,
-				score: score,
-				distSq: distSq
-			} );
-
-		}
-
-		const activeDlights = _countActiveRuntimeDlights();
-		const reserveDynamic = Math.min(
-			RT_RESERVED_DYNAMIC_LIGHTS,
-			Math.max( 2, activeDlights + 2 )
-		);
-		const reserveModelEmitters = _clampInt( RT_RESERVED_MODEL_EMITTERS, 0, RT_MAX_EMISSIVE_LIGHTS - reserveDynamic );
-		const mapLightBudget = Math.max( 1, RT_MAX_EMISSIVE_LIGHTS - reserveDynamic - reserveModelEmitters );
-		const count = Math.min( mapLightBudget, lights.length );
-		const selectedLights = [];
-		if ( useCameraBias && count > 4 && lights.length > count ) {
-
-			const nearBudget = Math.min( count, Math.max( 6, Math.floor( count * 0.45 ) ) );
-			const nearLights = lights.slice();
-			nearLights.sort( function ( a, b ) {
-
-				return a.distSq - b.distSq;
-
-			} );
-			for ( let i = 0; i < nearLights.length && selectedLights.length < nearBudget; i ++ ) {
-
-				selectedLights.push( nearLights[ i ] );
-
-			}
-
-		}
-
-		const rankedLights = lights.slice();
-		rankedLights.sort( function ( a, b ) {
-
-			return b.score - a.score;
-
+			b: b * intensity,
+			radius: radius,
+			score: score,
+			distSq: distSq,
+			styleIndex: mapStyleIndex,
+			styleStrength: mapStyleStrength
 		} );
 
-		for ( let i = 0; i < rankedLights.length && selectedLights.length < count; i ++ ) {
+	}
 
-			const light = rankedLights[ i ];
-			if ( selectedLights.indexOf( light ) !== -1 )
-				continue;
-			selectedLights.push( light );
+	const activeDlights = _countActiveRuntimeDlights();
+	const reserveDynamic = Math.min(
+		RT_RESERVED_DYNAMIC_LIGHTS,
+		Math.max( 2, activeDlights + 2 )
+	);
+	const reserveModelEmitters = _clampInt( RT_RESERVED_MODEL_EMITTERS, 0, RT_MAX_EMISSIVE_LIGHTS - reserveDynamic );
+	const mapLightBudget = Math.max( 1, RT_MAX_EMISSIVE_LIGHTS - reserveDynamic - reserveModelEmitters );
+	const count = Math.min( mapLightBudget, lights.length );
+	const selectedLights = [];
+	if ( useCameraBias && count > 4 && lights.length > count ) {
+
+		const nearBudget = Math.min( count, Math.max( 6, Math.floor( count * 0.45 ) ) );
+		const nearLights = lights.slice();
+		nearLights.sort( function ( a, b ) {
+
+			return a.distSq - b.distSq;
+
+		} );
+		for ( let i = 0; i < nearLights.length && selectedLights.length < nearBudget; i ++ ) {
+
+			selectedLights.push( nearLights[ i ] );
 
 		}
 
-		const selectedCount = selectedLights.length;
-		_rtEmissiveLightCount = selectedCount;
-		_rtStaticLightCount = selectedCount;
-		for ( let i = 0; i < selectedCount; i ++ ) {
+	}
 
-			const light = selectedLights[ i ];
-			_rtEmissiveLightPos[ i ].set( light.x, light.y, light.z );
-			_rtEmissiveLightColor[ i ].set( light.r, light.g, light.b );
-			_rtEmissiveLightRadius[ i ] = light.radius;
+	const rankedLights = lights.slice();
+	rankedLights.sort( function ( a, b ) {
 
-		}
-		for ( let i = selectedCount; i < RT_MAX_EMISSIVE_LIGHTS; i ++ ) {
+		return b.score - a.score;
+
+	} );
+
+	for ( let i = 0; i < rankedLights.length && selectedLights.length < count; i ++ ) {
+
+		const light = rankedLights[ i ];
+		if ( selectedLights.indexOf( light ) !== -1 )
+			continue;
+		selectedLights.push( light );
+
+	}
+
+	const selectedCount = selectedLights.length;
+	_rtEmissiveLightCount = selectedCount;
+	_rtStaticLightCount = selectedCount;
+	for ( let i = 0; i < selectedCount; i ++ ) {
+
+		const light = selectedLights[ i ];
+		_rtEmissiveLightPos[ i ].set( light.x, light.y, light.z );
+		_rtEmissiveLightBaseColor[ i ].set( light.r, light.g, light.b );
+		_rtEmissiveLightColor[ i ].copy( _rtEmissiveLightBaseColor[ i ] );
+		_rtEmissiveLightRadius[ i ] = light.radius;
+		_rtEmissiveLightStyleIndex[ i ] = light.styleIndex != null ? light.styleIndex : 0;
+		_rtEmissiveLightStyleStrength[ i ] = light.styleStrength != null ? light.styleStrength : 0.0;
+
+	}
+	for ( let i = selectedCount; i < RT_MAX_EMISSIVE_LIGHTS; i ++ ) {
 
 		_rtEmissiveLightRadius[ i ] = 0;
 		_rtEmissiveLightPos[ i ].set( 0, 0, 0 );
 		_rtEmissiveLightColor[ i ].set( 0, 0, 0 );
+		_rtEmissiveLightBaseColor[ i ].set( 0, 0, 0 );
+		_rtEmissiveLightStyleIndex[ i ] = 0;
+		_rtEmissiveLightStyleStrength[ i ] = 0;
 
 	}
 
@@ -1207,6 +1384,7 @@ function _injectRuntimeModelEmittersToRayLights( camera ) {
 	);
 	if ( maxModelSlots <= 0 )
 		return;
+	_refreshAnimatedLightstyles();
 
 	const candidates = [];
 	const dedupe = new Set();
@@ -1300,17 +1478,18 @@ function _injectRuntimeModelEmittersToRayLights( camera ) {
 
 		const phase = px * 0.013 + py * 0.009 + pz * 0.011;
 		const flicker = _clamp(
-			0.80 + 0.24 * Math.sin( now * 11.7 + phase ) + 0.18 * _pseudoRandom( phase + now * 7.31 ),
-			0.56,
-			1.34
+			1.00 + 0.04 * Math.sin( now * 5.6 + phase ) + 0.03 * ( _pseudoRandom( phase + now * 2.31 ) - 0.5 ),
+			0.92,
+			1.10
 		);
 		const radiusPulse = _clamp(
-			0.90 + 0.22 * Math.sin( now * 4.2 + phase * 0.7 ),
-			0.72,
-			1.34
+			1.00 + 0.05 * Math.sin( now * 2.8 + phase * 0.7 ),
+			0.90,
+			1.12
 		);
 		energy *= flicker;
 		radius *= radiusPulse;
+		const style = _resolveEmitterStyle( lower );
 
 		let distSq = 0;
 		if ( hasCamera ) {
@@ -1331,7 +1510,9 @@ function _injectRuntimeModelEmittersToRayLights( camera ) {
 			b: warmB * energy,
 			radius: _clamp( radius, 72, 900 ),
 			distSq: distSq,
-			score: energy * radius
+			score: energy * radius,
+			styleIndex: style.styleIndex,
+			styleStrength: style.styleStrength
 		} );
 
 	}
@@ -1345,18 +1526,6 @@ function _injectRuntimeModelEmittersToRayLights( camera ) {
 		);
 		for ( let i = 0; i < staticCount; i ++ )
 			pushEmitterCandidate( cl_static_entities[ i ] );
-
-	}
-
-	if ( cl_entities != null ) {
-
-		const entityCount = _clampInt(
-			cl != null && cl.num_entities != null ? cl.num_entities : cl_entities.length,
-			0,
-			cl_entities.length
-		);
-		for ( let i = 1; i < entityCount; i ++ )
-			pushEmitterCandidate( cl_entities[ i ] );
 
 	}
 
@@ -1377,8 +1546,11 @@ function _injectRuntimeModelEmittersToRayLights( camera ) {
 
 		const emitter = candidates[ i ];
 		_rtEmissiveLightPos[ count ].set( emitter.x, emitter.y, emitter.z );
-		_rtEmissiveLightColor[ count ].set( emitter.r, emitter.g, emitter.b );
+		_rtEmissiveLightBaseColor[ count ].set( emitter.r, emitter.g, emitter.b );
+		_rtEmissiveLightColor[ count ].copy( _rtEmissiveLightBaseColor[ count ] );
 		_rtEmissiveLightRadius[ count ] = emitter.radius;
+		_rtEmissiveLightStyleIndex[ count ] = emitter.styleIndex != null ? emitter.styleIndex : 0;
+		_rtEmissiveLightStyleStrength[ count ] = emitter.styleStrength != null ? emitter.styleStrength : 0.0;
 		count ++;
 		_rtModelEmitterLightCount ++;
 
@@ -1417,11 +1589,17 @@ function _injectRuntimeDlightsToRayLights() {
 		const px = _toNumber( light.origin[ 0 ], 0 );
 		const py = _toNumber( light.origin[ 1 ], 0 );
 		const pz = _toNumber( light.origin[ 2 ], 0 );
+		const dr = energy * 1.18;
+		const dg = energy * 0.78;
+		const db = energy * 0.42;
 
 		_rtEmissiveLightPos[ count ].set( px, py, pz );
 		// Quake dynamic lights are predominantly warm (muzzle/explosions/torches).
-		_rtEmissiveLightColor[ count ].set( energy * 1.18, energy * 0.78, energy * 0.42 );
+		_rtEmissiveLightBaseColor[ count ].set( dr, dg, db );
+		_rtEmissiveLightColor[ count ].copy( _rtEmissiveLightBaseColor[ count ] );
 		_rtEmissiveLightRadius[ count ] = _clamp( radius * 1.65, 56, 900 );
+		_rtEmissiveLightStyleIndex[ count ] = 0;
+		_rtEmissiveLightStyleStrength[ count ] = 0;
 		count ++;
 		injected ++;
 
@@ -1434,6 +1612,9 @@ function _injectRuntimeDlightsToRayLights() {
 		_rtEmissiveLightRadius[ i ] = 0;
 		_rtEmissiveLightPos[ i ].set( 0, 0, 0 );
 		_rtEmissiveLightColor[ i ].set( 0, 0, 0 );
+		_rtEmissiveLightBaseColor[ i ].set( 0, 0, 0 );
+		_rtEmissiveLightStyleIndex[ i ] = 0;
+		_rtEmissiveLightStyleStrength[ i ] = 0;
 
 	}
 
@@ -1500,7 +1681,8 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 	} );
 
 	const overBudget = sourceTriangleEstimate > maxTriangles;
-	if ( prioritizeByCamera && overBudget && meshEntries.length > 1 ) {
+	const prioritizeSelectionByCamera = prioritizeByCamera && overBudget && maxTriangles < 32768;
+	if ( prioritizeSelectionByCamera && meshEntries.length > 1 ) {
 
 		for ( let i = 0; i < meshEntries.length; i ++ ) {
 
@@ -1525,10 +1707,10 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 	const emissiveBins = new Map();
 	const buildMapWideLights = true;
 
-	function addEmissiveBin( x, y, z, emitR, emitG, emitB, area ) {
+		function addEmissiveBin( x, y, z, emitR, emitG, emitB, area ) {
 
-		const emitLum = emitR * 0.2126 + emitG * 0.7152 + emitB * 0.0722;
-		if ( emitLum <= 0.03 ) return;
+			const emitLum = emitR * 0.2126 + emitG * 0.7152 + emitB * 0.0722;
+			if ( emitLum <= 0.045 ) return;
 
 		const binScale = 40;
 		const bxKey = Math.floor( x / binScale );
@@ -1543,7 +1725,8 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 
 		}
 
-		const weight = Math.max( area, 2.0 ) * emitLum;
+			const areaWeight = _clamp( area, 1.0, 18.0 );
+			const weight = areaWeight * emitLum;
 		bin.x += x * weight;
 		bin.y += y * weight;
 		bin.z += z * weight;
@@ -1573,10 +1756,10 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 			const uv = geometry.attributes != null ? geometry.attributes.uv : null;
 			if ( uv == null ) continue;
 
-			const emissive = material.emissive != null ? material.emissive : null;
-			const emitScaleR = emissive != null ? _clamp( emissive.r, 0.5, 3.0 ) * 2.2 : 2.2;
-			const emitScaleG = emissive != null ? _clamp( emissive.g, 0.5, 3.0 ) * 2.2 : 2.2;
-			const emitScaleB = emissive != null ? _clamp( emissive.b, 0.5, 3.0 ) * 2.2 : 2.2;
+				const emissive = material.emissive != null ? material.emissive : null;
+				const emitScaleR = emissive != null ? _clamp( emissive.r, 0.4, 2.0 ) * 1.35 : 1.35;
+				const emitScaleG = emissive != null ? _clamp( emissive.g, 0.4, 2.0 ) * 1.35 : 1.35;
+				const emitScaleB = emissive != null ? _clamp( emissive.b, 0.4, 2.0 ) * 1.35 : 1.35;
 
 			const positions = entry.positions;
 			const index = entry.index;
@@ -1642,10 +1825,10 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 					}
 					if ( sampleCount <= 0 ) continue;
 
-					const emitLum = peakR * 0.2126 + peakG * 0.7152 + peakB * 0.0722;
-					if ( emitLum <= 0.025 ) continue;
+						const emitLum = peakR * 0.2126 + peakG * 0.7152 + peakB * 0.0722;
+						if ( emitLum <= 0.045 ) continue;
 
-					const emitBoost = _clamp( ( emitLum - 0.025 ) * 2.6, 0.28, 3.2 );
+						const emitBoost = _clamp( ( emitLum - 0.045 ) * 1.8, 0.10, 1.6 );
 					const emitR = peakR * emitScaleR * emitBoost;
 					const emitG = peakG * emitScaleG * emitBoost;
 					const emitB = peakB * emitScaleB * emitBoost;
@@ -1708,7 +1891,7 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 		const emissiveB = emissive != null ? _clamp( emissive.b, 0.0, 2.0 ) : 0.0;
 
 		let triOrder = null;
-		if ( prioritizeByCamera && overBudget && triCount > 64 ) {
+		if ( prioritizeSelectionByCamera && triCount > 64 ) {
 
 			const triDist = new Float32Array( triCount );
 			triOrder = new Array( triCount );
@@ -1763,12 +1946,12 @@ function _collectRaytraceTriangles( scene, maxTriangles, camera ) {
 					if ( _sampleTextureRGB( emissiveMap, u, v, _tmpTexel2 ) ) {
 
 						const emitLum = _tmpTexel2[ 0 ] * 0.2126 + _tmpTexel2[ 1 ] * 0.7152 + _tmpTexel2[ 2 ] * 0.0722;
-						if ( emitLum > 0.05 ) {
+						if ( emitLum > 0.08 ) {
 
-							const emitBoost = _clamp( ( emitLum - 0.05 ) * 3.0, 0.20, 3.0 );
-							emitR += _tmpTexel2[ 0 ] * Math.max( emissiveR, 0.65 ) * emitBoost;
-							emitG += _tmpTexel2[ 1 ] * Math.max( emissiveG, 0.65 ) * emitBoost;
-							emitB += _tmpTexel2[ 2 ] * Math.max( emissiveB, 0.65 ) * emitBoost;
+							const emitBoost = _clamp( ( emitLum - 0.08 ) * 1.8, 0.12, 1.8 );
+							emitR += _tmpTexel2[ 0 ] * Math.max( emissiveR, 0.55 ) * emitBoost;
+							emitG += _tmpTexel2[ 1 ] * Math.max( emissiveG, 0.55 ) * emitBoost;
+							emitB += _tmpTexel2[ 2 ] * Math.max( emissiveB, 0.55 ) * emitBoost;
 
 						}
 
@@ -2260,6 +2443,7 @@ function _registerCvars() {
 	Cvar_RegisterVariable( r_quantum_bundle );
 	Cvar_RegisterVariable( r_quantum_rt_tris );
 	Cvar_RegisterVariable( r_quantum_rt_debugtex );
+	Cvar_RegisterVariable( r_quantum_flashlight );
 	Cvar_RegisterVariable( r_quantum_wavelet );
 	Cvar_RegisterVariable( r_quantum_strength );
 	Cvar_RegisterVariable( r_quantum_gain );
@@ -3204,6 +3388,7 @@ export function QuantumRenderer_Render( scene, camera ) {
 
 				_injectRuntimeModelEmittersToRayLights( camera );
 				_injectRuntimeDlightsToRayLights();
+				_applyRaytraceLightstyleAnimation();
 
 			_setupRaytraceCameraUniforms( camera );
 			_postQuad.material = _rayTraceMaterial;
