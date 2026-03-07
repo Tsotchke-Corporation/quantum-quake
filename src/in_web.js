@@ -10,6 +10,7 @@ import {
 	K_MOUSE1, K_MOUSE2, K_MOUSE3,
 	K_MWHEELUP, K_MWHEELDOWN,
 	Key_Event,
+	Key_ClearStates,
 	key_game, key_menu, key_dest
 } from './keys.js';
 import { Cvar_RegisterVariable } from './cvar.js';
@@ -125,6 +126,30 @@ function requestPointerLock() {
 	} catch ( _error ) {
 
 		// Ignore hard failures to keep input responsive.
+
+	}
+
+}
+
+function focusGameSurface() {
+
+	if ( targetElement == null )
+		return;
+
+	if ( targetElement.tabIndex < 0 )
+		targetElement.tabIndex = -1;
+
+	if ( typeof targetElement.focus === 'function' ) {
+
+		try {
+
+			targetElement.focus( { preventScroll: true } );
+
+		} catch ( _err ) {
+
+			targetElement.focus();
+
+		}
 
 	}
 
@@ -321,6 +346,7 @@ function handleMouseDown( event ) {
 	// Three.js pointer lock example. Do not forward that click to gameplay.
 	if ( ! isMobile && key_dest === key_game && ! cls.demoplayback && ! pointerLocked ) {
 
+		focusGameSurface();
 		requestPointerLock();
 		event.preventDefault();
 		return;
@@ -409,10 +435,12 @@ function handleWheel( event ) {
 function handlePointerLockChange() {
 
 	pointerLocked = isPointerLockedToGameSurface();
+	Key_ClearStates();
 
 	if ( pointerLocked ) {
 
 		mouseactive = true;
+		focusGameSurface();
 
 	} else {
 
@@ -443,7 +471,21 @@ function handleContextMenu( event ) {
 
 function handleVisibilityChange() {
 
-	// Placeholder for visibility change handling (wake lock is in touch.js for mobile)
+	if ( document.hidden ) {
+
+		Key_ClearStates();
+		mx_accum = 0;
+		my_accum = 0;
+
+	}
+
+}
+
+function handleWindowBlur() {
+
+	Key_ClearStates();
+	mx_accum = 0;
+	my_accum = 0;
 
 }
 
@@ -550,6 +592,7 @@ export function IN_Init( element ) {
 
 	document.addEventListener( 'pointerlockchange', handlePointerLockChange );
 	document.addEventListener( 'pointerlockerror', handlePointerLockError );
+	window.addEventListener( 'blur', handleWindowBlur );
 
 	// Add global touch handler for showing menu during demos
 	targetElement.addEventListener( 'touchstart', handleTouchStart, { passive: false } );
@@ -602,6 +645,7 @@ export function IN_Shutdown() {
 	document.removeEventListener( 'pointerlockchange', handlePointerLockChange );
 	document.removeEventListener( 'pointerlockerror', handlePointerLockError );
 	document.removeEventListener( 'visibilitychange', handleVisibilityChange );
+	window.removeEventListener( 'blur', handleWindowBlur );
 
 	if ( pointerLocked && document.exitPointerLock ) {
 
