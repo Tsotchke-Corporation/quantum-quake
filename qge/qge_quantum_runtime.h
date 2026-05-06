@@ -191,6 +191,7 @@ int qge_quantum_runtime_load_replay_entropy(qge_quantum_runtime_t *rt,
                                             const char *trace_path);
 void qge_quantum_runtime_get_stats(const qge_quantum_runtime_t *rt,
                                    qge_quantum_runtime_stats_t *stats);
+int qge_quantum_qubits_for_basis_count(uint64_t basis_count);
 
 void qge_quantum_frame_begin(qge_quantum_runtime_t *rt,
                              int frame,

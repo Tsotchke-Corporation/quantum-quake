@@ -41,6 +41,17 @@ static int test_quantum_runtime_types(void) {
            strcmp(measure, "ai_action") == 0;
 }
 
+static int test_quantum_basis_qubit_count(void) {
+    return qge_quantum_qubits_for_basis_count(0) == 0 &&
+           qge_quantum_qubits_for_basis_count(1) == 0 &&
+           qge_quantum_qubits_for_basis_count(2) == 1 &&
+           qge_quantum_qubits_for_basis_count(3) == 2 &&
+           qge_quantum_qubits_for_basis_count(4) == 2 &&
+           qge_quantum_qubits_for_basis_count(5) == 3 &&
+           qge_quantum_qubits_for_basis_count(1024) == 10 &&
+           qge_quantum_qubits_for_basis_count(1024 * 1024 * 3ULL) == 22;
+}
+
 static int test_quantum_runtime_events(void) {
     qge_quantum_runtime_t* rt = qge_quantum_runtime_create();
     qge_quantum_runtime_stats_t stats;
@@ -1878,6 +1889,7 @@ int main(void) {
 
     printf("Quantum Runtime / Trace Tests:\n");
     TEST(quantum_runtime_types);
+    TEST(quantum_basis_qubit_count);
     TEST(quantum_runtime_events);
     TEST(quantum_trace_roundtrip);
     TEST(quantum_entropy_replay);

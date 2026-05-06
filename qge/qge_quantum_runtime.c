@@ -227,6 +227,23 @@ void qge_quantum_runtime_get_stats(const qge_quantum_runtime_t *rt,
     memcpy(stats, &rt->stats, sizeof(*stats));
 }
 
+int qge_quantum_qubits_for_basis_count(uint64_t basis_count)
+{
+    int qubits;
+
+    if (basis_count <= 1) {
+        return 0;
+    }
+
+    qubits = 0;
+    basis_count--;
+    while (basis_count > 0) {
+        qubits++;
+        basis_count >>= 1;
+    }
+    return qubits;
+}
+
 void qge_quantum_frame_begin(qge_quantum_runtime_t *rt,
                              int frame,
                              int server_time_msec)

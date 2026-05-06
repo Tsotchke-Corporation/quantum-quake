@@ -367,7 +367,8 @@ static void QGE_TraceWorldRegistryProbe(const qge_world_stats_t *stats)
 	probe.max_probability = (double)stats->surface_count;
 	probe.total_probability = (double)stats->total_resources;
 	probe.active_basis_count = (int32_t)stats->total_resources;
-	probe.qubit_count = QGE_RESOURCE_KIND_COUNT;
+	probe.qubit_count =
+		qge_quantum_qubits_for_basis_count(stats->total_resources);
 	probe.memory_bytes = (uint64_t)stats->total_resources * sizeof(qge_resource_id_t);
 	strlcpy(probe.label, "world_registry", sizeof(probe.label));
 	qge_quantum_record_probe(rt, &probe);
@@ -1245,7 +1246,7 @@ static void QGE_TraceFrameSnapshotProbe(const qge_frame_snapshot_t *snapshot,
 	probe.max_probability = (double)stats->visible_surface_count;
 	probe.total_probability = (double)active_items;
 	probe.active_basis_count = (int32_t)active_items;
-	probe.qubit_count = (int32_t)snapshot->view_leaf_index;
+	probe.qubit_count = qge_quantum_qubits_for_basis_count(active_items);
 	probe.memory_bytes = sizeof(*snapshot);
 	strlcpy(probe.label, "frame_snapshot", sizeof(probe.label));
 	qge_quantum_record_probe(rt, &probe);
@@ -1546,6 +1547,8 @@ void QGE_FrameEnd(void)
 		probe.domain = QGE_DOMAIN_PHYSICS;
 		probe.representation = QGE_REP_CLASSICAL_ORACLE;
 		probe.active_basis_count = qge_phys_active_objects;
+		probe.qubit_count =
+			qge_quantum_qubits_for_basis_count((uint64_t)qge_phys_active_objects);
 		probe.max_probability = qge_phys_max_shadow_error;
 		probe.total_probability = qge_phys_avg_shadow_error;
 		strlcpy(probe.label, "physics_shadow", sizeof(probe.label));
@@ -1559,6 +1562,8 @@ void QGE_FrameEnd(void)
 		probe.domain = QGE_DOMAIN_RNG;
 		probe.representation = QGE_REP_DENSE_STATE;
 		probe.active_basis_count = (int)stats.entropy_events;
+		probe.qubit_count =
+			qge_quantum_qubits_for_basis_count(stats.entropy_events);
 		probe.total_probability = (double)stats.entropy_events;
 		strlcpy(probe.label, "rng_entropy", sizeof(probe.label));
 		qge_quantum_record_probe(rt, &probe);
@@ -3672,7 +3677,8 @@ void QGE_RenderScene(void)
 		probe.domain = QGE_DOMAIN_RENDER;
 		probe.representation = QGE_REP_SPARSE_DWT;
 		probe.active_basis_count = active;
-		probe.qubit_count = 32;
+		probe.qubit_count =
+			qge_quantum_qubits_for_basis_count((uint64_t)total_coefficients);
 		probe.memory_bytes = (uint64_t)qge_render_res * (uint64_t)qge_render_res *
 							 (uint64_t)QGE_DWT_CHANNELS *
 							 (uint64_t)sizeof(float);
@@ -4035,7 +4041,7 @@ int QGE_AIDecide(int enemy_id, float aggression, float distance, int visible)
 		probe.representation = QGE_REP_DENSE_STATE;
 		probe.subject_id = enemy_id;
 		probe.active_basis_count = 7;
-		probe.qubit_count = 8;
+		probe.qubit_count = qge_quantum_qubits_for_basis_count(7);
 		probe.max_probability = 1.0;
 		strlcpy(probe.label, "ai_action", sizeof(probe.label));
 		qge_quantum_record_probe(rt, &probe);
