@@ -1,0 +1,40 @@
+# macOS/editor noise
+.DS_Store
+*.swp
+*.swo
+.claude/settings.local.json
+
+# Build products
+/build/
+/bin/
+*.o
+*.d
+*.a
+*.dylib
+*.so
+*.dll
+*.exe
+*.dSYM/
+
+# App bundles and runtime frameworks
+*.app/
+/Frameworks/
+
+# Runtime logs, screenshots, and diagnostics
+/diagnostics/
+/qconsole.log
+/history.txt
+/quantum_demo.gif
+/quantum_frame_*.ppm
+/assets/id1/config.cfg
+/assets/id1/autoexec.cfg
+/assets/id1/spasm*.png
+/assets/id1/*.pak
+/assets/id1/*.dem
+/assets/id1/*.sav
+
+# Local upstream metadata from vendored source trees
+/quake/.git/
+/quake/.git.upstream/
+/quake/Quake/quakespasm
+/quake/Quake/quakespasm.pak

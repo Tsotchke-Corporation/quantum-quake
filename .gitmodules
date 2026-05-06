@@ -1,0 +1,3 @@
+[submodule "deps/moonlab"]
+	path = deps/moonlab
+	url = /Users/tyr/Desktop/quantum_simulator
