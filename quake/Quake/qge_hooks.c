@@ -36,7 +36,7 @@ cvar_t quantum_physics   = {"quantum_physics",   "1", CVAR_ARCHIVE};
 cvar_t quantum_projectiles = {"quantum_projectiles", "1", CVAR_ARCHIVE};
 cvar_t quantum_debug     = {"quantum_debug",     "0", CVAR_NONE};
 cvar_t quantum_overlay_alpha = {"quantum_overlay_alpha", "0.10", CVAR_ARCHIVE};
-cvar_t quantum_scene_surface_budget = {"quantum_scene_surface_budget", "160", CVAR_ARCHIVE};
+cvar_t quantum_scene_surface_budget = {"quantum_scene_surface_budget", "1024", CVAR_ARCHIVE};
 cvar_t quantum_render_res = {"quantum_render_res", "512", CVAR_ARCHIVE};
 
 /* ============================================================================
@@ -204,6 +204,11 @@ typedef struct {
 	float y;
 	float depth;
 } qge_projected_vertex_t;
+
+typedef struct {
+	vec3_t world;
+	float depth;
+} qge_clip_vertex_t;
 
 #define QGE_MAX_HUD_IMAGE_REFS 256
 typedef struct {
@@ -1880,6 +1885,98 @@ static qboolean QGE_ProjectPoint(const vec3_t world, float *x, float *y, float *
 	return true;
 }
 
+static float QGE_ViewDepth(const vec3_t world)
+{
+	vec3_t view_delta;
+
+	VectorSubtract(world, r_refdef.vieworg, view_delta);
+	return DotProduct(view_delta, vpn);
+}
+
+static void QGE_AddClipVertex(qge_clip_vertex_t *out,
+							  int *count,
+							  int max_count,
+							  const vec3_t world,
+							  float depth)
+{
+	if (!out || !count || *count >= max_count)
+		return;
+	VectorCopy(world, out[*count].world);
+	out[*count].depth = depth;
+	(*count)++;
+}
+
+static void QGE_IntersectNearPlane(const qge_clip_vertex_t *a,
+								   const qge_clip_vertex_t *b,
+								   vec3_t out_world,
+								   float *out_depth)
+{
+	float denom;
+	float t;
+
+	denom = b->depth - a->depth;
+	if (fabsf(denom) < 0.0001f)
+		t = 0.0f;
+	else
+		t = (1.0f - a->depth) / denom;
+	if (t < 0.0f) t = 0.0f;
+	if (t > 1.0f) t = 1.0f;
+
+	out_world[0] = a->world[0] + (b->world[0] - a->world[0]) * t;
+	out_world[1] = a->world[1] + (b->world[1] - a->world[1]) * t;
+	out_world[2] = a->world[2] + (b->world[2] - a->world[2]) * t;
+	*out_depth = 1.0f;
+}
+
+static int QGE_ClipSurfacePolygonNear(const glpoly_t *poly,
+									  qge_clip_vertex_t *out,
+									  int max_count)
+{
+	qge_clip_vertex_t prev;
+	qboolean prev_inside;
+	int count = 0;
+
+	if (!poly || !out || max_count <= 0 || poly->numverts < 3)
+		return 0;
+
+	prev.world[0] = poly->verts[poly->numverts - 1][0];
+	prev.world[1] = poly->verts[poly->numverts - 1][1];
+	prev.world[2] = poly->verts[poly->numverts - 1][2];
+	prev.depth = QGE_ViewDepth(prev.world);
+	prev_inside = prev.depth >= 1.0f;
+
+	for (int i = 0; i < poly->numverts; i++) {
+		qge_clip_vertex_t cur;
+		qboolean cur_inside;
+
+		cur.world[0] = poly->verts[i][0];
+		cur.world[1] = poly->verts[i][1];
+		cur.world[2] = poly->verts[i][2];
+		cur.depth = QGE_ViewDepth(cur.world);
+		cur_inside = cur.depth >= 1.0f;
+
+		if (prev_inside && cur_inside) {
+			QGE_AddClipVertex(out, &count, max_count, cur.world, cur.depth);
+		} else if (prev_inside && !cur_inside) {
+			vec3_t hit;
+			float hit_depth;
+			QGE_IntersectNearPlane(&prev, &cur, hit, &hit_depth);
+			QGE_AddClipVertex(out, &count, max_count, hit, hit_depth);
+		} else if (!prev_inside && cur_inside) {
+			vec3_t hit;
+			float hit_depth;
+			QGE_IntersectNearPlane(&prev, &cur, hit, &hit_depth);
+			QGE_AddClipVertex(out, &count, max_count, hit, hit_depth);
+			QGE_AddClipVertex(out, &count, max_count, cur.world, cur.depth);
+		}
+
+		prev = cur;
+		prev_inside = cur_inside;
+	}
+
+	return count;
+}
+
 static qboolean QGE_SurfaceScreenBounds(const qge_scene_surface_t *surface,
 										const msurface_t *surf,
 										screen_rect_t *bounds,
@@ -1894,13 +1991,12 @@ static qboolean QGE_SurfaceScreenBounds(const qge_scene_surface_t *surface,
 	glpoly_t *poly = surf ? surf->polys : NULL;
 
 	if (poly) {
-		for (int i = 0; i < poly->numverts; i++) {
+		qge_clip_vertex_t clipped[QGE_MAX_PROJECTED_POLY_VERTS];
+		int clipped_count = QGE_ClipSurfacePolygonNear(poly, clipped,
+													   QGE_MAX_PROJECTED_POLY_VERTS);
+		for (int i = 0; i < clipped_count; i++) {
 			float sx, sy, sd;
-			vec3_t p;
-			p[0] = poly->verts[i][0];
-			p[1] = poly->verts[i][1];
-			p[2] = poly->verts[i][2];
-			if (!QGE_ProjectPoint(p, &sx, &sy, &sd))
+			if (!QGE_ProjectPoint(clipped[i].world, &sx, &sy, &sd))
 				continue;
 			if (sx < min_x) min_x = sx;
 			if (sy < min_y) min_y = sy;
@@ -1955,17 +2051,18 @@ static qboolean QGE_ProjectSurfacePolygon(const qge_scene_surface_t *surface,
 	float depth_sum = 0.0f;
 	float signed_area = 0.0f;
 	int count = 0;
+	qge_clip_vertex_t clipped[QGE_MAX_PROJECTED_POLY_VERTS];
+	int clipped_count;
 
 	if (!surface || !poly || !verts || !num_verts || !bounds || !depth || !area)
 		return false;
 
-	for (int i = 0; i < poly->numverts && count < max_verts; i++) {
+	clipped_count = QGE_ClipSurfacePolygonNear(poly, clipped,
+											   QGE_MAX_PROJECTED_POLY_VERTS);
+
+	for (int i = 0; i < clipped_count && count < max_verts; i++) {
 		float sx, sy, sd;
-		vec3_t p;
-		p[0] = poly->verts[i][0];
-		p[1] = poly->verts[i][1];
-		p[2] = poly->verts[i][2];
-		if (!QGE_ProjectPoint(p, &sx, &sy, &sd))
+		if (!QGE_ProjectPoint(clipped[i].world, &sx, &sy, &sd))
 			continue;
 
 		if (sx < 0.0f) sx = 0.0f;
@@ -2253,7 +2350,7 @@ static void QGE_SpatialFillPolygonDepth(const qge_projected_vertex_t *verts,
 		const qge_projected_vertex_t *a = &verts[i];
 		const qge_projected_vertex_t *b = &verts[(i + 1) % num_verts];
 		QGE_SpatialLineDepth(a->x, a->y, b->x, b->y,
-							 value * 1.35f, a->depth, b->depth);
+							 value * 0.65f, a->depth, b->depth);
 	}
 
 	if (!filled)
@@ -2262,12 +2359,12 @@ static void QGE_SpatialFillPolygonDepth(const qge_projected_vertex_t *verts,
 
 static float QGE_WorldEncodeGain(void)
 {
-	float gain = 0.09f;
+	float gain = 0.11f;
 
-	if (qge_scene_surface_count > 64)
-		gain *= sqrtf(64.0f / (float)qge_scene_surface_count);
-	if (gain < 0.025f)
-		gain = 0.025f;
+	if (qge_scene_surface_count > 192)
+		gain *= sqrtf(192.0f / (float)qge_scene_surface_count);
+	if (gain < 0.035f)
+		gain = 0.035f;
 	return gain;
 }
 
@@ -2343,7 +2440,7 @@ static void QGE_EncodeProjectedPolygonDWT(dwt_framebuffer_t *fb,
 	if (!surface || !verts || num_verts < 3 || !bounds)
 		return;
 
-	fill = brightness * (1.0f - depth * 0.1f) * 1.35f;
+	fill = brightness * (1.0f - depth * 0.1f) * 1.75f;
 	fill *= 0.60f + fminf(area / 4096.0f, 1.0f) * 0.40f;
 	if (fill < 0.004f)
 		fill = 0.004f;
@@ -2411,7 +2508,7 @@ static qboolean QGE_EncodeWorldSurfaceDWT(dwt_framebuffer_t *fb,
 		QGE_SpatialFillRectDepth(&bounds,
 								 brightness * (1.0f - depth * 0.1f),
 								 depth_world);
-		QGE_SpatialOutlineRectDepth(&bounds, brightness * 1.25f,
+		QGE_SpatialOutlineRectDepth(&bounds, brightness * 0.65f,
 									depth_world);
 		QGE_EncodeSurfaceMaterialDWT(fb, surface, &bounds, brightness,
 									 depth, depth_world);
@@ -2490,9 +2587,9 @@ static qboolean QGE_ProjectSnapshotEdictBounds(const qge_snapshot_edict_t *edict
 		return false;
 
 	if (QGE_IsSnapshotViewmodel(edict)) {
-		bounds->x1 = (qge_render_res * 38) / 100;
-		bounds->x2 = (qge_render_res * 68) / 100;
-		bounds->y1 = (qge_render_res * 58) / 100;
+		bounds->x1 = (qge_render_res * 47) / 100;
+		bounds->x2 = (qge_render_res * 55) / 100;
+		bounds->y1 = (qge_render_res * 72) / 100;
 		bounds->y2 = qge_render_res - 4;
 		*depth = 32.0f;
 		return true;
@@ -2607,6 +2704,18 @@ static void QGE_EncodeSnapshotEntityDetailDWT(dwt_framebuffer_t *fb,
 	if (width < 1) width = 1;
 	if (height < 1) height = 1;
 
+	if (QGE_IsSnapshotViewmodel(edict)) {
+		QGE_SpatialLineDepth((float)bounds->x1, (float)bounds->y2,
+							 (float)center_x, (float)bounds->y1,
+							 brightness * 0.55f, depth_world, depth_world);
+		QGE_SpatialLineDepth((float)bounds->x2, (float)bounds->y2,
+							 (float)center_x, (float)bounds->y1,
+							 brightness * 0.55f, depth_world, depth_world);
+		QGE_SpatialAddPixelDepth(center_x, bounds->y1, brightness * 0.85f,
+								 depth_world);
+		return;
+	}
+
 	QGE_SpatialOutlineRectDepth(bounds, brightness * 1.25f, depth_world);
 	QGE_SpatialAddPixelDepth(center_x, center_y, brightness * 0.55f,
 							 depth_world);
@@ -2635,6 +2744,8 @@ static qboolean QGE_EncodeSnapshotEdictDWT(dwt_framebuffer_t *fb,
 
 	if (!fb || !edict || !qge_resource_id_is_valid(edict->model_id))
 		return false;
+	if (QGE_IsSnapshotViewmodel(edict))
+		return true;
 
 	model_kind = qge_resource_id_kind(edict->model_id);
 	if (model_kind != QGE_RESOURCE_ALIAS_MODEL &&
