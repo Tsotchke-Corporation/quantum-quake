@@ -1038,6 +1038,39 @@ static int test_dwt_right_half_wall_not_midline_clamped(void) {
     return expected > 0.1f && clamped < expected * 0.25f;
 }
 
+static int test_dwt_1024_coeff_coordinates_not_wrapped(void) {
+    const int res = 1024;
+    const int cx = 300;
+    const int cy = 7;
+    dwt_config_t config = {
+        .mode = DWT_MODE_HAAR,
+        .num_levels = 4,
+        .base_resolution = res,
+        .gpu_reconstruct = false,
+        .sparsity_threshold = 0.001f
+    };
+
+    dwt_framebuffer_t* fb = qge_dwt_framebuffer_create(NULL, &config);
+    float* coeffs = calloc(res * res, sizeof(float));
+    if (!fb || !coeffs) {
+        free(coeffs);
+        qge_dwt_framebuffer_free(fb);
+        return 0;
+    }
+
+    qge_add_wavelet_coeff(fb, 0, SUBBAND_HL, cx, cy, 1.0f);
+    qge_extract_coefficients(fb, coeffs);
+
+    float expected = coeffs[cy * res + (res / 2 + cx)];
+    float wrapped = coeffs[cy * res + (res / 2 + (cx & 0xff))];
+    printf("\n    1024 coeff x=%d expected=%.3f wrapped=%.3f\n    ",
+           cx, expected, wrapped);
+
+    free(coeffs);
+    qge_dwt_framebuffer_free(fb);
+    return expected > 0.9f && fabsf(wrapped) < 0.001f;
+}
+
 static int test_dwt_encode_sprite(void) {
     dwt_config_t config = {
         .mode = DWT_MODE_HAAR,
@@ -1841,6 +1874,7 @@ int main(void) {
     TEST(dwt_framebuffer_create);
     TEST(dwt_encode_wall);
     TEST(dwt_right_half_wall_not_midline_clamped);
+    TEST(dwt_1024_coeff_coordinates_not_wrapped);
     TEST(dwt_encode_sprite);
     TEST(dwt_render);
     TEST(dwt_spatial_rectangle_roundtrip);

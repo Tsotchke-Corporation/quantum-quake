@@ -41,6 +41,13 @@
 #define VALUE_BITS      5   /* 32 amplitude levels */
 #define COLOR_BITS      2   /* 4 channels: Y, Cb, Cr, alpha */
 
+#define LEVEL_MASK      ((1u << LEVEL_BITS) - 1u)
+#define SUBBAND_MASK    ((1u << SUBBAND_BITS) - 1u)
+#define COEFF_X_MASK    ((1u << COEFF_X_BITS) - 1u)
+#define COEFF_Y_MASK    ((1u << COEFF_Y_BITS) - 1u)
+#define VALUE_MASK      ((1u << VALUE_BITS) - 1u)
+#define COLOR_MASK      ((1u << COLOR_BITS) - 1u)
+
 /* Bit offsets */
 #define LEVEL_OFFSET    0
 #define SUBBAND_OFFSET  (LEVEL_OFFSET + LEVEL_BITS)
@@ -112,12 +119,12 @@ static int render_entropy_callback(void *user_data, uint8_t *buffer, size_t size
 static uint64_t encode_dwt_index(int level, dwt_subband_t subband,
                                   int cx, int cy, int value, int color) {
     uint64_t index = 0;
-    index |= ((uint64_t)(level & 0x7)) << LEVEL_OFFSET;
-    index |= ((uint64_t)(subband & 0x3)) << SUBBAND_OFFSET;
-    index |= ((uint64_t)(cx & 0xFF)) << COEFF_X_OFFSET;
-    index |= ((uint64_t)(cy & 0xFF)) << COEFF_Y_OFFSET;
-    index |= ((uint64_t)(value & 0x1F)) << VALUE_OFFSET;
-    index |= ((uint64_t)(color & 0x3)) << COLOR_OFFSET;
+    index |= ((uint64_t)(level & LEVEL_MASK)) << LEVEL_OFFSET;
+    index |= ((uint64_t)(subband & SUBBAND_MASK)) << SUBBAND_OFFSET;
+    index |= ((uint64_t)(cx & COEFF_X_MASK)) << COEFF_X_OFFSET;
+    index |= ((uint64_t)(cy & COEFF_Y_MASK)) << COEFF_Y_OFFSET;
+    index |= ((uint64_t)(value & VALUE_MASK)) << VALUE_OFFSET;
+    index |= ((uint64_t)(color & COLOR_MASK)) << COLOR_OFFSET;
     return index;
 }
 
@@ -126,12 +133,12 @@ static uint64_t encode_dwt_index(int level, dwt_subband_t subband,
  */
 static void decode_dwt_index(uint64_t index, int* level, dwt_subband_t* subband,
                               int* cx, int* cy, int* value, int* color) {
-    if (level) *level = (index >> LEVEL_OFFSET) & 0x7;
-    if (subband) *subband = (dwt_subband_t)((index >> SUBBAND_OFFSET) & 0x3);
-    if (cx) *cx = (index >> COEFF_X_OFFSET) & 0xFF;
-    if (cy) *cy = (index >> COEFF_Y_OFFSET) & 0xFF;
-    if (value) *value = (index >> VALUE_OFFSET) & 0x1F;
-    if (color) *color = (index >> COLOR_OFFSET) & 0x3;
+    if (level) *level = (index >> LEVEL_OFFSET) & LEVEL_MASK;
+    if (subband) *subband = (dwt_subband_t)((index >> SUBBAND_OFFSET) & SUBBAND_MASK);
+    if (cx) *cx = (index >> COEFF_X_OFFSET) & COEFF_X_MASK;
+    if (cy) *cy = (index >> COEFF_Y_OFFSET) & COEFF_Y_MASK;
+    if (value) *value = (index >> VALUE_OFFSET) & VALUE_MASK;
+    if (color) *color = (index >> COLOR_OFFSET) & COLOR_MASK;
 }
 
 /* ============================================================================
@@ -226,7 +233,7 @@ dwt_framebuffer_t* qge_dwt_framebuffer_create(qge_context_t* ctx,
     }
 
     /* Calculate qubit requirements */
-    fb->num_qubits = DWT_TOTAL_QUBITS;  /* 28 qubits */
+    fb->num_qubits = DWT_TOTAL_QUBITS;
 
     /* Allocate the dense quantum state only for the measurement path. The
      * real-time Quake renderer uses the sparse active_indices/active_values
