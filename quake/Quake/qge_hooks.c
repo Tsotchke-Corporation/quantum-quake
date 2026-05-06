@@ -38,7 +38,7 @@ cvar_t quantum_debug     = {"quantum_debug",     "0", CVAR_NONE};
 cvar_t quantum_overlay_alpha = {"quantum_overlay_alpha", "0.10", CVAR_ARCHIVE};
 cvar_t quantum_scene_surface_budget = {"quantum_scene_surface_budget", "1024", CVAR_ARCHIVE};
 cvar_t quantum_render_res = {"quantum_render_res", "1024", CVAR_ARCHIVE};
-cvar_t quantum_render_threshold = {"quantum_render_threshold", "0.003", CVAR_ARCHIVE};
+cvar_t quantum_render_threshold = {"quantum_render_threshold", "0.001", CVAR_ARCHIVE};
 cvar_t quantum_render_edge_gain = {"quantum_render_edge_gain", "0.06", CVAR_ARCHIVE};
 cvar_t quantum_render_material_gain = {"quantum_render_material_gain", "0.18", CVAR_ARCHIVE};
 
@@ -3291,25 +3291,25 @@ static float QGE_DisplayChannelEnergyAt(const float *buffer, int x, int y)
 	if (!buffer)
 		return 0.0f;
 
-	center = fabsf(buffer[idx]);
+	center = buffer[idx] > 0.0f ? buffer[idx] : 0.0f;
 	if (x > 0)
-		axial += fabsf(buffer[idx - 1]);
+		axial += buffer[idx - 1] > 0.0f ? buffer[idx - 1] : 0.0f;
 	if (x + 1 < res)
-		axial += fabsf(buffer[idx + 1]);
+		axial += buffer[idx + 1] > 0.0f ? buffer[idx + 1] : 0.0f;
 	if (y > 0)
-		axial += fabsf(buffer[idx - res]);
+		axial += buffer[idx - res] > 0.0f ? buffer[idx - res] : 0.0f;
 	if (y + 1 < res)
-		axial += fabsf(buffer[idx + res]);
+		axial += buffer[idx + res] > 0.0f ? buffer[idx + res] : 0.0f;
 	if (x > 0 && y > 0)
-		diagonal += fabsf(buffer[idx - res - 1]);
+		diagonal += buffer[idx - res - 1] > 0.0f ? buffer[idx - res - 1] : 0.0f;
 	if (x + 1 < res && y > 0)
-		diagonal += fabsf(buffer[idx - res + 1]);
+		diagonal += buffer[idx - res + 1] > 0.0f ? buffer[idx - res + 1] : 0.0f;
 	if (x > 0 && y + 1 < res)
-		diagonal += fabsf(buffer[idx + res - 1]);
+		diagonal += buffer[idx + res - 1] > 0.0f ? buffer[idx + res - 1] : 0.0f;
 	if (x + 1 < res && y + 1 < res)
-		diagonal += fabsf(buffer[idx + res + 1]);
+		diagonal += buffer[idx + res + 1] > 0.0f ? buffer[idx + res + 1] : 0.0f;
 
-	return center * 0.40f + axial * 0.10f + diagonal * 0.025f;
+	return center * 0.70f + axial * 0.05f + diagonal * 0.0125f;
 }
 
 static float QGE_DisplayEnergyAt(int x, int y)

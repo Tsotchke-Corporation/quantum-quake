@@ -197,16 +197,18 @@ kernel void render_direct_spatial(
     uint64_t index = coeff_indices[gid];
     float value = coeff_values[gid];
 
-    /* Decode DWT index:
-     * bits 0-7: cy (coefficient Y)
-     * bits 8-15: cx (coefficient X)
-     * bits 16-17: subband (LL=0, HL=1, LH=2, HH=3)
-     * bits 18-20: level (0-7)
+    /* Decode qge_render.c's 32-bit sparse DWT index:
+     * bits 0-2:   level
+     * bits 3-4:   subband
+     * bits 5-14:  coefficient X
+     * bits 15-24: coefficient Y
+     * bits 25-29: quantized value
+     * bits 30-31: color channel
      */
-    uint cy = index & 0xFF;
-    uint cx = (index >> 8) & 0xFF;
-    uint subband = (index >> 16) & 0x3;
-    uint level = (index >> 18) & 0x7;
+    uint level = index & 0x7;
+    uint subband = (index >> 3) & 0x3;
+    uint cx = (index >> 5) & 0x3FF;
+    uint cy = (index >> 15) & 0x3FF;
 
     uint scale = 1u << level;
     uint px = cx * scale;
@@ -868,7 +870,8 @@ extern "C" int qge_metal_render_frame(
  * ============================================================================ */
 
 extern "C" qge_metal_stats_t qge_metal_get_stats(qge_metal_ctx_t* ctx) {
-    qge_metal_stats_t stats = {0};
+    qge_metal_stats_t stats;
+    memset(&stats, 0, sizeof(stats));
     if (ctx) {
         stats.marginalize_ms = ctx->last_marginalize_time_ms;
         stats.idwt_ms = ctx->last_idwt_time_ms;

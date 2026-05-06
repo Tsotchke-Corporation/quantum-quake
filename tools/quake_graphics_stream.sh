@@ -15,7 +15,7 @@ waits_per_frame="${QGE_STREAM_WAIT_FRAMES:-20}"
 map_name="${QGE_STREAM_MAP:-start}"
 render_value="${QGE_RENDER:-1}"
 render_res="${QGE_RENDER_RES:-1024}"
-render_threshold="${QGE_RENDER_THRESHOLD:-0.003}"
+render_threshold="${QGE_RENDER_THRESHOLD:-0.001}"
 render_edge_gain="${QGE_RENDER_EDGE_GAIN:-0.06}"
 render_material_gain="${QGE_RENDER_MATERIAL_GAIN:-0.18}"
 physics_value="${QGE_PHYSICS:-1}"
@@ -166,7 +166,6 @@ fi
 if [[ "$launch_mode" == "open" ]]; then
   runtime_log_file="$qconsole_file"
   : > "$runtime_log_file"
-  touch "$app_bundle" 2>/dev/null || true
   open_args=(-W -n)
   if [[ "$trace" == "1" ]]; then
     open_args+=(--env "QGE_TRACE_PATH=$trace_file")
