@@ -1214,6 +1214,56 @@ static int test_dwt_spatial_rectangle_roundtrip(void) {
            max_outside < 0.25f;
 }
 
+static int test_dwt_gradient_low_frequency_retention(void) {
+    const int res = 64;
+    dwt_config_t config = {
+        .mode = DWT_MODE_HAAR,
+        .num_levels = 4,
+        .base_resolution = res,
+        .gpu_reconstruct = false,
+        .sparsity_threshold = 0.05f
+    };
+
+    dwt_framebuffer_t* fb = qge_dwt_framebuffer_create(NULL, &config);
+    float* input = calloc(res * res, sizeof(float));
+    float* output = calloc(res * res, sizeof(float));
+    if (!fb || !input || !output) {
+        free(input);
+        free(output);
+        qge_dwt_framebuffer_free(fb);
+        return 0;
+    }
+
+    for (int y = 0; y < res; y++) {
+        for (int x = 0; x < res; x++)
+            input[y * res + x] = 0.10f + 0.50f * ((float)x / (float)(res - 1));
+    }
+
+    qge_dwt_encode_spatial(fb, input, res, res);
+    qge_dwt_render(fb, output);
+
+    float left = 0.0f;
+    float right = 0.0f;
+    int count = 0;
+    for (int y = 0; y < res; y++) {
+        for (int x = 0; x < 16; x++) {
+            left += output[y * res + x];
+            right += output[y * res + (res - 16 + x)];
+            count++;
+        }
+    }
+    left /= (float)count;
+    right /= (float)count;
+    int active = qge_dwt_get_active_count(fb);
+    printf("\n    Gradient retention: left=%.3f right=%.3f active=%d\n    ",
+           left, right, active);
+
+    free(input);
+    free(output);
+    qge_dwt_framebuffer_free(fb);
+    return active > 0 && right > left + 0.20f;
+}
+
 static int test_dwt_sparsity(void) {
     /* Test that typical scenes are sparse in wavelet domain */
     dwt_config_t config = {
@@ -1878,6 +1928,7 @@ int main(void) {
     TEST(dwt_encode_sprite);
     TEST(dwt_render);
     TEST(dwt_spatial_rectangle_roundtrip);
+    TEST(dwt_gradient_low_frequency_retention);
     TEST(dwt_sparsity);
     printf("\n");
 

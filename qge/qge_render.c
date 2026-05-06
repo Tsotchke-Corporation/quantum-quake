@@ -374,16 +374,18 @@ void qge_dwt_framebuffer_free(dwt_framebuffer_t* fb) {
  * Wavelet Coefficient Encoding
  * ============================================================================ */
 
-void qge_add_wavelet_coeff(dwt_framebuffer_t* fb,
-                            int level,
-                            dwt_subband_t subband,
-                            int cx, int cy,
-                            float value) {
+static void qge_add_wavelet_coeff_with_threshold(dwt_framebuffer_t* fb,
+                                                  int level,
+                                                  dwt_subband_t subband,
+                                                  int cx, int cy,
+                                                  float value,
+                                                  float threshold) {
     if (!fb || !fb->active_indices || !fb->active_values) return;
     if (fb->active_coeff_count >= MAX_ACTIVE_COEFFS) return;
 
     /* Skip if below sparsity threshold */
-    if (fabsf(value) < fb->config.sparsity_threshold) return;
+    if (threshold < 0.0f) threshold = 0.0f;
+    if (fabsf(value) < threshold) return;
 
     /* Quantize value to 5-bit range (0-31) */
     int quantized_value = (int)(fabsf(value) * 31.0f);
@@ -406,6 +408,16 @@ void qge_add_wavelet_coeff(dwt_framebuffer_t* fb,
     fb->active_indices[fb->active_coeff_count] = state_index;
     fb->active_values[fb->active_coeff_count] = value;
     fb->active_coeff_count++;
+}
+
+void qge_add_wavelet_coeff(dwt_framebuffer_t* fb,
+                            int level,
+                            dwt_subband_t subband,
+                            int cx, int cy,
+                            float value) {
+    if (!fb) return;
+    qge_add_wavelet_coeff_with_threshold(fb, level, subband, cx, cy, value,
+                                          fb->config.sparsity_threshold);
 }
 
 void qge_encode_wall_dwt(dwt_framebuffer_t* fb,
@@ -869,16 +881,26 @@ void qge_dwt_encode_spatial(dwt_framebuffer_t* fb,
     for (int level = 0; level < levels; level++) {
         int size = base_res >> level;
         int half = size / 2;
+        float threshold = fb->config.sparsity_threshold;
         if (half <= 0) break;
+
+        /* Coarser subbands carry the large-area structure of walls, floors,
+         * and lighting gradients. Keep them at a lower threshold than fine
+         * texture detail so sparse reconstruction does not collapse broad
+         * surfaces into visible block bands. */
+        if (level >= levels - 2)
+            threshold *= 0.20f;
+        else if (level >= levels - 4)
+            threshold *= 0.50f;
 
         for (int y = 0; y < half; y++) {
             for (int x = 0; x < half; x++) {
-                qge_add_wavelet_coeff(fb, level, SUBBAND_HL, x, y,
-                    fb->coeff_buffer[y * base_res + half + x]);
-                qge_add_wavelet_coeff(fb, level, SUBBAND_LH, x, y,
-                    fb->coeff_buffer[(half + y) * base_res + x]);
-                qge_add_wavelet_coeff(fb, level, SUBBAND_HH, x, y,
-                    fb->coeff_buffer[(half + y) * base_res + half + x]);
+                qge_add_wavelet_coeff_with_threshold(fb, level, SUBBAND_HL, x, y,
+                    fb->coeff_buffer[y * base_res + half + x], threshold);
+                qge_add_wavelet_coeff_with_threshold(fb, level, SUBBAND_LH, x, y,
+                    fb->coeff_buffer[(half + y) * base_res + x], threshold);
+                qge_add_wavelet_coeff_with_threshold(fb, level, SUBBAND_HH, x, y,
+                    fb->coeff_buffer[(half + y) * base_res + half + x], threshold);
             }
         }
     }
@@ -889,8 +911,9 @@ void qge_dwt_encode_spatial(dwt_framebuffer_t* fb,
     if (coarse_ll < 1) coarse_ll = 1;
     for (int y = 0; y < coarse_ll; y++) {
         for (int x = 0; x < coarse_ll; x++) {
-            qge_add_wavelet_coeff(fb, coarse_level, SUBBAND_LL, x, y,
-                fb->coeff_buffer[y * base_res + x]);
+            qge_add_wavelet_coeff_with_threshold(fb, coarse_level, SUBBAND_LL, x, y,
+                fb->coeff_buffer[y * base_res + x],
+                fb->config.sparsity_threshold * 0.10f);
         }
     }
 }
