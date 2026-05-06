@@ -56,6 +56,11 @@ void QGE_RenderScene(void);
  * a translucent diagnostic overlay. */
 qboolean QGE_RenderIsPrimary(void);
 
+/* Record whether the classic 3D renderer or QGE owns this frame's final 3D
+ * framebuffer. Counts are emitted in render telemetry for publication gates. */
+void QGE_RenderSetOwnershipTelemetry(int classic_3d_passes,
+                                     int suppressed_3d_passes);
+
 /* Begin collecting world/entity draw submissions for this frame. */
 void QGE_SceneBegin(void);
 

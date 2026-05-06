@@ -77,6 +77,9 @@ static GLenum qge_last_gl_draw_error = GL_NO_ERROR;
 static float qge_last_tone_floor = 0.0f;
 static float qge_last_tone_white = 1.0f;
 static int qge_last_tone_clipped = 0;
+static int qge_render_classic_3d_passes = 0;
+static int qge_render_suppressed_3d_passes = 0;
+static int qge_render_qge_primary_owned = 0;
 
 static qboolean qge_initialized = false;
 
@@ -3674,7 +3677,8 @@ void QGE_RenderScene(void)
 							 (uint64_t)QGE_DWT_CHANNELS *
 							 (uint64_t)sizeof(float);
 		probe.subject_id = qge_scene_snapshot_surfaces;
-		probe.flags = (uint32_t)qge_scene_snapshot_misses;
+		probe.flags = (uint32_t)qge_scene_snapshot_misses |
+					  (qge_render_qge_primary_owned ? 0x10000u : 0u);
 		probe.entropy = sparsity;
 		probe.coherence = 1.0 - sparsity;
 		probe.max_probability = max_val;
@@ -3687,11 +3691,15 @@ void QGE_RenderScene(void)
 	if (quantum_debug.value >= 1.0f || qge_frame_count % 30 == 0) {
 		if (quantum_debug.value >= 1.0f) {
 			if (qge_frame_count < 5 || (qge_frame_count % 60) == 0) {
-				Con_Printf("QGE render frame=%d mode=%s res=%d coeffs=%d snapshot=%d snapshot_miss=%d "
+				Con_Printf("QGE render frame=%d mode=%s owner=%s classic3d=%d suppressed3d=%d "
+						   "res=%d coeffs=%d snapshot=%d snapshot_miss=%d "
 						   "texcache=%d/%d lightcache=%d/%d poly=%d fallback=%d "
 						   "encoded=%d material=%d edicts=%d alias=%d sprites=%d "
 						   "viewmodel=%d entity_miss=%d nonzero=%d/%d\n",
 						   qge_frame_count, QGE_RenderIsPrimary() ? "primary" : "overlay",
+						   qge_render_qge_primary_owned ? "qge_3d" : "mixed",
+						   qge_render_classic_3d_passes,
+						   qge_render_suppressed_3d_passes,
 						   qge_render_res, active, qge_scene_snapshot_surfaces,
 						   qge_scene_snapshot_misses, qge_scene_texture_cache_hits,
 						   qge_scene_texture_cache_misses, qge_scene_lightmap_cache_hits,
@@ -3702,13 +3710,17 @@ void QGE_RenderScene(void)
 						   qge_scene_viewmodel_encoded, qge_scene_entity_misses,
 						   nonzero_pixels, total_pixels);
 			}
-			fprintf(stderr, "QGE render frame=%d mode=%s res=%d time=%.1fms coeffs=%d sparse=%.1f%% "
+			fprintf(stderr, "QGE render frame=%d mode=%s owner=%s classic3d=%d suppressed3d=%d "
+					"res=%d time=%.1fms coeffs=%d sparse=%.1f%% "
 					"scene_surfaces=%d snapshot_surfaces=%d snapshot_misses=%d "
 					"texcache=%d/%d lightcache=%d/%d poly=%d fallback=%d encoded_surfaces=%d "
 					"material_encoded=%d snapshot_edicts=%d encoded_edicts=%d alias=%d "
 					"sprites=%d viewmodel=%d entity_misses=%d visedicts=%d nonzero=%d/%d max=%.6f sum=%.3f "
 					"tone_floor=%.6f tone_white=%.6f tone_clip=%d levels=%d gl_upload=0x%x gl_draw=0x%x\n",
 					qge_frame_count, QGE_RenderIsPrimary() ? "primary" : "overlay",
+					qge_render_qge_primary_owned ? "qge_3d" : "mixed",
+					qge_render_classic_3d_passes,
+					qge_render_suppressed_3d_passes,
 					qge_render_res, elapsed, active, sparsity * 100.0f,
 					qge_scene_surface_count, qge_scene_snapshot_surfaces,
 					qge_scene_snapshot_misses, qge_scene_texture_cache_hits,
@@ -3734,6 +3746,20 @@ void QGE_RenderScene(void)
 qboolean QGE_RenderIsPrimary(void)
 {
 	return qge_initialized && quantum_render.value >= 1.5f;
+}
+
+void QGE_RenderSetOwnershipTelemetry(int classic_3d_passes,
+									 int suppressed_3d_passes)
+{
+	if (classic_3d_passes < 0)
+		classic_3d_passes = 0;
+	if (suppressed_3d_passes < 0)
+		suppressed_3d_passes = 0;
+	qge_render_classic_3d_passes = classic_3d_passes;
+	qge_render_suppressed_3d_passes = suppressed_3d_passes;
+	qge_render_qge_primary_owned =
+		QGE_RenderIsPrimary() && classic_3d_passes == 0 &&
+		suppressed_3d_passes > 0;
 }
 
 /* ============================================================================

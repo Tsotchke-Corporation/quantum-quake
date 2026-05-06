@@ -924,9 +924,12 @@ R_RenderScene
 void R_RenderScene (void)
 {
 	qboolean qge_primary;
+	enum { QGE_CLASSIC_3D_PASS_COUNT = 9 };
 
 	R_SetupScene (); //johnfitz -- this does everything that should be done once per call to RenderScene
 	qge_primary = QGE_RenderIsPrimary ();
+	QGE_RenderSetOwnershipTelemetry(qge_primary ? 0 : QGE_CLASSIC_3D_PASS_COUNT,
+									qge_primary ? QGE_CLASSIC_3D_PASS_COUNT : 0);
 
 	Fog_EnableGFog (); //johnfitz
 
