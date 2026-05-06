@@ -166,6 +166,7 @@ static int qge_scene_lightmap_cache_hits = 0;
 static int qge_scene_lightmap_cache_misses = 0;
 static int qge_scene_polygon_encoded = 0;
 static int qge_scene_polygon_fallback = 0;
+static int qge_scene_polygon_triangles = 0;
 static int qge_scene_snapshot_edicts = 0;
 static int qge_scene_encoded_edicts = 0;
 static int qge_scene_alias_encoded = 0;
@@ -212,7 +213,8 @@ static unsigned int QGE_TextureSignalBuild(const texture_t *tex,
 										   qge_texture_signal_cache_t *out);
 
 #define QGE_MAX_LIGHTMAP_SIGNAL_CACHE MAX_MAP_FACES
-#define QGE_MAX_PROJECTED_POLY_VERTS 64
+#define QGE_MAX_PROJECTED_POLY_VERTS 96
+#define QGE_MAX_PROJECTED_TRIS (QGE_MAX_PROJECTED_POLY_VERTS - 2)
 typedef struct {
 	qboolean valid;
 	unsigned int light_hash;
@@ -232,6 +234,10 @@ typedef struct {
 	float light_s;
 	float light_t;
 } qge_projected_vertex_t;
+
+typedef struct {
+	qge_projected_vertex_t v[3];
+} qge_projected_triangle_t;
 
 typedef struct {
 	vec3_t world;
@@ -1661,6 +1667,7 @@ void QGE_SceneBegin(void)
 	qge_scene_lightmap_cache_misses = 0;
 	qge_scene_polygon_encoded = 0;
 	qge_scene_polygon_fallback = 0;
+	qge_scene_polygon_triangles = 0;
 	qge_scene_snapshot_edicts = 0;
 	qge_scene_encoded_edicts = 0;
 	qge_scene_alias_encoded = 0;
@@ -2064,6 +2071,119 @@ static int QGE_ClipSurfacePolygonNear(const glpoly_t *poly,
 	return count;
 }
 
+static qge_projected_vertex_t QGE_ProjectVertexLerp(
+	const qge_projected_vertex_t *a,
+	const qge_projected_vertex_t *b,
+	float t)
+{
+	qge_projected_vertex_t out;
+
+	if (t < 0.0f) t = 0.0f;
+	if (t > 1.0f) t = 1.0f;
+	out.x = a->x + (b->x - a->x) * t;
+	out.y = a->y + (b->y - a->y) * t;
+	out.depth = a->depth + (b->depth - a->depth) * t;
+	out.tex_s = a->tex_s + (b->tex_s - a->tex_s) * t;
+	out.tex_t = a->tex_t + (b->tex_t - a->tex_t) * t;
+	out.light_s = a->light_s + (b->light_s - a->light_s) * t;
+	out.light_t = a->light_t + (b->light_t - a->light_t) * t;
+	return out;
+}
+
+static float QGE_ProjectVertexClipDistance(const qge_projected_vertex_t *v,
+										   int plane)
+{
+	float max_coord = (float)(qge_render_res - 1);
+
+	switch (plane) {
+	case 0: return v->x;
+	case 1: return max_coord - v->x;
+	case 2: return v->y;
+	default: return max_coord - v->y;
+	}
+}
+
+static int QGE_ClipProjectedPolygonPlane(const qge_projected_vertex_t *in,
+										 int in_count,
+										 qge_projected_vertex_t *out,
+										 int max_count,
+										 int plane)
+{
+	qge_projected_vertex_t prev;
+	float prev_dist;
+	qboolean prev_inside;
+	int out_count = 0;
+
+	if (!in || !out || in_count <= 0 || max_count <= 0)
+		return 0;
+
+	prev = in[in_count - 1];
+	prev_dist = QGE_ProjectVertexClipDistance(&prev, plane);
+	prev_inside = prev_dist >= -0.001f;
+
+	for (int i = 0; i < in_count; i++) {
+		qge_projected_vertex_t cur = in[i];
+		float cur_dist = QGE_ProjectVertexClipDistance(&cur, plane);
+		qboolean cur_inside = cur_dist >= -0.001f;
+
+		if (prev_inside != cur_inside && out_count < max_count) {
+			float denom = prev_dist - cur_dist;
+			float t = fabsf(denom) > 0.0001f ? prev_dist / denom : 0.0f;
+			out[out_count++] = QGE_ProjectVertexLerp(&prev, &cur, t);
+		}
+		if (cur_inside && out_count < max_count)
+			out[out_count++] = cur;
+
+		prev = cur;
+		prev_dist = cur_dist;
+		prev_inside = cur_inside;
+	}
+
+	return out_count;
+}
+
+static int QGE_ClipProjectedPolygonViewport(const qge_projected_vertex_t *in,
+											int in_count,
+											qge_projected_vertex_t *out,
+											int max_count)
+{
+	qge_projected_vertex_t tmp_a[QGE_MAX_PROJECTED_POLY_VERTS];
+	qge_projected_vertex_t tmp_b[QGE_MAX_PROJECTED_POLY_VERTS];
+	int count;
+
+	if (!in || !out || in_count < 3 || max_count < 3)
+		return 0;
+	if (in_count > QGE_MAX_PROJECTED_POLY_VERTS)
+		in_count = QGE_MAX_PROJECTED_POLY_VERTS;
+
+	for (int i = 0; i < in_count; i++)
+		tmp_a[i] = in[i];
+	count = in_count;
+
+	for (int plane = 0; plane < 4 && count >= 3; plane++) {
+		if ((plane & 1) == 0)
+			count = QGE_ClipProjectedPolygonPlane(tmp_a, count, tmp_b,
+												  QGE_MAX_PROJECTED_POLY_VERTS,
+												  plane);
+		else
+			count = QGE_ClipProjectedPolygonPlane(tmp_b, count, tmp_a,
+												  QGE_MAX_PROJECTED_POLY_VERTS,
+												  plane);
+	}
+
+	if (count < 3)
+		return 0;
+
+	if ((4 & 1) == 0) {
+		for (int i = 0; i < count && i < max_count; i++)
+			out[i] = tmp_a[i];
+	} else {
+		for (int i = 0; i < count && i < max_count; i++)
+			out[i] = tmp_b[i];
+	}
+	return count < max_count ? count : max_count;
+}
+
 static qboolean QGE_SurfaceScreenBounds(const qge_scene_surface_t *surface,
 										const msurface_t *surf,
 										screen_rect_t *bounds,
@@ -2139,10 +2259,14 @@ static qboolean QGE_ProjectSurfacePolygon(const qge_scene_surface_t *surface,
 	float signed_area = 0.0f;
 	int count = 0;
 	qge_clip_vertex_t clipped[QGE_MAX_PROJECTED_POLY_VERTS];
+	qge_projected_vertex_t projected[QGE_MAX_PROJECTED_POLY_VERTS];
 	int clipped_count;
+	int clipped_projected_count;
 
 	if (!surface || !poly || !verts || !num_verts || !bounds || !depth || !area)
 		return false;
+	if (max_verts > QGE_MAX_PROJECTED_POLY_VERTS)
+		max_verts = QGE_MAX_PROJECTED_POLY_VERTS;
 
 	clipped_count = QGE_ClipSurfacePolygonNear(poly, clipped,
 											   QGE_MAX_PROJECTED_POLY_VERTS);
@@ -2152,32 +2276,35 @@ static qboolean QGE_ProjectSurfacePolygon(const qge_scene_surface_t *surface,
 		if (!QGE_ProjectPoint(clipped[i].world, &sx, &sy, &sd))
 			continue;
 
-		if (sx < 0.0f) sx = 0.0f;
-		if (sy < 0.0f) sy = 0.0f;
-		if (sx > qge_render_res - 1) sx = (float)(qge_render_res - 1);
-		if (sy > qge_render_res - 1) sy = (float)(qge_render_res - 1);
-
-		verts[count].x = sx;
-		verts[count].y = sy;
-		verts[count].depth = sd;
-		verts[count].tex_s = clipped[i].tex_s;
-		verts[count].tex_t = clipped[i].tex_t;
-		verts[count].light_s = clipped[i].light_s;
-		verts[count].light_t = clipped[i].light_t;
-		if (sx < min_x) min_x = sx;
-		if (sy < min_y) min_y = sy;
-		if (sx > max_x) max_x = sx;
-		if (sy > max_y) max_y = sy;
-		depth_sum += sd;
+		projected[count].x = sx;
+		projected[count].y = sy;
+		projected[count].depth = sd;
+		projected[count].tex_s = clipped[i].tex_s;
+		projected[count].tex_t = clipped[i].tex_t;
+		projected[count].light_s = clipped[i].light_s;
+		projected[count].light_t = clipped[i].light_t;
 		count++;
 	}
 
 	if (count < 3)
 		return false;
 
+	clipped_projected_count = QGE_ClipProjectedPolygonViewport(projected,
+															   count,
+															   verts,
+															   max_verts);
+	if (clipped_projected_count < 3)
+		return false;
+	count = clipped_projected_count;
+
 	for (int i = 0; i < count; i++) {
 		int j = (i + 1) % count;
 		signed_area += verts[i].x * verts[j].y - verts[j].x * verts[i].y;
+		if (verts[i].x < min_x) min_x = verts[i].x;
+		if (verts[i].y < min_y) min_y = verts[i].y;
+		if (verts[i].x > max_x) max_x = verts[i].x;
+		if (verts[i].y > max_y) max_y = verts[i].y;
+		depth_sum += verts[i].depth;
 	}
 	signed_area = fabsf(signed_area) * 0.5f;
 	if (signed_area < 1.0f)
@@ -2193,31 +2320,6 @@ static qboolean QGE_ProjectSurfacePolygon(const qge_scene_surface_t *surface,
 	*depth = depth_sum / (float)count;
 	*area = signed_area;
 	return true;
-}
-
-static qboolean QGE_PointInsideProjectedPolygon(float x,
-												float y,
-												const qge_projected_vertex_t *verts,
-												int num_verts)
-{
-	qboolean inside = false;
-
-	if (!verts || num_verts < 3)
-		return false;
-
-	for (int i = 0, j = num_verts - 1; i < num_verts; j = i++) {
-		float yi = verts[i].y;
-		float yj = verts[j].y;
-		float xi = verts[i].x;
-		float xj = verts[j].x;
-		qboolean crosses = ((yi > y) != (yj > y));
-		if (crosses) {
-			float at_x = (xj - xi) * (y - yi) / (yj - yi + 0.0001f) + xi;
-			if (x < at_x)
-				inside = !inside;
-		}
-	}
-	return inside;
 }
 
 static void QGE_SpatialClear(void)
@@ -2505,22 +2607,142 @@ static qboolean QGE_ProjectedTriangleSampleAt(float x,
 	return true;
 }
 
-static qge_projected_sample_t QGE_ProjectedPolygonSampleAt(float x,
-														   float y,
-														   const qge_projected_vertex_t *verts,
-														   int num_verts,
-														   qge_projected_sample_t fallback)
+static float QGE_ProjectedTriangleArea2D(const qge_projected_vertex_t *a,
+										 const qge_projected_vertex_t *b,
+										 const qge_projected_vertex_t *c)
 {
-	if (!verts || num_verts < 3)
-		return fallback;
+	if (!a || !b || !c)
+		return 0.0f;
+	return ((b->x - a->x) * (c->y - a->y) -
+			(b->y - a->y) * (c->x - a->x)) * 0.5f;
+}
 
-	for (int i = 1; i + 1 < num_verts; i++) {
-		qge_projected_sample_t sample;
-		if (QGE_ProjectedTriangleSampleAt(x, y, &verts[0], &verts[i],
-										  &verts[i + 1], &sample))
-			return sample;
+static qboolean QGE_PointInProjectedTriangle2D(
+	float x,
+	float y,
+	const qge_projected_vertex_t *a,
+	const qge_projected_vertex_t *b,
+	const qge_projected_vertex_t *c)
+{
+	float area;
+	float w0, w1, w2;
+
+	if (!a || !b || !c)
+		return false;
+	area = (b->y - c->y) * (a->x - c->x) +
+		   (c->x - b->x) * (a->y - c->y);
+	if (fabsf(area) < 0.0001f)
+		return false;
+	w0 = ((b->y - c->y) * (x - c->x) +
+		  (c->x - b->x) * (y - c->y)) / area;
+	w1 = ((c->y - a->y) * (x - c->x) +
+		  (a->x - c->x) * (y - c->y)) / area;
+	w2 = 1.0f - w0 - w1;
+	return w0 >= -0.0005f && w1 >= -0.0005f && w2 >= -0.0005f;
+}
+
+static qboolean QGE_AddProjectedTriangle(qge_projected_triangle_t *tris,
+										 int *num_tris,
+										 int max_tris,
+										 const qge_projected_vertex_t *a,
+										 const qge_projected_vertex_t *b,
+										 const qge_projected_vertex_t *c)
+{
+	float area;
+
+	if (!tris || !num_tris || *num_tris >= max_tris)
+		return false;
+	area = fabsf(QGE_ProjectedTriangleArea2D(a, b, c));
+	if (area < 0.25f)
+		return false;
+	tris[*num_tris].v[0] = *a;
+	tris[*num_tris].v[1] = *b;
+	tris[*num_tris].v[2] = *c;
+	(*num_tris)++;
+	return true;
+}
+
+static int QGE_TriangulateProjectedPolygon(const qge_projected_vertex_t *verts,
+										   int num_verts,
+										   qge_projected_triangle_t *tris,
+										   int max_tris)
+{
+	int indices[QGE_MAX_PROJECTED_POLY_VERTS];
+	float polygon_area = 0.0f;
+	float winding;
+	int remaining;
+	int num_tris = 0;
+	int guard;
+
+	if (!verts || !tris || num_verts < 3 || max_tris <= 0)
+		return 0;
+	if (num_verts > QGE_MAX_PROJECTED_POLY_VERTS)
+		num_verts = QGE_MAX_PROJECTED_POLY_VERTS;
+
+	for (int i = 0; i < num_verts; i++) {
+		int j = (i + 1) % num_verts;
+		polygon_area += verts[i].x * verts[j].y - verts[j].x * verts[i].y;
+		indices[i] = i;
 	}
-	return fallback;
+	if (fabsf(polygon_area) < 0.5f)
+		return 0;
+	winding = polygon_area >= 0.0f ? 1.0f : -1.0f;
+	remaining = num_verts;
+	guard = num_verts * num_verts;
+
+	while (remaining > 3 && guard-- > 0) {
+		qboolean clipped_ear = false;
+
+		for (int i = 0; i < remaining && !clipped_ear; i++) {
+			int prev_i = (i + remaining - 1) % remaining;
+			int next_i = (i + 1) % remaining;
+			const qge_projected_vertex_t *a = &verts[indices[prev_i]];
+			const qge_projected_vertex_t *b = &verts[indices[i]];
+			const qge_projected_vertex_t *c = &verts[indices[next_i]];
+			float area = QGE_ProjectedTriangleArea2D(a, b, c) * winding;
+			qboolean contains = false;
+
+			if (area <= 0.25f)
+				continue;
+
+			for (int k = 0; k < remaining; k++) {
+				if (k == prev_i || k == i || k == next_i)
+					continue;
+				if (QGE_PointInProjectedTriangle2D(verts[indices[k]].x,
+												   verts[indices[k]].y,
+												   a, b, c)) {
+					contains = true;
+					break;
+				}
+			}
+			if (contains)
+				continue;
+
+			if (QGE_AddProjectedTriangle(tris, &num_tris, max_tris, a, b, c)) {
+				for (int k = i; k + 1 < remaining; k++)
+					indices[k] = indices[k + 1];
+				remaining--;
+				clipped_ear = true;
+			}
+		}
+
+		if (!clipped_ear)
+			break;
+	}
+
+	if (remaining == 3) {
+		QGE_AddProjectedTriangle(tris, &num_tris, max_tris,
+								 &verts[indices[0]], &verts[indices[1]],
+								 &verts[indices[2]]);
+	}
+
+	if (num_tris <= 0) {
+		for (int i = 1; i + 1 < num_verts; i++)
+			QGE_AddProjectedTriangle(tris, &num_tris, max_tris,
+									 &verts[0], &verts[i], &verts[i + 1]);
+	}
+
+	return num_tris;
 }
 
 static float QGE_RGBLuma(const qge_rgb_sample_t *color)
@@ -2807,11 +3029,16 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 	int filled = 0;
 	float edge_gain;
 	qge_projected_sample_t avg_sample;
+	qge_projected_triangle_t tris[QGE_MAX_PROJECTED_TRIS];
+	int num_tris;
 
 	if (!verts || num_verts < 3 || !bounds || value <= 0.0f)
 		return;
 
 	avg_sample = QGE_ProjectedPolygonAverageSample(verts, num_verts);
+	num_tris = QGE_TriangulateProjectedPolygon(verts, num_verts,
+											   tris, QGE_MAX_PROJECTED_TRIS);
+	qge_scene_polygon_triangles += num_tris;
 
 	x1 = bounds->x1;
 	y1 = bounds->y1;
@@ -2822,25 +3049,38 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 	if (x2 >= qge_render_res) x2 = qge_render_res - 1;
 	if (y2 >= qge_render_res) y2 = qge_render_res - 1;
 
-	for (int y = y1; y <= y2; y++) {
-		for (int x = x1; x <= x2; x++) {
-			float sample_x = (float)x + 0.5f;
-			float sample_y = (float)y + 0.5f;
-			qge_projected_sample_t sample;
-			qge_rgb_sample_t pixel_color;
-			if (!QGE_PointInsideProjectedPolygon(sample_x,
-												sample_y,
-												verts, num_verts))
-				continue;
-			sample = QGE_ProjectedPolygonSampleAt(sample_x, sample_y,
-												  verts, num_verts,
-												  avg_sample);
-			pixel_color = QGE_SurfaceSampleColor(surface, &sample);
-			pixel_color.r *= value;
-			pixel_color.g *= value;
-			pixel_color.b *= value;
-			QGE_SpatialAddPixelColorDepth(x, y, &pixel_color, sample.depth);
-			filled++;
+	for (int tri_i = 0; tri_i < num_tris; tri_i++) {
+		const qge_projected_triangle_t *tri = &tris[tri_i];
+		int tx1 = (int)floorf(fminf(fminf(tri->v[0].x, tri->v[1].x), tri->v[2].x));
+		int ty1 = (int)floorf(fminf(fminf(tri->v[0].y, tri->v[1].y), tri->v[2].y));
+		int tx2 = (int)ceilf(fmaxf(fmaxf(tri->v[0].x, tri->v[1].x), tri->v[2].x));
+		int ty2 = (int)ceilf(fmaxf(fmaxf(tri->v[0].y, tri->v[1].y), tri->v[2].y));
+
+		if (tx1 < x1) tx1 = x1;
+		if (ty1 < y1) ty1 = y1;
+		if (tx2 > x2) tx2 = x2;
+		if (ty2 > y2) ty2 = y2;
+		if (tx2 < tx1 || ty2 < ty1)
+			continue;
+
+		for (int y = ty1; y <= ty2; y++) {
+			for (int x = tx1; x <= tx2; x++) {
+				float sample_x = (float)x + 0.5f;
+				float sample_y = (float)y + 0.5f;
+				qge_projected_sample_t sample;
+				qge_rgb_sample_t pixel_color;
+
+				if (!QGE_ProjectedTriangleSampleAt(sample_x, sample_y,
+												   &tri->v[0], &tri->v[1],
+												   &tri->v[2], &sample))
+					continue;
+				pixel_color = QGE_SurfaceSampleColor(surface, &sample);
+				pixel_color.r *= value;
+				pixel_color.g *= value;
+				pixel_color.b *= value;
+				QGE_SpatialAddPixelColorDepth(x, y, &pixel_color, sample.depth);
+				filled++;
+			}
 		}
 	}
 
@@ -3710,7 +3950,7 @@ void QGE_RenderScene(void)
 			if (qge_frame_count < 5 || (qge_frame_count % 60) == 0) {
 				Con_Printf("QGE render frame=%d mode=%s owner=%s classic3d=%d suppressed3d=%d "
 						   "res=%d coeffs=%d snapshot=%d snapshot_miss=%d "
-						   "texcache=%d/%d lightcache=%d/%d poly=%d fallback=%d "
+						   "texcache=%d/%d lightcache=%d/%d poly=%d tris=%d fallback=%d "
 						   "encoded=%d material=%d edicts=%d alias=%d sprites=%d "
 						   "viewmodel=%d entity_miss=%d nonzero=%d/%d\n",
 						   qge_frame_count, QGE_RenderIsPrimary() ? "primary" : "overlay",
@@ -3721,7 +3961,8 @@ void QGE_RenderScene(void)
 						   qge_scene_snapshot_misses, qge_scene_texture_cache_hits,
 						   qge_scene_texture_cache_misses, qge_scene_lightmap_cache_hits,
 						   qge_scene_lightmap_cache_misses, qge_scene_polygon_encoded,
-						   qge_scene_polygon_fallback, qge_scene_encoded_surfaces,
+						   qge_scene_polygon_triangles, qge_scene_polygon_fallback,
+						   qge_scene_encoded_surfaces,
 						   qge_scene_material_encoded, qge_scene_encoded_edicts,
 						   qge_scene_alias_encoded, qge_scene_sprite_encoded,
 						   qge_scene_viewmodel_encoded, qge_scene_entity_misses,
@@ -3730,7 +3971,7 @@ void QGE_RenderScene(void)
 			fprintf(stderr, "QGE render frame=%d mode=%s owner=%s classic3d=%d suppressed3d=%d "
 					"res=%d time=%.1fms coeffs=%d sparse=%.1f%% "
 					"scene_surfaces=%d snapshot_surfaces=%d snapshot_misses=%d "
-					"texcache=%d/%d lightcache=%d/%d poly=%d fallback=%d encoded_surfaces=%d "
+					"texcache=%d/%d lightcache=%d/%d poly=%d tris=%d fallback=%d encoded_surfaces=%d "
 					"material_encoded=%d snapshot_edicts=%d encoded_edicts=%d alias=%d "
 					"sprites=%d viewmodel=%d entity_misses=%d visedicts=%d nonzero=%d/%d max=%.6f sum=%.3f "
 					"tone_floor=%.6f tone_white=%.6f tone_clip=%d levels=%d gl_upload=0x%x gl_draw=0x%x\n",
@@ -3743,7 +3984,8 @@ void QGE_RenderScene(void)
 					qge_scene_snapshot_misses, qge_scene_texture_cache_hits,
 					qge_scene_texture_cache_misses, qge_scene_lightmap_cache_hits,
 					qge_scene_lightmap_cache_misses, qge_scene_polygon_encoded,
-					qge_scene_polygon_fallback, qge_scene_encoded_surfaces,
+					qge_scene_polygon_triangles, qge_scene_polygon_fallback,
+					qge_scene_encoded_surfaces,
 					qge_scene_material_encoded, qge_scene_snapshot_edicts,
 					qge_scene_encoded_edicts, qge_scene_alias_encoded,
 					qge_scene_sprite_encoded, qge_scene_viewmodel_encoded,
