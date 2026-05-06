@@ -3264,8 +3264,6 @@ static qboolean QGE_EncodeSnapshotEdictDWT(dwt_framebuffer_t *fb,
 
 	if (!fb || !edict || !qge_resource_id_is_valid(edict->model_id))
 		return false;
-	if (QGE_IsSnapshotViewmodel(edict))
-		return true;
 
 	model_kind = qge_resource_id_kind(edict->model_id);
 	if (model_kind != QGE_RESOURCE_ALIAS_MODEL &&
