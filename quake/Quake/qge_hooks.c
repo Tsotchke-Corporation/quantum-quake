@@ -2439,6 +2439,8 @@ static qboolean QGE_ProjectedTriangleSampleAt(float x,
 {
 	float denom;
 	float w0, w1, w2;
+	float ia, ib, ic;
+	float inv_depth;
 
 	if (!a || !b || !c || !sample)
 		return false;
@@ -2457,11 +2459,28 @@ static qboolean QGE_ProjectedTriangleSampleAt(float x,
 	if (w0 < -0.001f || w1 < -0.001f || w2 < -0.001f)
 		return false;
 
-	sample->depth = w0 * a->depth + w1 * b->depth + w2 * c->depth;
-	sample->tex_s = w0 * a->tex_s + w1 * b->tex_s + w2 * c->tex_s;
-	sample->tex_t = w0 * a->tex_t + w1 * b->tex_t + w2 * c->tex_t;
-	sample->light_s = w0 * a->light_s + w1 * b->light_s + w2 * c->light_s;
-	sample->light_t = w0 * a->light_t + w1 * b->light_t + w2 * c->light_t;
+	ia = a->depth > 0.0001f ? 1.0f / a->depth : 1.0f;
+	ib = b->depth > 0.0001f ? 1.0f / b->depth : 1.0f;
+	ic = c->depth > 0.0001f ? 1.0f / c->depth : 1.0f;
+	inv_depth = w0 * ia + w1 * ib + w2 * ic;
+	if (inv_depth <= 0.000001f || !isfinite(inv_depth)) {
+		sample->depth = w0 * a->depth + w1 * b->depth + w2 * c->depth;
+		sample->tex_s = w0 * a->tex_s + w1 * b->tex_s + w2 * c->tex_s;
+		sample->tex_t = w0 * a->tex_t + w1 * b->tex_t + w2 * c->tex_t;
+		sample->light_s = w0 * a->light_s + w1 * b->light_s + w2 * c->light_s;
+		sample->light_t = w0 * a->light_t + w1 * b->light_t + w2 * c->light_t;
+		return true;
+	}
+
+	sample->depth = 1.0f / inv_depth;
+	sample->tex_s = (w0 * a->tex_s * ia + w1 * b->tex_s * ib +
+					 w2 * c->tex_s * ic) / inv_depth;
+	sample->tex_t = (w0 * a->tex_t * ia + w1 * b->tex_t * ib +
+					 w2 * c->tex_t * ic) / inv_depth;
+	sample->light_s = (w0 * a->light_s * ia + w1 * b->light_s * ib +
+					   w2 * c->light_s * ic) / inv_depth;
+	sample->light_t = (w0 * a->light_t * ia + w1 * b->light_t * ib +
+					   w2 * c->light_t * ic) / inv_depth;
 	return true;
 }
 
