@@ -83,6 +83,17 @@ static int qge_render_qge_primary_owned = 0;
 
 static qboolean qge_initialized = false;
 
+static const char *QGE_CommandLineTracePath(void)
+{
+	int arg;
+
+	arg = COM_CheckParm("-qgetrace");
+	if (arg && arg < com_argc - 1 && com_argv[arg + 1] &&
+		com_argv[arg + 1][0])
+		return com_argv[arg + 1];
+	return NULL;
+}
+
 /* Frame timing */
 static double qge_frame_start = 0.0;
 static int qge_frame_count = 0;
@@ -1361,7 +1372,9 @@ void QGE_Init(void)
 		Con_Printf("QGE: Quantum RNG failed, using classical fallback\n");
 	}
 
-	const char *trace_path = getenv("QGE_TRACE_PATH");
+	const char *trace_path = QGE_CommandLineTracePath();
+	if (!trace_path || !trace_path[0])
+		trace_path = getenv("QGE_TRACE_PATH");
 	if (trace_path && trace_path[0]) {
 		if (qge_quantum_trace_open(QGE_Runtime(), trace_path) == 0) {
 			Con_Printf("QGE: Trace recording to %s\n", trace_path);

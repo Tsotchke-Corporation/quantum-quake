@@ -162,60 +162,59 @@ run_args=(-basedir "$basedir" "${video_args[@]}")
 if [[ "$sound" != "1" ]]; then
   run_args+=(-nosound)
 fi
+if [[ "$trace" == "1" ]]; then
+  run_args+=(-qgetrace "$trace_file")
+fi
 
 if [[ "$launch_mode" == "open" ]]; then
   runtime_log_file="$qconsole_file"
   : > "$runtime_log_file"
+  echo "open output is not redirected; qconsole.log is captured as the runtime log." > "$open_log_file"
   open_args=(-W -n)
-  if [[ "$trace" == "1" ]]; then
-    open_args+=(--env "QGE_TRACE_PATH=$trace_file")
-  fi
   open_args+=("$app_bundle")
-  open "${open_args[@]}" --args "${run_args[@]}" -condebug >"$open_log_file" 2>&1 &
+  open "${open_args[@]}" --args "${run_args[@]}" -condebug || true
+  print_log_updates
 elif [[ "$trace" == "1" ]]; then
-  QGE_TRACE_PATH="$trace_file" "$app_bin" "${run_args[@]}" >"$log_file" 2>&1 &
+  "$app_bin" "${run_args[@]}" >"$log_file" 2>&1 &
 else
   "$app_bin" "${run_args[@]}" >"$log_file" 2>&1 &
 fi
 
-game_pid=$!
 frame_index=0
-elapsed=0
-max_seconds=$((60 + frames * waits_per_frame / 20))
+if [[ "$launch_mode" != "open" ]]; then
+  game_pid=$!
+  elapsed=0
+  max_seconds=$((60 + frames * waits_per_frame / 20))
 
-while kill -0 "$game_pid" 2>/dev/null; do
-  print_log_updates
-  find "$gamedir" -maxdepth 1 -name 'spasm*.png' -print | sort > "$current_file"
-  comm -13 "$seen_file" "$current_file" > "$new_file"
-  if [[ -s "$new_file" ]]; then
-    while IFS= read -r screenshot; do
-      if [[ -f "$screenshot" ]]; then
-        frame_index=$((frame_index + 1))
-        frame_name="$(printf 'frame_%03d.png' "$frame_index")"
-        cp "$screenshot" "$outdir/$frame_name"
-        echo "QGE_STREAM_FRAME $frame_index $outdir/$frame_name"
-      fi
-    done < "$new_file"
-    cp "$current_file" "$seen_file"
-  fi
-
-  if (( elapsed >= max_seconds )); then
-    echo "QGE_STREAM_TIMEOUT killing process $game_pid" >&2
-    kill "$game_pid" 2>/dev/null || true
-    if [[ "$launch_mode" == "open" ]]; then
-      pgrep -f "$app_bin" | while read -r app_pid; do
-        kill "$app_pid" 2>/dev/null || true
-      done
+  while kill -0 "$game_pid" 2>/dev/null; do
+    print_log_updates
+    find "$gamedir" -maxdepth 1 -name 'spasm*.png' -print | sort > "$current_file"
+    comm -13 "$seen_file" "$current_file" > "$new_file"
+    if [[ -s "$new_file" ]]; then
+      while IFS= read -r screenshot; do
+        if [[ -f "$screenshot" ]]; then
+          frame_index=$((frame_index + 1))
+          frame_name="$(printf 'frame_%03d.png' "$frame_index")"
+          cp "$screenshot" "$outdir/$frame_name"
+          echo "QGE_STREAM_FRAME $frame_index $outdir/$frame_name"
+        fi
+      done < "$new_file"
+      cp "$current_file" "$seen_file"
     fi
-    break
-  fi
 
-  sleep 1
-  elapsed=$((elapsed + 1))
-done
+    if (( elapsed >= max_seconds )); then
+      echo "QGE_STREAM_TIMEOUT killing process $game_pid" >&2
+      kill "$game_pid" 2>/dev/null || true
+      break
+    fi
 
-wait "$game_pid" 2>/dev/null || true
-print_log_updates
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+
+  wait "$game_pid" 2>/dev/null || true
+  print_log_updates
+fi
 
 if [[ "$launch_mode" == "open" && -f "$runtime_log_file" ]]; then
   cp "$runtime_log_file" "$log_file"
