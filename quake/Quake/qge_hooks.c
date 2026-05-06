@@ -49,13 +49,20 @@ cvar_t quantum_render_material_gain = {"quantum_render_material_gain", "0.18", C
 static qge_context_t* qge_ctx = NULL;
 static qge_particle_system_t* qge_particles = NULL;
 
-/* Quantum DWT framebuffers — single-buffer: encode then render same buffer per frame */
-static dwt_framebuffer_t* qge_dwt_fb[2] = {NULL, NULL};
+#define QGE_DWT_CHANNELS 3
+#define QGE_DWT_R 0
+#define QGE_DWT_G 1
+#define QGE_DWT_B 2
+
+/* Quantum DWT framebuffers — one sparse DWT field per RGB channel */
+static dwt_framebuffer_t* qge_dwt_fb[QGE_DWT_CHANNELS] = {NULL, NULL, NULL};
 
 /* Render buffers */
 static float* qge_render_buffer = NULL;
+static float* qge_render_color_buffer[QGE_DWT_CHANNELS] = {NULL, NULL, NULL};
 static uint8_t* qge_display_buffer = NULL;
 static float* qge_spatial_encode_buffer = NULL;
+static float* qge_spatial_color_buffer[QGE_DWT_CHANNELS] = {NULL, NULL, NULL};
 static float* qge_spatial_depth_buffer = NULL;
 
 static int qge_render_res = 1024;  /* Internal quantum render resolution */
@@ -228,6 +235,12 @@ typedef struct {
 	float light_s;
 	float light_t;
 } qge_projected_sample_t;
+
+typedef struct {
+	float r;
+	float g;
+	float b;
+} qge_rgb_sample_t;
 
 #define QGE_MAX_HUD_IMAGE_REFS 256
 typedef struct {
@@ -1360,7 +1373,7 @@ void QGE_Init(void)
 	if ((int)quantum_render_res.value != qge_render_res)
 		Con_Printf("QGE: quantum_render_res clamped to %d\n", qge_render_res);
 
-	/* Phase 4.1: Create double-buffered DWT framebuffers */
+	/* Phase 4.1: Create one sparse DWT framebuffer per RGB channel */
 	dwt_config_t dwt_cfg = {
 		.mode = DWT_MODE_HAAR,
 		.num_levels = qge_render_res >= 1024 ? 6 : (qge_render_res >= 512 ? 5 : 4),
@@ -1375,12 +1388,13 @@ void QGE_Init(void)
 		dwt_cfg.sparsity_threshold = 0.10f;
 	qge_dwt_levels = dwt_cfg.num_levels;
 
-	fprintf(stderr, "QGE: Creating DWT framebuffer 0...\n");
-	qge_dwt_fb[0] = qge_dwt_framebuffer_create(qge_ctx, &dwt_cfg);
-	fprintf(stderr, "QGE: Creating DWT framebuffer 1...\n");
-	qge_dwt_fb[1] = qge_dwt_framebuffer_create(qge_ctx, &dwt_cfg);
-	if (qge_dwt_fb[0] && qge_dwt_fb[1]) {
-		Con_Printf("QGE: Double-buffered sparse DWT framebuffers created (%dx%d, threshold %.4f)\n",
+	for (int ch = 0; ch < QGE_DWT_CHANNELS; ch++) {
+		fprintf(stderr, "QGE: Creating DWT framebuffer channel %d...\n", ch);
+		qge_dwt_fb[ch] = qge_dwt_framebuffer_create(qge_ctx, &dwt_cfg);
+	}
+	if (qge_dwt_fb[QGE_DWT_R] && qge_dwt_fb[QGE_DWT_G] &&
+		qge_dwt_fb[QGE_DWT_B]) {
+		Con_Printf("QGE: RGB sparse DWT framebuffers created (%dx%d, threshold %.4f)\n",
 				   qge_render_res, qge_render_res, dwt_cfg.sparsity_threshold);
 	}
 
@@ -1391,6 +1405,12 @@ void QGE_Init(void)
 	qge_display_buffer = (uint8_t *)calloc(qge_render_res * qge_render_res * 3, sizeof(uint8_t));
 	qge_spatial_encode_buffer = (float *)calloc(qge_render_res * qge_render_res, sizeof(float));
 	qge_spatial_depth_buffer = (float *)calloc(qge_render_res * qge_render_res, sizeof(float));
+	for (int ch = 0; ch < QGE_DWT_CHANNELS; ch++) {
+		qge_render_color_buffer[ch] = (float *)calloc(qge_render_res * qge_render_res,
+													  sizeof(float));
+		qge_spatial_color_buffer[ch] = (float *)calloc(qge_render_res * qge_render_res,
+													   sizeof(float));
+	}
 
 	/* Create particle system */
 	qge_particles = qge_particle_system_create(64);
@@ -1428,7 +1448,7 @@ void QGE_Init(void)
 	Con_Printf("  quantum_physics %d | quantum_projectiles %d | quantum_particles %d\n",
 			   (int)quantum_physics.value, (int)quantum_projectiles.value,
 			   (int)quantum_particles.value);
-	Con_Printf("  Double-buffered | Stable DWT quality | Sparse-only GPU path\n");
+	Con_Printf("  RGB sparse DWT | Stable DWT quality | Sparse-only GPU path\n");
 	Con_Printf("===================================\n\n");
 }
 
@@ -1453,21 +1473,27 @@ void QGE_Shutdown(void)
 		qge_particles = NULL;
 	}
 
-	if (qge_dwt_fb[0]) {
-		qge_dwt_framebuffer_free(qge_dwt_fb[0]);
-		qge_dwt_fb[0] = NULL;
-	}
-	if (qge_dwt_fb[1]) {
-		qge_dwt_framebuffer_free(qge_dwt_fb[1]);
-		qge_dwt_fb[1] = NULL;
+	for (int ch = 0; ch < QGE_DWT_CHANNELS; ch++) {
+		if (qge_dwt_fb[ch]) {
+			qge_dwt_framebuffer_free(qge_dwt_fb[ch]);
+			qge_dwt_fb[ch] = NULL;
+		}
 	}
 
 	free(qge_render_buffer);
 	qge_render_buffer = NULL;
+	for (int ch = 0; ch < QGE_DWT_CHANNELS; ch++) {
+		free(qge_render_color_buffer[ch]);
+		qge_render_color_buffer[ch] = NULL;
+	}
 	free(qge_display_buffer);
 	qge_display_buffer = NULL;
 	free(qge_spatial_encode_buffer);
 	qge_spatial_encode_buffer = NULL;
+	for (int ch = 0; ch < QGE_DWT_CHANNELS; ch++) {
+		free(qge_spatial_color_buffer[ch]);
+		qge_spatial_color_buffer[ch] = NULL;
+	}
 	free(qge_spatial_depth_buffer);
 	qge_spatial_depth_buffer = NULL;
 
@@ -2179,6 +2205,12 @@ static void QGE_SpatialClear(void)
 		return;
 	memset(qge_spatial_encode_buffer, 0,
 		   qge_render_res * qge_render_res * sizeof(float));
+	for (int ch = 0; ch < QGE_DWT_CHANNELS; ch++) {
+		if (qge_spatial_color_buffer[ch]) {
+			memset(qge_spatial_color_buffer[ch], 0,
+				   qge_render_res * qge_render_res * sizeof(float));
+		}
+	}
 	if (qge_spatial_depth_buffer) {
 		int pixels = qge_render_res * qge_render_res;
 		for (int i = 0; i < pixels; i++)
@@ -2186,10 +2218,32 @@ static void QGE_SpatialClear(void)
 	}
 }
 
-static void QGE_SpatialAddPixelDepth(int x, int y, float value, float depth)
+static float QGE_ClampSpatialSignal(float value)
+{
+	if (value < 0.0f)
+		return 0.0f;
+	if (value > 1.5f)
+		return 1.5f;
+	return value;
+}
+
+static void QGE_SpatialAddPixelColorDepth(int x,
+										  int y,
+										  const qge_rgb_sample_t *color,
+										  float depth)
 {
 	int idx;
 	float current_depth;
+	qge_rgb_sample_t sample;
+	float value;
+
+	if (!color)
+		return;
+	sample = *color;
+	if (sample.r < 0.0f) sample.r = 0.0f;
+	if (sample.g < 0.0f) sample.g = 0.0f;
+	if (sample.b < 0.0f) sample.b = 0.0f;
+	value = 0.299f * sample.r + 0.587f * sample.g + 0.114f * sample.b;
 
 	if (!qge_spatial_encode_buffer || x < 0 || y < 0 ||
 		x >= qge_render_res || y >= qge_render_res || value <= 0.0f)
@@ -2201,21 +2255,58 @@ static void QGE_SpatialAddPixelDepth(int x, int y, float value, float depth)
 	idx = y * qge_render_res + x;
 	if (!qge_spatial_depth_buffer) {
 		qge_spatial_encode_buffer[idx] += value;
+		if (qge_spatial_color_buffer[QGE_DWT_R])
+			qge_spatial_color_buffer[QGE_DWT_R][idx] += sample.r;
+		if (qge_spatial_color_buffer[QGE_DWT_G])
+			qge_spatial_color_buffer[QGE_DWT_G][idx] += sample.g;
+		if (qge_spatial_color_buffer[QGE_DWT_B])
+			qge_spatial_color_buffer[QGE_DWT_B][idx] += sample.b;
 	} else {
 		current_depth = qge_spatial_depth_buffer[idx];
 		if (depth > current_depth + QGE_SPATIAL_DEPTH_EPSILON)
 			return;
 		if (depth < current_depth - QGE_SPATIAL_DEPTH_EPSILON) {
 			qge_spatial_encode_buffer[idx] = value;
+			if (qge_spatial_color_buffer[QGE_DWT_R])
+				qge_spatial_color_buffer[QGE_DWT_R][idx] = sample.r;
+			if (qge_spatial_color_buffer[QGE_DWT_G])
+				qge_spatial_color_buffer[QGE_DWT_G][idx] = sample.g;
+			if (qge_spatial_color_buffer[QGE_DWT_B])
+				qge_spatial_color_buffer[QGE_DWT_B][idx] = sample.b;
 			qge_spatial_depth_buffer[idx] = depth;
 		} else {
 			qge_spatial_encode_buffer[idx] += value;
+			if (qge_spatial_color_buffer[QGE_DWT_R])
+				qge_spatial_color_buffer[QGE_DWT_R][idx] += sample.r;
+			if (qge_spatial_color_buffer[QGE_DWT_G])
+				qge_spatial_color_buffer[QGE_DWT_G][idx] += sample.g;
+			if (qge_spatial_color_buffer[QGE_DWT_B])
+				qge_spatial_color_buffer[QGE_DWT_B][idx] += sample.b;
 			if (depth < current_depth)
 				qge_spatial_depth_buffer[idx] = depth;
 		}
 	}
-	if (qge_spatial_encode_buffer[idx] > 1.5f)
-		qge_spatial_encode_buffer[idx] = 1.5f;
+	qge_spatial_encode_buffer[idx] =
+		QGE_ClampSpatialSignal(qge_spatial_encode_buffer[idx]);
+	if (qge_spatial_color_buffer[QGE_DWT_R])
+		qge_spatial_color_buffer[QGE_DWT_R][idx] =
+			QGE_ClampSpatialSignal(qge_spatial_color_buffer[QGE_DWT_R][idx]);
+	if (qge_spatial_color_buffer[QGE_DWT_G])
+		qge_spatial_color_buffer[QGE_DWT_G][idx] =
+			QGE_ClampSpatialSignal(qge_spatial_color_buffer[QGE_DWT_G][idx]);
+	if (qge_spatial_color_buffer[QGE_DWT_B])
+		qge_spatial_color_buffer[QGE_DWT_B][idx] =
+			QGE_ClampSpatialSignal(qge_spatial_color_buffer[QGE_DWT_B][idx]);
+}
+
+static void QGE_SpatialAddPixelDepth(int x, int y, float value, float depth)
+{
+	qge_rgb_sample_t gray;
+
+	gray.r = value;
+	gray.g = value;
+	gray.b = value;
+	QGE_SpatialAddPixelColorDepth(x, y, &gray, depth);
 }
 
 static void QGE_SpatialFillRectDepth(const screen_rect_t *bounds,
@@ -2241,6 +2332,32 @@ static void QGE_SpatialFillRectDepth(const screen_rect_t *bounds,
 	for (int y = y1; y <= y2; y++) {
 		for (int x = x1; x <= x2; x++)
 			QGE_SpatialAddPixelDepth(x, y, value, depth);
+	}
+}
+
+static void QGE_SpatialFillRectColorDepth(const screen_rect_t *bounds,
+										  const qge_rgb_sample_t *color,
+										  float depth)
+{
+	int x1, y1, x2, y2;
+
+	if (!bounds || !color)
+		return;
+
+	x1 = bounds->x1;
+	y1 = bounds->y1;
+	x2 = bounds->x2;
+	y2 = bounds->y2;
+	if (x1 < 0) x1 = 0;
+	if (y1 < 0) y1 = 0;
+	if (x2 >= qge_render_res) x2 = qge_render_res - 1;
+	if (y2 >= qge_render_res) y2 = qge_render_res - 1;
+	if (x2 < x1 || y2 < y1)
+		return;
+
+	for (int y = y1; y <= y2; y++) {
+		for (int x = x1; x <= x2; x++)
+			QGE_SpatialAddPixelColorDepth(x, y, color, depth);
 	}
 }
 
@@ -2366,9 +2483,17 @@ static qge_projected_sample_t QGE_ProjectedPolygonSampleAt(float x,
 	return fallback;
 }
 
-static float QGE_SurfaceTextureLuma(const qge_scene_surface_t *surface,
-									float tex_s,
-									float tex_t)
+static float QGE_RGBLuma(const qge_rgb_sample_t *color)
+{
+	if (!color)
+		return 0.0f;
+	return 0.299f * color->r + 0.587f * color->g + 0.114f * color->b;
+}
+
+static qboolean QGE_SurfaceTextureColor(const qge_scene_surface_t *surface,
+										float tex_s,
+										float tex_t,
+										qge_rgb_sample_t *color)
 {
 	const msurface_t *surf = surface ? surface->surf : NULL;
 	texture_t *tex = surf && surf->texinfo ? surf->texinfo->texture : NULL;
@@ -2377,16 +2502,21 @@ static float QGE_SurfaceTextureLuma(const qge_scene_surface_t *surface,
 	unsigned int width, height;
 	int tx, ty;
 	int palette_index;
-	float luma;
+
+	if (!color)
+		return false;
+	color->r = 0.75f;
+	color->g = 0.75f;
+	color->b = 0.75f;
 
 	if (!tex)
-		return 0.75f;
+		return true;
 
 	tex = R_TextureAnimation(tex, 0);
 	width = tex->width;
 	height = tex->height;
 	if (!width || !height)
-		return 0.75f;
+		return true;
 
 	tex_s = tex_s - floorf(tex_s);
 	tex_t = tex_t - floorf(tex_t);
@@ -2404,37 +2534,49 @@ static float QGE_SurfaceTextureLuma(const qge_scene_surface_t *surface,
 	palette_index = pixels[ty * (int)width + tx];
 	rgba = (const byte *)&d_8to24table[palette_index];
 	if (rgba[3] == 0 || ((surface->flags & SURF_DRAWFENCE) && palette_index == 255))
-		return 0.0f;
+		return false;
 
-	luma = (0.299f * (float)rgba[0] +
-			0.587f * (float)rgba[1] +
-			0.114f * (float)rgba[2]) / 255.0f;
-	if (palette_index >= 224)
-		luma += 0.25f;
-	if (luma > 1.25f)
-		luma = 1.25f;
-	return luma;
+	color->r = (float)rgba[0] / 255.0f;
+	color->g = (float)rgba[1] / 255.0f;
+	color->b = (float)rgba[2] / 255.0f;
+	if (palette_index >= 224) {
+		color->r += 0.25f;
+		color->g += 0.25f;
+		color->b += 0.25f;
+	}
+	color->r = QGE_ClampSpatialSignal(color->r);
+	color->g = QGE_ClampSpatialSignal(color->g);
+	color->b = QGE_ClampSpatialSignal(color->b);
+	return true;
 }
 
-static float QGE_SurfaceLightLuma(const msurface_t *surf,
-								  const qge_projected_sample_t *sample)
+static qge_rgb_sample_t QGE_SurfaceLightColor(const msurface_t *surf,
+											  const qge_projected_sample_t *sample)
 {
 	int smax, tmax, size;
 	int s, t;
 	float local_s, local_t;
-	float luma = 0.0f;
 	int maps = 0;
+	qge_rgb_sample_t color;
+
+	color.r = 0.95f;
+	color.g = 0.95f;
+	color.b = 0.95f;
 
 	if (!surf || !sample)
-		return 0.85f;
+		return color;
 	if (!surf->samples)
-		return 0.95f;
+		return color;
 
 	smax = (surf->extents[0] >> 4) + 1;
 	tmax = (surf->extents[1] >> 4) + 1;
 	size = smax * tmax;
 	if (smax <= 0 || tmax <= 0 || size <= 0)
-		return 0.85f;
+		return color;
+
+	color.r = 0.0f;
+	color.g = 0.0f;
+	color.b = 0.0f;
 
 	local_s = sample->light_s * (float)(LMBLOCK_WIDTH * 16) -
 			  (float)(surf->light_s * 16) - 8.0f;
@@ -2450,47 +2592,75 @@ static float QGE_SurfaceLightLuma(const msurface_t *surf,
 	for (int map = 0; map < MAXLIGHTMAPS && surf->styles[map] != 255; map++) {
 		const byte *p = surf->samples + map * size * 3 + (t * smax + s) * 3;
 		float scale = (float)d_lightstylevalue[surf->styles[map]] / 256.0f;
-		float sample_luma = ((float)p[0] + (float)p[1] + (float)p[2]) /
-							(255.0f * 3.0f);
-		luma += sample_luma * scale;
+		color.r += ((float)p[0] / 255.0f) * scale;
+		color.g += ((float)p[1] / 255.0f) * scale;
+		color.b += ((float)p[2] / 255.0f) * scale;
 		maps++;
 	}
 
-	if (!maps)
-		return 0.85f;
-	if (luma > 1.35f)
-		luma = 1.35f;
-	return luma;
+	if (!maps) {
+		color.r = 0.85f;
+		color.g = 0.85f;
+		color.b = 0.85f;
+		return color;
+	}
+	if (color.r > 1.35f) color.r = 1.35f;
+	if (color.g > 1.35f) color.g = 1.35f;
+	if (color.b > 1.35f) color.b = 1.35f;
+	return color;
 }
 
-static float QGE_SurfaceSampleSignal(const qge_scene_surface_t *surface,
-									 const qge_projected_sample_t *sample)
+static qge_rgb_sample_t QGE_SurfaceSampleColor(const qge_scene_surface_t *surface,
+											   const qge_projected_sample_t *sample)
 {
-	float tex_luma;
-	float light_luma;
-	float signal;
+	qge_rgb_sample_t tex_color;
+	qge_rgb_sample_t light_color;
+	qge_rgb_sample_t out;
+	float material_gain;
 
+	out.r = 1.0f;
+	out.g = 1.0f;
+	out.b = 1.0f;
 	if (!surface || !sample)
-		return 1.0f;
+		return out;
 
-	if (surface->flags & SURF_DRAWSKY)
-		return 0.12f;
+	if (surface->flags & SURF_DRAWSKY) {
+		out.r = 0.020f;
+		out.g = 0.035f;
+		out.b = 0.090f;
+		return out;
+	}
 
-	tex_luma = QGE_SurfaceTextureLuma(surface, sample->tex_s, sample->tex_t);
-	if (tex_luma <= 0.0f)
-		return 0.0f;
-	light_luma = QGE_SurfaceLightLuma(surface->surf, sample);
+	if (!QGE_SurfaceTextureColor(surface, sample->tex_s, sample->tex_t,
+								 &tex_color)) {
+		out.r = 0.0f;
+		out.g = 0.0f;
+		out.b = 0.0f;
+		return out;
+	}
+	light_color = QGE_SurfaceLightColor(surface->surf, sample);
+	material_gain = 0.85f + surface->material_signal * 0.25f;
 
-	signal = (0.18f + tex_luma * 0.82f) *
-			 (0.30f + light_luma * 0.90f) *
-			 (0.85f + surface->material_signal * 0.25f);
-	if (surface->flags & (SURF_DRAWLAVA | SURF_DRAWTELE))
-		signal *= 1.20f;
-	if (signal < 0.05f)
-		signal = 0.05f;
-	if (signal > 1.75f)
-		signal = 1.75f;
-	return signal;
+	out.r = (0.18f + tex_color.r * 0.82f) *
+			(0.30f + light_color.r * 0.90f) * material_gain;
+	out.g = (0.18f + tex_color.g * 0.82f) *
+			(0.30f + light_color.g * 0.90f) * material_gain;
+	out.b = (0.18f + tex_color.b * 0.82f) *
+			(0.30f + light_color.b * 0.90f) * material_gain;
+	if (surface->flags & (SURF_DRAWLAVA | SURF_DRAWTELE)) {
+		out.r *= 1.20f;
+		out.g *= 1.20f;
+		out.b *= 1.20f;
+	}
+	out.r = QGE_ClampSpatialSignal(out.r);
+	out.g = QGE_ClampSpatialSignal(out.g);
+	out.b = QGE_ClampSpatialSignal(out.b);
+	if (QGE_RGBLuma(&out) < 0.05f) {
+		out.r += 0.05f;
+		out.g += 0.05f;
+		out.b += 0.05f;
+	}
+	return out;
 }
 
 static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
@@ -2523,7 +2693,7 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 			float sample_x = (float)x + 0.5f;
 			float sample_y = (float)y + 0.5f;
 			qge_projected_sample_t sample;
-			float pixel_value;
+			qge_rgb_sample_t pixel_color;
 			if (!QGE_PointInsideProjectedPolygon(sample_x,
 												sample_y,
 												verts, num_verts))
@@ -2531,8 +2701,11 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 			sample = QGE_ProjectedPolygonSampleAt(sample_x, sample_y,
 												  verts, num_verts,
 												  avg_sample);
-			pixel_value = value * QGE_SurfaceSampleSignal(surface, &sample);
-			QGE_SpatialAddPixelDepth(x, y, pixel_value, sample.depth);
+			pixel_color = QGE_SurfaceSampleColor(surface, &sample);
+			pixel_color.r *= value;
+			pixel_color.g *= value;
+			pixel_color.b *= value;
+			QGE_SpatialAddPixelColorDepth(x, y, &pixel_color, sample.depth);
 			filled++;
 		}
 	}
@@ -2551,11 +2724,13 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 							 value * edge_gain, a->depth, b->depth);
 	}
 
-	if (!filled)
-		QGE_SpatialFillRectDepth(bounds,
-								 value * QGE_SurfaceSampleSignal(surface,
-																 &avg_sample),
-								 avg_sample.depth);
+	if (!filled) {
+		qge_rgb_sample_t fill_color = QGE_SurfaceSampleColor(surface, &avg_sample);
+		fill_color.r *= value;
+		fill_color.g *= value;
+		fill_color.b *= value;
+		QGE_SpatialFillRectColorDepth(bounds, &fill_color, avg_sample.depth);
+	}
 }
 
 static float QGE_WorldEncodeGain(void)
@@ -3011,7 +3186,7 @@ static int QGE_EncodeSnapshotEdicts(dwt_framebuffer_t *fb,
 	return encoded;
 }
 
-static float QGE_DisplayEnergyAt(int x, int y)
+static float QGE_DisplayChannelEnergyAt(const float *buffer, int x, int y)
 {
 	float center;
 	float axial = 0.0f;
@@ -3019,25 +3194,37 @@ static float QGE_DisplayEnergyAt(int x, int y)
 	int res = qge_render_res;
 	int idx = y * res + x;
 
-	center = fabsf(qge_render_buffer[idx]);
+	if (!buffer)
+		return 0.0f;
+
+	center = fabsf(buffer[idx]);
 	if (x > 0)
-		axial += fabsf(qge_render_buffer[idx - 1]);
+		axial += fabsf(buffer[idx - 1]);
 	if (x + 1 < res)
-		axial += fabsf(qge_render_buffer[idx + 1]);
+		axial += fabsf(buffer[idx + 1]);
 	if (y > 0)
-		axial += fabsf(qge_render_buffer[idx - res]);
+		axial += fabsf(buffer[idx - res]);
 	if (y + 1 < res)
-		axial += fabsf(qge_render_buffer[idx + res]);
+		axial += fabsf(buffer[idx + res]);
 	if (x > 0 && y > 0)
-		diagonal += fabsf(qge_render_buffer[idx - res - 1]);
+		diagonal += fabsf(buffer[idx - res - 1]);
 	if (x + 1 < res && y > 0)
-		diagonal += fabsf(qge_render_buffer[idx - res + 1]);
+		diagonal += fabsf(buffer[idx - res + 1]);
 	if (x > 0 && y + 1 < res)
-		diagonal += fabsf(qge_render_buffer[idx + res - 1]);
+		diagonal += fabsf(buffer[idx + res - 1]);
 	if (x + 1 < res && y + 1 < res)
-		diagonal += fabsf(qge_render_buffer[idx + res + 1]);
+		diagonal += fabsf(buffer[idx + res + 1]);
 
 	return center * 0.40f + axial * 0.10f + diagonal * 0.025f;
+}
+
+static float QGE_DisplayEnergyAt(int x, int y)
+{
+	float r = QGE_DisplayChannelEnergyAt(qge_render_color_buffer[QGE_DWT_R], x, y);
+	float g = QGE_DisplayChannelEnergyAt(qge_render_color_buffer[QGE_DWT_G], x, y);
+	float b = QGE_DisplayChannelEnergyAt(qge_render_color_buffer[QGE_DWT_B], x, y);
+
+	return 0.299f * r + 0.587f * g + 0.114f * b;
 }
 
 static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
@@ -3066,6 +3253,7 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 		int x = i % qge_render_res;
 		int y = i / qge_render_res;
 		float v = QGE_DisplayEnergyAt(x, y);
+		qge_render_buffer[i] = v;
 		if (v > max_abs)
 			max_abs = v;
 		if (v > 0.0001f) {
@@ -3097,7 +3285,7 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 	}
 
 	median_target = active / 2;
-	white_target = (active * 985) / 1000;
+	white_target = (active * 992) / 1000;
 	if (white_target < median_target + 1)
 		white_target = median_target + 1;
 
@@ -3124,9 +3312,12 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 	for (i = 0; i < total_pixels; i++) {
 		int x = i % qge_render_res;
 		int y = i / qge_render_res;
-		float v = QGE_DisplayEnergyAt(x, y);
+		float r = QGE_DisplayChannelEnergyAt(qge_render_color_buffer[QGE_DWT_R], x, y);
+		float g = QGE_DisplayChannelEnergyAt(qge_render_color_buffer[QGE_DWT_G], x, y);
+		float b = QGE_DisplayChannelEnergyAt(qge_render_color_buffer[QGE_DWT_B], x, y);
+		float v = 0.299f * r + 0.587f * g + 0.114f * b;
 		float normalized = (v - floor_val) * inv_range;
-		uint8_t gray;
+		float scale;
 		int idx;
 
 		if (normalized <= 0.0f)
@@ -3136,12 +3327,21 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 			qge_last_tone_clipped++;
 		}
 
-		normalized = log1pf(normalized * 5.0f) / log1pf(5.0f);
-		gray = (uint8_t)(normalized * 255.0f);
+		normalized = log1pf(normalized * 4.0f) / log1pf(4.0f);
+		if (v > 0.0001f)
+			scale = normalized / v;
+		else
+			scale = 0.0f;
+		r *= scale;
+		g *= scale;
+		b *= scale;
+		if (r > 1.0f) r = 1.0f;
+		if (g > 1.0f) g = 1.0f;
+		if (b > 1.0f) b = 1.0f;
 		idx = i * 3;
-		qge_display_buffer[idx + 0] = (uint8_t)(gray * 0.58f);
-		qge_display_buffer[idx + 1] = (uint8_t)(gray * 0.68f);
-		qge_display_buffer[idx + 2] = gray;
+		qge_display_buffer[idx + 0] = (uint8_t)(r * 255.0f);
+		qge_display_buffer[idx + 1] = (uint8_t)(g * 255.0f);
+		qge_display_buffer[idx + 2] = (uint8_t)(b * 255.0f);
 	}
 
 	*max_val = max_abs;
@@ -3152,21 +3352,23 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
  *
  * Signal chain: BSP surfaces → screen-space bounds → DWT coefficient encoding
  *
- * This walks Quake's visible entity list and encodes each surface as a set of
- * wavelet coefficients in the 28-qubit quantum state. Walls create edge
- * coefficients (HL, LH, HH subbands) and fill coefficients (LL subband).
+ * This walks Quake's visible scene snapshot and rasterizes surfaces into
+ * RGB spatial fields, then encodes each channel into sparse 32-qubit DWT
+ * coefficient space before inverse reconstruction.
  */
 static void QGE_EncodeScene(void)
 {
 	int encoded_world = 0;
 	int surface_budget;
-	dwt_framebuffer_t *fb = qge_dwt_fb[0];
 	qge_frame_snapshot_t *snapshot;
 
-	if (!fb) return;
+	if (!qge_dwt_fb[QGE_DWT_R] || !qge_dwt_fb[QGE_DWT_G] ||
+		!qge_dwt_fb[QGE_DWT_B])
+		return;
 
 	/* Reset write framebuffer for new frame */
-	qge_dwt_framebuffer_reset(fb);
+	for (int ch = 0; ch < QGE_DWT_CHANNELS; ch++)
+		qge_dwt_framebuffer_reset(qge_dwt_fb[ch]);
 	QGE_SpatialClear();
 
 	/* Encode visible BSP world surfaces submitted by R_MarkSurfaces. */
@@ -3176,12 +3378,15 @@ static void QGE_EncodeScene(void)
 	snapshot = qge_get_frame_snapshot(qge_ctx);
 	if (snapshot && !snapshot->sealed)
 		QGE_FrameSnapshotCaptureEdicts(snapshot);
-	encoded_world = QGE_EncodeSnapshotWorldSurfaces(fb, snapshot, surface_budget);
+	encoded_world = QGE_EncodeSnapshotWorldSurfaces(qge_dwt_fb[QGE_DWT_R],
+													snapshot,
+													surface_budget);
 	if (!encoded_world)
-		encoded_world = QGE_EncodeTransientWorldSurfaces(fb, surface_budget);
+		encoded_world = QGE_EncodeTransientWorldSurfaces(qge_dwt_fb[QGE_DWT_R],
+														 surface_budget);
 	qge_scene_encoded_surfaces = encoded_world;
 
-	QGE_EncodeSnapshotEdicts(fb, snapshot);
+	QGE_EncodeSnapshotEdicts(qge_dwt_fb[QGE_DWT_R], snapshot);
 
 	if (!encoded_world) {
 		screen_rect_t world_bounds = {
@@ -3193,8 +3398,13 @@ static void QGE_EncodeScene(void)
 								 8192.0f);
 	}
 
-	qge_dwt_encode_spatial(fb, qge_spatial_encode_buffer,
-						   qge_render_res, qge_render_res);
+	for (int ch = 0; ch < QGE_DWT_CHANNELS; ch++) {
+		const float *source = qge_spatial_color_buffer[ch] ?
+							  qge_spatial_color_buffer[ch] :
+							  qge_spatial_encode_buffer;
+		qge_dwt_encode_spatial(qge_dwt_fb[ch], source,
+							   qge_render_res, qge_render_res);
+	}
 }
 
 static void QGE_ResetTextureUnitsForBlit(void)
@@ -3291,9 +3501,17 @@ static void QGE_BlitToScreen(void)
 
 void QGE_RenderScene(void)
 {
-	dwt_framebuffer_t *fb = qge_dwt_fb[0];  /* Single buffer — encode then render same one */
+	int active = 0;
+	float sparsity = 0.0f;
+	int total_coefficients;
 
-	if (!qge_initialized || !fb || !qge_render_buffer || !qge_display_buffer)
+	if (!qge_initialized ||
+		!qge_dwt_fb[QGE_DWT_R] || !qge_dwt_fb[QGE_DWT_G] ||
+		!qge_dwt_fb[QGE_DWT_B] ||
+		!qge_render_buffer || !qge_display_buffer ||
+		!qge_render_color_buffer[QGE_DWT_R] ||
+		!qge_render_color_buffer[QGE_DWT_G] ||
+		!qge_render_color_buffer[QGE_DWT_B])
 		return;
 
 	if (quantum_render.value < 0.5f)
@@ -3309,7 +3527,8 @@ void QGE_RenderScene(void)
 	 * Uses the SAME buffer we just encoded into (like the working demo).
 	 * Sparse-only path — active_indices/values provide the wavelet representation
 	 * without iterating all 268M amplitudes. */
-	qge_dwt_render(fb, qge_render_buffer);
+	for (int ch = 0; ch < QGE_DWT_CHANNELS; ch++)
+		qge_dwt_render(qge_dwt_fb[ch], qge_render_color_buffer[ch]);
 
 	/* Step 3: Convert float pixels to RGB display buffer. */
 	float max_val = 0.0001f;
@@ -3322,8 +3541,11 @@ void QGE_RenderScene(void)
 	QGE_BlitToScreen();
 
 	double elapsed = (Sys_DoubleTime() - start) * 1000.0;
-	int active = qge_dwt_get_active_count(fb);
-	float sparsity = qge_dwt_get_sparsity(fb);
+	for (int ch = 0; ch < QGE_DWT_CHANNELS; ch++)
+		active += qge_dwt_get_active_count(qge_dwt_fb[ch]);
+	total_coefficients = qge_render_res * qge_render_res * QGE_DWT_CHANNELS;
+	if (total_coefficients > 0)
+		sparsity = (float)active / (float)total_coefficients;
 
 	qge_quantum_runtime_t *rt = QGE_Runtime();
 	if (rt) {
@@ -3336,6 +3558,7 @@ void QGE_RenderScene(void)
 		probe.active_basis_count = active;
 		probe.qubit_count = 32;
 		probe.memory_bytes = (uint64_t)qge_render_res * (uint64_t)qge_render_res *
+							 (uint64_t)QGE_DWT_CHANNELS *
 							 (uint64_t)sizeof(float);
 		probe.subject_id = qge_scene_snapshot_surfaces;
 		probe.flags = (uint32_t)qge_scene_snapshot_misses;
