@@ -203,12 +203,28 @@ typedef struct {
 	float x;
 	float y;
 	float depth;
+	float tex_s;
+	float tex_t;
+	float light_s;
+	float light_t;
 } qge_projected_vertex_t;
 
 typedef struct {
 	vec3_t world;
 	float depth;
+	float tex_s;
+	float tex_t;
+	float light_s;
+	float light_t;
 } qge_clip_vertex_t;
+
+typedef struct {
+	float depth;
+	float tex_s;
+	float tex_t;
+	float light_s;
+	float light_t;
+} qge_projected_sample_t;
 
 #define QGE_MAX_HUD_IMAGE_REFS 256
 typedef struct {
@@ -1896,23 +1912,39 @@ static float QGE_ViewDepth(const vec3_t world)
 static void QGE_AddClipVertex(qge_clip_vertex_t *out,
 							  int *count,
 							  int max_count,
-							  const vec3_t world,
-							  float depth)
+							  const qge_clip_vertex_t *vertex)
 {
 	if (!out || !count || *count >= max_count)
 		return;
-	VectorCopy(world, out[*count].world);
-	out[*count].depth = depth;
+	out[*count] = *vertex;
 	(*count)++;
+}
+
+static void QGE_SetClipVertexFromPoly(const glpoly_t *poly,
+									  int index,
+									  qge_clip_vertex_t *vertex)
+{
+	if (!poly || !vertex)
+		return;
+	vertex->world[0] = poly->verts[index][0];
+	vertex->world[1] = poly->verts[index][1];
+	vertex->world[2] = poly->verts[index][2];
+	vertex->depth = QGE_ViewDepth(vertex->world);
+	vertex->tex_s = poly->verts[index][3];
+	vertex->tex_t = poly->verts[index][4];
+	vertex->light_s = poly->verts[index][5];
+	vertex->light_t = poly->verts[index][6];
 }
 
 static void QGE_IntersectNearPlane(const qge_clip_vertex_t *a,
 								   const qge_clip_vertex_t *b,
-								   vec3_t out_world,
-								   float *out_depth)
+								   qge_clip_vertex_t *out)
 {
 	float denom;
 	float t;
+
+	if (!a || !b || !out)
+		return;
 
 	denom = b->depth - a->depth;
 	if (fabsf(denom) < 0.0001f)
@@ -1922,10 +1954,14 @@ static void QGE_IntersectNearPlane(const qge_clip_vertex_t *a,
 	if (t < 0.0f) t = 0.0f;
 	if (t > 1.0f) t = 1.0f;
 
-	out_world[0] = a->world[0] + (b->world[0] - a->world[0]) * t;
-	out_world[1] = a->world[1] + (b->world[1] - a->world[1]) * t;
-	out_world[2] = a->world[2] + (b->world[2] - a->world[2]) * t;
-	*out_depth = 1.0f;
+	out->world[0] = a->world[0] + (b->world[0] - a->world[0]) * t;
+	out->world[1] = a->world[1] + (b->world[1] - a->world[1]) * t;
+	out->world[2] = a->world[2] + (b->world[2] - a->world[2]) * t;
+	out->depth = 1.0f;
+	out->tex_s = a->tex_s + (b->tex_s - a->tex_s) * t;
+	out->tex_t = a->tex_t + (b->tex_t - a->tex_t) * t;
+	out->light_s = a->light_s + (b->light_s - a->light_s) * t;
+	out->light_t = a->light_t + (b->light_t - a->light_t) * t;
 }
 
 static int QGE_ClipSurfacePolygonNear(const glpoly_t *poly,
@@ -1939,35 +1975,27 @@ static int QGE_ClipSurfacePolygonNear(const glpoly_t *poly,
 	if (!poly || !out || max_count <= 0 || poly->numverts < 3)
 		return 0;
 
-	prev.world[0] = poly->verts[poly->numverts - 1][0];
-	prev.world[1] = poly->verts[poly->numverts - 1][1];
-	prev.world[2] = poly->verts[poly->numverts - 1][2];
-	prev.depth = QGE_ViewDepth(prev.world);
+	QGE_SetClipVertexFromPoly(poly, poly->numverts - 1, &prev);
 	prev_inside = prev.depth >= 1.0f;
 
 	for (int i = 0; i < poly->numverts; i++) {
 		qge_clip_vertex_t cur;
 		qboolean cur_inside;
 
-		cur.world[0] = poly->verts[i][0];
-		cur.world[1] = poly->verts[i][1];
-		cur.world[2] = poly->verts[i][2];
-		cur.depth = QGE_ViewDepth(cur.world);
+		QGE_SetClipVertexFromPoly(poly, i, &cur);
 		cur_inside = cur.depth >= 1.0f;
 
 		if (prev_inside && cur_inside) {
-			QGE_AddClipVertex(out, &count, max_count, cur.world, cur.depth);
+			QGE_AddClipVertex(out, &count, max_count, &cur);
 		} else if (prev_inside && !cur_inside) {
-			vec3_t hit;
-			float hit_depth;
-			QGE_IntersectNearPlane(&prev, &cur, hit, &hit_depth);
-			QGE_AddClipVertex(out, &count, max_count, hit, hit_depth);
+			qge_clip_vertex_t hit;
+			QGE_IntersectNearPlane(&prev, &cur, &hit);
+			QGE_AddClipVertex(out, &count, max_count, &hit);
 		} else if (!prev_inside && cur_inside) {
-			vec3_t hit;
-			float hit_depth;
-			QGE_IntersectNearPlane(&prev, &cur, hit, &hit_depth);
-			QGE_AddClipVertex(out, &count, max_count, hit, hit_depth);
-			QGE_AddClipVertex(out, &count, max_count, cur.world, cur.depth);
+			qge_clip_vertex_t hit;
+			QGE_IntersectNearPlane(&prev, &cur, &hit);
+			QGE_AddClipVertex(out, &count, max_count, &hit);
+			QGE_AddClipVertex(out, &count, max_count, &cur);
 		}
 
 		prev = cur;
@@ -2073,6 +2101,10 @@ static qboolean QGE_ProjectSurfacePolygon(const qge_scene_surface_t *surface,
 		verts[count].x = sx;
 		verts[count].y = sy;
 		verts[count].depth = sd;
+		verts[count].tex_s = clipped[i].tex_s;
+		verts[count].tex_t = clipped[i].tex_t;
+		verts[count].light_s = clipped[i].light_s;
+		verts[count].light_t = clipped[i].light_t;
 		if (sx < min_x) min_x = sx;
 		if (sy < min_y) min_y = sy;
 		if (sx > max_x) max_x = sx;
@@ -2243,30 +2275,43 @@ static void QGE_SpatialOutlineRectDepth(const screen_rect_t *bounds,
 						 value, depth, depth);
 }
 
-static float QGE_ProjectedPolygonAverageDepth(const qge_projected_vertex_t *verts,
-											  int num_verts)
+static qge_projected_sample_t QGE_ProjectedPolygonAverageSample(const qge_projected_vertex_t *verts,
+																int num_verts)
 {
-	float depth_sum = 0.0f;
+	qge_projected_sample_t sample;
 
-	if (!verts || num_verts <= 0)
-		return QGE_SPATIAL_DEPTH_FAR * 0.5f;
+	memset(&sample, 0, sizeof(sample));
+	if (!verts || num_verts <= 0) {
+		sample.depth = QGE_SPATIAL_DEPTH_FAR * 0.5f;
+		return sample;
+	}
 
-	for (int i = 0; i < num_verts; i++)
-		depth_sum += verts[i].depth;
-	return depth_sum / (float)num_verts;
+	for (int i = 0; i < num_verts; i++) {
+		sample.depth += verts[i].depth;
+		sample.tex_s += verts[i].tex_s;
+		sample.tex_t += verts[i].tex_t;
+		sample.light_s += verts[i].light_s;
+		sample.light_t += verts[i].light_t;
+	}
+	sample.depth /= (float)num_verts;
+	sample.tex_s /= (float)num_verts;
+	sample.tex_t /= (float)num_verts;
+	sample.light_s /= (float)num_verts;
+	sample.light_t /= (float)num_verts;
+	return sample;
 }
 
-static qboolean QGE_ProjectedTriangleDepthAt(float x,
-											 float y,
-											 const qge_projected_vertex_t *a,
-											 const qge_projected_vertex_t *b,
-											 const qge_projected_vertex_t *c,
-											 float *depth)
+static qboolean QGE_ProjectedTriangleSampleAt(float x,
+											  float y,
+											  const qge_projected_vertex_t *a,
+											  const qge_projected_vertex_t *b,
+											  const qge_projected_vertex_t *c,
+											  qge_projected_sample_t *sample)
 {
 	float denom;
 	float w0, w1, w2;
 
-	if (!a || !b || !c || !depth)
+	if (!a || !b || !c || !sample)
 		return false;
 
 	denom = (b->y - c->y) * (a->x - c->x) +
@@ -2283,42 +2328,170 @@ static qboolean QGE_ProjectedTriangleDepthAt(float x,
 	if (w0 < -0.001f || w1 < -0.001f || w2 < -0.001f)
 		return false;
 
-	*depth = w0 * a->depth + w1 * b->depth + w2 * c->depth;
+	sample->depth = w0 * a->depth + w1 * b->depth + w2 * c->depth;
+	sample->tex_s = w0 * a->tex_s + w1 * b->tex_s + w2 * c->tex_s;
+	sample->tex_t = w0 * a->tex_t + w1 * b->tex_t + w2 * c->tex_t;
+	sample->light_s = w0 * a->light_s + w1 * b->light_s + w2 * c->light_s;
+	sample->light_t = w0 * a->light_t + w1 * b->light_t + w2 * c->light_t;
 	return true;
 }
 
-static float QGE_ProjectedPolygonDepthAt(float x,
-										 float y,
-										 const qge_projected_vertex_t *verts,
-										 int num_verts,
-										 float fallback_depth)
+static qge_projected_sample_t QGE_ProjectedPolygonSampleAt(float x,
+														   float y,
+														   const qge_projected_vertex_t *verts,
+														   int num_verts,
+														   qge_projected_sample_t fallback)
 {
-	float depth;
-
 	if (!verts || num_verts < 3)
-		return fallback_depth;
+		return fallback;
 
 	for (int i = 1; i + 1 < num_verts; i++) {
-		if (QGE_ProjectedTriangleDepthAt(x, y, &verts[0], &verts[i],
-										 &verts[i + 1], &depth))
-			return depth;
+		qge_projected_sample_t sample;
+		if (QGE_ProjectedTriangleSampleAt(x, y, &verts[0], &verts[i],
+										  &verts[i + 1], &sample))
+			return sample;
 	}
-	return fallback_depth;
+	return fallback;
 }
 
-static void QGE_SpatialFillPolygonDepth(const qge_projected_vertex_t *verts,
+static float QGE_SurfaceTextureLuma(const qge_scene_surface_t *surface,
+									float tex_s,
+									float tex_t)
+{
+	const msurface_t *surf = surface ? surface->surf : NULL;
+	texture_t *tex = surf && surf->texinfo ? surf->texinfo->texture : NULL;
+	const byte *pixels;
+	const byte *rgba;
+	unsigned int width, height;
+	int tx, ty;
+	int palette_index;
+	float luma;
+
+	if (!tex)
+		return 0.75f;
+
+	tex = R_TextureAnimation(tex, 0);
+	width = tex->width;
+	height = tex->height;
+	if (!width || !height)
+		return 0.75f;
+
+	tex_s = tex_s - floorf(tex_s);
+	tex_t = tex_t - floorf(tex_t);
+	if (tex_s < 0.0f) tex_s += 1.0f;
+	if (tex_t < 0.0f) tex_t += 1.0f;
+
+	tx = (int)(tex_s * (float)width);
+	ty = (int)(tex_t * (float)height);
+	if (tx < 0) tx = 0;
+	if (ty < 0) ty = 0;
+	if (tx >= (int)width) tx = (int)width - 1;
+	if (ty >= (int)height) ty = (int)height - 1;
+
+	pixels = (const byte *)(tex + 1);
+	palette_index = pixels[ty * (int)width + tx];
+	rgba = (const byte *)&d_8to24table[palette_index];
+	if (rgba[3] == 0 || ((surface->flags & SURF_DRAWFENCE) && palette_index == 255))
+		return 0.0f;
+
+	luma = (0.299f * (float)rgba[0] +
+			0.587f * (float)rgba[1] +
+			0.114f * (float)rgba[2]) / 255.0f;
+	if (palette_index >= 224)
+		luma += 0.25f;
+	if (luma > 1.25f)
+		luma = 1.25f;
+	return luma;
+}
+
+static float QGE_SurfaceLightLuma(const msurface_t *surf,
+								  const qge_projected_sample_t *sample)
+{
+	int smax, tmax, size;
+	int s, t;
+	float local_s, local_t;
+	float luma = 0.0f;
+	int maps = 0;
+
+	if (!surf || !sample)
+		return 0.85f;
+	if (!surf->samples)
+		return 0.95f;
+
+	smax = (surf->extents[0] >> 4) + 1;
+	tmax = (surf->extents[1] >> 4) + 1;
+	size = smax * tmax;
+	if (smax <= 0 || tmax <= 0 || size <= 0)
+		return 0.85f;
+
+	local_s = sample->light_s * (float)(LMBLOCK_WIDTH * 16) -
+			  (float)(surf->light_s * 16) - 8.0f;
+	local_t = sample->light_t * (float)(LMBLOCK_HEIGHT * 16) -
+			  (float)(surf->light_t * 16) - 8.0f;
+	s = (int)floorf(local_s / 16.0f + 0.5f);
+	t = (int)floorf(local_t / 16.0f + 0.5f);
+	if (s < 0) s = 0;
+	if (t < 0) t = 0;
+	if (s >= smax) s = smax - 1;
+	if (t >= tmax) t = tmax - 1;
+
+	for (int map = 0; map < MAXLIGHTMAPS && surf->styles[map] != 255; map++) {
+		const byte *p = surf->samples + map * size * 3 + (t * smax + s) * 3;
+		float scale = (float)d_lightstylevalue[surf->styles[map]] / 256.0f;
+		float sample_luma = ((float)p[0] + (float)p[1] + (float)p[2]) /
+							(255.0f * 3.0f);
+		luma += sample_luma * scale;
+		maps++;
+	}
+
+	if (!maps)
+		return 0.85f;
+	if (luma > 1.35f)
+		luma = 1.35f;
+	return luma;
+}
+
+static float QGE_SurfaceSampleSignal(const qge_scene_surface_t *surface,
+									 const qge_projected_sample_t *sample)
+{
+	float tex_luma;
+	float light_luma;
+	float signal;
+
+	if (!surface || !sample)
+		return 1.0f;
+
+	tex_luma = QGE_SurfaceTextureLuma(surface, sample->tex_s, sample->tex_t);
+	if (tex_luma <= 0.0f)
+		return 0.0f;
+	light_luma = QGE_SurfaceLightLuma(surface->surf, sample);
+
+	signal = (0.18f + tex_luma * 0.82f) *
+			 (0.30f + light_luma * 0.90f) *
+			 (0.85f + surface->material_signal * 0.25f);
+	if (surface->flags & (SURF_DRAWLAVA | SURF_DRAWTELE))
+		signal *= 1.20f;
+	if (signal < 0.05f)
+		signal = 0.05f;
+	if (signal > 1.75f)
+		signal = 1.75f;
+	return signal;
+}
+
+static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
+										const qge_projected_vertex_t *verts,
 										int num_verts,
 										const screen_rect_t *bounds,
 										float value)
 {
 	int x1, y1, x2, y2;
 	int filled = 0;
-	float avg_depth;
+	qge_projected_sample_t avg_sample;
 
 	if (!verts || num_verts < 3 || !bounds || value <= 0.0f)
 		return;
 
-	avg_depth = QGE_ProjectedPolygonAverageDepth(verts, num_verts);
+	avg_sample = QGE_ProjectedPolygonAverageSample(verts, num_verts);
 
 	x1 = bounds->x1;
 	y1 = bounds->y1;
@@ -2333,15 +2506,17 @@ static void QGE_SpatialFillPolygonDepth(const qge_projected_vertex_t *verts,
 		for (int x = x1; x <= x2; x++) {
 			float sample_x = (float)x + 0.5f;
 			float sample_y = (float)y + 0.5f;
-			float pixel_depth;
+			qge_projected_sample_t sample;
+			float pixel_value;
 			if (!QGE_PointInsideProjectedPolygon(sample_x,
 												sample_y,
 												verts, num_verts))
 				continue;
-			pixel_depth = QGE_ProjectedPolygonDepthAt(sample_x, sample_y,
-													  verts, num_verts,
-													  avg_depth);
-			QGE_SpatialAddPixelDepth(x, y, value, pixel_depth);
+			sample = QGE_ProjectedPolygonSampleAt(sample_x, sample_y,
+												  verts, num_verts,
+												  avg_sample);
+			pixel_value = value * QGE_SurfaceSampleSignal(surface, &sample);
+			QGE_SpatialAddPixelDepth(x, y, pixel_value, sample.depth);
 			filled++;
 		}
 	}
@@ -2350,11 +2525,14 @@ static void QGE_SpatialFillPolygonDepth(const qge_projected_vertex_t *verts,
 		const qge_projected_vertex_t *a = &verts[i];
 		const qge_projected_vertex_t *b = &verts[(i + 1) % num_verts];
 		QGE_SpatialLineDepth(a->x, a->y, b->x, b->y,
-							 value * 0.65f, a->depth, b->depth);
+							 value * 0.30f, a->depth, b->depth);
 	}
 
 	if (!filled)
-		QGE_SpatialFillRectDepth(bounds, value, avg_depth);
+		QGE_SpatialFillRectDepth(bounds,
+								 value * QGE_SurfaceSampleSignal(surface,
+																 &avg_sample),
+								 avg_sample.depth);
 }
 
 static float QGE_WorldEncodeGain(void)
@@ -2444,7 +2622,7 @@ static void QGE_EncodeProjectedPolygonDWT(dwt_framebuffer_t *fb,
 	fill *= 0.60f + fminf(area / 4096.0f, 1.0f) * 0.40f;
 	if (fill < 0.004f)
 		fill = 0.004f;
-	QGE_SpatialFillPolygonDepth(verts, num_verts, bounds, fill);
+	QGE_SpatialFillPolygonDepth(surface, verts, num_verts, bounds, fill);
 
 	QGE_EncodeSurfaceMaterialDWT(fb, surface, bounds, brightness,
 								 depth, depth_world);
