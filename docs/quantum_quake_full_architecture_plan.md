@@ -224,7 +224,26 @@ The game should support multiple honest modes:
 
 This avoids mixing incompatible goals. A faithful port, a quantum-enhanced game, and a research demo can share infrastructure without pretending to be the same mode.
 
-### 4.5.5 Design Rules For Quantum Features
+### 4.5.5 Publication Gates
+
+Claims about the port must be backed by artifacts that can be rerun and cited.
+Screenshots alone are not enough. Each publishable milestone should include:
+
+- exact commit, map, cvars, launch command, resolution, render mode, and hardware/backend summary
+- paired classic-reference and QGE-owned captures when parity is the claim
+- JSON and Markdown metrics for image/audio/simulation comparisons
+- raw logs with QGE registry, snapshot, trace, coefficient, fallback, and timing telemetry
+- saved inputs or replay traces for any measurement that affects gameplay
+- explicit failure notes when a launch path, fallback, or subsystem is not authoritative
+
+The first renderer artifact is produced by `tools/quake_graphics_harness.sh`,
+which captures paired classic/QGE frames through the stream harness and runs
+`tools/qge_image_metrics.py` for RGB error, PSNR, luma SSIM, edge overlap,
+histogram overlap, occupancy, and block-boundary metrics. Similar harnesses
+are required before making paper claims for audio, physics, visibility, AI, or
+full-game ownership.
+
+### 4.5.6 Design Rules For Quantum Features
 
 - If a feature can be implemented as a normal random number plus a shader, it needs a state/measurement/telemetry reason to live in QGE.
 - Parity mode should match Quake; quantum ruleset mode may intentionally diverge.
