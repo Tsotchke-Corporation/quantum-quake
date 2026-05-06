@@ -53,8 +53,12 @@ static dwt_framebuffer_t* qge_dwt_fb[2] = {NULL, NULL};
 static float* qge_render_buffer = NULL;
 static uint8_t* qge_display_buffer = NULL;
 static float* qge_spatial_encode_buffer = NULL;
+static float* qge_spatial_depth_buffer = NULL;
 
 static int qge_render_res = 512;  /* Internal quantum render resolution */
+
+#define QGE_SPATIAL_DEPTH_FAR 1.0e30f
+#define QGE_SPATIAL_DEPTH_EPSILON 2.0f
 
 /* GL texture for quantum framebuffer */
 static GLuint qge_texture = 0;
@@ -1353,6 +1357,7 @@ void QGE_Init(void)
 	qge_render_buffer = (float *)calloc(qge_render_res * qge_render_res, sizeof(float));
 	qge_display_buffer = (uint8_t *)calloc(qge_render_res * qge_render_res * 3, sizeof(uint8_t));
 	qge_spatial_encode_buffer = (float *)calloc(qge_render_res * qge_render_res, sizeof(float));
+	qge_spatial_depth_buffer = (float *)calloc(qge_render_res * qge_render_res, sizeof(float));
 
 	/* Create particle system */
 	qge_particles = qge_particle_system_create(64);
@@ -1430,6 +1435,8 @@ void QGE_Shutdown(void)
 	qge_display_buffer = NULL;
 	free(qge_spatial_encode_buffer);
 	qge_spatial_encode_buffer = NULL;
+	free(qge_spatial_depth_buffer);
+	qge_spatial_depth_buffer = NULL;
 
 	qge_rng_set_runtime(NULL);
 	qge_rng_shutdown();
@@ -2031,23 +2038,48 @@ static void QGE_SpatialClear(void)
 		return;
 	memset(qge_spatial_encode_buffer, 0,
 		   qge_render_res * qge_render_res * sizeof(float));
+	if (qge_spatial_depth_buffer) {
+		int pixels = qge_render_res * qge_render_res;
+		for (int i = 0; i < pixels; i++)
+			qge_spatial_depth_buffer[i] = QGE_SPATIAL_DEPTH_FAR;
+	}
 }
 
-static void QGE_SpatialAddPixel(int x, int y, float value)
+static void QGE_SpatialAddPixelDepth(int x, int y, float value, float depth)
 {
 	int idx;
+	float current_depth;
 
 	if (!qge_spatial_encode_buffer || x < 0 || y < 0 ||
 		x >= qge_render_res || y >= qge_render_res || value <= 0.0f)
 		return;
 
+	if (depth <= 0.0f || !isfinite(depth))
+		depth = QGE_SPATIAL_DEPTH_FAR * 0.5f;
+
 	idx = y * qge_render_res + x;
-	qge_spatial_encode_buffer[idx] += value;
+	if (!qge_spatial_depth_buffer) {
+		qge_spatial_encode_buffer[idx] += value;
+	} else {
+		current_depth = qge_spatial_depth_buffer[idx];
+		if (depth > current_depth + QGE_SPATIAL_DEPTH_EPSILON)
+			return;
+		if (depth < current_depth - QGE_SPATIAL_DEPTH_EPSILON) {
+			qge_spatial_encode_buffer[idx] = value;
+			qge_spatial_depth_buffer[idx] = depth;
+		} else {
+			qge_spatial_encode_buffer[idx] += value;
+			if (depth < current_depth)
+				qge_spatial_depth_buffer[idx] = depth;
+		}
+	}
 	if (qge_spatial_encode_buffer[idx] > 1.5f)
 		qge_spatial_encode_buffer[idx] = 1.5f;
 }
 
-static void QGE_SpatialFillRect(const screen_rect_t *bounds, float value)
+static void QGE_SpatialFillRectDepth(const screen_rect_t *bounds,
+									 float value,
+									 float depth)
 {
 	int x1, y1, x2, y2;
 
@@ -2067,11 +2099,17 @@ static void QGE_SpatialFillRect(const screen_rect_t *bounds, float value)
 
 	for (int y = y1; y <= y2; y++) {
 		for (int x = x1; x <= x2; x++)
-			QGE_SpatialAddPixel(x, y, value);
+			QGE_SpatialAddPixelDepth(x, y, value, depth);
 	}
 }
 
-static void QGE_SpatialLine(float x1, float y1, float x2, float y2, float value)
+static void QGE_SpatialLineDepth(float x1,
+								 float y1,
+								 float x2,
+								 float y2,
+								 float value,
+								 float depth1,
+								 float depth2)
 {
 	float dx = x2 - x1;
 	float dy = y2 - y1;
@@ -2083,34 +2121,107 @@ static void QGE_SpatialLine(float x1, float y1, float x2, float y2, float value)
 		float t = (float)i / (float)samples;
 		int x = (int)(x1 + dx * t + 0.5f);
 		int y = (int)(y1 + dy * t + 0.5f);
-		QGE_SpatialAddPixel(x, y, value);
+		float depth = depth1 + (depth2 - depth1) * t;
+		QGE_SpatialAddPixelDepth(x, y, value, depth);
 	}
 }
 
-static void QGE_SpatialOutlineRect(const screen_rect_t *bounds, float value)
+static void QGE_SpatialOutlineRectDepth(const screen_rect_t *bounds,
+										float value,
+										float depth)
 {
 	if (!bounds)
 		return;
-	QGE_SpatialLine((float)bounds->x1, (float)bounds->y1,
-					(float)bounds->x2, (float)bounds->y1, value);
-	QGE_SpatialLine((float)bounds->x2, (float)bounds->y1,
-					(float)bounds->x2, (float)bounds->y2, value);
-	QGE_SpatialLine((float)bounds->x2, (float)bounds->y2,
-					(float)bounds->x1, (float)bounds->y2, value);
-	QGE_SpatialLine((float)bounds->x1, (float)bounds->y2,
-					(float)bounds->x1, (float)bounds->y1, value);
+	QGE_SpatialLineDepth((float)bounds->x1, (float)bounds->y1,
+						 (float)bounds->x2, (float)bounds->y1,
+						 value, depth, depth);
+	QGE_SpatialLineDepth((float)bounds->x2, (float)bounds->y1,
+						 (float)bounds->x2, (float)bounds->y2,
+						 value, depth, depth);
+	QGE_SpatialLineDepth((float)bounds->x2, (float)bounds->y2,
+						 (float)bounds->x1, (float)bounds->y2,
+						 value, depth, depth);
+	QGE_SpatialLineDepth((float)bounds->x1, (float)bounds->y2,
+						 (float)bounds->x1, (float)bounds->y1,
+						 value, depth, depth);
 }
 
-static void QGE_SpatialFillPolygon(const qge_projected_vertex_t *verts,
-								   int num_verts,
-								   const screen_rect_t *bounds,
-								   float value)
+static float QGE_ProjectedPolygonAverageDepth(const qge_projected_vertex_t *verts,
+											  int num_verts)
+{
+	float depth_sum = 0.0f;
+
+	if (!verts || num_verts <= 0)
+		return QGE_SPATIAL_DEPTH_FAR * 0.5f;
+
+	for (int i = 0; i < num_verts; i++)
+		depth_sum += verts[i].depth;
+	return depth_sum / (float)num_verts;
+}
+
+static qboolean QGE_ProjectedTriangleDepthAt(float x,
+											 float y,
+											 const qge_projected_vertex_t *a,
+											 const qge_projected_vertex_t *b,
+											 const qge_projected_vertex_t *c,
+											 float *depth)
+{
+	float denom;
+	float w0, w1, w2;
+
+	if (!a || !b || !c || !depth)
+		return false;
+
+	denom = (b->y - c->y) * (a->x - c->x) +
+			(c->x - b->x) * (a->y - c->y);
+	if (fabsf(denom) < 0.0001f)
+		return false;
+
+	w0 = ((b->y - c->y) * (x - c->x) +
+		  (c->x - b->x) * (y - c->y)) / denom;
+	w1 = ((c->y - a->y) * (x - c->x) +
+		  (a->x - c->x) * (y - c->y)) / denom;
+	w2 = 1.0f - w0 - w1;
+
+	if (w0 < -0.001f || w1 < -0.001f || w2 < -0.001f)
+		return false;
+
+	*depth = w0 * a->depth + w1 * b->depth + w2 * c->depth;
+	return true;
+}
+
+static float QGE_ProjectedPolygonDepthAt(float x,
+										 float y,
+										 const qge_projected_vertex_t *verts,
+										 int num_verts,
+										 float fallback_depth)
+{
+	float depth;
+
+	if (!verts || num_verts < 3)
+		return fallback_depth;
+
+	for (int i = 1; i + 1 < num_verts; i++) {
+		if (QGE_ProjectedTriangleDepthAt(x, y, &verts[0], &verts[i],
+										 &verts[i + 1], &depth))
+			return depth;
+	}
+	return fallback_depth;
+}
+
+static void QGE_SpatialFillPolygonDepth(const qge_projected_vertex_t *verts,
+										int num_verts,
+										const screen_rect_t *bounds,
+										float value)
 {
 	int x1, y1, x2, y2;
 	int filled = 0;
+	float avg_depth;
 
 	if (!verts || num_verts < 3 || !bounds || value <= 0.0f)
 		return;
+
+	avg_depth = QGE_ProjectedPolygonAverageDepth(verts, num_verts);
 
 	x1 = bounds->x1;
 	y1 = bounds->y1;
@@ -2123,11 +2234,17 @@ static void QGE_SpatialFillPolygon(const qge_projected_vertex_t *verts,
 
 	for (int y = y1; y <= y2; y++) {
 		for (int x = x1; x <= x2; x++) {
-			if (!QGE_PointInsideProjectedPolygon((float)x + 0.5f,
-												(float)y + 0.5f,
+			float sample_x = (float)x + 0.5f;
+			float sample_y = (float)y + 0.5f;
+			float pixel_depth;
+			if (!QGE_PointInsideProjectedPolygon(sample_x,
+												sample_y,
 												verts, num_verts))
 				continue;
-			QGE_SpatialAddPixel(x, y, value);
+			pixel_depth = QGE_ProjectedPolygonDepthAt(sample_x, sample_y,
+													  verts, num_verts,
+													  avg_depth);
+			QGE_SpatialAddPixelDepth(x, y, value, pixel_depth);
 			filled++;
 		}
 	}
@@ -2135,11 +2252,12 @@ static void QGE_SpatialFillPolygon(const qge_projected_vertex_t *verts,
 	for (int i = 0; i < num_verts; i++) {
 		const qge_projected_vertex_t *a = &verts[i];
 		const qge_projected_vertex_t *b = &verts[(i + 1) % num_verts];
-		QGE_SpatialLine(a->x, a->y, b->x, b->y, value * 1.35f);
+		QGE_SpatialLineDepth(a->x, a->y, b->x, b->y,
+							 value * 1.35f, a->depth, b->depth);
 	}
 
 	if (!filled)
-		QGE_SpatialFillRect(bounds, value);
+		QGE_SpatialFillRectDepth(bounds, value, avg_depth);
 }
 
 static float QGE_WorldEncodeGain(void)
@@ -2157,7 +2275,8 @@ static void QGE_EncodeSurfaceMaterialDWT(dwt_framebuffer_t *fb,
 										 const qge_scene_surface_t *surface,
 										 const screen_rect_t *bounds,
 										 float brightness,
-										 float depth)
+										 float depth,
+										 float depth_world)
 {
 	unsigned int hash;
 	float material;
@@ -2187,20 +2306,24 @@ static void QGE_EncodeSurfaceMaterialDWT(dwt_framebuffer_t *fb,
 	if (detail < 0.004f)
 		detail = 0.004f;
 
-	QGE_SpatialAddPixel(center_x, center_y,
-						detail * (0.50f + surface->light_contrast));
-	QGE_SpatialAddPixel(center_x + (int)(hash & 7u) - 3,
-						center_y + (int)((hash >> 4) & 7u) - 3,
-						detail * (surface->light_energy + 0.15f));
+	QGE_SpatialAddPixelDepth(center_x, center_y,
+							 detail * (0.50f + surface->light_contrast),
+							 depth_world);
+	QGE_SpatialAddPixelDepth(center_x + (int)(hash & 7u) - 3,
+							 center_y + (int)((hash >> 4) & 7u) - 3,
+							 detail * (surface->light_energy + 0.15f),
+							 depth_world);
 
 	if (surface->flags & (SURF_DRAWWATER | SURF_DRAWTURB | SURF_DRAWLAVA | SURF_DRAWSLIME | SURF_DRAWTELE)) {
 		int wave_x = bounds->x1 + (int)(hash % (unsigned int)width);
 		int wave_y = bounds->y1 + (int)((hash >> 8) % (unsigned int)height);
-		QGE_SpatialAddPixel(wave_x, wave_y, detail * 0.75f);
+		QGE_SpatialAddPixelDepth(wave_x, wave_y, detail * 0.75f,
+								 depth_world);
 	}
 
 	if (surface->has_fullbright)
-		QGE_SpatialAddPixel(center_x, center_y, detail * 0.80f);
+		QGE_SpatialAddPixelDepth(center_x, center_y, detail * 0.80f,
+								 depth_world);
 
 	qge_scene_material_encoded++;
 }
@@ -2212,6 +2335,7 @@ static void QGE_EncodeProjectedPolygonDWT(dwt_framebuffer_t *fb,
 										  const screen_rect_t *bounds,
 										  float brightness,
 										  float depth,
+										  float depth_world,
 										  float area)
 {
 	float fill;
@@ -2223,9 +2347,10 @@ static void QGE_EncodeProjectedPolygonDWT(dwt_framebuffer_t *fb,
 	fill *= 0.60f + fminf(area / 4096.0f, 1.0f) * 0.40f;
 	if (fill < 0.004f)
 		fill = 0.004f;
-	QGE_SpatialFillPolygon(verts, num_verts, bounds, fill);
+	QGE_SpatialFillPolygonDepth(verts, num_verts, bounds, fill);
 
-	QGE_EncodeSurfaceMaterialDWT(fb, surface, bounds, brightness, depth);
+	QGE_EncodeSurfaceMaterialDWT(fb, surface, bounds, brightness,
+								 depth, depth_world);
 	qge_scene_polygon_encoded++;
 }
 
@@ -2280,11 +2405,16 @@ static qboolean QGE_EncodeWorldSurfaceDWT(dwt_framebuffer_t *fb,
 		brightness = surface->brightness * (1.0f - depth * 0.45f) * QGE_WorldEncodeGain();
 		if (brightness < 0.015f) brightness = 0.015f;
 		QGE_EncodeProjectedPolygonDWT(fb, surface, verts, num_verts,
-									  &bounds, brightness, depth, area);
+									  &bounds, brightness, depth,
+									  depth_world, area);
 	} else {
-		QGE_SpatialFillRect(&bounds, brightness * (1.0f - depth * 0.1f));
-		QGE_SpatialOutlineRect(&bounds, brightness * 1.25f);
-		QGE_EncodeSurfaceMaterialDWT(fb, surface, &bounds, brightness, depth);
+		QGE_SpatialFillRectDepth(&bounds,
+								 brightness * (1.0f - depth * 0.1f),
+								 depth_world);
+		QGE_SpatialOutlineRectDepth(&bounds, brightness * 1.25f,
+									depth_world);
+		QGE_EncodeSurfaceMaterialDWT(fb, surface, &bounds, brightness,
+									 depth, depth_world);
 		qge_scene_polygon_fallback++;
 	}
 	(*encoded_world)++;
@@ -2454,7 +2584,8 @@ static float QGE_SnapshotEntityBrightness(const qge_snapshot_edict_t *edict,
 static void QGE_EncodeSnapshotEntityDetailDWT(dwt_framebuffer_t *fb,
 											  const qge_snapshot_edict_t *edict,
 											  const screen_rect_t *bounds,
-											  float brightness)
+											  float brightness,
+											  float depth_world)
 {
 	uint64_t hash;
 	int center_x, center_y;
@@ -2476,18 +2607,20 @@ static void QGE_EncodeSnapshotEntityDetailDWT(dwt_framebuffer_t *fb,
 	if (width < 1) width = 1;
 	if (height < 1) height = 1;
 
-	QGE_SpatialOutlineRect(bounds, brightness * 1.25f);
-	QGE_SpatialAddPixel(center_x, center_y, brightness * 0.55f);
-	QGE_SpatialAddPixel(bounds->x1 + (int)(hash % (uint64_t)width),
-						center_y, brightness * 0.32f);
-	QGE_SpatialAddPixel(center_x,
-						bounds->y1 + (int)((hash >> 8) % (uint64_t)height),
-						brightness * 0.32f);
+	QGE_SpatialOutlineRectDepth(bounds, brightness * 1.25f, depth_world);
+	QGE_SpatialAddPixelDepth(center_x, center_y, brightness * 0.55f,
+							 depth_world);
+	QGE_SpatialAddPixelDepth(bounds->x1 + (int)(hash % (uint64_t)width),
+							 center_y, brightness * 0.32f, depth_world);
+	QGE_SpatialAddPixelDepth(center_x,
+							 bounds->y1 + (int)((hash >> 8) % (uint64_t)height),
+							 brightness * 0.32f, depth_world);
 
 	if (QGE_IsSnapshotViewmodel(edict) ||
 		(edict->effects & (EF_MUZZLEFLASH | EF_BRIGHTLIGHT |
 						   EF_QEX_QUADLIGHT | EF_QEX_PENTALIGHT))) {
-		QGE_SpatialAddPixel(center_x, center_y, brightness * 0.90f);
+		QGE_SpatialAddPixelDepth(center_x, center_y, brightness * 0.90f,
+								 depth_world);
 	}
 }
 
@@ -2516,10 +2649,17 @@ static qboolean QGE_EncodeSnapshotEdictDWT(dwt_framebuffer_t *fb,
 	if (depth < 0.0f) depth = 0.0f;
 	brightness = QGE_SnapshotEntityBrightness(edict, model_kind, depth);
 
-	QGE_SpatialFillRect(&bounds,
-						model_kind == QGE_RESOURCE_SPRITE ?
-						brightness * 1.05f : brightness * 0.80f);
-	QGE_EncodeSnapshotEntityDetailDWT(fb, edict, &bounds, brightness);
+	if (!QGE_IsSnapshotViewmodel(edict)) {
+		QGE_SpatialFillRectDepth(&bounds,
+								 model_kind == QGE_RESOURCE_SPRITE ?
+								 brightness * 1.05f : brightness * 0.80f,
+								 depth_world);
+	} else {
+		QGE_SpatialOutlineRectDepth(&bounds, brightness * 0.70f,
+									depth_world);
+	}
+	QGE_EncodeSnapshotEntityDetailDWT(fb, edict, &bounds, brightness,
+									  depth_world);
 
 	qge_scene_encoded_edicts++;
 	if (model_kind == QGE_RESOURCE_ALIAS_MODEL)
@@ -2726,7 +2866,9 @@ static void QGE_EncodeScene(void)
 			.x1 = 0, .y1 = 0,
 			.x2 = qge_render_res - 1, .y2 = qge_render_res - 1
 		};
-		QGE_SpatialFillRect(&world_bounds, 0.15f * (1.0f - 0.95f * 0.1f));
+		QGE_SpatialFillRectDepth(&world_bounds,
+								 0.15f * (1.0f - 0.95f * 0.1f),
+								 8192.0f);
 	}
 
 	qge_dwt_encode_spatial(fb, qge_spatial_encode_buffer,
