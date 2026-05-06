@@ -169,11 +169,13 @@ qge_resolution_t qge_recommended_resolution(qge_hardware_tier_t tier) {
 dwt_config_t qge_dwt_config_for_tier(qge_hardware_tier_t tier) {
     dwt_config_t config;
 
+    memset(&config, 0, sizeof(config));
+
     switch (tier) {
         case QGE_TIER_ULTRA:
             config.mode = DWT_MODE_DAUBECHIES4;
-            config.num_levels = 5;
-            config.base_resolution = 640;
+            config.num_levels = 6;
+            config.base_resolution = 1024;
             config.gpu_reconstruct = true;
             config.sparsity_threshold = 0.001f;
             break;

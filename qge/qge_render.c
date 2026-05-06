@@ -9,13 +9,13 @@
  * Key insight: Quake scenes are SPARSE in wavelet domain (~8-10% non-zero).
  * Walls create localized edge coefficients, flat areas have zero detail.
  *
- * Qubit layout for 28-qubit state:
+ * Qubit layout for 32-qubit sparse DWT state:
  * - Bits 0-2:   Level selector (8 decomposition levels)
  * - Bits 3-4:   Subband selector (LL, HL, LH, HH)
- * - Bits 5-12:  Coefficient X (256 positions)
- * - Bits 13-20: Coefficient Y (256 positions)
- * - Bits 21-25: Coefficient value (32 amplitude levels)
- * - Bits 26-27: Color channel (Y, Cb, Cr, alpha)
+ * - Bits 5-14:  Coefficient X (1024 positions)
+ * - Bits 15-24: Coefficient Y (1024 positions)
+ * - Bits 25-29: Coefficient value (32 amplitude levels)
+ * - Bits 30-31: Color channel (Y, Cb, Cr, alpha)
  */
 
 #include "qge.h"
@@ -36,8 +36,8 @@
 /* Qubit allocation for DWT rendering */
 #define LEVEL_BITS      3   /* 8 decomposition levels max */
 #define SUBBAND_BITS    2   /* 4 subbands: LL, HL, LH, HH */
-#define COEFF_X_BITS    8   /* 256 coefficient X positions */
-#define COEFF_Y_BITS    8   /* 256 coefficient Y positions */
+#define COEFF_X_BITS    10  /* 1024 coefficient X positions */
+#define COEFF_Y_BITS    10  /* 1024 coefficient Y positions */
 #define VALUE_BITS      5   /* 32 amplitude levels */
 #define COLOR_BITS      2   /* 4 channels: Y, Cb, Cr, alpha */
 
@@ -54,7 +54,8 @@
                           COEFF_Y_BITS + VALUE_BITS + COLOR_BITS)
 
 /* Maximum coefficient tracking */
-#define MAX_ACTIVE_COEFFS 262144
+#define MAX_ACTIVE_COEFFS 1048576
+#define DWT_MAX_DENSE_QUBITS 28
 
 /* ============================================================================
  * Framebuffer Structures
@@ -229,8 +230,13 @@ dwt_framebuffer_t* qge_dwt_framebuffer_create(qge_context_t* ctx,
 
     /* Allocate the dense quantum state only for the measurement path. The
      * real-time Quake renderer uses the sparse active_indices/active_values
-     * representation by default; allocating 2^28 amplitudes for that path costs
-     * about 4.3GB per framebuffer without improving the result. */
+     * representation by default. A 32-qubit dense DWT state is not viable for
+     * live Quake rendering, so high-resolution sparse framebuffers force the
+     * sparse extraction path. */
+    if (fb->config.quantum_measurement_extract &&
+        fb->num_qubits > DWT_MAX_DENSE_QUBITS) {
+        fb->config.quantum_measurement_extract = false;
+    }
     if (fb->config.quantum_measurement_extract) {
         fb->state = malloc(sizeof(quantum_state_t));
         if (!fb->state) {

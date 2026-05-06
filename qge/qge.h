@@ -86,7 +86,7 @@ typedef enum {
 typedef struct {
     dwt_mode_t mode;
     int num_levels;           // 4-6 typical
-    int base_resolution;      // 64, 128, 256, 512, or 640
+    int base_resolution;      // 64, 128, 256, 512, or 1024
     bool gpu_reconstruct;     // Use Metal for inverse DWT
     float sparsity_threshold; // Skip coefficients below this
     bool quantum_measurement_extract; // Extract coefficients via quantum measurement (slower, captures interference)

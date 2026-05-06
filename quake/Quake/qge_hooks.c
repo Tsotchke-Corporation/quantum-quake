@@ -37,7 +37,10 @@ cvar_t quantum_projectiles = {"quantum_projectiles", "1", CVAR_ARCHIVE};
 cvar_t quantum_debug     = {"quantum_debug",     "0", CVAR_NONE};
 cvar_t quantum_overlay_alpha = {"quantum_overlay_alpha", "0.10", CVAR_ARCHIVE};
 cvar_t quantum_scene_surface_budget = {"quantum_scene_surface_budget", "1024", CVAR_ARCHIVE};
-cvar_t quantum_render_res = {"quantum_render_res", "512", CVAR_ARCHIVE};
+cvar_t quantum_render_res = {"quantum_render_res", "1024", CVAR_ARCHIVE};
+cvar_t quantum_render_threshold = {"quantum_render_threshold", "0.003", CVAR_ARCHIVE};
+cvar_t quantum_render_edge_gain = {"quantum_render_edge_gain", "0.06", CVAR_ARCHIVE};
+cvar_t quantum_render_material_gain = {"quantum_render_material_gain", "0.18", CVAR_ARCHIVE};
 
 /* ============================================================================
  * State
@@ -55,7 +58,7 @@ static uint8_t* qge_display_buffer = NULL;
 static float* qge_spatial_encode_buffer = NULL;
 static float* qge_spatial_depth_buffer = NULL;
 
-static int qge_render_res = 512;  /* Internal quantum render resolution */
+static int qge_render_res = 1024;  /* Internal quantum render resolution */
 
 #define QGE_SPATIAL_DEPTH_FAR 1.0e30f
 #define QGE_SPATIAL_DEPTH_EPSILON 2.0f
@@ -258,7 +261,9 @@ static int QGE_ClampRenderResolution(float requested)
 		return 128;
 	if (value <= 384)
 		return 256;
-	return 512;
+	if (value <= 768)
+		return 512;
+	return 1024;
 }
 
 static uint64_t QGE_RegistryHashStep(uint64_t hash, uint64_t value)
@@ -1315,6 +1320,9 @@ void QGE_Init(void)
 	Cvar_RegisterVariable(&quantum_overlay_alpha);
 	Cvar_RegisterVariable(&quantum_scene_surface_budget);
 	Cvar_RegisterVariable(&quantum_render_res);
+	Cvar_RegisterVariable(&quantum_render_threshold);
+	Cvar_RegisterVariable(&quantum_render_edge_gain);
+	Cvar_RegisterVariable(&quantum_render_material_gain);
 
 	fprintf(stderr, "QGE: CVars registered, initializing core...\n");
 
@@ -1355,12 +1363,16 @@ void QGE_Init(void)
 	/* Phase 4.1: Create double-buffered DWT framebuffers */
 	dwt_config_t dwt_cfg = {
 		.mode = DWT_MODE_HAAR,
-		.num_levels = qge_render_res >= 512 ? 5 : 4,
+		.num_levels = qge_render_res >= 1024 ? 6 : (qge_render_res >= 512 ? 5 : 4),
 		.base_resolution = qge_render_res,
 		.gpu_reconstruct = true,
-		.sparsity_threshold = 0.01f,
+		.sparsity_threshold = quantum_render_threshold.value,
 		.quantum_measurement_extract = false
 	};
+	if (dwt_cfg.sparsity_threshold < 0.0001f)
+		dwt_cfg.sparsity_threshold = 0.0001f;
+	if (dwt_cfg.sparsity_threshold > 0.10f)
+		dwt_cfg.sparsity_threshold = 0.10f;
 	qge_dwt_levels = dwt_cfg.num_levels;
 
 	fprintf(stderr, "QGE: Creating DWT framebuffer 0...\n");
@@ -1368,8 +1380,8 @@ void QGE_Init(void)
 	fprintf(stderr, "QGE: Creating DWT framebuffer 1...\n");
 	qge_dwt_fb[1] = qge_dwt_framebuffer_create(qge_ctx, &dwt_cfg);
 	if (qge_dwt_fb[0] && qge_dwt_fb[1]) {
-		Con_Printf("QGE: Double-buffered sparse DWT framebuffers created (%dx%d, 28-bit address space)\n",
-				   qge_render_res, qge_render_res);
+		Con_Printf("QGE: Double-buffered sparse DWT framebuffers created (%dx%d, threshold %.4f)\n",
+				   qge_render_res, qge_render_res, dwt_cfg.sparsity_threshold);
 	}
 
 	fprintf(stderr, "QGE: Framebuffers created, allocating render buffers...\n");
@@ -2461,6 +2473,9 @@ static float QGE_SurfaceSampleSignal(const qge_scene_surface_t *surface,
 	if (!surface || !sample)
 		return 1.0f;
 
+	if (surface->flags & SURF_DRAWSKY)
+		return 0.12f;
+
 	tex_luma = QGE_SurfaceTextureLuma(surface, sample->tex_s, sample->tex_t);
 	if (tex_luma <= 0.0f)
 		return 0.0f;
@@ -2486,6 +2501,7 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 {
 	int x1, y1, x2, y2;
 	int filled = 0;
+	float edge_gain;
 	qge_projected_sample_t avg_sample;
 
 	if (!verts || num_verts < 3 || !bounds || value <= 0.0f)
@@ -2521,11 +2537,18 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 		}
 	}
 
-	for (int i = 0; i < num_verts; i++) {
+	edge_gain = quantum_render_edge_gain.value;
+	if (edge_gain < 0.0f)
+		edge_gain = 0.0f;
+	if (edge_gain > 0.50f)
+		edge_gain = 0.50f;
+	if (surface && (surface->flags & SURF_DRAWSKY))
+		edge_gain = 0.0f;
+	for (int i = 0; i < num_verts && edge_gain > 0.0f; i++) {
 		const qge_projected_vertex_t *a = &verts[i];
 		const qge_projected_vertex_t *b = &verts[(i + 1) % num_verts];
 		QGE_SpatialLineDepth(a->x, a->y, b->x, b->y,
-							 value * 0.30f, a->depth, b->depth);
+							 value * edge_gain, a->depth, b->depth);
 	}
 
 	if (!filled)
@@ -2555,6 +2578,7 @@ static void QGE_EncodeSurfaceMaterialDWT(dwt_framebuffer_t *fb,
 {
 	unsigned int hash;
 	float material;
+	float material_gain;
 	float detail;
 	int center_x, center_y;
 	int width, height;
@@ -2563,6 +2587,14 @@ static void QGE_EncodeSurfaceMaterialDWT(dwt_framebuffer_t *fb,
 
 	if (!surface || !bounds)
 		return;
+	if (surface->flags & SURF_DRAWSKY)
+		return;
+
+	material_gain = quantum_render_material_gain.value;
+	if (material_gain <= 0.0f)
+		return;
+	if (material_gain > 1.0f)
+		material_gain = 1.0f;
 
 	hash = surface->texture_hash ^ (surface->light_hash << 1) ^
 		   (unsigned int)(surface->surface_id * 2654435761u);
@@ -2577,7 +2609,8 @@ static void QGE_EncodeSurfaceMaterialDWT(dwt_framebuffer_t *fb,
 	if (width < 1) width = 1;
 	if (height < 1) height = 1;
 
-	detail = brightness * (0.20f + material * 0.55f) * (1.0f - depth * 0.25f);
+	detail = brightness * (0.20f + material * 0.55f) *
+			 (1.0f - depth * 0.25f) * material_gain;
 	if (detail < 0.004f)
 		detail = 0.004f;
 
@@ -3301,7 +3334,7 @@ void QGE_RenderScene(void)
 		probe.domain = QGE_DOMAIN_RENDER;
 		probe.representation = QGE_REP_SPARSE_DWT;
 		probe.active_basis_count = active;
-		probe.qubit_count = 28;
+		probe.qubit_count = 32;
 		probe.memory_bytes = (uint64_t)qge_render_res * (uint64_t)qge_render_res *
 							 (uint64_t)sizeof(float);
 		probe.subject_id = qge_scene_snapshot_surfaces;

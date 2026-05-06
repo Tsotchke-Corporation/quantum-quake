@@ -14,7 +14,10 @@ frames="${QGE_STREAM_FRAMES:-12}"
 waits_per_frame="${QGE_STREAM_WAIT_FRAMES:-20}"
 map_name="${QGE_STREAM_MAP:-start}"
 render_value="${QGE_RENDER:-1}"
-render_res="${QGE_RENDER_RES:-512}"
+render_res="${QGE_RENDER_RES:-1024}"
+render_threshold="${QGE_RENDER_THRESHOLD:-0.003}"
+render_edge_gain="${QGE_RENDER_EDGE_GAIN:-0.06}"
+render_material_gain="${QGE_RENDER_MATERIAL_GAIN:-0.18}"
 physics_value="${QGE_PHYSICS:-1}"
 projectiles_value="${QGE_PROJECTILES:-1}"
 particles_value="${QGE_PARTICLES:-0}"
@@ -71,6 +74,9 @@ trap restore_autoexec EXIT
   echo "quantum_debug 1"
   echo "quantum_render $render_value"
   echo "quantum_render_res $render_res"
+  echo "quantum_render_threshold $render_threshold"
+  echo "quantum_render_edge_gain $render_edge_gain"
+  echo "quantum_render_material_gain $render_material_gain"
   echo "quantum_overlay_alpha $overlay_alpha"
   echo "quantum_scene_surface_budget $scene_surface_budget"
   echo "quantum_physics $physics_value"
@@ -121,7 +127,7 @@ cp "$before_file" "$seen_file"
 
 echo "Streaming Quantum Quake graphics diagnostics"
 echo "  outdir=$outdir"
-echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_particles=$particles_value"
+echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_particles=$particles_value"
 echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame fullscreen=$fullscreen sound=$sound trace=$trace fire_test=$fire_test scene_surface_budget=$scene_surface_budget launch=$launch_mode"
 
 print_log_updates() {
@@ -236,6 +242,9 @@ Frames captured: $frame_index
 Map: $map_name
 Render cvar: quantum_render $render_value
 Internal render resolution: $render_res
+Render threshold: $render_threshold
+Render edge gain: $render_edge_gain
+Render material gain: $render_material_gain
 Scene surface budget: $scene_surface_budget
 Physics cvars: quantum_physics $physics_value, quantum_projectiles $projectiles_value, quantum_particles $particles_value
 Fire test: $fire_test
