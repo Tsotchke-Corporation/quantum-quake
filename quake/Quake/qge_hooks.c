@@ -215,6 +215,7 @@ static int qge_scene_alias_encoded = 0;
 static int qge_scene_sprite_encoded = 0;
 static int qge_scene_viewmodel_encoded = 0;
 static int qge_scene_entity_misses = 0;
+static int qge_scene_entity_coefficients = 0;
 
 static qge_phys_object_t qge_phys_objects[QGE_MAX_PHYS_OBJECTS];
 static int qge_phys_active_objects = 0;
@@ -889,8 +890,20 @@ static void QGE_RegisterAliasModelAsset(qge_world_t *world, qmodel_t *model, int
 	ref.frame_count = (uint32_t)(model->numframes < 0 ? 0 : model->numframes);
 	ref.flags = (uint32_t)model->flags;
 	ref.source_hash = QGE_RegistryModelHash(model);
+	if (model->cache.data) {
+		aliashdr_t *hdr = (aliashdr_t *)model->cache.data;
+		ref.vertex_count = (uint32_t)(hdr->numverts < 0 ? 0 : hdr->numverts);
+		ref.triangle_count = (uint32_t)(hdr->numtris < 0 ? 0 : hdr->numtris);
+		ref.skin_count = (uint32_t)(hdr->numskins < 0 ? 0 : hdr->numskins);
+		ref.frame_count = (uint32_t)(hdr->numframes < 0 ? 0 : hdr->numframes);
+		ref.source_hash = QGE_RegistryHashStep(ref.source_hash, hdr->skinwidth);
+		ref.source_hash = QGE_RegistryHashStep(ref.source_hash, hdr->skinheight);
+		ref.source_hash = QGE_RegistryHashStep(ref.source_hash, hdr->numposes);
+		ref.source_hash = QGE_RegistryHashStep(ref.source_hash, hdr->poseverts);
+	}
 	ref.source_hash = QGE_RegistryHashStep(ref.source_hash, ref.vertex_count);
 	ref.source_hash = QGE_RegistryHashStep(ref.source_hash, ref.triangle_count);
+	ref.source_hash = QGE_RegistryHashStep(ref.source_hash, ref.skin_count);
 	ref.debug_cookie = (uint64_t)(uintptr_t)model;
 	ref.mins = QGE_RegistryVec3(model->mins);
 	ref.maxs = QGE_RegistryVec3(model->maxs);
@@ -915,8 +928,16 @@ static void QGE_RegisterSpriteAsset(qge_world_t *world, qmodel_t *model, int pre
 	ref.height = (uint32_t)fabsf(model->maxs[2] - model->mins[2]);
 	ref.flags = (uint32_t)model->flags;
 	ref.source_hash = QGE_RegistryModelHash(model);
+	if (model->cache.data) {
+		msprite_t *sprite = (msprite_t *)model->cache.data;
+		ref.frame_count = (uint32_t)(sprite->numframes < 0 ? 0 : sprite->numframes);
+		ref.width = (uint32_t)(sprite->maxwidth < 0 ? 0 : sprite->maxwidth);
+		ref.height = (uint32_t)(sprite->maxheight < 0 ? 0 : sprite->maxheight);
+		ref.sprite_type = (uint32_t)sprite->type;
+	}
 	ref.source_hash = QGE_RegistryHashStep(ref.source_hash, ref.width);
 	ref.source_hash = QGE_RegistryHashStep(ref.source_hash, ref.height);
+	ref.source_hash = QGE_RegistryHashStep(ref.source_hash, ref.sprite_type);
 	ref.debug_cookie = (uint64_t)(uintptr_t)model;
 	id = qge_world_register_sprite(world, &ref);
 	if (precache_index >= 0 && precache_index < MAX_MODELS)
@@ -2095,6 +2116,7 @@ void QGE_SceneBegin(void)
 	qge_scene_sprite_encoded = 0;
 	qge_scene_viewmodel_encoded = 0;
 	qge_scene_entity_misses = 0;
+	qge_scene_entity_coefficients = 0;
 	QGE_ResetRenderGateTelemetry();
 }
 
@@ -2948,6 +2970,31 @@ static void QGE_SpatialLineDepth(float x1,
 	}
 }
 
+static void QGE_SpatialLineColorDepth(float x1,
+									  float y1,
+									  float x2,
+									  float y2,
+									  const qge_rgb_sample_t *color,
+									  float depth1,
+									  float depth2)
+{
+	float dx = x2 - x1;
+	float dy = y2 - y1;
+	int samples = (int)fmaxf(fabsf(dx), fabsf(dy)) + 1;
+
+	if (!color)
+		return;
+	if (samples < 1)
+		samples = 1;
+	for (int i = 0; i <= samples; i++) {
+		float t = (float)i / (float)samples;
+		int x = (int)(x1 + dx * t + 0.5f);
+		int y = (int)(y1 + dy * t + 0.5f);
+		float depth = depth1 + (depth2 - depth1) * t;
+		QGE_SpatialAddPixelColorDepth(x, y, color, depth);
+	}
+}
+
 static void QGE_SpatialOutlineRectDepth(const screen_rect_t *bounds,
 										float value,
 										float depth)
@@ -2966,6 +3013,26 @@ static void QGE_SpatialOutlineRectDepth(const screen_rect_t *bounds,
 	QGE_SpatialLineDepth((float)bounds->x1, (float)bounds->y2,
 						 (float)bounds->x1, (float)bounds->y1,
 						 value, depth, depth);
+}
+
+static void QGE_SpatialOutlineRectColorDepth(const screen_rect_t *bounds,
+											 const qge_rgb_sample_t *color,
+											 float depth)
+{
+	if (!bounds || !color)
+		return;
+	QGE_SpatialLineColorDepth((float)bounds->x1, (float)bounds->y1,
+							  (float)bounds->x2, (float)bounds->y1,
+							  color, depth, depth);
+	QGE_SpatialLineColorDepth((float)bounds->x2, (float)bounds->y1,
+							  (float)bounds->x2, (float)bounds->y2,
+							  color, depth, depth);
+	QGE_SpatialLineColorDepth((float)bounds->x2, (float)bounds->y2,
+							  (float)bounds->x1, (float)bounds->y2,
+							  color, depth, depth);
+	QGE_SpatialLineColorDepth((float)bounds->x1, (float)bounds->y2,
+							  (float)bounds->x1, (float)bounds->y1,
+							  color, depth, depth);
 }
 
 static qge_projected_sample_t QGE_ProjectedPolygonAverageSample(const qge_projected_vertex_t *verts,
@@ -3898,10 +3965,10 @@ static qboolean QGE_ProjectSnapshotEdictBounds(const qge_snapshot_edict_t *edict
 		return false;
 
 	if (QGE_IsSnapshotViewmodel(edict)) {
-		bounds->x1 = (qge_render_res * 47) / 100;
-		bounds->x2 = (qge_render_res * 55) / 100;
-		bounds->y1 = (qge_render_res * 72) / 100;
-		bounds->y2 = qge_render_res - 4;
+		bounds->x1 = (qge_render_res * 48) / 100;
+		bounds->x2 = (qge_render_res * 53) / 100;
+		bounds->y1 = (qge_render_res * 76) / 100;
+		bounds->y2 = (qge_render_res * 92) / 100;
 		*depth = 32.0f;
 		return true;
 	}
@@ -3989,59 +4056,301 @@ static float QGE_SnapshotEntityBrightness(const qge_snapshot_edict_t *edict,
 	return brightness;
 }
 
+static qge_rgb_sample_t QGE_RGBScaled(qge_rgb_sample_t color, float scale)
+{
+	color.r *= scale;
+	color.g *= scale;
+	color.b *= scale;
+	QGE_RGBClamp(&color);
+	return color;
+}
+
+static uint64_t QGE_SnapshotEntityAssetHash(const qge_snapshot_edict_t *edict,
+											qge_resource_kind_t model_kind)
+{
+	qge_world_t *world;
+	uint64_t hash;
+
+	if (!edict)
+		return 0;
+	hash = (uint64_t)edict->model_id;
+	world = qge_ctx ? qge_get_world(qge_ctx) : NULL;
+	if (world && model_kind == QGE_RESOURCE_ALIAS_MODEL) {
+		const qge_alias_model_ref_t *ref =
+			qge_world_get_alias_model(world, edict->model_id);
+		if (ref) {
+			hash = QGE_RegistryHashStep(ref->source_hash, ref->vertex_count);
+			hash = QGE_RegistryHashStep(hash, ref->triangle_count);
+			hash = QGE_RegistryHashStep(hash, ref->skin_count);
+			hash = QGE_RegistryHashStep(hash, ref->frame_count);
+		}
+	} else if (world && model_kind == QGE_RESOURCE_SPRITE) {
+		const qge_sprite_ref_t *ref =
+			qge_world_get_sprite(world, edict->model_id);
+		if (ref) {
+			hash = QGE_RegistryHashStep(ref->source_hash, ref->width);
+			hash = QGE_RegistryHashStep(hash, ref->height);
+			hash = QGE_RegistryHashStep(hash, ref->sprite_type);
+			hash = QGE_RegistryHashStep(hash, ref->frame_count);
+		}
+	}
+	hash = QGE_RegistryHashStep(hash, (uint64_t)edict->entity_id);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)edict->frame);
+	hash = QGE_RegistryHashStep(hash, edict->effects);
+	return hash;
+}
+
+static qge_rgb_sample_t QGE_SnapshotEntityColor(const qge_snapshot_edict_t *edict,
+												qge_resource_kind_t model_kind,
+												float brightness)
+{
+	qge_rgb_sample_t color;
+	uint64_t hash = QGE_SnapshotEntityAssetHash(edict, model_kind);
+	float h0 = (float)(hash & 0xffu) / 255.0f;
+	float h1 = (float)((hash >> 8) & 0xffu) / 255.0f;
+	float h2 = (float)((hash >> 16) & 0xffu) / 255.0f;
+
+	if (model_kind == QGE_RESOURCE_SPRITE) {
+		color.r = brightness * (0.95f + h0 * 0.35f);
+		color.g = brightness * (0.55f + h1 * 0.45f);
+		color.b = brightness * (0.18f + h2 * 0.35f);
+	} else if (model_kind == QGE_RESOURCE_ALIAS_MODEL) {
+		color.r = brightness * (0.55f + h0 * 0.45f);
+		color.g = brightness * (0.48f + h1 * 0.38f);
+		color.b = brightness * (0.34f + h2 * 0.42f);
+	} else {
+		color.r = brightness * (0.42f + h0 * 0.35f);
+		color.g = brightness * (0.48f + h1 * 0.35f);
+		color.b = brightness * (0.42f + h2 * 0.35f);
+	}
+
+	if (QGE_IsSnapshotViewmodel(edict)) {
+		color.r = brightness * 0.88f;
+		color.g = brightness * 0.72f;
+		color.b = brightness * 0.48f;
+	}
+	if (edict && (edict->effects & (EF_MUZZLEFLASH | EF_BRIGHTLIGHT |
+									EF_QEX_QUADLIGHT | EF_QEX_PENTALIGHT))) {
+		color.r *= 1.35f;
+		color.g *= 1.22f;
+		color.b *= 0.92f;
+	}
+	color.r *= qge_render_gate_color_gain[QGE_DWT_R];
+	color.g *= qge_render_gate_color_gain[QGE_DWT_G];
+	color.b *= qge_render_gate_color_gain[QGE_DWT_B];
+	QGE_RGBClamp(&color);
+	return color;
+}
+
+static void QGE_EntityCoeffPixel(int x,
+								 int y,
+								 const qge_rgb_sample_t *color,
+								 float depth)
+{
+	QGE_SpatialAddPixelColorDepth(x, y, color, depth);
+	qge_scene_entity_coefficients++;
+}
+
+static void QGE_EntityCoeffLine(float x1,
+								float y1,
+								float x2,
+								float y2,
+								const qge_rgb_sample_t *color,
+								float depth)
+{
+	QGE_SpatialLineColorDepth(x1, y1, x2, y2, color, depth, depth);
+	qge_scene_entity_coefficients++;
+}
+
+static int QGE_EntityBoundedTapCount(uint32_t primary,
+									 uint32_t secondary)
+{
+	int taps = 4 + (int)(primary / 64u) + (int)(secondary / 128u);
+
+	if (taps < 4)
+		taps = 4;
+	if (taps > 14)
+		taps = 14;
+	return taps;
+}
+
+static void QGE_EncodeAliasModelCoefficients(
+	const qge_snapshot_edict_t *edict,
+	const screen_rect_t *bounds,
+	qge_rgb_sample_t color,
+	float depth_world)
+{
+	qge_world_t *world = qge_ctx ? qge_get_world(qge_ctx) : NULL;
+	const qge_alias_model_ref_t *ref = world ?
+		qge_world_get_alias_model(world, edict->model_id) : NULL;
+	uint64_t hash = QGE_SnapshotEntityAssetHash(edict,
+												QGE_RESOURCE_ALIAS_MODEL);
+	int x1, y1, x2, y2, cx, w, h;
+	int taps;
+	qge_rgb_sample_t fill = QGE_RGBScaled(color,
+										  QGE_IsSnapshotViewmodel(edict) ?
+										  0.42f : 0.34f);
+	qge_rgb_sample_t edge = QGE_RGBScaled(color, 1.20f);
+	qge_rgb_sample_t detail = QGE_RGBScaled(color, 1.45f);
+
+	if (!edict || !bounds)
+		return;
+	x1 = bounds->x1; y1 = bounds->y1; x2 = bounds->x2; y2 = bounds->y2;
+	cx = (x1 + x2) / 2;
+	w = x2 - x1;
+	h = y2 - y1;
+	if (w < 1) w = 1;
+	if (h < 1) h = 1;
+
+	if (QGE_IsSnapshotViewmodel(edict)) {
+		QGE_EntityCoeffLine((float)x1, (float)y2,
+							(float)cx, (float)y1,
+							&detail, depth_world);
+		QGE_EntityCoeffLine((float)x2, (float)y2,
+							(float)cx, (float)y1,
+							&detail, depth_world);
+		QGE_EntityCoeffLine((float)(x1 + w / 4), (float)(y2 - h / 5),
+							(float)(x2 - w / 5), (float)(y1 + h / 3),
+							&edge, depth_world);
+		QGE_EntityCoeffPixel(cx, y1 + h / 5, &detail, depth_world);
+		return;
+	}
+
+	QGE_SpatialFillRectColorDepth(bounds, &fill, depth_world);
+	QGE_SpatialOutlineRectColorDepth(bounds, &edge, depth_world);
+
+	QGE_EntityCoeffLine((float)cx, (float)y1,
+						(float)cx, (float)y2,
+						&detail, depth_world);
+	QGE_EntityCoeffLine((float)(x1 + w / 5), (float)(y1 + h / 3),
+						(float)(x2 - w / 5), (float)(y1 + h / 3),
+						&edge, depth_world);
+	QGE_EntityCoeffLine((float)cx, (float)(y1 + h / 2),
+						(float)(x1 + w / 4), (float)y2,
+						&edge, depth_world);
+	QGE_EntityCoeffLine((float)cx, (float)(y1 + h / 2),
+						(float)(x2 - w / 4), (float)y2,
+						&edge, depth_world);
+
+	taps = ref ? QGE_EntityBoundedTapCount(ref->vertex_count,
+										   ref->triangle_count) : 6;
+	for (int i = 0; i < taps; i++) {
+		uint64_t tap = QGE_RegistryHashStep(hash, (uint64_t)i + 1u);
+		int x = x1 + (int)(tap % (uint64_t)(w + 1));
+		int y = y1 + (int)((tap >> 11) % (uint64_t)(h + 1));
+		QGE_EntityCoeffPixel(x, y, &detail, depth_world);
+	}
+}
+
+static void QGE_EncodeSpriteCoefficients(const qge_snapshot_edict_t *edict,
+										 const screen_rect_t *bounds,
+										 qge_rgb_sample_t color,
+										 float depth_world)
+{
+	qge_world_t *world = qge_ctx ? qge_get_world(qge_ctx) : NULL;
+	const qge_sprite_ref_t *ref = world ?
+		qge_world_get_sprite(world, edict->model_id) : NULL;
+	uint64_t hash = QGE_SnapshotEntityAssetHash(edict, QGE_RESOURCE_SPRITE);
+	int x1, y1, x2, y2, cx, cy, w, h;
+	int bands, taps;
+	qge_rgb_sample_t fill = QGE_RGBScaled(color, 0.58f);
+	qge_rgb_sample_t edge = QGE_RGBScaled(color, 1.18f);
+	qge_rgb_sample_t detail = QGE_RGBScaled(color, 1.50f);
+
+	if (!edict || !bounds)
+		return;
+	x1 = bounds->x1; y1 = bounds->y1; x2 = bounds->x2; y2 = bounds->y2;
+	cx = (x1 + x2) / 2;
+	cy = (y1 + y2) / 2;
+	w = x2 - x1;
+	h = y2 - y1;
+	if (w < 1) w = 1;
+	if (h < 1) h = 1;
+
+	QGE_SpatialFillRectColorDepth(bounds, &fill, depth_world);
+	QGE_SpatialOutlineRectColorDepth(bounds, &edge, depth_world);
+	QGE_EntityCoeffLine((float)cx, (float)y1,
+						(float)cx, (float)y2,
+						&detail, depth_world);
+	QGE_EntityCoeffLine((float)x1, (float)cy,
+						(float)x2, (float)cy,
+						&edge, depth_world);
+
+	bands = ref && ref->width > ref->height ? 4 : 3;
+	for (int i = 1; i < bands; i++) {
+		int x = x1 + (w * i) / bands;
+		QGE_EntityCoeffLine((float)x, (float)(y1 + 1),
+							(float)x, (float)(y2 - 1),
+							&edge, depth_world);
+	}
+
+	taps = ref ? QGE_EntityBoundedTapCount(ref->width, ref->height) : 5;
+	for (int i = 0; i < taps; i++) {
+		uint64_t tap = QGE_RegistryHashStep(hash, (uint64_t)i + 17u);
+		int x = x1 + (int)(tap % (uint64_t)(w + 1));
+		int y = y1 + (int)((tap >> 9) % (uint64_t)(h + 1));
+		QGE_EntityCoeffPixel(x, y, &detail, depth_world);
+	}
+}
+
+static void QGE_EncodeBrushEntityCoefficients(
+	const qge_snapshot_edict_t *edict,
+	const screen_rect_t *bounds,
+	qge_rgb_sample_t color,
+	float depth_world)
+{
+	uint64_t hash = QGE_SnapshotEntityAssetHash(edict, QGE_RESOURCE_BSP_MODEL);
+	int cx, cy, w, h;
+	qge_rgb_sample_t fill = QGE_RGBScaled(color, 0.38f);
+	qge_rgb_sample_t edge = QGE_RGBScaled(color, 1.15f);
+	qge_rgb_sample_t detail = QGE_RGBScaled(color, 1.35f);
+
+	if (!bounds)
+		return;
+	cx = (bounds->x1 + bounds->x2) / 2;
+	cy = (bounds->y1 + bounds->y2) / 2;
+	w = bounds->x2 - bounds->x1;
+	h = bounds->y2 - bounds->y1;
+	if (w < 1) w = 1;
+	if (h < 1) h = 1;
+
+	QGE_SpatialFillRectColorDepth(bounds, &fill, depth_world);
+	QGE_SpatialOutlineRectColorDepth(bounds, &edge, depth_world);
+	QGE_EntityCoeffLine((float)bounds->x1, (float)bounds->y1,
+						(float)bounds->x2, (float)bounds->y2,
+						&detail, depth_world);
+	QGE_EntityCoeffLine((float)bounds->x2, (float)bounds->y1,
+						(float)bounds->x1, (float)bounds->y2,
+						&detail, depth_world);
+	QGE_EntityCoeffPixel(bounds->x1 + (int)(hash % (uint64_t)(w + 1)),
+						 cy, &detail, depth_world);
+	QGE_EntityCoeffPixel(cx,
+						 bounds->y1 + (int)((hash >> 8) % (uint64_t)(h + 1)),
+						 &detail, depth_world);
+}
+
 static void QGE_EncodeSnapshotEntityDetailDWT(dwt_framebuffer_t *fb,
 											  const qge_snapshot_edict_t *edict,
 											  const screen_rect_t *bounds,
 											  float brightness,
 											  float depth_world)
 {
-	uint64_t hash;
-	int center_x, center_y;
-	int width, height;
+	qge_resource_kind_t model_kind;
+	qge_rgb_sample_t color;
 
 	(void)fb;
 
 	if (!edict || !bounds)
 		return;
 
-	hash = (uint64_t)edict->entity_id;
-	hash = QGE_RegistryHashStep(hash, (uint64_t)edict->model_id);
-	hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)edict->frame);
-	hash = QGE_RegistryHashStep(hash, edict->effects);
-	center_x = (bounds->x1 + bounds->x2) / 2;
-	center_y = (bounds->y1 + bounds->y2) / 2;
-	width = bounds->x2 - bounds->x1;
-	height = bounds->y2 - bounds->y1;
-	if (width < 1) width = 1;
-	if (height < 1) height = 1;
-
-	if (QGE_IsSnapshotViewmodel(edict)) {
-		QGE_SpatialLineDepth((float)bounds->x1, (float)bounds->y2,
-							 (float)center_x, (float)bounds->y1,
-							 brightness * 0.55f, depth_world, depth_world);
-		QGE_SpatialLineDepth((float)bounds->x2, (float)bounds->y2,
-							 (float)center_x, (float)bounds->y1,
-							 brightness * 0.55f, depth_world, depth_world);
-		QGE_SpatialAddPixelDepth(center_x, bounds->y1, brightness * 0.85f,
-								 depth_world);
-		return;
-	}
-
-	QGE_SpatialOutlineRectDepth(bounds, brightness * 1.25f, depth_world);
-	QGE_SpatialAddPixelDepth(center_x, center_y, brightness * 0.55f,
-							 depth_world);
-	QGE_SpatialAddPixelDepth(bounds->x1 + (int)(hash % (uint64_t)width),
-							 center_y, brightness * 0.32f, depth_world);
-	QGE_SpatialAddPixelDepth(center_x,
-							 bounds->y1 + (int)((hash >> 8) % (uint64_t)height),
-							 brightness * 0.32f, depth_world);
-
-	if (QGE_IsSnapshotViewmodel(edict) ||
-		(edict->effects & (EF_MUZZLEFLASH | EF_BRIGHTLIGHT |
-						   EF_QEX_QUADLIGHT | EF_QEX_PENTALIGHT))) {
-		QGE_SpatialAddPixelDepth(center_x, center_y, brightness * 0.90f,
-								 depth_world);
-	}
+	model_kind = qge_resource_id_kind(edict->model_id);
+	color = QGE_SnapshotEntityColor(edict, model_kind, brightness);
+	if (model_kind == QGE_RESOURCE_ALIAS_MODEL)
+		QGE_EncodeAliasModelCoefficients(edict, bounds, color, depth_world);
+	else if (model_kind == QGE_RESOURCE_SPRITE)
+		QGE_EncodeSpriteCoefficients(edict, bounds, color, depth_world);
+	else
+		QGE_EncodeBrushEntityCoefficients(edict, bounds, color, depth_world);
 }
 
 static qboolean QGE_EncodeSnapshotEdictDWT(dwt_framebuffer_t *fb,
@@ -4069,15 +4378,6 @@ static qboolean QGE_EncodeSnapshotEdictDWT(dwt_framebuffer_t *fb,
 	if (depth < 0.0f) depth = 0.0f;
 	brightness = QGE_SnapshotEntityBrightness(edict, model_kind, depth);
 
-	if (!QGE_IsSnapshotViewmodel(edict)) {
-		QGE_SpatialFillRectDepth(&bounds,
-								 model_kind == QGE_RESOURCE_SPRITE ?
-								 brightness * 1.05f : brightness * 0.80f,
-								 depth_world);
-	} else {
-		QGE_SpatialOutlineRectDepth(&bounds, brightness * 0.70f,
-									depth_world);
-	}
 	QGE_EncodeSnapshotEntityDetailDWT(fb, edict, &bounds, brightness,
 									  depth_world);
 
@@ -4504,7 +4804,7 @@ void QGE_RenderScene(void)
 						   "res=%d coeffs=%d snapshot=%d snapshot_miss=%d "
 						   "texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d microfill=%d "
 						   "culled=%d surrogate=%d micro=%d clipped=%d fallback=%d "
-						   "encoded=%d material=%d edicts=%d alias=%d sprites=%d "
+						   "encoded=%d material=%d edicts=%d alias=%d sprites=%d ecoeff=%d "
 						   "viewmodel=%d entity_miss=%d gates=%d shots=%d "
 						   "readout=%.3f edgeq=%.3f ggain=%.3f egain=%.3f "
 						   "nonzero=%d/%d\n",
@@ -4526,6 +4826,7 @@ void QGE_RenderScene(void)
 						   qge_scene_encoded_surfaces,
 						   qge_scene_material_encoded, qge_scene_encoded_edicts,
 						   qge_scene_alias_encoded, qge_scene_sprite_encoded,
+						   qge_scene_entity_coefficients,
 						   qge_scene_viewmodel_encoded, qge_scene_entity_misses,
 						   qge_render_gate_total, qge_render_gate_shots,
 						   qge_render_gate_probability,
@@ -4539,7 +4840,7 @@ void QGE_RenderScene(void)
 					"texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d microfill=%d "
 					"culled=%d surrogate=%d micro=%d clipped=%d invalid=%d fallback=%d encoded_surfaces=%d "
 					"material_encoded=%d snapshot_edicts=%d encoded_edicts=%d alias=%d "
-					"sprites=%d viewmodel=%d entity_misses=%d visedicts=%d nonzero=%d/%d max=%.6f sum=%.3f "
+					"sprites=%d entity_coeffs=%d viewmodel=%d entity_misses=%d visedicts=%d nonzero=%d/%d max=%.6f sum=%.3f "
 					"gate_kernel=%d gates=%d h=%d ry=%d rz=%d ent=%d phase=%d gate_active=%d "
 					"shots=%d readout_ones=%d edge_ones=%d majority=0x%llx "
 					"gate_p=%.6f gate_edge=%.6f gate_gain=%.6f edge_gain=%.6f material_gain=%.6f "
@@ -4565,7 +4866,8 @@ void QGE_RenderScene(void)
 					qge_scene_encoded_surfaces,
 					qge_scene_material_encoded, qge_scene_snapshot_edicts,
 					qge_scene_encoded_edicts, qge_scene_alias_encoded,
-					qge_scene_sprite_encoded, qge_scene_viewmodel_encoded,
+					qge_scene_sprite_encoded, qge_scene_entity_coefficients,
+					qge_scene_viewmodel_encoded,
 					qge_scene_entity_misses, cl_numvisedicts, nonzero_pixels, total_pixels,
 					max_val, abs_sum,
 					qge_render_gate_initialized && quantum_render_gate_kernel.value >= 0.5f,
