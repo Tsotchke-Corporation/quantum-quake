@@ -397,7 +397,7 @@ if [[ "$launch_mode" == "open" ]]; then
   : > "$runtime_log_file"
   echo "open output is not redirected; qconsole.log is captured as the runtime log." > "$open_log_file"
   cp "$open_log_file" "$agent_open_log_file"
-  open_args=(-W -n)
+  open_args=(-W -n -F)
   open_args+=("$app_bundle")
   rm -f "$watch_stop_file"
   watch_open_stream &

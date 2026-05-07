@@ -1,35 +1,74 @@
 # QGE Agent Media Stream
 
-`tools/quake_graphics_stream.sh` writes a project-local stream directory for
-agent-side inspection while the game is running.
+`tools/quake_graphics_stream.sh` runs Quantum Quake and mirrors the useful
+runtime artifacts into a project-local directory that other agents can inspect
+while the game is still running.
 
-Default location:
+The default stream directory is:
 
 ```text
 diagnostics/agent_stream/<timestamp>/
 ```
 
-The directory is intentionally simple and tail-friendly:
+Set `QGE_AGENT_STREAM_DIR=/path/to/dir` to choose a stable location.
 
-- `manifest.json`: current stream contract, capture path, render settings, and
-  audio/video/log locations.
-- `events.ndjson`: append-only runtime events such as stream start, video frame,
-  audio raw, startup failure, trace done, and stream done.
-- `video/frames/frame_###.png`: copied screenshots as they are produced.
-- `video/frame_count.txt`: current number of mirrored frames, updated as frames
-  arrive.
-- `video/latest_frame.txt`: path to the newest mirrored frame, updated as frames
-  arrive.
+## Quick Start
+
+Capture one traced frame on the default `start` map:
+
+```sh
+QGE_STREAM_FRAMES=1 QGE_STREAM_TRACE=1 bash tools/quake_graphics_stream.sh
+```
+
+Capture a specific map with sound enabled:
+
+```sh
+QGE_STREAM_MAP=e1m1 QGE_STREAM_SOUND=1 QGE_STREAM_TRACE=1 \
+  bash tools/quake_graphics_stream.sh
+```
+
+Run the scripted weapon smoke and capture before the script exits:
+
+```sh
+QGE_STREAM_MAP=e1m1 QGE_STREAM_FIRE_TEST=1 QGE_STREAM_CAPTURE_WAIT=20 \
+  QGE_STREAM_FRAMES=1 QGE_STREAM_WAIT_FRAMES=30 QGE_STREAM_TRACE=1 \
+  bash tools/quake_graphics_stream.sh
+```
+
+## Stream Contract
+
+The stream directory is intentionally simple and tail-friendly:
+
+- `manifest.json`: rewritten whenever stream state changes. It records the
+  capture path, map, render settings, trace path, and current audio/video/log
+  locations.
+- `events.ndjson`: append-only runtime events. This is the safest file to tail
+  for incremental progress.
+- `video/frames/frame_###.png`: screenshots copied into stable frame names as
+  they are produced.
+- `video/frame_count.txt`: current number of mirrored frames. It starts at `0`
+  and is overwritten after each copied frame.
+- `video/latest_frame.txt`: absolute path to the newest mirrored frame. It is
+  empty until the first frame arrives.
 - `audio/quake_mix_s16le.raw`: post-QGE mixed stereo PCM when sound is enabled.
-- `audio/quake_mix_s16le.json`: audio metadata including sample rate, format,
+- `audio/quake_mix_s16le.json`: audio metadata, including sample rate, format,
   channels, and sample pair count.
-- `audio/bytes.txt`: current raw PCM byte count, updated as audio arrives.
+- `audio/bytes.txt`: current raw PCM byte count. It starts at `0` and is
+  overwritten as audio grows.
 - `logs/quantum_quake.log`: runtime console log mirrored into the stream.
 - `logs/open.log`: LaunchServices notes for macOS `open` mode.
-- `qge_agent_stream_icc_evidence.jsonl`: ICC-native runtime events for the
-  manifest, video frame, raw audio, audio metadata, and completion signal.
+- `qge_agent_stream_icc_evidence.jsonl`: ICC-native evidence entries for the
+  manifest, events file, latest video frame, raw audio, audio metadata, and
+  completion signal.
 
-The stream script prints:
+Consumers should treat `events.ndjson` as append-only and `manifest.json`,
+`video/frame_count.txt`, `video/latest_frame.txt`, and `audio/bytes.txt` as
+current-state pointers that may be rewritten.
+
+## Stdout Markers
+
+The script also prints machine-readable markers for harnesses that drive it
+through stdout:
 
 ```text
 QGE_AGENT_STREAM <dir>
@@ -37,25 +76,96 @@ QGE_AGENT_VIDEO_FRAME <index> <png>
 QGE_AGENT_STREAM_DONE <dir>
 ```
 
-In macOS `open` launch mode the harness keeps `open -W` in the foreground, but
-now runs a side watcher that tails the game log, mirrors screenshots, and
-refreshes audio byte counts while the app is still running. Consumers should
-follow `events.ndjson`, `video/latest_frame.txt`, or `audio/bytes.txt` rather
-than waiting for `QGE_AGENT_STREAM_DONE`.
+Trace and failure paths may additionally print:
 
-Audio capture requires the game sound system to run:
+```text
+QGE_TRACE_DONE <trace> bytes=<n>
+QGE_TRACE_MISSING <trace>
+QGE_RUNTIME_LOG_EMPTY <log>
+QGE_STARTUP_FAILED <reason> <log>
+```
+
+Prefer the stream files for long-running consumers. Stdout is useful for launch
+wrappers and CI logs, but it is not the canonical live state.
+
+## Launch Modes
+
+`QGE_STREAM_LAUNCH=auto` is the default. On macOS it selects `open`; on other
+platforms it selects direct binary execution.
+
+In macOS `open` mode, the harness uses `open -W -n -F`: it waits for the app,
+starts a new instance, and asks LaunchServices to ignore restored window state.
+A side watcher tails `qconsole.log`, mirrors screenshots, and refreshes audio
+byte counts while the app is still running.
+
+Use `QGE_STREAM_LAUNCH=direct` when running the app binary directly is more
+reliable in the local environment. Direct mode redirects the runtime log through
+the harness process instead of reading `qconsole.log`.
+
+## Capture Timing
+
+Engine auto-capture is enabled by default with `QGE_STREAM_ENGINE_CAPTURE=1`.
+The screenshot frame defaults to `QGE_STREAM_WAIT_FRAMES`.
+
+Some action scripts execute fewer rendered frames than their command-buffer wait
+count suggests. For those runs, set `QGE_STREAM_CAPTURE_WAIT=<frames>` to choose
+the engine screenshot frame explicitly. When `QGE_STREAM_FIRE_TEST=1` and no
+override is provided, the harness captures at roughly two-thirds of
+`QGE_STREAM_WAIT_FRAMES`, with a floor that falls back to the normal wait for
+very small values.
+
+Set `QGE_STREAM_ENGINE_CAPTURE=0` to use scripted `screenshot png` commands
+instead of engine auto-capture. This mode still mirrors discovered `spasm*.png`
+files into the agent stream.
+
+## Audio
+
+Audio is disabled by default because most graphics smokes run with `-nosound`.
+Enable it with:
 
 ```sh
 QGE_STREAM_SOUND=1 bash tools/quake_graphics_stream.sh
 ```
 
-The raw audio format is signed 16-bit little-endian stereo PCM. Consumers should
-read `audio/quake_mix_s16le.json` for the sample rate before playback or
-conversion.
+The raw audio format is signed 16-bit little-endian stereo PCM. Read
+`audio/quake_mix_s16le.json` for the sample rate before playback or conversion.
+If sound is requested but no audio has arrived yet, `manifest.json` reports
+`audio.status` as `requested_missing` and `audio/bytes.txt` remains `0`.
 
-Engine auto-capture defaults to `QGE_STREAM_WAIT_FRAMES`. For action scripts
-whose rendered frame count is lower than their command-buffer wait count, set
-`QGE_STREAM_CAPTURE_WAIT=<frames>` to choose the screenshot frame explicitly.
-When trace capture is requested but startup never reaches video or QGE trace
-initialization, the harness emits `QGE_STARTUP_FAILED <reason> <log>` and a
-`startup_failed` event.
+## Failure Signals
+
+When trace capture is requested but no trace file is written, the harness
+classifies startup progress from the runtime log:
+
+- `gl_context_failed`: the log reported an SDL/OpenGL context failure.
+- `video_init_missing`: the process did not reach Quake video initialization.
+- `trace_init_missing`: video initialized, but QGE trace startup did not.
+
+The failure is emitted both as `QGE_STARTUP_FAILED <reason> <log>` on stderr and
+as a `startup_failed` entry in `events.ndjson`. LaunchServices failures are
+reported as `open_failed` events and `QGE_OPEN_FAILED status=<n>` in
+`logs/open.log`.
+
+Even on failure, the harness finalizes the stream: `manifest.json` is written
+with status `complete`, `events.ndjson` receives `stream_done`, and the frame and
+audio pointer files remain present for consumers that expect a stable contract.
+
+## Common Environment Variables
+
+- `QGE_AGENT_STREAM_DIR`: override the agent stream output directory.
+- `QGE_STREAM_MAP`: map to load, default `start`.
+- `QGE_STREAM_FRAMES`: number of screenshots requested, default `12`.
+- `QGE_STREAM_WAIT_FRAMES`: default engine capture wait, default `20`.
+- `QGE_STREAM_CAPTURE_WAIT`: explicit engine capture frame.
+- `QGE_STREAM_TRACE`: write `qge_trace.bin` when set to `1`.
+- `QGE_STREAM_SOUND`: run with game sound enabled when set to `1`.
+- `QGE_STREAM_FIRE_TEST`: run the scripted weapon smoke when set to `1`.
+- `QGE_STREAM_ENGINE_CAPTURE`: use engine auto-capture when set to `1`, default
+  `1`.
+- `QGE_STREAM_LAUNCH`: `auto`, `open`, or `direct`.
+- `QGE_STREAM_WIDTH`, `QGE_STREAM_HEIGHT`, `QGE_STREAM_FULLSCREEN`: window
+  controls.
+- `QGE_RENDER`, `QGE_RENDER_RES`, `QGE_RENDER_THRESHOLD`,
+  `QGE_RENDER_EDGE_GAIN`, `QGE_RENDER_MATERIAL_GAIN`: QGE render controls.
+- `QGE_PHYSICS`, `QGE_PROJECTILES`, `QGE_PARTICLES`: QGE simulation toggles.
+- `QGE_SCENE_SURFACE_BUDGET`: QGE scene surface budget.
