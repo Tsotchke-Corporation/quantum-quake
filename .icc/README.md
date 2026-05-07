@@ -22,7 +22,10 @@ The oracles in `completion-oracles.json` deliberately separate task classes:
   QuakeWorld-only, codec, or Moonlab lab paths do not mask the real vanilla
   runtime ownership signal.
 - `qge_publication_artifact_pack`: paper artifact work. It requires reproducible
-  artifact emission and blocks on unmarked fallback-backed claims.
+  artifact emission and blocks on unmarked fallback-backed claims in the QGE
+  publication toolchain (`tools/`, `qge/`, Quake QGE hooks, and the claims
+  ledger). It intentionally does not fail on unrelated Windows, QuakeWorld,
+  codec, or Moonlab research-backend symbols.
 
 The criteria use ICC event-name and event-value filters so an oracle-export
 sidecar cannot accidentally satisfy an advantage-benchmark or publication gate.

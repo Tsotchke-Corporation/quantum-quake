@@ -365,6 +365,12 @@
             "production_fallback",
             "synthetic_model_only"
           ],
+          "path_prefixes": [
+            "tools/",
+            "qge/",
+            "quake/Quake/qge_",
+            "docs/claims/"
+          ],
           "severity": "high",
           "label": "Publication claims do not rely on unmarked fallback paths",
           "action": "route_every_claim_through_claims_ledger"
