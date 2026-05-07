@@ -129,6 +129,20 @@ def rmse(errors: list[float]) -> float:
     return math.sqrt(sum(error * error for error in errors) / len(errors)) if errors else 0.0
 
 
+def sample_stdev(values: list[float]) -> float:
+    if len(values) < 2:
+        return 0.0
+    avg = mean(values)
+    return math.sqrt(sum((value - avg) ** 2 for value in values) /
+                     (len(values) - 1))
+
+
+def ci95_half_width(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    return 1.96 * sample_stdev(values) / math.sqrt(len(values))
+
+
 def mc_estimate(values: list[float], samples: int, seed: int) -> dict[str, Any]:
     rng = random.Random(seed)
     n = len(values)
@@ -296,12 +310,14 @@ def resource_estimate(candidate_bits: int,
     }
 
 
-def fit_slope(points: list[dict[str, Any]]) -> float | None:
+def fit_slope(points: list[dict[str, Any]],
+              error_key: str = "absolute_error") -> float | None:
     pairs = [
         (math.log(float(point["oracle_eval_count"])),
-         math.log(float(point["absolute_error"])))
+         math.log(float(point.get(error_key, point.get("absolute_error", 0.0)))))
         for point in points
-        if point.get("oracle_eval_count", 0) > 0 and point.get("absolute_error", 0.0) > 0.0
+        if point.get("oracle_eval_count", 0) > 0 and
+        point.get(error_key, point.get("absolute_error", 0.0)) > 0.0
     ]
     if len(pairs) < 2:
         return None
@@ -320,24 +336,99 @@ def add_error(record: dict[str, Any], reference: float) -> dict[str, Any]:
     return out
 
 
+def trial_seed(base_seed: int, trial: int) -> int:
+    return base_seed + trial * 104729
+
+
+def sample_counts(args: argparse.Namespace) -> list[int]:
+    return sorted(dict.fromkeys(args.samples or [16, 32, 64, 128, 256]))
+
+
+def annotate_trial_record(record: dict[str, Any],
+                          reference: float,
+                          trial: int,
+                          seed: int) -> dict[str, Any]:
+    out = add_error(record, reference)
+    out["trial"] = trial
+    out["trial_seed"] = seed
+    out["reference_value"] = reference
+    return out
+
+
+def aggregate_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for record in records:
+        key = (
+            record.get("algorithm"),
+            record.get("oracle_eval_count"),
+            record.get("samples"),
+            record.get("shots"),
+        )
+        groups.setdefault(key, []).append(record)
+
+    rows = []
+    for key, group in groups.items():
+        algorithm, oracle_evals, samples, shots = key
+        signed_errors = [
+            float(record["estimate"]) - float(record["reference_value"])
+            for record in group
+        ]
+        abs_errors = [abs(error) for error in signed_errors]
+        estimates = [float(record["estimate"]) for record in group]
+        references = [float(record["reference_value"]) for record in group]
+        mean_abs = mean(abs_errors)
+        row = {
+            "algorithm": algorithm,
+            "oracle_eval_count": oracle_evals,
+            "samples": samples,
+            "shots": shots,
+            "trial_count": len(group),
+            "mean_estimate": mean(estimates),
+            "mean_reference_value": mean(references),
+            "mean_absolute_error": mean_abs,
+            "absolute_error": mean_abs,
+            "rmse": rmse(signed_errors),
+            "std_absolute_error": sample_stdev(abs_errors),
+            "stderr_absolute_error": (
+                sample_stdev(abs_errors) / math.sqrt(len(abs_errors))
+                if abs_errors else 0.0
+            ),
+            "ci95_absolute_error": ci95_half_width(abs_errors),
+            "min_absolute_error": min(abs_errors) if abs_errors else 0.0,
+            "max_absolute_error": max(abs_errors) if abs_errors else 0.0,
+            "trial_seeds": [record.get("trial_seed") for record in group],
+        }
+        rows.append(row)
+
+    return sorted(rows, key=lambda row: (
+        str(row.get("algorithm")),
+        int(row.get("oracle_eval_count") or 0),
+        int(row.get("samples") or 0),
+        int(row.get("shots") or 0),
+    ))
+
+
 def write_curve_csv(path: Path, metrics: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = []
     for section in ("classical_baselines", "quantum_estimators"):
-        for record in metrics.get(section, []):
+        for record in metrics.get("trial_records", {}).get(section, []):
             rows.append({
+                "trial": record.get("trial"),
                 "algorithm": record.get("algorithm"),
                 "samples": record.get("samples"),
                 "shots": record.get("shots"),
                 "oracle_eval_count": record.get("oracle_eval_count"),
                 "estimate": record.get("estimate"),
-                "reference_value": metrics["reference"]["value"],
+                "reference_value": record.get("reference_value"),
                 "absolute_error": record.get("absolute_error"),
                 "rmse": record.get("rmse"),
                 "seed": record.get("seed"),
+                "trial_seed": record.get("trial_seed"),
             })
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=[
+            "trial",
             "algorithm",
             "samples",
             "shots",
@@ -347,9 +438,45 @@ def write_curve_csv(path: Path, metrics: dict[str, Any]) -> None:
             "absolute_error",
             "rmse",
             "seed",
+            "trial_seed",
         ])
         writer.writeheader()
         writer.writerows(rows)
+
+
+def write_scaling_csv(path: Path, metrics: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = []
+    scaling = metrics.get("scaling_summary", {})
+    for estimator_family in ("classical_baselines", "quantum_estimators"):
+        for record in scaling.get(estimator_family, []):
+            row = dict(record)
+            row["estimator_family"] = estimator_family
+            row.pop("trial_seeds", None)
+            rows.append(row)
+
+    fieldnames = [
+        "estimator_family",
+        "algorithm",
+        "samples",
+        "shots",
+        "oracle_eval_count",
+        "trial_count",
+        "mean_estimate",
+        "mean_reference_value",
+        "mean_absolute_error",
+        "rmse",
+        "std_absolute_error",
+        "stderr_absolute_error",
+        "ci95_absolute_error",
+        "min_absolute_error",
+        "max_absolute_error",
+    ]
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({name: row.get(name) for name in fieldnames})
 
 
 def write_circuit_text(path: Path, metrics: dict[str, Any]) -> None:
@@ -398,7 +525,8 @@ def write_circuit_text(path: Path, metrics: dict[str, Any]) -> None:
 def build_icc_evidence(metrics: dict[str, Any],
                        metrics_path: Path,
                        curve_path: Path,
-                       circuit_path: Path) -> dict[str, Any]:
+                       circuit_path: Path,
+                       scaling_path: Path) -> dict[str, Any]:
     return {
         "schema": "qge.icc_evidence.v0",
         "runtime_backend": "qge_advantage_benchmark",
@@ -406,47 +534,85 @@ def build_icc_evidence(metrics: dict[str, Any],
         "advantage_metrics_file": str(metrics_path),
         "qae_curve_file": str(curve_path),
         "circuit_artifact_file": str(circuit_path),
+        "scaling_summary_file": str(scaling_path),
         "advantage_problem_id": metrics["advantage_problem_id"],
         "oracle_eval_count": metrics["comparison"]["best_qae"]["oracle_eval_count"],
         "classical_eval_count": metrics["comparison"]["best_classical"]["oracle_eval_count"],
         "state_prep_cost": metrics["oracle"]["state_prep_cost"],
         "readout_model": metrics["oracle"]["readout_model"],
         "shots": metrics["comparison"]["best_qae"]["shots"],
-        "reference_value": metrics["reference"]["value"],
+        "trial_count": metrics["scaling_summary"]["trial_count"],
+        "confidence_level": metrics["scaling_summary"]["confidence_level"],
+        "reference_value": metrics["comparison"]["best_qae"]["mean_reference_value"],
         "rmse": metrics["comparison"]["best_qae"]["rmse"],
+        "ci95_absolute_error": metrics["comparison"]["best_qae"]["ci95_absolute_error"],
         "status": "success",
     }
 
 
-def build_metrics(args: argparse.Namespace, oracle_scene: dict[str, Any]) -> dict[str, Any]:
-    contributions = build_contributions(oracle_scene, args.seed,
+def build_trial_metrics(args: argparse.Namespace,
+                        oracle_scene: dict[str, Any],
+                        trial: int) -> dict[str, Any]:
+    seed = trial_seed(args.seed, trial)
+    contributions = build_contributions(oracle_scene, seed,
                                         args.contribution_bits)
     reference = mean(contributions)
     candidate_count = len(contributions)
+
+    classical = []
+    qae = []
+    for samples in sample_counts(args):
+        classical.append(annotate_trial_record(
+            mc_estimate(contributions, samples, seed + samples),
+            reference, trial, seed))
+        classical.append(annotate_trial_record(
+            stratified_vdc_estimate(contributions, samples),
+            reference, trial, seed))
+    for level in range(1, args.qae_levels + 1):
+        qae.append(annotate_trial_record(
+            qae_estimate(reference, level, args.qae_shots,
+                         seed + 1000 + level, args.qae_grid_steps),
+            reference, trial, seed))
+
+    return {
+        "trial": trial,
+        "trial_seed": seed,
+        "reference": {
+            "value": reference,
+            "candidate_evals": candidate_count,
+        },
+        "classical_baselines": classical,
+        "quantum_estimators": qae,
+    }
+
+
+def build_metrics(args: argparse.Namespace, oracle_scene: dict[str, Any]) -> dict[str, Any]:
+    trials = [
+        build_trial_metrics(args, oracle_scene, trial)
+        for trial in range(args.trials)
+    ]
+    first_trial = trials[0]
+    first_reference = float(first_trial["reference"]["value"])
+    first_classical = first_trial["classical_baselines"]
+    first_qae = first_trial["quantum_estimators"]
+    all_classical = [
+        record for trial in trials for record in trial["classical_baselines"]
+    ]
+    all_qae = [
+        record for trial in trials for record in trial["quantum_estimators"]
+    ]
+    classical_summary = aggregate_records(all_classical)
+    qae_summary = aggregate_records(all_qae)
+    candidate_count = int(first_trial["reference"]["candidate_evals"])
     candidate_bits = int(
         oracle_scene.get("oracle_contract", {})
         .get("input_register", {})
         .get("candidate_index_bits") or ceil_log2(candidate_count)
     )
 
-    classical = []
-    qae = []
-    sample_counts = args.samples or [16, 32, 64, 128, 256]
-    for samples in sample_counts:
-        classical.append(add_error(mc_estimate(contributions, samples,
-                                               args.seed + samples),
-                                   reference))
-        classical.append(add_error(stratified_vdc_estimate(contributions, samples),
-                                   reference))
-    for level in range(1, args.qae_levels + 1):
-        qae.append(add_error(qae_estimate(reference, level, args.qae_shots,
-                                          args.seed + 1000 + level,
-                                          args.qae_grid_steps),
-                             reference))
-
-    resource = resource_estimate(candidate_bits, args.contribution_bits, qae)
-    best_classical = min(classical, key=lambda item: item["absolute_error"])
-    best_qae = min(qae, key=lambda item: item["absolute_error"])
+    resource = resource_estimate(candidate_bits, args.contribution_bits, all_qae)
+    best_classical = min(classical_summary, key=lambda item: item["rmse"])
+    best_qae = min(qae_summary, key=lambda item: item["rmse"])
     scene = oracle_scene.get("scene", {})
     observable = oracle_scene.get("observable", {})
     cost_model = oracle_scene.get("cost_model", {})
@@ -488,22 +654,45 @@ def build_metrics(args: argparse.Namespace, oracle_scene: dict[str, Any]) -> dic
         },
         "reference": {
             "mode": "exact_finite_sidecar_mean",
-            "value": reference,
+            "value": first_reference,
+            "trial_mean_value": mean([
+                float(trial["reference"]["value"]) for trial in trials
+            ]),
             "candidate_evals": candidate_count,
         },
-        "classical_baselines": classical,
-        "quantum_estimators": qae,
+        "classical_baselines": first_classical,
+        "quantum_estimators": first_qae,
+        "trial_records": {
+            "classical_baselines": all_classical,
+            "quantum_estimators": all_qae,
+        },
+        "trials": [
+            {
+                "trial": trial["trial"],
+                "trial_seed": trial["trial_seed"],
+                "reference_value": trial["reference"]["value"],
+            }
+            for trial in trials
+        ],
+        "scaling_summary": {
+            "trial_count": args.trials,
+            "confidence_level": 0.95,
+            "classical_baselines": classical_summary,
+            "quantum_estimators": qae_summary,
+        },
         "resource_estimate": resource,
         "comparison": {
             "best_classical": best_classical,
             "best_qae": best_qae,
             "mc_loglog_error_slope": fit_slope([
-                item for item in classical if item["algorithm"] == "classical_mc"
-            ]),
+                item for item in classical_summary
+                if item["algorithm"] == "classical_mc"
+            ], "rmse"),
             "stratified_loglog_error_slope": fit_slope([
-                item for item in classical if item["algorithm"] == "stratified_vdc"
-            ]),
-            "qae_loglog_error_slope": fit_slope(qae),
+                item for item in classical_summary
+                if item["algorithm"] == "stratified_vdc"
+            ], "rmse"),
+            "qae_loglog_error_slope": fit_slope(qae_summary, "rmse"),
         },
         "claim_posture": {
             "claim_id": "advantage.light_transport_qae_query_scaling",
@@ -526,6 +715,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--outdir", type=Path, required=True,
                         help="Directory for benchmark artifacts")
     parser.add_argument("--seed", type=int, default=1337)
+    parser.add_argument("--trials", type=int, default=1,
+                        help="Independent deterministic trials for scaling aggregation.")
     parser.add_argument("--samples", type=int, action="append",
                         help="Classical sample count; repeatable.")
     parser.add_argument("--qae-levels", type=int, default=5)
@@ -537,11 +728,20 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+    if args.trials <= 0:
+        print("qge_advantage_benchmark: --trials must be > 0", file=sys.stderr)
+        return 1
+    if any(samples <= 0 for samples in sample_counts(args)):
+        print("qge_advantage_benchmark: --samples values must be > 0", file=sys.stderr)
+        return 1
     if args.qae_levels <= 0:
         print("qge_advantage_benchmark: --qae-levels must be > 0", file=sys.stderr)
         return 1
     if args.qae_shots <= 0:
         print("qge_advantage_benchmark: --qae-shots must be > 0", file=sys.stderr)
+        return 1
+    if args.qae_grid_steps <= 0:
+        print("qge_advantage_benchmark: --qae-grid-steps must be > 0", file=sys.stderr)
         return 1
     if args.contribution_bits <= 0 or args.contribution_bits > 16:
         print("qge_advantage_benchmark: --contribution-bits must be in 1..16",
@@ -554,12 +754,17 @@ def main(argv: list[str]) -> int:
         metrics_path = args.outdir / "advantage_metrics.json"
         curve_path = args.outdir / "qae_curve.csv"
         circuit_path = args.outdir / "qae_circuit.txt"
+        scaling_path = args.outdir / "scaling_summary.json"
+        scaling_csv_path = args.outdir / "scaling_summary.csv"
         icc_path = args.outdir / "qge_advantage_icc_evidence.json"
         write_json(metrics_path, metrics)
         write_curve_csv(curve_path, metrics)
+        write_json(scaling_path, metrics["scaling_summary"])
+        write_scaling_csv(scaling_csv_path, metrics)
         write_circuit_text(circuit_path, metrics)
         write_json(icc_path, build_icc_evidence(metrics, metrics_path,
-                                                curve_path, circuit_path))
+                                                curve_path, circuit_path,
+                                                scaling_path))
     except (OSError, ValueError, KeyError) as exc:
         print(f"qge_advantage_benchmark: {exc}", file=sys.stderr)
         return 1
@@ -567,6 +772,8 @@ def main(argv: list[str]) -> int:
     print(f"QGE_ADVANTAGE_METRICS {metrics_path}")
     print(f"QGE_QAE_CURVE {curve_path}")
     print(f"QGE_QAE_CIRCUIT {circuit_path}")
+    print(f"QGE_SCALING_SUMMARY {scaling_path}")
+    print(f"QGE_SCALING_SUMMARY_CSV {scaling_csv_path}")
     print(f"QGE_ADVANTAGE_ICC_EVIDENCE {icc_path}")
     return 0
 

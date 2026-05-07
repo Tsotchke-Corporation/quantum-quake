@@ -83,6 +83,19 @@
           "action": "run_qge_advantage_benchmark_and_emit_metrics"
         },
         {
+          "id": "qge_advantage_scaling_summary",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "scaling_summary_file"
+          ],
+          "severity": "high",
+          "label": "Advantage benchmark scaling summary is emitted",
+          "action": "run_multi_trial_qge_advantage_benchmark"
+        },
+        {
           "id": "qge_advantage_completion",
           "kind": "runtime_event",
           "event_kinds": [
