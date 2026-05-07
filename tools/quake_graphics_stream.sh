@@ -294,7 +294,11 @@ fi
 run_args=(-basedir "$basedir" "${video_args[@]}")
 run_args+=(-qgestreamdir "$agent_stream")
 if [[ "$engine_capture" == "1" ]]; then
-  run_args+=(-qgeautocapture "$frames" -qgecapturewait "$waits_per_frame")
+  engine_capture_wait="$waits_per_frame"
+  if [[ "$fire_test" == "1" ]]; then
+    engine_capture_wait=$((engine_capture_wait + 24))
+  fi
+  run_args+=(-qgeautocapture "$frames" -qgecapturewait "$engine_capture_wait")
 fi
 if [[ "$sound" != "1" ]]; then
   run_args+=(-nosound)
@@ -310,7 +314,13 @@ if [[ "$launch_mode" == "open" ]]; then
   cp "$open_log_file" "$agent_open_log_file"
   open_args=(-W -n)
   open_args+=("$app_bundle")
-  open "${open_args[@]}" --args "${run_args[@]}" -condebug || true
+  open_status=0
+  open "${open_args[@]}" --args "${run_args[@]}" -condebug || open_status=$?
+  if (( open_status != 0 )); then
+    echo "QGE_OPEN_FAILED status=$open_status" >> "$open_log_file"
+    echo "QGE_OPEN_FAILED status=$open_status" >&2
+    agent_event "open_failed" "$app_bundle" "status=$open_status"
+  fi
   print_log_updates
 elif [[ "$trace" == "1" ]]; then
   runtime_log_file="$agent_log_file"
@@ -356,6 +366,10 @@ if [[ "$launch_mode" == "open" && -f "$runtime_log_file" ]]; then
   cp "$runtime_log_file" "$agent_log_file"
 elif [[ -f "$agent_log_file" ]]; then
   cp "$agent_log_file" "$log_file"
+fi
+if [[ ! -s "$log_file" ]]; then
+  agent_event "runtime_log_empty" "$log_file"
+  echo "QGE_RUNTIME_LOG_EMPTY $log_file" >&2
 fi
 if [[ -f "$open_log_file" ]]; then
   cp "$open_log_file" "$agent_open_log_file"

@@ -876,13 +876,14 @@ static void SCR_QGEAutoCaptureMaybe(void)
 		return;
 
 	scr_qge_autocapture_done++;
-	Cbuf_AddText("screenshot png\n");
 	Con_Printf("QGE_AUTO_CAPTURE %d/%d\n",
 			   scr_qge_autocapture_done, scr_qge_autocapture_frames);
 	if (scr_qge_autocapture_done >= scr_qge_autocapture_frames &&
 		!scr_qge_autocapture_quit) {
 		scr_qge_autocapture_quit = true;
-		Cbuf_AddText("quit\n");
+		Cbuf_InsertText("screenshot png\nquit\n");
+	} else {
+		Cbuf_InsertText("screenshot png\n");
 	}
 }
 
