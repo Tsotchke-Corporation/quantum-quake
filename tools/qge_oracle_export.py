@@ -355,6 +355,46 @@ def build_claims_evidence(oracle_scene: dict[str, Any], trace: dict[str, Any],
     return evidence
 
 
+def build_icc_evidence(oracle_scene: dict[str, Any],
+                       claims_evidence: dict[str, Any],
+                       oracle_out: Path,
+                       claims_out: Path) -> dict[str, Any]:
+    supported_claims = [
+        claim["claim_id"]
+        for claim in claims_evidence.get("claims", [])
+        if claim.get("evidence_status") == "supported"
+    ]
+    blocked_claims = [
+        claim["claim_id"]
+        for claim in claims_evidence.get("claims", [])
+        if claim.get("missing_fields")
+    ]
+    cost_model = oracle_scene.get("cost_model", {})
+    sample_space = oracle_scene.get("sample_space", {})
+    trace_summary = oracle_scene.get("trace_summary", {})
+
+    return {
+        "schema": "qge.icc_evidence.v0",
+        "runtime_backend": "qge_oracle_export",
+        "completion_reason": "qge_scene_oracle_ir_exported",
+        "oracle_scene_file": str(oracle_out),
+        "claims_evidence_file": str(claims_out),
+        "trace_file": oracle_scene.get("source_capture", {}).get("trace"),
+        "frame_file": oracle_scene.get("source_capture", {}).get("frame"),
+        "scene_id": oracle_scene.get("scene", {}).get("scene_id"),
+        "observable_id": oracle_scene.get("observable", {}).get("observable_id"),
+        "candidate_count": sample_space.get("candidate_count"),
+        "state_prep_cost": cost_model.get("state_prep_cost"),
+        "readout_model": cost_model.get("readout_model"),
+        "shots": cost_model.get("shots"),
+        "fallback_count": cost_model.get("fallback_count"),
+        "trace_sequence_errors": trace_summary.get("sequence_errors"),
+        "supported_claim_ids": supported_claims,
+        "blocked_claim_ids": blocked_claims,
+        "status": "success",
+    }
+
+
 def write_json(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -366,6 +406,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--claims", type=Path, default=Path("docs/claims/qge_claims.json"))
     parser.add_argument("--oracle-out", type=Path, help="Output oracle_scene.json path")
     parser.add_argument("--claims-out", type=Path, help="Output claims_evidence.json path")
+    parser.add_argument("--icc-out", type=Path, help="Output ICC runtime evidence JSON path")
     return parser.parse_args(argv)
 
 
@@ -386,10 +427,15 @@ def main(argv: list[str]) -> int:
     oracle_scene, claims_evidence = build_oracle_scene(capture_dir, claims_path)
     oracle_out = args.oracle_out or (capture_dir / "oracle_scene.json")
     claims_out = args.claims_out or (capture_dir / "claims_evidence.json")
+    icc_out = args.icc_out or oracle_out.with_name("qge_icc_evidence.json")
+    icc_evidence = build_icc_evidence(oracle_scene, claims_evidence,
+                                      oracle_out, claims_out)
     write_json(oracle_out, oracle_scene)
     write_json(claims_out, claims_evidence)
+    write_json(icc_out, icc_evidence)
     print(f"QGE_ORACLE_SCENE {oracle_out}")
     print(f"QGE_CLAIMS_EVIDENCE {claims_out}")
+    print(f"QGE_ICC_EVIDENCE {icc_out}")
     return 0
 
 

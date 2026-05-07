@@ -1,0 +1,275 @@
+{
+  "oracles": [
+    {
+      "name": "qge_icc_research_oracle_profile",
+      "target": "qge_icc_research_oracle_profile",
+      "aliases": [
+        "icc-readable qge evidence sidecars",
+        "qge-icc-profile",
+        "research-oracle-profile"
+      ],
+      "requires": [
+        {
+          "id": "qge_icc_profile_runtime_evidence",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_oracle_export"
+          ],
+          "severity": "high",
+          "label": "QGE ICC profile can see exporter runtime evidence",
+          "action": "run_qge_oracle_export_with_icc_sidecar"
+        },
+        {
+          "id": "qge_icc_profile_completion_filter",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_scene_oracle_ir_exported"
+          ],
+          "severity": "high",
+          "label": "QGE ICC profile can filter completion evidence by value",
+          "action": "use_event_value_filtered_completion_oracle"
+        },
+        {
+          "id": "qge_icc_profile_oracle_artifact_filter",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "oracle_scene_file"
+          ],
+          "severity": "high",
+          "label": "QGE ICC profile can filter artifact evidence by name",
+          "action": "emit_oracle_scene_artifact_evidence"
+        }
+      ]
+    },
+    {
+      "name": "qge_scene_oracle_ir",
+      "target": "qge_scene_oracle_ir",
+      "aliases": [
+        "qge_engine_foundation_scene_oracle_ir",
+        "scene-oracle",
+        "oracle-ir",
+        "oracle_scene"
+      ],
+      "requires": [
+        {
+          "id": "qge_icc_runtime_evidence",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_oracle_export"
+          ],
+          "severity": "high",
+          "label": "QGE exporter runtime evidence is present",
+          "action": "run_qge_oracle_export_with_icc_sidecar"
+        },
+        {
+          "id": "qge_scene_oracle_exported",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_scene_oracle_ir_exported"
+          ],
+          "severity": "high",
+          "label": "Scene-oracle export completion is recorded",
+          "action": "emit_qge_icc_evidence_completion_reason"
+        },
+        {
+          "id": "qge_oracle_scene_artifact",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "oracle_scene_file"
+          ],
+          "severity": "high",
+          "label": "Oracle scene artifact is visible to ICC",
+          "action": "write_oracle_scene_json"
+        },
+        {
+          "id": "qge_claims_evidence_artifact",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "claims_evidence_file"
+          ],
+          "severity": "high",
+          "label": "Claims evidence artifact is visible to ICC",
+          "action": "write_claims_evidence_json"
+        }
+      ]
+    },
+    {
+      "name": "qge_advantage_benchmark",
+      "target": "qge_advantage_benchmark",
+      "aliases": [
+        "qge_light_transport_qae_benchmark",
+        "advantage.light_transport_qae_query_scaling",
+        "light_transport_qae"
+      ],
+      "requires": [
+        {
+          "id": "qge_advantage_artifacts",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "advantage_metrics_file"
+          ],
+          "severity": "high",
+          "label": "Advantage benchmark artifacts are emitted",
+          "action": "run_qge_advantage_benchmark_and_emit_metrics"
+        },
+        {
+          "id": "qge_advantage_completion",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_advantage_benchmark_complete"
+          ],
+          "severity": "high",
+          "label": "Advantage benchmark completion is recorded",
+          "action": "emit_advantage_metrics_completion_reason"
+        },
+        {
+          "id": "qge_advantage_no_synthetic_prod_path",
+          "kind": "no_stubbed_paths",
+          "classifications": [
+            "production_fallback",
+            "synthetic_model_only"
+          ],
+          "severity": "medium",
+          "label": "Synthetic benchmark paths are not treated as production claims",
+          "action": "mark_lab_models_or_wire_real_oracles"
+        }
+      ]
+    },
+    {
+      "name": "qge_vanilla_quake_conformance",
+      "target": "qge_vanilla_quake_conformance",
+      "aliases": [
+        "engine.vanilla_quake_conformance",
+        "vanilla-quake-port",
+        "complete-quake-port"
+      ],
+      "requires": [
+        {
+          "id": "qge_vanilla_trace_artifacts",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "vanilla_capture_matrix_file"
+          ],
+          "severity": "high",
+          "label": "Vanilla/QGE comparison artifacts are emitted",
+          "action": "run_classic_and_qge_capture_matrix"
+        },
+        {
+          "id": "qge_vanilla_tests_or_smoke",
+          "kind": "test_evidence",
+          "severity": "high",
+          "label": "Vanilla port tests or smoke evidence are recorded",
+          "action": "run_make_test_and_qge_stream_smoke"
+        },
+        {
+          "id": "qge_vanilla_no_silent_fallback",
+          "kind": "no_stubbed_paths",
+          "classifications": [
+            "production_fallback",
+            "synthetic_model_only",
+            "not_exercised_by_real_smoke"
+          ],
+          "severity": "high",
+          "label": "Full port has no silent fallback-only production path",
+          "action": "replace_or_mark_each_classic_fallback"
+        }
+      ]
+    },
+    {
+      "name": "qge_publication_artifact_pack",
+      "target": "qge_publication_artifact_pack",
+      "aliases": [
+        "publication-artifact",
+        "paper-artifact",
+        "qge_paper_artifact"
+      ],
+      "requires": [
+        {
+          "id": "qge_publication_artifacts",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "publication_manifest_file"
+          ],
+          "severity": "high",
+          "label": "Publication artifact files are emitted",
+          "action": "run_publication_pack_builder"
+        },
+        {
+          "id": "qge_publication_completion",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_publication_artifact_pack_complete"
+          ],
+          "severity": "high",
+          "label": "Publication artifact completion is recorded",
+          "action": "emit_publication_pack_completion_reason"
+        },
+        {
+          "id": "qge_publication_no_unmarked_fallback",
+          "kind": "no_stubbed_paths",
+          "classifications": [
+            "production_fallback",
+            "synthetic_model_only"
+          ],
+          "severity": "high",
+          "label": "Publication claims do not rely on unmarked fallback paths",
+          "action": "route_every_claim_through_claims_ledger"
+        }
+      ]
+    }
+  ]
+}
