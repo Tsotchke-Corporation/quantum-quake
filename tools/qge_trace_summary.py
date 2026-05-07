@@ -178,6 +178,13 @@ def print_text(summary: dict) -> None:
     print(f"Records: {json.dumps(summary['records'], sort_keys=True)}")
     print(f"Sequence errors: {summary['sequence_errors']}")
     for probe in summary["state_probes"]:
+        extra = f" subject={probe['last_subject_id']}"
+        if probe["label"] == "render_gate_kernel":
+            extra = (
+                f" gates={probe['last_subject_id']} "
+                f"coherence={probe['coherence_min']:.3f}..{probe['coherence_max']:.3f} "
+                f"max_prob={probe['max_probability_max']:.3f}"
+            )
         print(
             "Probe "
             f"{probe['label']} domain={probe['domain']} rep={probe['representation']} "
@@ -185,6 +192,7 @@ def print_text(summary: dict) -> None:
             f"basis={probe['active_basis_min']}..{probe['active_basis_max']} "
             f"qubits={probe['qubit_min']}..{probe['qubit_max']} "
             f"max_mem={probe['memory_bytes_max']} flags_or=0x{probe['flags_or']:x}"
+            f"{extra}"
         )
 
 
