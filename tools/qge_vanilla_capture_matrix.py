@@ -78,11 +78,38 @@ def latest_matching_line(path: Path, needle: str) -> str | None:
     if not path.is_file():
         return None
     latest = None
+    latest_frame = -1
     with path.open("r", encoding="utf-8", errors="replace") as f:
         for line in f:
             if needle in line:
-                latest = line.strip()
+                stripped = line.strip()
+                values = parse_key_values(stripped)
+                frame = values.get("frame")
+                if isinstance(frame, int) and frame >= latest_frame:
+                    latest = stripped
+                    latest_frame = frame
+                elif latest_frame < 0:
+                    latest = stripped
     return latest
+
+
+def matching_key_value_max(path: Path,
+                           needle: str,
+                           keys: list[str]) -> dict[str, int]:
+    out = {key: 0 for key in keys}
+    if not path.is_file():
+        return out
+    with path.open("r", encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if needle not in line:
+                continue
+            values = parse_key_values(line)
+            for key in keys:
+                try:
+                    out[key] = max(out[key], int(values.get(key, 0) or 0))
+                except (TypeError, ValueError):
+                    pass
+    return out
 
 
 def read_readme_value(path: Path, label: str) -> str | None:
@@ -108,6 +135,17 @@ def mode_entry(capture_dir: Path,
     agent_icc = capture_dir / f"{mode}.agent_icc_evidence.jsonl"
     render_line = latest_matching_line(log, "QGE render frame=")
     scene_line = latest_matching_line(log, "QGE scene frame=")
+    render_max = matching_key_value_max(
+        log,
+        "QGE render frame=",
+        ["fallback", "surrogate", "micro", "clipped", "invalid",
+         "microfill", "culled", "classic3d", "viewmodel"],
+    )
+    scene_max = matching_key_value_max(
+        log,
+        "QGE scene frame=",
+        ["fallback", "surrogate", "micro", "clipped", "invalid", "culled"],
+    )
     entry = {
         "mode": mode,
         "quantum_render": render_value,
@@ -126,9 +164,11 @@ def mode_entry(capture_dir: Path,
     if render_line:
         entry["runtime"]["qge_render_line"] = render_line
         entry["runtime"]["qge_render"] = parse_key_values(render_line)
+        entry["runtime"]["qge_render_max"] = render_max
     if scene_line:
         entry["runtime"]["qge_scene_line"] = scene_line
         entry["runtime"]["qge_scene"] = parse_key_values(scene_line)
+        entry["runtime"]["qge_scene_max"] = scene_max
     return entry
 
 
@@ -155,9 +195,15 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
                          args.classic_render, "reference")
     qge = mode_entry(capture_dir, args.qge_mode, args.qge_render, "candidate")
     qge_render = qge.get("runtime", {}).get("qge_render", {})
-    fallback_count = int(qge_render.get("fallback", 0) or 0)
-    classic3d = int(qge_render.get("classic3d", 0) or 0)
-    viewmodel = int(qge_render.get("viewmodel", 0) or 0)
+    qge_render_max = qge.get("runtime", {}).get("qge_render_max", {})
+    fallback_count = max(int(qge_render.get("fallback", 0) or 0),
+                         int(qge_render_max.get("fallback", 0) or 0))
+    surrogate_count = max(int(qge_render.get("surrogate", 0) or 0),
+                          int(qge_render_max.get("surrogate", 0) or 0))
+    classic3d = max(int(qge_render.get("classic3d", 0) or 0),
+                    int(qge_render_max.get("classic3d", 0) or 0))
+    viewmodel = max(int(qge_render.get("viewmodel", 0) or 0),
+                    int(qge_render_max.get("viewmodel", 0) or 0))
 
     return {
         "schema": "qge.vanilla_capture_matrix.v0",
@@ -177,10 +223,28 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
             "qge_suppressed_classic3d": qge_render.get("suppressed3d"),
             "qge_surface_polygons": qge_render.get("poly"),
             "qge_surface_triangles": qge_render.get("tris"),
+            "qge_surface_surrogates": surrogate_count,
+            "qge_surface_culled": max(
+                int(qge_render.get("culled", 0) or 0),
+                int(qge_render_max.get("culled", 0) or 0),
+            ),
+            "qge_surface_micro_surrogates": max(
+                int(qge_render.get("micro", 0) or 0),
+                int(qge_render_max.get("micro", 0) or 0),
+            ),
+            "qge_surface_micro_fills": max(
+                int(qge_render.get("microfill", 0) or 0),
+                int(qge_render_max.get("microfill", 0) or 0),
+            ),
+            "qge_surface_clipped_surrogates": max(
+                int(qge_render.get("clipped", 0) or 0),
+                int(qge_render_max.get("clipped", 0) or 0),
+            ),
             "qge_edge_fills": qge_render.get("edgefills"),
             "ready_for_complete_claim": (
                 classic["frame"]["exists"] and qge["frame"]["exists"] and
-                fallback_count == 0 and classic3d == 0 and viewmodel > 0
+                fallback_count == 0 and surrogate_count == 0 and
+                classic3d == 0 and viewmodel > 0
             ),
         },
         "claim_posture": {
@@ -215,6 +279,8 @@ def build_icc_evidence(matrix: dict[str, Any],
         "classic_frame_file": classic["frame"]["path"],
         "qge_frame_file": qge["frame"]["path"],
         "fallback_count": summary["fallback_count"],
+        "surrogate_count": summary["qge_surface_surrogates"],
+        "culled_count": summary["qge_surface_culled"],
         "classic3d_count": summary["classic3d_count"],
         "viewmodel_encoded": summary["viewmodel_encoded"],
         "ready_for_complete_claim": summary["ready_for_complete_claim"],

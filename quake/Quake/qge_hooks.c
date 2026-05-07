@@ -201,8 +201,14 @@ static int qge_scene_lightmap_cache_hits = 0;
 static int qge_scene_lightmap_cache_misses = 0;
 static int qge_scene_polygon_encoded = 0;
 static int qge_scene_polygon_fallback = 0;
+static int qge_scene_polygon_surrogate = 0;
+static int qge_scene_polygon_surrogate_micro = 0;
+static int qge_scene_polygon_surrogate_clipped = 0;
+static int qge_scene_polygon_surrogate_invalid = 0;
+static int qge_scene_polygon_culled = 0;
 static int qge_scene_polygon_triangles = 0;
 static int qge_scene_triangle_edge_fills = 0;
+static int qge_scene_polygon_micro_fills = 0;
 static int qge_scene_snapshot_edicts = 0;
 static int qge_scene_encoded_edicts = 0;
 static int qge_scene_alias_encoded = 0;
@@ -251,6 +257,7 @@ static unsigned int QGE_TextureSignalBuild(const texture_t *tex,
 #define QGE_MAX_LIGHTMAP_SIGNAL_CACHE MAX_MAP_FACES
 #define QGE_MAX_PROJECTED_POLY_VERTS 96
 #define QGE_MAX_PROJECTED_TRIS (QGE_MAX_PROJECTED_POLY_VERTS - 2)
+#define QGE_PROJECTED_AREA_EPSILON 0.000001f
 typedef struct {
 	qboolean valid;
 	unsigned int light_hash;
@@ -274,6 +281,16 @@ typedef struct {
 typedef struct {
 	qge_projected_vertex_t v[3];
 } qge_projected_triangle_t;
+
+typedef enum {
+	QGE_PROJECT_FAIL_NONE = 0,
+	QGE_PROJECT_FAIL_INVALID,
+	QGE_PROJECT_FAIL_NO_POLY,
+	QGE_PROJECT_FAIL_NEAR_CLIP_EMPTY,
+	QGE_PROJECT_FAIL_PROJECT_EMPTY,
+	QGE_PROJECT_FAIL_VIEWPORT_CLIP_EMPTY,
+	QGE_PROJECT_FAIL_MICRO_AREA
+} qge_project_fail_reason_t;
 
 typedef struct {
 	vec3_t world;
@@ -1998,7 +2015,8 @@ void QGE_FrameEnd(void)
 		fprintf(stderr, "QGE scene frame=%d world_surfaces=%d submitted=%d dropped=%d "
 				"snapshot=%d snapshot_miss=%d encoded=%d material_encoded=%d "
 				"tex=%d texcache=%d/%d entries=%d light=%d lightcache=%d/%d "
-				"light_entries=%d poly=%d fallback=%d sky=%d water=%d\n",
+				"light_entries=%d poly=%d culled=%d surrogate=%d micro=%d clipped=%d invalid=%d "
+				"fallback=%d sky=%d water=%d\n",
 				qge_frame_count, qge_scene_world_surfaces, qge_scene_surface_count,
 				qge_scene_surface_dropped, qge_scene_snapshot_surfaces,
 				qge_scene_snapshot_misses, qge_scene_encoded_surfaces,
@@ -2007,6 +2025,10 @@ void QGE_FrameEnd(void)
 				qge_texture_signal_cache_entries, qge_scene_lightmapped_surfaces,
 				qge_scene_lightmap_cache_hits, qge_scene_lightmap_cache_misses,
 				qge_lightmap_signal_cache_entries, qge_scene_polygon_encoded,
+				qge_scene_polygon_culled,
+				qge_scene_polygon_surrogate, qge_scene_polygon_surrogate_micro,
+				qge_scene_polygon_surrogate_clipped,
+				qge_scene_polygon_surrogate_invalid,
 				qge_scene_polygon_fallback,
 				qge_scene_sky_surfaces, qge_scene_water_surfaces);
 	}
@@ -2059,8 +2081,14 @@ void QGE_SceneBegin(void)
 	qge_scene_lightmap_cache_misses = 0;
 	qge_scene_polygon_encoded = 0;
 	qge_scene_polygon_fallback = 0;
+	qge_scene_polygon_surrogate = 0;
+	qge_scene_polygon_surrogate_micro = 0;
+	qge_scene_polygon_surrogate_clipped = 0;
+	qge_scene_polygon_surrogate_invalid = 0;
+	qge_scene_polygon_culled = 0;
 	qge_scene_polygon_triangles = 0;
 	qge_scene_triangle_edge_fills = 0;
+	qge_scene_polygon_micro_fills = 0;
 	qge_scene_snapshot_edicts = 0;
 	qge_scene_encoded_edicts = 0;
 	qge_scene_alias_encoded = 0;
@@ -2635,6 +2663,14 @@ static qboolean QGE_SurfaceScreenBounds(const qge_scene_surface_t *surface,
 	return true;
 }
 
+static qboolean QGE_ProjectSurfaceFail(qge_project_fail_reason_t *fail_reason,
+									   qge_project_fail_reason_t reason)
+{
+	if (fail_reason)
+		*fail_reason = reason;
+	return false;
+}
+
 static qboolean QGE_ProjectSurfacePolygon(const qge_scene_surface_t *surface,
 										  const msurface_t *surf,
 										  qge_projected_vertex_t *verts,
@@ -2642,7 +2678,8 @@ static qboolean QGE_ProjectSurfacePolygon(const qge_scene_surface_t *surface,
 										  int *num_verts,
 										  screen_rect_t *bounds,
 										  float *depth,
-										  float *area)
+										  float *area,
+										  qge_project_fail_reason_t *fail_reason)
 {
 	glpoly_t *poly = surf ? surf->polys : NULL;
 	float min_x = (float)qge_render_res;
@@ -2658,12 +2695,19 @@ static qboolean QGE_ProjectSurfacePolygon(const qge_scene_surface_t *surface,
 	int clipped_projected_count;
 
 	if (!surface || !poly || !verts || !num_verts || !bounds || !depth || !area)
-		return false;
+		return QGE_ProjectSurfaceFail(fail_reason,
+									  poly ? QGE_PROJECT_FAIL_INVALID :
+									  QGE_PROJECT_FAIL_NO_POLY);
+	if (fail_reason)
+		*fail_reason = QGE_PROJECT_FAIL_NONE;
 	if (max_verts > QGE_MAX_PROJECTED_POLY_VERTS)
 		max_verts = QGE_MAX_PROJECTED_POLY_VERTS;
 
 	clipped_count = QGE_ClipSurfacePolygonNear(poly, clipped,
 											   QGE_MAX_PROJECTED_POLY_VERTS);
+	if (clipped_count < 3)
+		return QGE_ProjectSurfaceFail(fail_reason,
+									  QGE_PROJECT_FAIL_NEAR_CLIP_EMPTY);
 
 	for (int i = 0; i < clipped_count && count < max_verts; i++) {
 		float sx, sy, sd;
@@ -2681,14 +2725,16 @@ static qboolean QGE_ProjectSurfacePolygon(const qge_scene_surface_t *surface,
 	}
 
 	if (count < 3)
-		return false;
+		return QGE_ProjectSurfaceFail(fail_reason,
+									  QGE_PROJECT_FAIL_PROJECT_EMPTY);
 
 	clipped_projected_count = QGE_ClipProjectedPolygonViewport(projected,
 															   count,
 															   verts,
 															   max_verts);
 	if (clipped_projected_count < 3)
-		return false;
+		return QGE_ProjectSurfaceFail(fail_reason,
+									  QGE_PROJECT_FAIL_VIEWPORT_CLIP_EMPTY);
 	count = clipped_projected_count;
 
 	for (int i = 0; i < count; i++) {
@@ -2701,8 +2747,9 @@ static qboolean QGE_ProjectSurfacePolygon(const qge_scene_surface_t *surface,
 		depth_sum += verts[i].depth;
 	}
 	signed_area = fabsf(signed_area) * 0.5f;
-	if (signed_area < 1.0f)
-		return false;
+	if (signed_area < QGE_PROJECTED_AREA_EPSILON)
+		return QGE_ProjectSurfaceFail(fail_reason,
+									  QGE_PROJECT_FAIL_MICRO_AREA);
 
 	if (max_x <= min_x) max_x = min_x + 1.0f;
 	if (max_y <= min_y) max_y = min_y + 1.0f;
@@ -3557,6 +3604,7 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 		fill_color.g *= value;
 		fill_color.b *= value;
 		QGE_SpatialFillRectColorDepth(bounds, &fill_color, avg_sample.depth);
+		qge_scene_polygon_micro_fills++;
 	}
 }
 
@@ -3666,6 +3714,54 @@ static void QGE_EncodeProjectedPolygonDWT(dwt_framebuffer_t *fb,
 	qge_scene_polygon_encoded++;
 }
 
+static void QGE_RecordSurfaceSurrogate(qge_project_fail_reason_t reason)
+{
+	qge_scene_polygon_surrogate++;
+	switch (reason) {
+	case QGE_PROJECT_FAIL_MICRO_AREA:
+		qge_scene_polygon_surrogate_micro++;
+		break;
+	case QGE_PROJECT_FAIL_NEAR_CLIP_EMPTY:
+	case QGE_PROJECT_FAIL_PROJECT_EMPTY:
+	case QGE_PROJECT_FAIL_VIEWPORT_CLIP_EMPTY:
+		qge_scene_polygon_surrogate_clipped++;
+		break;
+	case QGE_PROJECT_FAIL_INVALID:
+	case QGE_PROJECT_FAIL_NO_POLY:
+	default:
+		qge_scene_polygon_surrogate_invalid++;
+		break;
+	}
+}
+
+static qboolean QGE_ProjectFailIsCull(qge_project_fail_reason_t reason)
+{
+	return reason == QGE_PROJECT_FAIL_NEAR_CLIP_EMPTY ||
+		   reason == QGE_PROJECT_FAIL_PROJECT_EMPTY ||
+		   reason == QGE_PROJECT_FAIL_VIEWPORT_CLIP_EMPTY;
+}
+
+static void QGE_EncodeSurfaceSurrogateDWT(dwt_framebuffer_t *fb,
+										  const qge_scene_surface_t *surface,
+										  const screen_rect_t *bounds,
+										  float brightness,
+										  float depth,
+										  float depth_world,
+										  qge_project_fail_reason_t reason)
+{
+	if (!surface || !bounds)
+		return;
+
+	QGE_SpatialFillRectDepth(bounds,
+							 brightness * (1.0f - depth * 0.1f),
+							 depth_world);
+	QGE_SpatialOutlineRectDepth(bounds, brightness * 0.65f,
+								depth_world);
+	QGE_EncodeSurfaceMaterialDWT(fb, surface, bounds, brightness,
+								 depth, depth_world);
+	QGE_RecordSurfaceSurrogate(reason);
+}
+
 static qge_scene_surface_t *QGE_FindSceneSurfaceByResourceId(qge_resource_id_t surface_id)
 {
 	if (qge_resource_id_kind(surface_id) != QGE_RESOURCE_SURFACE)
@@ -3695,11 +3791,14 @@ static qboolean QGE_EncodeWorldSurfaceDWT(dwt_framebuffer_t *fb,
 	float depth;
 	float brightness;
 	float area = 0.0f;
+	qge_project_fail_reason_t project_fail = QGE_PROJECT_FAIL_NONE;
 
 	if (!fb || !surface || !encoded_world)
 		return false;
-	if (!QGE_SurfaceScreenBounds(surface, surface->surf, &bounds, &depth_world))
+	if (!QGE_SurfaceScreenBounds(surface, surface->surf, &bounds, &depth_world)) {
+		qge_scene_polygon_fallback++;
 		return false;
+	}
 
 	depth = depth_world / 4096.0f;
 	if (depth > 1.0f) depth = 1.0f;
@@ -3710,7 +3809,8 @@ static qboolean QGE_EncodeWorldSurfaceDWT(dwt_framebuffer_t *fb,
 
 	if (QGE_ProjectSurfacePolygon(surface, surface->surf, verts,
 								  QGE_MAX_PROJECTED_POLY_VERTS,
-								  &num_verts, &bounds, &depth_world, &area)) {
+								  &num_verts, &bounds, &depth_world, &area,
+								  &project_fail)) {
 		depth = depth_world / 4096.0f;
 		if (depth > 1.0f) depth = 1.0f;
 		if (depth < 0.0f) depth = 0.0f;
@@ -3719,15 +3819,11 @@ static qboolean QGE_EncodeWorldSurfaceDWT(dwt_framebuffer_t *fb,
 		QGE_EncodeProjectedPolygonDWT(fb, surface, verts, num_verts,
 									  &bounds, brightness, depth,
 									  depth_world, area);
+	} else if (QGE_ProjectFailIsCull(project_fail)) {
+		qge_scene_polygon_culled++;
 	} else {
-		QGE_SpatialFillRectDepth(&bounds,
-								 brightness * (1.0f - depth * 0.1f),
-								 depth_world);
-		QGE_SpatialOutlineRectDepth(&bounds, brightness * 0.65f,
-									depth_world);
-		QGE_EncodeSurfaceMaterialDWT(fb, surface, &bounds, brightness,
-									 depth, depth_world);
-		qge_scene_polygon_fallback++;
+		QGE_EncodeSurfaceSurrogateDWT(fb, surface, &bounds, brightness,
+									  depth, depth_world, project_fail);
 	}
 	(*encoded_world)++;
 	return true;
@@ -4406,7 +4502,8 @@ void QGE_RenderScene(void)
 			if (qge_frame_count < 5 || (qge_frame_count % 60) == 0) {
 				Con_Printf("QGE render frame=%d mode=%s owner=%s classic3d=%d suppressed3d=%d "
 						   "res=%d coeffs=%d snapshot=%d snapshot_miss=%d "
-						   "texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d fallback=%d "
+						   "texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d microfill=%d "
+						   "culled=%d surrogate=%d micro=%d clipped=%d fallback=%d "
 						   "encoded=%d material=%d edicts=%d alias=%d sprites=%d "
 						   "viewmodel=%d entity_miss=%d gates=%d shots=%d "
 						   "readout=%.3f edgeq=%.3f ggain=%.3f egain=%.3f "
@@ -4420,6 +4517,11 @@ void QGE_RenderScene(void)
 						   qge_scene_texture_cache_misses, qge_scene_lightmap_cache_hits,
 						   qge_scene_lightmap_cache_misses, qge_scene_polygon_encoded,
 						   qge_scene_polygon_triangles, qge_scene_triangle_edge_fills,
+						   qge_scene_polygon_micro_fills,
+						   qge_scene_polygon_culled,
+						   qge_scene_polygon_surrogate,
+						   qge_scene_polygon_surrogate_micro,
+						   qge_scene_polygon_surrogate_clipped,
 						   qge_scene_polygon_fallback,
 						   qge_scene_encoded_surfaces,
 						   qge_scene_material_encoded, qge_scene_encoded_edicts,
@@ -4434,7 +4536,8 @@ void QGE_RenderScene(void)
 			fprintf(stderr, "QGE render frame=%d mode=%s owner=%s classic3d=%d suppressed3d=%d "
 					"res=%d time=%.1fms coeffs=%d sparse=%.1f%% "
 					"scene_surfaces=%d snapshot_surfaces=%d snapshot_misses=%d "
-					"texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d fallback=%d encoded_surfaces=%d "
+					"texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d microfill=%d "
+					"culled=%d surrogate=%d micro=%d clipped=%d invalid=%d fallback=%d encoded_surfaces=%d "
 					"material_encoded=%d snapshot_edicts=%d encoded_edicts=%d alias=%d "
 					"sprites=%d viewmodel=%d entity_misses=%d visedicts=%d nonzero=%d/%d max=%.6f sum=%.3f "
 					"gate_kernel=%d gates=%d h=%d ry=%d rz=%d ent=%d phase=%d gate_active=%d "
@@ -4452,6 +4555,12 @@ void QGE_RenderScene(void)
 					qge_scene_texture_cache_misses, qge_scene_lightmap_cache_hits,
 					qge_scene_lightmap_cache_misses, qge_scene_polygon_encoded,
 					qge_scene_polygon_triangles, qge_scene_triangle_edge_fills,
+					qge_scene_polygon_micro_fills,
+					qge_scene_polygon_culled,
+					qge_scene_polygon_surrogate,
+					qge_scene_polygon_surrogate_micro,
+					qge_scene_polygon_surrogate_clipped,
+					qge_scene_polygon_surrogate_invalid,
 					qge_scene_polygon_fallback,
 					qge_scene_encoded_surfaces,
 					qge_scene_material_encoded, qge_scene_snapshot_edicts,
