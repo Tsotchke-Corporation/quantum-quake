@@ -65,11 +65,13 @@ agent_manifest_file="$agent_stream/manifest.json"
 agent_icc_file="$agent_stream/qge_agent_stream_icc_evidence.jsonl"
 agent_audio_raw="$agent_audio_dir/quake_mix_s16le.raw"
 agent_audio_meta="$agent_audio_dir/quake_mix_s16le.json"
+agent_audio_bytes_file="$agent_audio_dir/bytes.txt"
 agent_frame_count_file="$agent_stream/video/frame_count.txt"
 agent_last_frame_file="$agent_stream/video/latest_frame.txt"
 last_agent_frame=""
 mkdir -p "$outdir" "$agent_video_dir" "$agent_audio_dir" "$agent_log_dir"
 : > "$agent_events_file"
+: > "$agent_audio_bytes_file"
 : > "$agent_frame_count_file"
 : > "$agent_last_frame_file"
 
@@ -126,6 +128,7 @@ write_agent_manifest() {
     "status": "$audio_status",
     "raw_file": "$agent_audio_raw",
     "metadata_file": "$agent_audio_meta",
+    "bytes_file": "$agent_audio_bytes_file",
     "format": "s16le",
     "bytes": $audio_bytes
   },
@@ -239,6 +242,7 @@ touch "$log_file"
 touch "$agent_log_file" "$agent_open_log_file"
 log_next_line=1
 frame_index=0
+printf '0\n' > "$agent_audio_bytes_file"
 printf '%d\n' "$frame_index" > "$agent_frame_count_file"
 
 find "$gamedir" -maxdepth 1 -name 'spasm*.png' -print | sort > "$before_file"
@@ -308,14 +312,42 @@ collect_new_frames() {
   fi
 }
 
+poll_agent_audio() {
+  local audio_bytes=0
+  local previous_bytes=0
+
+  if [[ ! -s "$agent_audio_raw" ]]; then
+    return
+  fi
+  audio_bytes="$(wc -c < "$agent_audio_raw" | tr -d ' ')"
+  if [[ -s "$agent_audio_bytes_file" ]]; then
+    previous_bytes="$(tail -n 1 "$agent_audio_bytes_file" | tr -d ' ')"
+    if [[ -z "$previous_bytes" ]]; then
+      previous_bytes=0
+    fi
+  fi
+  if (( audio_bytes == previous_bytes )); then
+    return
+  fi
+
+  printf '%s\n' "$audio_bytes" > "$agent_audio_bytes_file"
+  agent_event "audio_raw" "$agent_audio_raw" "bytes=$audio_bytes"
+  if [[ -s "$agent_audio_meta" ]]; then
+    agent_event "audio_metadata" "$agent_audio_meta" "bytes=$audio_bytes"
+  fi
+  write_agent_manifest "running"
+}
+
 watch_open_stream() {
   while [[ ! -f "$watch_stop_file" ]]; do
     print_log_updates
     collect_new_frames
+    poll_agent_audio
     sleep 1
   done
   print_log_updates
   collect_new_frames
+  poll_agent_audio
 }
 
 sync_agent_frame_state() {
@@ -388,6 +420,7 @@ if [[ "$launch_mode" != "open" ]]; then
   while kill -0 "$game_pid" 2>/dev/null; do
     print_log_updates
     collect_new_frames
+    poll_agent_audio
 
     if (( elapsed >= max_seconds )); then
       echo "QGE_STREAM_TIMEOUT killing process $game_pid" >&2
@@ -419,6 +452,7 @@ fi
 
 sync_agent_frame_state
 collect_new_frames
+poll_agent_audio
 sync_agent_frame_state
 
 cat > "$outdir/README.txt" <<EOF
@@ -457,10 +491,7 @@ if [[ "$trace" == "1" ]]; then
   fi
 fi
 
-if [[ -s "$agent_audio_raw" ]]; then
-  audio_bytes="$(wc -c < "$agent_audio_raw" | tr -d ' ')"
-  agent_event "audio_raw" "$agent_audio_raw" "bytes=$audio_bytes"
-fi
+poll_agent_audio
 agent_event "stream_done" "$outdir" "frames=$frame_index"
 write_agent_manifest "complete"
 write_agent_icc_evidence

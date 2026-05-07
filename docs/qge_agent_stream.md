@@ -23,6 +23,7 @@ The directory is intentionally simple and tail-friendly:
 - `audio/quake_mix_s16le.raw`: post-QGE mixed stereo PCM when sound is enabled.
 - `audio/quake_mix_s16le.json`: audio metadata including sample rate, format,
   channels, and sample pair count.
+- `audio/bytes.txt`: current raw PCM byte count, updated as audio arrives.
 - `logs/quantum_quake.log`: runtime console log mirrored into the stream.
 - `logs/open.log`: LaunchServices notes for macOS `open` mode.
 - `qge_agent_stream_icc_evidence.jsonl`: ICC-native runtime events for the
@@ -37,10 +38,10 @@ QGE_AGENT_STREAM_DONE <dir>
 ```
 
 In macOS `open` launch mode the harness keeps `open -W` in the foreground, but
-now runs a side watcher that tails the game log and mirrors screenshots into the
-agent stream while the app is still running. Consumers should follow
-`events.ndjson` or `video/latest_frame.txt` rather than waiting for
-`QGE_AGENT_STREAM_DONE`.
+now runs a side watcher that tails the game log, mirrors screenshots, and
+refreshes audio byte counts while the app is still running. Consumers should
+follow `events.ndjson`, `video/latest_frame.txt`, or `audio/bytes.txt` rather
+than waiting for `QGE_AGENT_STREAM_DONE`.
 
 Audio capture requires the game sound system to run:
 
