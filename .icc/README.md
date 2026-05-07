@@ -16,7 +16,11 @@ The oracles in `completion-oracles.json` deliberately separate task classes:
   completion evidence, and treats synthetic/model paths as a medium-severity
   blocker until they are marked as lab models or wired to real oracles.
 - `qge_vanilla_quake_conformance`: full port work. It requires smoke/test
-  evidence and keeps fallback-only production paths high-severity.
+  evidence, a ready paired classic/QGE runtime matrix, and keeps fallback-only
+  production paths high-severity. Broader synthetic-model and external-backend
+  scrutiny stays on the publication/advantage gates so Windows-only,
+  QuakeWorld-only, codec, or Moonlab lab paths do not mask the real vanilla
+  runtime ownership signal.
 - `qge_publication_artifact_pack`: paper artifact work. It requires reproducible
   artifact emission and blocks on unmarked fallback-backed claims.
 

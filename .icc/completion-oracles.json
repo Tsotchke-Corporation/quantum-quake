@@ -286,6 +286,22 @@
           "action": "run_classic_and_qge_capture_matrix"
         },
         {
+          "id": "qge_vanilla_runtime_complete",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_vanilla_capture_matrix_complete"
+          ],
+          "severity": "high",
+          "label": "Vanilla/QGE runtime matrix satisfies strict ownership counters",
+          "action": "produce_ready_vanilla_capture_matrix"
+        },
+        {
           "id": "qge_vanilla_tests_or_smoke",
           "kind": "test_evidence",
           "severity": "high",
@@ -296,9 +312,7 @@
           "id": "qge_vanilla_no_silent_fallback",
           "kind": "no_stubbed_paths",
           "classifications": [
-            "production_fallback",
-            "synthetic_model_only",
-            "not_exercised_by_real_smoke"
+            "production_fallback"
           ],
           "severity": "high",
           "label": "Full port has no silent fallback-only production path",

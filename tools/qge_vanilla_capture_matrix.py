@@ -268,10 +268,14 @@ def build_icc_evidence(matrix: dict[str, Any],
     modes = {mode["mode"]: mode for mode in matrix["modes"]}
     classic = modes.get("classic", matrix["modes"][0])
     qge = modes.get("quantum", matrix["modes"][-1])
+    ready = bool(summary["ready_for_complete_claim"])
     return {
         "schema": "qge.icc_evidence.v0",
         "runtime_backend": "qge_vanilla_capture_matrix",
-        "completion_reason": "qge_vanilla_capture_matrix_complete",
+        "completion_reason": (
+            "qge_vanilla_capture_matrix_complete"
+            if ready else "qge_vanilla_capture_matrix_evidence_only"
+        ),
         "vanilla_capture_matrix_file": str(matrix_path),
         "icc_evidence_file": str(icc_path),
         "capture_dir": matrix["capture_dir"],
@@ -283,8 +287,8 @@ def build_icc_evidence(matrix: dict[str, Any],
         "culled_count": summary["qge_surface_culled"],
         "classic3d_count": summary["classic3d_count"],
         "viewmodel_encoded": summary["viewmodel_encoded"],
-        "ready_for_complete_claim": summary["ready_for_complete_claim"],
-        "status": "success",
+        "ready_for_complete_claim": ready,
+        "status": "success" if ready else "blocked",
     }
 
 
