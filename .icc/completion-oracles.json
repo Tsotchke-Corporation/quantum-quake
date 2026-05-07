@@ -1,6 +1,86 @@
 {
   "oracles": [
     {
+      "name": "qge_agent_media_stream",
+      "target": "qge_agent_media_stream",
+      "aliases": [
+        "agent-media-stream",
+        "full data streaming",
+        "audio-video-stream",
+        "qge-agent-stream"
+      ],
+      "requires": [
+        {
+          "id": "qge_agent_stream_manifest",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "agent_stream_manifest_file"
+          ],
+          "severity": "high",
+          "label": "Agent stream manifest is emitted",
+          "action": "run_sound_enabled_qge_stream"
+        },
+        {
+          "id": "qge_agent_stream_video",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "agent_video_frame_file"
+          ],
+          "severity": "high",
+          "label": "Agent stream contains a video frame artifact",
+          "action": "copy_screenshot_into_agent_stream"
+        },
+        {
+          "id": "qge_agent_stream_audio_raw",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "agent_audio_raw_file"
+          ],
+          "severity": "high",
+          "label": "Agent stream contains raw mixed-audio artifact",
+          "action": "enable_sound_and_dump_mixed_pcm"
+        },
+        {
+          "id": "qge_agent_stream_audio_metadata",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "agent_audio_metadata_file"
+          ],
+          "severity": "high",
+          "label": "Agent stream contains audio metadata artifact",
+          "action": "write_pcm_metadata_sidecar"
+        },
+        {
+          "id": "qge_agent_stream_completion",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_agent_media_stream_complete"
+          ],
+          "severity": "high",
+          "label": "Agent media stream completion is recorded",
+          "action": "emit_agent_stream_completion_reason"
+        }
+      ]
+    },
+    {
       "name": "qge_icc_research_oracle_profile",
       "target": "qge_icc_research_oracle_profile",
       "aliases": [

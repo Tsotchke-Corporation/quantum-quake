@@ -32,6 +32,139 @@ short		*snd_out;
 
 static int	snd_vol;
 
+static FILE	*qge_agent_audio_file = NULL;
+static qboolean	qge_agent_audio_tried = false;
+static int	qge_agent_audio_sample_pairs = 0;
+static char	qge_agent_audio_dir[MAX_OSPATH];
+static char	qge_agent_audio_raw_path[MAX_OSPATH];
+static char	qge_agent_audio_meta_path[MAX_OSPATH];
+
+static const char *QGE_AgentStreamDir(void)
+{
+	int arg;
+	const char *env;
+
+	arg = COM_CheckParm("-qgestreamdir");
+	if (arg && arg < com_argc - 1 && com_argv[arg + 1] &&
+		com_argv[arg + 1][0])
+		return com_argv[arg + 1];
+
+	env = getenv("QGE_AGENT_STREAM_DIR");
+	if (env && env[0])
+		return env;
+	return NULL;
+}
+
+static short QGE_AgentAudioClamp16(int value)
+{
+	value /= 256;
+	if (value > 32767)
+		return 32767;
+	if (value < -32768)
+		return -32768;
+	return (short)value;
+}
+
+static void QGE_AgentAudioWriteMetadata(void)
+{
+	FILE *meta;
+	char path[MAX_OSPATH];
+
+	if (!qge_agent_audio_meta_path[0] || !shm)
+		return;
+
+	q_strlcpy(path, qge_agent_audio_meta_path, sizeof(path));
+	COM_CreatePath(path);
+	meta = fopen(qge_agent_audio_meta_path, "w");
+	if (!meta)
+		return;
+
+	fprintf(meta,
+		"{\n"
+		"  \"schema\": \"qge.agent_audio_stream.v0\",\n"
+		"  \"format\": \"s16le\",\n"
+		"  \"channels\": 2,\n"
+		"  \"sample_rate\": %d,\n"
+		"  \"sample_bits\": 16,\n"
+		"  \"sample_pairs\": %d,\n"
+		"  \"raw_file\": \"%s\"\n"
+		"}\n",
+		shm->speed, qge_agent_audio_sample_pairs,
+		qge_agent_audio_raw_path);
+	fclose(meta);
+}
+
+static void QGE_AgentAudioInit(void)
+{
+	const char *stream_dir;
+	char path[MAX_OSPATH];
+
+	if (qge_agent_audio_tried)
+		return;
+	qge_agent_audio_tried = true;
+
+	stream_dir = QGE_AgentStreamDir();
+	if (!stream_dir || !stream_dir[0] || !shm)
+		return;
+
+	q_snprintf(qge_agent_audio_dir, sizeof(qge_agent_audio_dir),
+			   "%s/audio", stream_dir);
+	q_snprintf(qge_agent_audio_raw_path, sizeof(qge_agent_audio_raw_path),
+			   "%s/audio/quake_mix_s16le.raw", stream_dir);
+	q_snprintf(qge_agent_audio_meta_path, sizeof(qge_agent_audio_meta_path),
+			   "%s/audio/quake_mix_s16le.json", stream_dir);
+
+	q_strlcpy(path, qge_agent_audio_raw_path, sizeof(path));
+	COM_CreatePath(path);
+	qge_agent_audio_file = fopen(qge_agent_audio_raw_path, "wb");
+	if (!qge_agent_audio_file)
+	{
+		Con_Printf("QGE agent audio stream: failed to open %s\n",
+				   qge_agent_audio_raw_path);
+		return;
+	}
+
+	qge_agent_audio_sample_pairs = 0;
+	QGE_AgentAudioWriteMetadata();
+	Con_Printf("QGE agent audio stream: %s\n", qge_agent_audio_raw_path);
+}
+
+static void QGE_AgentAudioDump(const portable_samplepair_t *buffer, int count)
+{
+	short stereo[PAINTBUFFER_SIZE * 2];
+
+	if (count <= 0 || !buffer || !shm)
+		return;
+	QGE_AgentAudioInit();
+	if (!qge_agent_audio_file)
+		return;
+	if (count > PAINTBUFFER_SIZE)
+		count = PAINTBUFFER_SIZE;
+
+	for (int i = 0; i < count; i++)
+	{
+		stereo[i * 2] = QGE_AgentAudioClamp16(buffer[i].left);
+		stereo[i * 2 + 1] = QGE_AgentAudioClamp16(buffer[i].right);
+	}
+	fwrite(stereo, sizeof(short) * 2, count, qge_agent_audio_file);
+	fflush(qge_agent_audio_file);
+	qge_agent_audio_sample_pairs += count;
+	QGE_AgentAudioWriteMetadata();
+}
+
+void QGE_AgentAudioShutdown(void)
+{
+	if (qge_agent_audio_file)
+	{
+		QGE_AgentAudioWriteMetadata();
+		fclose(qge_agent_audio_file);
+		qge_agent_audio_file = NULL;
+		Con_Printf("QGE agent audio stream complete: %s samples=%d\n",
+				   qge_agent_audio_raw_path,
+				   qge_agent_audio_sample_pairs);
+	}
+}
+
 static void Snd_WriteLinearBlastStereo16 (void)
 {
 	int		i;
@@ -444,6 +577,9 @@ void S_PaintChannels (int endtime)
 	// apply quantum audio effects
 		S_QuantumProcess(paintbuffer, end - paintedtime);
 
+	// stream the post-QGE mixed audio for agent-side inspection
+		QGE_AgentAudioDump(paintbuffer, end - paintedtime);
+
 	// transfer out according to DMA format
 		S_TransferPaintBuffer(end);
 		paintedtime = end;
@@ -528,4 +664,3 @@ static void SND_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int count, in
 
 	ch->pos += count;
 }
-

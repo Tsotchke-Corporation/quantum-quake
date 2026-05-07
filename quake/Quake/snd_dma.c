@@ -33,6 +33,7 @@ static void S_Play (void);
 static void S_PlayVol (void);
 static void S_SoundList (void);
 static void S_Update_ (void);
+void QGE_AgentAudioShutdown(void);
 void S_StopAllSounds (qboolean clear);
 static void S_StopAllSoundsC (void);
 
@@ -254,6 +255,7 @@ void S_Shutdown (void)
 	snd_blocked = 0;
 
 	S_CodecShutdown();
+	QGE_AgentAudioShutdown();
 	S_QuantumShutdown();
 
 	SNDDMA_Shutdown();

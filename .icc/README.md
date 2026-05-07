@@ -9,6 +9,9 @@ The oracles in `completion-oracles.json` deliberately separate task classes:
   runtime evidence, a completion event, and oracle/claims artifacts. It does
   not block on full production fallback checks because v0 sidecars are research
   compiler artifacts.
+- `qge_agent_media_stream`: agent-facing media telemetry. It requires the
+  project-local stream manifest, at least one video frame, raw mixed-audio PCM,
+  audio metadata, and completion evidence.
 - `qge_advantage_benchmark`: benchmark work. It requires emitted artifacts and
   completion evidence, and treats synthetic/model paths as a medium-severity
   blocker until they are marked as lab models or wired to real oracles.

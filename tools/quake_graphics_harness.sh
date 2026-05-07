@@ -21,6 +21,7 @@ scene_surface_budget="${QGE_SCENE_SURFACE_BUDGET:-1024}"
 width="${QGE_STREAM_WIDTH:-800}"
 height="${QGE_STREAM_HEIGHT:-600}"
 launch_mode="${QGE_STREAM_LAUNCH:-auto}"
+sound="${QGE_HARNESS_SOUND:-0}"
 
 if [[ ! -x "$app_bin" ]]; then
   echo "QuantumQuake.app is missing; building it first." >&2
@@ -41,6 +42,7 @@ capture_mode() {
   local render_value="$2"
   local stream_stdout="$outdir/${mode}.stream.txt"
   local stream_dir
+  local agent_stream
   local frame_path
 
   echo "Capturing $mode frame with quantum_render=$render_value" >&2
@@ -56,6 +58,7 @@ capture_mode() {
        QGE_STREAM_WIDTH="$width" \
        QGE_STREAM_HEIGHT="$height" \
        QGE_STREAM_LAUNCH="$launch_mode" \
+       QGE_STREAM_SOUND="$sound" \
        QGE_STREAM_FULLSCREEN=0 \
        QGE_STREAM_FIRE_TEST=0 \
        QGE_PARTICLES=0 \
@@ -65,6 +68,7 @@ capture_mode() {
   fi
 
   stream_dir="$(awk '/QGE_STREAM_DONE / {print $2}' "$stream_stdout" | tail -n 1)"
+  agent_stream="$(awk '/QGE_AGENT_STREAM_DONE / {print $2}' "$stream_stdout" | tail -n 1)"
   frame_path="$(awk '/QGE_STREAM_FRAME / {print $3}' "$stream_stdout" | tail -n 1)"
   if [[ -z "$stream_dir" || ! -d "$stream_dir" ]]; then
     echo "No stream directory reported for $mode. See $stream_stdout" >&2
@@ -79,6 +83,11 @@ capture_mode() {
   cp "$stream_dir/README.txt" "$outdir/${mode}.README.txt" 2>/dev/null || true
   cp "$stream_dir/quantum_quake.log" "$outdir/${mode}.log" 2>/dev/null || true
   cp "$stream_dir/open.log" "$outdir/${mode}.open.log" 2>/dev/null || true
+  if [[ -n "$agent_stream" && -d "$agent_stream" ]]; then
+    cp "$agent_stream/manifest.json" "$outdir/${mode}.agent_stream.json" 2>/dev/null || true
+    cp "$agent_stream/events.ndjson" "$outdir/${mode}.agent_events.ndjson" 2>/dev/null || true
+    cp "$agent_stream/qge_agent_stream_icc_evidence.jsonl" "$outdir/${mode}.agent_icc_evidence.jsonl" 2>/dev/null || true
+  fi
   echo "$outdir/${mode}.png"
 }
 
@@ -91,6 +100,10 @@ python3 tools/qge_image_metrics.py \
   --json "$outdir/metrics.json" \
   --markdown "$outdir/metrics.md"
 
+python3 tools/qge_vanilla_capture_matrix.py "$outdir" \
+  --out "$outdir/vanilla_capture_matrix.json" \
+  --icc-out "$outdir/qge_vanilla_icc_evidence.json"
+
 cat > "$outdir/README.txt" <<EOF
 Quantum Quake graphics harness
 
@@ -102,12 +115,15 @@ Frames captured per mode: $frames
 Waits before each capture: $waits_per_frame
 Window: ${width}x${height}
 Launch mode: $launch_mode
+Sound streaming requested: $sound
 
 Classic reference:
   quantum_render $classic_render
   image: $classic_png
   log: $outdir/classic.log
   stream stdout: $outdir/classic.stream.txt
+  agent stream manifest: $outdir/classic.agent_stream.json
+  agent stream ICC: $outdir/classic.agent_icc_evidence.jsonl
 
 QGE candidate:
   quantum_render $quantum_render
@@ -119,10 +135,16 @@ QGE candidate:
   image: $quantum_png
   log: $outdir/quantum.log
   stream stdout: $outdir/quantum.stream.txt
+  agent stream manifest: $outdir/quantum.agent_stream.json
+  agent stream ICC: $outdir/quantum.agent_icc_evidence.jsonl
 
 Metrics:
   JSON: $outdir/metrics.json
   Markdown: $outdir/metrics.md
+
+Vanilla capture matrix:
+  JSON: $outdir/vanilla_capture_matrix.json
+  ICC evidence: $outdir/qge_vanilla_icc_evidence.json
 EOF
 
 echo "QGE_GRAPHICS_HARNESS_DONE $outdir"
