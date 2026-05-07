@@ -57,6 +57,50 @@
       ]
     },
     {
+      "name": "qge_advantage_benchmark",
+      "target": "qge_advantage_benchmark",
+      "aliases": [
+        "qge_light_transport_qae_benchmark",
+        "advantage.light_transport_qae_query_scaling",
+        "light_transport_qae",
+        "advantage benchmark",
+        "finite-shot amplitude-estimation",
+        "amplitude-estimation simulator",
+        "light-transport observable"
+      ],
+      "requires": [
+        {
+          "id": "qge_advantage_artifacts",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "advantage_metrics_file"
+          ],
+          "severity": "high",
+          "label": "Advantage benchmark artifacts are emitted",
+          "action": "run_qge_advantage_benchmark_and_emit_metrics"
+        },
+        {
+          "id": "qge_advantage_completion",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_advantage_benchmark_complete"
+          ],
+          "severity": "high",
+          "label": "Advantage benchmark completion is recorded",
+          "action": "emit_advantage_metrics_completion_reason"
+        }
+      ]
+    },
+    {
       "name": "qge_scene_oracle_ir",
       "target": "qge_scene_oracle_ir",
       "aliases": [
@@ -123,57 +167,6 @@
           "severity": "high",
           "label": "Claims evidence artifact is visible to ICC",
           "action": "write_claims_evidence_json"
-        }
-      ]
-    },
-    {
-      "name": "qge_advantage_benchmark",
-      "target": "qge_advantage_benchmark",
-      "aliases": [
-        "qge_light_transport_qae_benchmark",
-        "advantage.light_transport_qae_query_scaling",
-        "light_transport_qae"
-      ],
-      "requires": [
-        {
-          "id": "qge_advantage_artifacts",
-          "kind": "runtime_event",
-          "event_kinds": [
-            "artifact"
-          ],
-          "event_names": [
-            "advantage_metrics_file"
-          ],
-          "severity": "high",
-          "label": "Advantage benchmark artifacts are emitted",
-          "action": "run_qge_advantage_benchmark_and_emit_metrics"
-        },
-        {
-          "id": "qge_advantage_completion",
-          "kind": "runtime_event",
-          "event_kinds": [
-            "completion_condition"
-          ],
-          "event_names": [
-            "completion_reason"
-          ],
-          "event_values": [
-            "qge_advantage_benchmark_complete"
-          ],
-          "severity": "high",
-          "label": "Advantage benchmark completion is recorded",
-          "action": "emit_advantage_metrics_completion_reason"
-        },
-        {
-          "id": "qge_advantage_no_synthetic_prod_path",
-          "kind": "no_stubbed_paths",
-          "classifications": [
-            "production_fallback",
-            "synthetic_model_only"
-          ],
-          "severity": "medium",
-          "label": "Synthetic benchmark paths are not treated as production claims",
-          "action": "mark_lab_models_or_wire_real_oracles"
         }
       ]
     },
