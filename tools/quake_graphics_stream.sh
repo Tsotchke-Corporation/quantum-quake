@@ -12,6 +12,7 @@ autoexec="$gamedir/autoexec.cfg"
 
 frames="${QGE_STREAM_FRAMES:-12}"
 waits_per_frame="${QGE_STREAM_WAIT_FRAMES:-20}"
+capture_wait_override="${QGE_STREAM_CAPTURE_WAIT:-}"
 map_name="${QGE_STREAM_MAP:-start}"
 render_value="${QGE_RENDER:-1}"
 render_res="${QGE_RENDER_RES:-1024}"
@@ -370,9 +371,16 @@ fi
 run_args=(-basedir "$basedir" "${video_args[@]}")
 run_args+=(-qgestreamdir "$agent_stream")
 if [[ "$engine_capture" == "1" ]]; then
-  engine_capture_wait="$waits_per_frame"
-  if [[ "$fire_test" == "1" ]]; then
-    engine_capture_wait=$((engine_capture_wait + 24))
+  if [[ -n "$capture_wait_override" ]]; then
+    engine_capture_wait="$capture_wait_override"
+  else
+    engine_capture_wait="$waits_per_frame"
+    if [[ "$fire_test" == "1" ]]; then
+      engine_capture_wait=$((waits_per_frame * 2 / 3))
+      if (( engine_capture_wait < 8 )); then
+        engine_capture_wait="$waits_per_frame"
+      fi
+    fi
   fi
   run_args+=(-qgeautocapture "$frames" -qgecapturewait "$engine_capture_wait")
 fi
@@ -382,6 +390,7 @@ fi
 if [[ "$trace" == "1" ]]; then
   run_args+=(-qgetrace "$trace_file")
 fi
+max_seconds=$((60 + frames * waits_per_frame / 20))
 
 if [[ "$launch_mode" == "open" ]]; then
   runtime_log_file="$qconsole_file"
@@ -393,9 +402,21 @@ if [[ "$launch_mode" == "open" ]]; then
   rm -f "$watch_stop_file"
   watch_open_stream &
   watch_pid=$!
+  (
+    sleep "$max_seconds"
+    if [[ ! -f "$watch_stop_file" ]]; then
+      echo "QGE_STREAM_TIMEOUT killing app launched by open" >&2
+      pgrep -f "$app_bin" | while read -r app_pid; do
+        kill "$app_pid" 2>/dev/null || true
+      done
+    fi
+  ) &
+  watchdog_pid=$!
   open_status=0
   open "${open_args[@]}" --args "${run_args[@]}" -condebug || open_status=$?
   touch "$watch_stop_file"
+  kill "$watchdog_pid" 2>/dev/null || true
+  wait "$watchdog_pid" 2>/dev/null || true
   wait "$watch_pid" 2>/dev/null || true
   sync_agent_frame_state
   if (( open_status != 0 )); then
@@ -403,7 +424,6 @@ if [[ "$launch_mode" == "open" ]]; then
     echo "QGE_OPEN_FAILED status=$open_status" >&2
     agent_event "open_failed" "$app_bundle" "status=$open_status"
   fi
-  print_log_updates
 elif [[ "$trace" == "1" ]]; then
   runtime_log_file="$agent_log_file"
   "$app_bin" "${run_args[@]}" >"$agent_log_file" 2>&1 &
@@ -415,7 +435,6 @@ fi
 if [[ "$launch_mode" != "open" ]]; then
   game_pid=$!
   elapsed=0
-  max_seconds=$((60 + frames * waits_per_frame / 20))
 
   while kill -0 "$game_pid" 2>/dev/null; do
     print_log_updates
@@ -448,6 +467,21 @@ if [[ ! -s "$log_file" ]]; then
 fi
 if [[ -f "$open_log_file" ]]; then
   cp "$open_log_file" "$agent_open_log_file"
+fi
+
+startup_issue=""
+if [[ "$trace" == "1" && ! -s "$trace_file" ]]; then
+  if grep -q "Couldn't create GL context" "$log_file" 2>/dev/null; then
+    startup_issue="gl_context_failed"
+  elif ! grep -q "Video mode .* initialized" "$log_file" 2>/dev/null; then
+    startup_issue="video_init_missing"
+  elif ! grep -q "QGE: Trace recording" "$log_file" 2>/dev/null; then
+    startup_issue="trace_init_missing"
+  fi
+fi
+if [[ -n "$startup_issue" ]]; then
+  agent_event "startup_failed" "$log_file" "$startup_issue"
+  echo "QGE_STARTUP_FAILED $startup_issue $log_file" >&2
 fi
 
 sync_agent_frame_state

@@ -14,7 +14,7 @@ The directory is intentionally simple and tail-friendly:
 - `manifest.json`: current stream contract, capture path, render settings, and
   audio/video/log locations.
 - `events.ndjson`: append-only runtime events such as stream start, video frame,
-  audio raw, trace done, and stream done.
+  audio raw, startup failure, trace done, and stream done.
 - `video/frames/frame_###.png`: copied screenshots as they are produced.
 - `video/frame_count.txt`: current number of mirrored frames, updated as frames
   arrive.
@@ -52,3 +52,10 @@ QGE_STREAM_SOUND=1 bash tools/quake_graphics_stream.sh
 The raw audio format is signed 16-bit little-endian stereo PCM. Consumers should
 read `audio/quake_mix_s16le.json` for the sample rate before playback or
 conversion.
+
+Engine auto-capture defaults to `QGE_STREAM_WAIT_FRAMES`. For action scripts
+whose rendered frame count is lower than their command-buffer wait count, set
+`QGE_STREAM_CAPTURE_WAIT=<frames>` to choose the screenshot frame explicitly.
+When trace capture is requested but startup never reaches video or QGE trace
+initialization, the harness emits `QGE_STARTUP_FAILED <reason> <log>` and a
+`startup_failed` event.
