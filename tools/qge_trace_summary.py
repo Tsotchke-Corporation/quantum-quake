@@ -182,6 +182,7 @@ def print_text(summary: dict) -> None:
         if probe["label"] == "render_gate_kernel":
             extra = (
                 f" gates={probe['last_subject_id']} "
+                f"shots={int(round(probe['total_probability_max']))} "
                 f"coherence={probe['coherence_min']:.3f}..{probe['coherence_max']:.3f} "
                 f"max_prob={probe['max_probability_max']:.3f}"
             )

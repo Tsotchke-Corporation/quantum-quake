@@ -45,6 +45,7 @@ cvar_t quantum_render_threshold = {"quantum_render_threshold", "0.001", CVAR_ARC
 cvar_t quantum_render_edge_gain = {"quantum_render_edge_gain", "0.06", CVAR_ARCHIVE};
 cvar_t quantum_render_material_gain = {"quantum_render_material_gain", "0.18", CVAR_ARCHIVE};
 cvar_t quantum_render_gate_kernel = {"quantum_render_gate_kernel", "1", CVAR_ARCHIVE};
+cvar_t quantum_render_gate_shots = {"quantum_render_gate_shots", "64", CVAR_ARCHIVE};
 
 /* ============================================================================
  * State
@@ -87,12 +88,16 @@ static int qge_render_qge_primary_owned = 0;
 
 static qboolean qge_initialized = false;
 
-#define QGE_RENDER_GATE_QUBITS 4
+#define QGE_RENDER_GATE_QUBITS 6
+#define QGE_RENDER_GATE_DIM (1u << QGE_RENDER_GATE_QUBITS)
 #define QGE_RENDER_GATE_FLAG_ACTIVE 0x20000u
 #define QGE_RENDER_GATE_FLAG_ERROR 0x40000u
 
 static quantum_state_t qge_render_gate_state;
 static qboolean qge_render_gate_initialized = false;
+static int qge_render_gate_shots = 0;
+static int qge_render_gate_readout_ones = 0;
+static int qge_render_gate_edge_ones = 0;
 static int qge_render_gate_total = 0;
 static int qge_render_gate_h = 0;
 static int qge_render_gate_ry = 0;
@@ -102,11 +107,15 @@ static int qge_render_gate_phase_count = 0;
 static int qge_render_gate_errors = 0;
 static int qge_render_gate_active_basis = 0;
 static float qge_render_gate_gain = 1.0f;
+static float qge_render_gate_edge_gain = 1.0f;
+static float qge_render_gate_material_gain = 1.0f;
 static float qge_render_gate_color_gain[QGE_DWT_CHANNELS] = {1.0f, 1.0f, 1.0f};
 static float qge_render_gate_probability = 0.5f;
+static float qge_render_gate_edge_observable = 0.5f;
 static float qge_render_gate_coherence = 0.0f;
 static float qge_render_gate_entropy = 0.0f;
 static float qge_render_gate_max_probability = 1.0f;
+static uint64_t qge_render_gate_majority_basis = 0;
 static uint64_t qge_render_gate_state_hash = 0;
 
 static const char *QGE_CommandLineTracePath(void)
@@ -320,6 +329,17 @@ static float QGE_ClampUnit(float value)
 	return value;
 }
 
+static int QGE_RenderGateShotCount(void)
+{
+	int shots = (int)(quantum_render_gate_shots.value + 0.5f);
+
+	if (shots < 8)
+		shots = 8;
+	if (shots > 256)
+		shots = 256;
+	return shots;
+}
+
 static uint64_t QGE_RenderGateAnalyzeState(const quantum_state_t *state,
 										   int *active_basis,
 										   float *basis_entropy,
@@ -369,6 +389,9 @@ static uint64_t QGE_RenderGateAnalyzeState(const quantum_state_t *state,
 
 static void QGE_ResetRenderGateTelemetry(void)
 {
+	qge_render_gate_shots = 0;
+	qge_render_gate_readout_ones = 0;
+	qge_render_gate_edge_ones = 0;
 	qge_render_gate_total = 0;
 	qge_render_gate_h = 0;
 	qge_render_gate_ry = 0;
@@ -378,13 +401,17 @@ static void QGE_ResetRenderGateTelemetry(void)
 	qge_render_gate_errors = 0;
 	qge_render_gate_active_basis = 0;
 	qge_render_gate_gain = 1.0f;
+	qge_render_gate_edge_gain = 1.0f;
+	qge_render_gate_material_gain = 1.0f;
 	qge_render_gate_color_gain[QGE_DWT_R] = 1.0f;
 	qge_render_gate_color_gain[QGE_DWT_G] = 1.0f;
 	qge_render_gate_color_gain[QGE_DWT_B] = 1.0f;
 	qge_render_gate_probability = 0.5f;
+	qge_render_gate_edge_observable = 0.5f;
 	qge_render_gate_coherence = 0.0f;
 	qge_render_gate_entropy = 0.0f;
 	qge_render_gate_max_probability = 1.0f;
+	qge_render_gate_majority_basis = 0;
 	qge_render_gate_state_hash = 0;
 }
 
@@ -402,16 +429,16 @@ static void QGE_RenderGateRecordMeasurements(qge_quantum_runtime_t *rt,
 		event.boundary = QGE_OBSERVE_FRAME_BOUNDARY;
 		event.subject_id = q;
 		event.flags = QGE_RENDER_GATE_FLAG_ACTIVE;
-		event.basis_index = (uint64_t)q;
+		event.basis_index = qge_render_gate_majority_basis;
 		event.probability = probabilities[q];
 		event.phase = qge_render_gate_coherence;
+		event.entropy_offset = (uint64_t)qge_render_gate_shots;
 		event.trace_id = qge_render_gate_state_hash ^ (uint64_t)q;
 		qge_quantum_record_measurement(rt, &event);
 	}
 }
 
-static void QGE_RecordRenderGateProbe(qge_quantum_runtime_t *rt,
-									  double total_probability)
+static void QGE_RecordRenderGateProbe(qge_quantum_runtime_t *rt)
 {
 	qge_state_probe_t probe;
 
@@ -434,26 +461,50 @@ static void QGE_RecordRenderGateProbe(qge_quantum_runtime_t *rt,
 	probe.entropy = qge_render_gate_entropy;
 	probe.coherence = qge_render_gate_coherence;
 	probe.max_probability = qge_render_gate_max_probability;
-	probe.total_probability = total_probability;
+	probe.total_probability = (double)qge_render_gate_shots;
 	strlcpy(probe.label, "render_gate_kernel", sizeof(probe.label));
 	qge_quantum_record_probe(rt, &probe);
 }
 
-/* Bounded reviewer-facing circuit: scene/material/light statistics parameterize
- * a dense 4-qubit Moonlab state whose measured probabilities modulate the
- * sparse-DWT render gain. This keeps the real-time framebuffer sparse while
- * making the gate path explicit and traceable. */
+static uint64_t QGE_RenderGateSampleBasis(qge_quantum_runtime_t *rt)
+{
+	uint64_t raw = qge_quantum_entropy_u64(rt, QGE_DOMAIN_RENDER,
+										   qge_frame_count);
+	double sample = (double)(raw >> 11) * (1.0 / 9007199254740992.0);
+	double cumulative = 0.0;
+
+	for (uint64_t basis = 0; basis < (uint64_t)qge_render_gate_state.state_dim;
+		 basis++) {
+		double p = quantum_state_get_probability(&qge_render_gate_state, basis);
+
+		if (!isfinite(p) || p < 0.0)
+			p = 0.0;
+		cumulative += p;
+		if (sample <= cumulative)
+			return basis;
+	}
+	return qge_render_gate_state.state_dim > 0 ?
+		   (uint64_t)qge_render_gate_state.state_dim - 1u : 0u;
+}
+
+/* Bounded reviewer-facing simulated QPU workload: scene/material/light
+ * statistics are angle-encoded into a 6-qubit Moonlab state, entangling gates
+ * mix feature and readout qubits, and finite-shot measurements produce an edge
+ * preservation observable used by the sparse-DWT renderer. */
 static void QGE_RunRenderGateKernel(const qge_frame_snapshot_t *snapshot)
 {
 	qge_quantum_runtime_t *rt;
 	float surface_ratio;
 	float light_avg = 0.0f;
+	float contrast_avg = 0.0f;
 	float material_avg = 0.0f;
 	float entity_ratio;
-	double probabilities[QGE_RENDER_GATE_QUBITS] = {0.0, 0.0, 0.0, 0.0};
-	double total_probability = 0.0;
+	float special_ratio = 0.0f;
+	double shot_probabilities[QGE_RENDER_GATE_QUBITS] = {0.0};
+	int basis_counts[QGE_RENDER_GATE_DIM];
 	int surface_count = qge_scene_surface_count;
 	int entity_count = snapshot ? (int)snapshot->edict_count : 0;
+	int special_count = 0;
 	qs_error_t err = QS_SUCCESS;
 
 	QGE_ResetRenderGateTelemetry();
@@ -462,14 +513,23 @@ static void QGE_RunRenderGateKernel(const qge_frame_snapshot_t *snapshot)
 
 	if (surface_count > 0) {
 		double light_sum = 0.0;
+		double contrast_sum = 0.0;
 		double material_sum = 0.0;
 
 		for (int i = 0; i < surface_count; i++) {
 			light_sum += qge_scene_surfaces[i].light_energy;
+			contrast_sum += qge_scene_surfaces[i].light_contrast;
 			material_sum += qge_scene_surfaces[i].material_signal;
+			if (qge_scene_surfaces[i].has_warp ||
+				qge_scene_surfaces[i].has_fullbright ||
+				(qge_scene_surfaces[i].flags &
+				 (SURF_DRAWWATER | SURF_DRAWLAVA | SURF_DRAWTELE | SURF_DRAWSKY)))
+				special_count++;
 		}
 		light_avg = QGE_ClampUnit((float)(light_sum / (double)surface_count));
+		contrast_avg = QGE_ClampUnit((float)(contrast_sum / (double)surface_count));
 		material_avg = QGE_ClampUnit((float)(material_sum / (double)surface_count));
+		special_ratio = QGE_ClampUnit((float)special_count / (float)surface_count);
 	}
 
 	surface_ratio = QGE_ClampUnit((float)surface_count / 512.0f);
@@ -490,28 +550,57 @@ static void QGE_RunRenderGateKernel(const qge_frame_snapshot_t *snapshot)
 		QGE_GATE_CALL(gate_hadamard(&qge_render_gate_state, q),
 					  qge_render_gate_h);
 	QGE_GATE_CALL(gate_ry(&qge_render_gate_state, 0,
-						  (double)surface_ratio * M_PI * 0.50),
+						  (double)surface_ratio * M_PI * 0.85),
 				  qge_render_gate_ry);
 	QGE_GATE_CALL(gate_ry(&qge_render_gate_state, 1,
-						  (double)light_avg * M_PI * 0.40),
+						  (double)light_avg * M_PI * 0.70),
 				  qge_render_gate_ry);
-	QGE_GATE_CALL(gate_rz(&qge_render_gate_state, 2,
-						  (double)material_avg * M_PI * 0.60),
-				  qge_render_gate_rz);
+	QGE_GATE_CALL(gate_ry(&qge_render_gate_state, 2,
+						  (double)material_avg * M_PI * 0.75),
+				  qge_render_gate_ry);
 	QGE_GATE_CALL(gate_ry(&qge_render_gate_state, 3,
-						  (double)entity_ratio * M_PI * 0.35),
+						  (double)entity_ratio * M_PI * 0.55),
 				  qge_render_gate_ry);
-	QGE_GATE_CALL(gate_cnot(&qge_render_gate_state, 0, 3),
+	QGE_GATE_CALL(gate_ry(&qge_render_gate_state, 4,
+						  (double)contrast_avg * M_PI * 0.80),
+				  qge_render_gate_ry);
+	QGE_GATE_CALL(gate_ry(&qge_render_gate_state, 5,
+						  (double)special_ratio * M_PI * 0.65),
+				  qge_render_gate_ry);
+	QGE_GATE_CALL(gate_rz(&qge_render_gate_state, 1,
+						  (double)(light_avg - surface_ratio) * M_PI * 0.35),
+				  qge_render_gate_rz);
+	QGE_GATE_CALL(gate_rz(&qge_render_gate_state, 2,
+						  (double)(material_avg - light_avg) * M_PI * 0.45),
+				  qge_render_gate_rz);
+	QGE_GATE_CALL(gate_rz(&qge_render_gate_state, 4,
+						  (double)(contrast_avg + special_ratio) * M_PI * 0.30),
+				  qge_render_gate_rz);
+	QGE_GATE_CALL(gate_cnot(&qge_render_gate_state, 0, 4),
 				  qge_render_gate_entangling);
-	QGE_GATE_CALL(gate_cnot(&qge_render_gate_state, 1, 3),
+	QGE_GATE_CALL(gate_cnot(&qge_render_gate_state, 1, 4),
 				  qge_render_gate_entangling);
-	QGE_GATE_CALL(gate_cz(&qge_render_gate_state, 2, 3),
+	QGE_GATE_CALL(gate_cnot(&qge_render_gate_state, 2, 5),
 				  qge_render_gate_entangling);
-	QGE_GATE_CALL(gate_phase(&qge_render_gate_state, 2,
-							 ((double)material_avg - (double)light_avg) *
-							 M_PI * 0.25),
+	QGE_GATE_CALL(gate_cnot(&qge_render_gate_state, 3, 5),
+				  qge_render_gate_entangling);
+	QGE_GATE_CALL(gate_cnot(&qge_render_gate_state, 4, 5),
+				  qge_render_gate_entangling);
+	QGE_GATE_CALL(gate_cz(&qge_render_gate_state, 0, 5),
+				  qge_render_gate_entangling);
+	QGE_GATE_CALL(gate_phase(&qge_render_gate_state, 4,
+							 ((double)contrast_avg + (double)material_avg -
+							  (double)light_avg) * M_PI * 0.25),
 				  qge_render_gate_phase_count);
-	QGE_GATE_CALL(gate_hadamard(&qge_render_gate_state, 3),
+	QGE_GATE_CALL(gate_ry(&qge_render_gate_state, 4,
+						  (double)(contrast_avg + material_avg) * M_PI * 0.25),
+				  qge_render_gate_ry);
+	QGE_GATE_CALL(gate_ry(&qge_render_gate_state, 5,
+						  (double)(entity_ratio + special_ratio) * M_PI * 0.25),
+				  qge_render_gate_ry);
+	QGE_GATE_CALL(gate_hadamard(&qge_render_gate_state, 4),
+				  qge_render_gate_h);
+	QGE_GATE_CALL(gate_hadamard(&qge_render_gate_state, 5),
 				  qge_render_gate_h);
 
 #undef QGE_GATE_CALL
@@ -523,25 +612,52 @@ static void QGE_RunRenderGateKernel(const qge_frame_snapshot_t *snapshot)
 		return;
 	}
 
-	for (int q = 0; q < QGE_RENDER_GATE_QUBITS; q++)
-		probabilities[q] = measurement_probability_one(&qge_render_gate_state, q);
+	qge_render_gate_shots = QGE_RenderGateShotCount();
+	memset(basis_counts, 0, sizeof(basis_counts));
+	rt = QGE_Runtime();
+	for (int shot = 0; shot < qge_render_gate_shots; shot++) {
+		uint64_t basis = QGE_RenderGateSampleBasis(rt);
 
-	qge_render_gate_coherence = (float)fabs(measurement_expectation_x(&qge_render_gate_state, 3));
-	qge_render_gate_color_gain[QGE_DWT_R] = 0.96f + 0.08f * (float)probabilities[0];
-	qge_render_gate_color_gain[QGE_DWT_G] = 0.96f + 0.08f * (float)probabilities[1];
-	qge_render_gate_color_gain[QGE_DWT_B] = 0.96f + 0.08f * (float)probabilities[2];
+		if (basis < QGE_RENDER_GATE_DIM)
+			basis_counts[basis]++;
+		for (int q = 0; q < QGE_RENDER_GATE_QUBITS; q++) {
+			if (basis & (1u << q))
+				shot_probabilities[q] += 1.0;
+		}
+		if (basis & (1u << 4))
+			qge_render_gate_edge_ones++;
+		if (basis & (1u << 5))
+			qge_render_gate_readout_ones++;
+	}
+	if (qge_render_gate_shots > 0) {
+		for (int q = 0; q < QGE_RENDER_GATE_QUBITS; q++)
+			shot_probabilities[q] /= (double)qge_render_gate_shots;
+		for (int basis = 1; basis < QGE_RENDER_GATE_DIM; basis++) {
+			if (basis_counts[basis] >
+				basis_counts[(int)qge_render_gate_majority_basis])
+				qge_render_gate_majority_basis = (uint64_t)basis;
+		}
+	}
+
+	qge_render_gate_coherence =
+		(float)fabs(measurement_expectation_x(&qge_render_gate_state, 5));
+	qge_render_gate_probability = (float)shot_probabilities[5];
+	qge_render_gate_edge_observable = (float)shot_probabilities[4];
+	qge_render_gate_gain = 0.94f + 0.12f * qge_render_gate_probability;
+	qge_render_gate_edge_gain = 0.70f + 0.85f * qge_render_gate_edge_observable;
+	qge_render_gate_material_gain = 0.85f + 0.30f * qge_render_gate_edge_observable;
+	qge_render_gate_color_gain[QGE_DWT_R] = 0.94f + 0.10f * (float)shot_probabilities[0];
+	qge_render_gate_color_gain[QGE_DWT_G] = 0.94f + 0.10f * (float)shot_probabilities[1];
+	qge_render_gate_color_gain[QGE_DWT_B] = 0.94f + 0.10f * (float)shot_probabilities[2];
 	qge_render_gate_state_hash = QGE_RenderGateAnalyzeState(
 		&qge_render_gate_state,
 		&qge_render_gate_active_basis,
 		&qge_render_gate_entropy,
 		&qge_render_gate_max_probability,
-		&total_probability);
-	qge_render_gate_probability = qge_render_gate_max_probability;
-	qge_render_gate_gain = 0.92f + 0.18f * qge_render_gate_probability;
+		NULL);
 
-	rt = QGE_Runtime();
-	QGE_RenderGateRecordMeasurements(rt, probabilities);
-	QGE_RecordRenderGateProbe(rt, total_probability);
+	QGE_RenderGateRecordMeasurements(rt, shot_probabilities);
+	QGE_RecordRenderGateProbe(rt);
 }
 
 static int QGE_ClampRenderResolution(float requested)
@@ -1618,6 +1734,7 @@ void QGE_Init(void)
 	Cvar_RegisterVariable(&quantum_render_edge_gain);
 	Cvar_RegisterVariable(&quantum_render_material_gain);
 	Cvar_RegisterVariable(&quantum_render_gate_kernel);
+	Cvar_RegisterVariable(&quantum_render_gate_shots);
 
 	fprintf(stderr, "QGE: CVars registered, initializing core...\n");
 
@@ -3420,6 +3537,7 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 	}
 
 	edge_gain = quantum_render_edge_gain.value;
+	edge_gain *= qge_render_gate_edge_gain;
 	if (edge_gain < 0.0f)
 		edge_gain = 0.0f;
 	if (edge_gain > 0.50f)
@@ -3476,6 +3594,7 @@ static void QGE_EncodeSurfaceMaterialDWT(dwt_framebuffer_t *fb,
 		return;
 
 	material_gain = quantum_render_material_gain.value;
+	material_gain *= qge_render_gate_material_gain;
 	if (material_gain <= 0.0f)
 		return;
 	if (material_gain > 1.0f)
@@ -4289,7 +4408,8 @@ void QGE_RenderScene(void)
 						   "res=%d coeffs=%d snapshot=%d snapshot_miss=%d "
 						   "texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d fallback=%d "
 						   "encoded=%d material=%d edicts=%d alias=%d sprites=%d "
-						   "viewmodel=%d entity_miss=%d gates=%d gp=%.3f ggain=%.3f "
+						   "viewmodel=%d entity_miss=%d gates=%d shots=%d "
+						   "readout=%.3f edgeq=%.3f ggain=%.3f egain=%.3f "
 						   "nonzero=%d/%d\n",
 						   qge_frame_count, QGE_RenderIsPrimary() ? "primary" : "overlay",
 						   qge_render_qge_primary_owned ? "qge_3d" : "mixed",
@@ -4305,8 +4425,10 @@ void QGE_RenderScene(void)
 						   qge_scene_material_encoded, qge_scene_encoded_edicts,
 						   qge_scene_alias_encoded, qge_scene_sprite_encoded,
 						   qge_scene_viewmodel_encoded, qge_scene_entity_misses,
-						   qge_render_gate_total, qge_render_gate_probability,
-						   qge_render_gate_gain,
+						   qge_render_gate_total, qge_render_gate_shots,
+						   qge_render_gate_probability,
+						   qge_render_gate_edge_observable,
+						   qge_render_gate_gain, qge_render_gate_edge_gain,
 						   nonzero_pixels, total_pixels);
 			}
 			fprintf(stderr, "QGE render frame=%d mode=%s owner=%s classic3d=%d suppressed3d=%d "
@@ -4316,7 +4438,9 @@ void QGE_RenderScene(void)
 					"material_encoded=%d snapshot_edicts=%d encoded_edicts=%d alias=%d "
 					"sprites=%d viewmodel=%d entity_misses=%d visedicts=%d nonzero=%d/%d max=%.6f sum=%.3f "
 					"gate_kernel=%d gates=%d h=%d ry=%d rz=%d ent=%d phase=%d gate_active=%d "
-					"gate_p=%.6f gate_gain=%.6f gate_rgb=%.4f/%.4f/%.4f gate_entropy=%.3f gate_coh=%.3f "
+					"shots=%d readout_ones=%d edge_ones=%d majority=0x%llx "
+					"gate_p=%.6f gate_edge=%.6f gate_gain=%.6f edge_gain=%.6f material_gain=%.6f "
+					"gate_rgb=%.4f/%.4f/%.4f gate_entropy=%.3f gate_coh=%.3f "
 					"tone_floor=%.6f tone_white=%.6f tone_clip=%d levels=%d gl_upload=0x%x gl_draw=0x%x\n",
 					qge_frame_count, QGE_RenderIsPrimary() ? "primary" : "overlay",
 					qge_render_qge_primary_owned ? "qge_3d" : "mixed",
@@ -4339,7 +4463,12 @@ void QGE_RenderScene(void)
 					qge_render_gate_total, qge_render_gate_h, qge_render_gate_ry,
 					qge_render_gate_rz, qge_render_gate_entangling,
 					qge_render_gate_phase_count, qge_render_gate_active_basis,
-					qge_render_gate_probability, qge_render_gate_gain,
+					qge_render_gate_shots, qge_render_gate_readout_ones,
+					qge_render_gate_edge_ones,
+					(unsigned long long)qge_render_gate_majority_basis,
+					qge_render_gate_probability, qge_render_gate_edge_observable,
+					qge_render_gate_gain, qge_render_gate_edge_gain,
+					qge_render_gate_material_gain,
 					qge_render_gate_color_gain[QGE_DWT_R],
 					qge_render_gate_color_gain[QGE_DWT_G],
 					qge_render_gate_color_gain[QGE_DWT_B],
