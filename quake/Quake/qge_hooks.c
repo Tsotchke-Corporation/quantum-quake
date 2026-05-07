@@ -167,6 +167,7 @@ static int qge_scene_lightmap_cache_misses = 0;
 static int qge_scene_polygon_encoded = 0;
 static int qge_scene_polygon_fallback = 0;
 static int qge_scene_polygon_triangles = 0;
+static int qge_scene_triangle_edge_fills = 0;
 static int qge_scene_snapshot_edicts = 0;
 static int qge_scene_encoded_edicts = 0;
 static int qge_scene_alias_encoded = 0;
@@ -1668,6 +1669,7 @@ void QGE_SceneBegin(void)
 	qge_scene_polygon_encoded = 0;
 	qge_scene_polygon_fallback = 0;
 	qge_scene_polygon_triangles = 0;
+	qge_scene_triangle_edge_fills = 0;
 	qge_scene_snapshot_edicts = 0;
 	qge_scene_encoded_edicts = 0;
 	qge_scene_alias_encoded = 0;
@@ -2607,6 +2609,59 @@ static qboolean QGE_ProjectedTriangleSampleAt(float x,
 	return true;
 }
 
+static qboolean QGE_ProjectedTrianglePixelSampleAt(
+	int x,
+	int y,
+	const qge_projected_vertex_t *a,
+	const qge_projected_vertex_t *b,
+	const qge_projected_vertex_t *c,
+	qge_projected_sample_t *sample,
+	float *coverage)
+{
+	static const float offsets[4][2] = {
+		{0.25f, 0.25f},
+		{0.75f, 0.25f},
+		{0.25f, 0.75f},
+		{0.75f, 0.75f}
+	};
+	qge_projected_sample_t sub;
+	int hits = 0;
+
+	if (!sample || !coverage)
+		return false;
+	if (QGE_ProjectedTriangleSampleAt((float)x + 0.5f,
+									  (float)y + 0.5f,
+									  a, b, c, sample)) {
+		*coverage = 1.0f;
+		return true;
+	}
+
+	memset(sample, 0, sizeof(*sample));
+	for (int i = 0; i < 4; i++) {
+		if (!QGE_ProjectedTriangleSampleAt((float)x + offsets[i][0],
+										   (float)y + offsets[i][1],
+										   a, b, c, &sub))
+			continue;
+		sample->depth += sub.depth;
+		sample->tex_s += sub.tex_s;
+		sample->tex_t += sub.tex_t;
+		sample->light_s += sub.light_s;
+		sample->light_t += sub.light_t;
+		hits++;
+	}
+	if (!hits)
+		return false;
+
+	sample->depth /= (float)hits;
+	sample->tex_s /= (float)hits;
+	sample->tex_t /= (float)hits;
+	sample->light_s /= (float)hits;
+	sample->light_t /= (float)hits;
+	*coverage = (float)hits * 0.25f;
+	qge_scene_triangle_edge_fills++;
+	return true;
+}
+
 static float QGE_ProjectedTriangleArea2D(const qge_projected_vertex_t *a,
 										 const qge_projected_vertex_t *b,
 										 const qge_projected_vertex_t *c)
@@ -3065,19 +3120,21 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 
 		for (int y = ty1; y <= ty2; y++) {
 			for (int x = tx1; x <= tx2; x++) {
-				float sample_x = (float)x + 0.5f;
-				float sample_y = (float)y + 0.5f;
 				qge_projected_sample_t sample;
 				qge_rgb_sample_t pixel_color;
+				float coverage;
 
-				if (!QGE_ProjectedTriangleSampleAt(sample_x, sample_y,
-												   &tri->v[0], &tri->v[1],
-												   &tri->v[2], &sample))
+				if (!QGE_ProjectedTrianglePixelSampleAt(x, y,
+														&tri->v[0],
+														&tri->v[1],
+														&tri->v[2],
+														&sample,
+														&coverage))
 					continue;
 				pixel_color = QGE_SurfaceSampleColor(surface, &sample);
-				pixel_color.r *= value;
-				pixel_color.g *= value;
-				pixel_color.b *= value;
+				pixel_color.r *= value * coverage;
+				pixel_color.g *= value * coverage;
+				pixel_color.b *= value * coverage;
 				QGE_SpatialAddPixelColorDepth(x, y, &pixel_color, sample.depth);
 				filled++;
 			}
@@ -3950,7 +4007,7 @@ void QGE_RenderScene(void)
 			if (qge_frame_count < 5 || (qge_frame_count % 60) == 0) {
 				Con_Printf("QGE render frame=%d mode=%s owner=%s classic3d=%d suppressed3d=%d "
 						   "res=%d coeffs=%d snapshot=%d snapshot_miss=%d "
-						   "texcache=%d/%d lightcache=%d/%d poly=%d tris=%d fallback=%d "
+						   "texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d fallback=%d "
 						   "encoded=%d material=%d edicts=%d alias=%d sprites=%d "
 						   "viewmodel=%d entity_miss=%d nonzero=%d/%d\n",
 						   qge_frame_count, QGE_RenderIsPrimary() ? "primary" : "overlay",
@@ -3961,7 +4018,8 @@ void QGE_RenderScene(void)
 						   qge_scene_snapshot_misses, qge_scene_texture_cache_hits,
 						   qge_scene_texture_cache_misses, qge_scene_lightmap_cache_hits,
 						   qge_scene_lightmap_cache_misses, qge_scene_polygon_encoded,
-						   qge_scene_polygon_triangles, qge_scene_polygon_fallback,
+						   qge_scene_polygon_triangles, qge_scene_triangle_edge_fills,
+						   qge_scene_polygon_fallback,
 						   qge_scene_encoded_surfaces,
 						   qge_scene_material_encoded, qge_scene_encoded_edicts,
 						   qge_scene_alias_encoded, qge_scene_sprite_encoded,
@@ -3971,7 +4029,7 @@ void QGE_RenderScene(void)
 			fprintf(stderr, "QGE render frame=%d mode=%s owner=%s classic3d=%d suppressed3d=%d "
 					"res=%d time=%.1fms coeffs=%d sparse=%.1f%% "
 					"scene_surfaces=%d snapshot_surfaces=%d snapshot_misses=%d "
-					"texcache=%d/%d lightcache=%d/%d poly=%d tris=%d fallback=%d encoded_surfaces=%d "
+					"texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d fallback=%d encoded_surfaces=%d "
 					"material_encoded=%d snapshot_edicts=%d encoded_edicts=%d alias=%d "
 					"sprites=%d viewmodel=%d entity_misses=%d visedicts=%d nonzero=%d/%d max=%.6f sum=%.3f "
 					"tone_floor=%.6f tone_white=%.6f tone_clip=%d levels=%d gl_upload=0x%x gl_draw=0x%x\n",
@@ -3984,7 +4042,8 @@ void QGE_RenderScene(void)
 					qge_scene_snapshot_misses, qge_scene_texture_cache_hits,
 					qge_scene_texture_cache_misses, qge_scene_lightmap_cache_hits,
 					qge_scene_lightmap_cache_misses, qge_scene_polygon_encoded,
-					qge_scene_polygon_triangles, qge_scene_polygon_fallback,
+					qge_scene_polygon_triangles, qge_scene_triangle_edge_fills,
+					qge_scene_polygon_fallback,
 					qge_scene_encoded_surfaces,
 					qge_scene_material_encoded, qge_scene_snapshot_edicts,
 					qge_scene_encoded_edicts, qge_scene_alias_encoded,
