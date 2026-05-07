@@ -292,6 +292,7 @@ typedef struct {
     uint32_t effects;
     int32_t frame;
     float alpha;
+    float scale;
 } qge_snapshot_edict_t;
 
 typedef struct {

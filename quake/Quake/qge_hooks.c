@@ -217,6 +217,7 @@ static int qge_scene_viewmodel_encoded = 0;
 static int qge_scene_entity_misses = 0;
 static int qge_scene_entity_coefficients = 0;
 static int qge_scene_entity_mesh_triangles = 0;
+static int qge_scene_sprite_billboards = 0;
 
 static qge_phys_object_t qge_phys_objects[QGE_MAX_PHYS_OBJECTS];
 static int qge_phys_active_objects = 0;
@@ -1508,6 +1509,7 @@ static void QGE_FrameSnapshotAddEntity(qge_frame_snapshot_t *snapshot,
 	item.effects = (uint32_t)ent->effects;
 	item.frame = ent->frame;
 	item.alpha = ENTALPHA_DECODE(ent->alpha);
+	item.scale = ENTSCALE_DECODE(ent->scale);
 	qge_frame_snapshot_add_edict(snapshot, &item);
 }
 
@@ -1624,6 +1626,8 @@ static uint64_t QGE_FrameSnapshotHash(const qge_frame_snapshot_t *snapshot,
 		hash = QGE_RegistryHashStep(hash, snapshot->edicts[i].entity_id);
 		hash = QGE_RegistryHashStep(hash, snapshot->edicts[i].model_id);
 		hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)snapshot->edicts[i].frame);
+		hash = QGE_RegistryHashStep(hash,
+			(uint64_t)(uint32_t)(snapshot->edicts[i].scale * 65536.0f));
 	}
 	for (uint32_t i = 0; i < snapshot->dynamic_light_count; i++)
 		hash = QGE_RegistryHashStep(hash, snapshot->dynamic_lights[i].light_id);
@@ -2120,6 +2124,7 @@ void QGE_SceneBegin(void)
 	qge_scene_entity_misses = 0;
 	qge_scene_entity_coefficients = 0;
 	qge_scene_entity_mesh_triangles = 0;
+	qge_scene_sprite_billboards = 0;
 	QGE_ResetRenderGateTelemetry();
 }
 
@@ -4364,6 +4369,244 @@ static qboolean QGE_EncodeAliasModelMeshCoefficients(
 	return encoded > 0;
 }
 
+static void QGE_SnapshotOriginVec3(const qge_snapshot_edict_t *edict,
+								   vec3_t out)
+{
+	if (!edict || !out)
+		return;
+	out[0] = edict->origin.x;
+	out[1] = edict->origin.y;
+	out[2] = edict->origin.z;
+}
+
+static void QGE_SnapshotAnglesVec3(const qge_snapshot_edict_t *edict,
+								   vec3_t out)
+{
+	if (!edict || !out)
+		return;
+	out[0] = edict->angles.x;
+	out[1] = edict->angles.y;
+	out[2] = edict->angles.z;
+}
+
+static mspriteframe_t *QGE_SpriteFrameFromSnapshot(
+	const qge_snapshot_edict_t *edict,
+	const msprite_t *sprite)
+{
+	const mspriteframedesc_t *desc;
+	mspritegroup_t *group;
+	int frame;
+
+	if (!edict || !sprite || sprite->numframes <= 0)
+		return NULL;
+
+	frame = edict->frame;
+	if (frame < 0 || frame >= sprite->numframes)
+		frame = 0;
+	desc = &sprite->frames[frame];
+	if (desc->type == SPR_SINGLE)
+		return desc->frameptr;
+
+	group = (mspritegroup_t *)desc->frameptr;
+	if (!group || group->numframes <= 0)
+		return NULL;
+
+	if (desc->type == SPR_ANGLED) {
+		vec3_t angles, axis[3];
+		float f, r;
+		int dir;
+
+		QGE_SnapshotAnglesVec3(edict, angles);
+		AngleVectors(angles, axis[0], axis[1], axis[2]);
+		f = DotProduct(vpn, axis[0]);
+		r = DotProduct(vright, axis[0]);
+		dir = (int)((atan2f(r, f) + 1.125f * (float)M_PI) *
+					(4.0f / (float)M_PI));
+		return group->frames[(dir & 7) % group->numframes];
+	}
+
+	if (group->intervals) {
+		float fullinterval = group->intervals[group->numframes - 1];
+		float time = cl.time;
+		float targettime;
+
+		if (fullinterval > 0.0f) {
+			targettime = time - ((int)(time / fullinterval)) * fullinterval;
+			for (int i = 0; i < group->numframes - 1; i++) {
+				if (group->intervals[i] > targettime)
+					return group->frames[i];
+			}
+		}
+	}
+	return group->frames[group->numframes - 1];
+}
+
+static qboolean QGE_SpriteAxesFromSnapshot(const qge_snapshot_edict_t *edict,
+										   const msprite_t *sprite,
+										   vec3_t right,
+										   vec3_t up)
+{
+	vec3_t origin, forward, angles;
+	float angle, sr, cr;
+
+	if (!edict || !sprite || !right || !up)
+		return false;
+
+	switch (sprite->type) {
+	case SPR_VP_PARALLEL_UPRIGHT:
+		up[0] = 0.0f; up[1] = 0.0f; up[2] = 1.0f;
+		CrossProduct(vpn, up, right);
+		VectorNormalizeFast(right);
+		return true;
+	case SPR_FACING_UPRIGHT:
+		QGE_SnapshotOriginVec3(edict, origin);
+		VectorSubtract(origin, r_origin, forward);
+		forward[2] = 0.0f;
+		if (VectorLength(forward) < 0.001f)
+			VectorCopy(vpn, forward);
+		VectorNormalizeFast(forward);
+		right[0] = forward[1];
+		right[1] = -forward[0];
+		right[2] = 0.0f;
+		up[0] = 0.0f; up[1] = 0.0f; up[2] = 1.0f;
+		return true;
+	case SPR_VP_PARALLEL:
+		VectorCopy(vright, right);
+		VectorCopy(vup, up);
+		return true;
+	case SPR_ORIENTED:
+		QGE_SnapshotAnglesVec3(edict, angles);
+		AngleVectors(angles, forward, right, up);
+		return true;
+	case SPR_VP_PARALLEL_ORIENTED:
+		angle = edict->angles.z * (float)M_PI_DIV_180;
+		sr = sinf(angle);
+		cr = cosf(angle);
+		right[0] = vright[0] * cr + vup[0] * sr;
+		right[1] = vright[1] * cr + vup[1] * sr;
+		right[2] = vright[2] * cr + vup[2] * sr;
+		up[0] = vright[0] * -sr + vup[0] * cr;
+		up[1] = vright[1] * -sr + vup[1] * cr;
+		up[2] = vright[2] * -sr + vup[2] * cr;
+		return true;
+	default:
+		return false;
+	}
+}
+
+static void QGE_SpriteCorner(const vec3_t origin,
+							 const vec3_t up,
+							 const vec3_t right,
+							 float up_offset,
+							 float right_offset,
+							 float scale,
+							 vec3_t out)
+{
+	out[0] = origin[0] + up[0] * up_offset * scale +
+			 right[0] * right_offset * scale;
+	out[1] = origin[1] + up[1] * up_offset * scale +
+			 right[1] * right_offset * scale;
+	out[2] = origin[2] + up[2] * up_offset * scale +
+			 right[2] * right_offset * scale;
+}
+
+static qboolean QGE_ProjectSpriteFrameQuad(const qge_snapshot_edict_t *edict,
+										   const msprite_t *sprite,
+										   const mspriteframe_t *frame,
+										   qge_projected_vertex_t pv[4])
+{
+	vec3_t origin, up, right, point;
+	float scale;
+
+	if (!edict || !sprite || !frame || !pv)
+		return false;
+	if (!QGE_SpriteAxesFromSnapshot(edict, sprite, right, up))
+		return false;
+
+	QGE_SnapshotOriginVec3(edict, origin);
+	scale = edict->scale > 0.0f ? edict->scale : 1.0f;
+
+	QGE_SpriteCorner(origin, up, right, frame->down, frame->left,
+					 scale, point);
+	if (!QGE_ProjectPoint(point, &pv[0].x, &pv[0].y, &pv[0].depth))
+		return false;
+	pv[0].tex_s = 0.0f; pv[0].tex_t = 1.0f;
+
+	QGE_SpriteCorner(origin, up, right, frame->up, frame->left,
+					 scale, point);
+	if (!QGE_ProjectPoint(point, &pv[1].x, &pv[1].y, &pv[1].depth))
+		return false;
+	pv[1].tex_s = 0.0f; pv[1].tex_t = 0.0f;
+
+	QGE_SpriteCorner(origin, up, right, frame->up, frame->right,
+					 scale, point);
+	if (!QGE_ProjectPoint(point, &pv[2].x, &pv[2].y, &pv[2].depth))
+		return false;
+	pv[2].tex_s = frame->smax; pv[2].tex_t = 0.0f;
+
+	QGE_SpriteCorner(origin, up, right, frame->down, frame->right,
+					 scale, point);
+	if (!QGE_ProjectPoint(point, &pv[3].x, &pv[3].y, &pv[3].depth))
+		return false;
+	pv[3].tex_s = frame->smax; pv[3].tex_t = frame->tmax;
+	return true;
+}
+
+static qboolean QGE_EncodeSpriteBillboardCoefficients(
+	const qge_snapshot_edict_t *edict,
+	const qge_sprite_ref_t *ref,
+	qge_rgb_sample_t color)
+{
+	qmodel_t *model;
+	msprite_t *sprite;
+	mspriteframe_t *frame;
+	qge_projected_vertex_t pv[4];
+	qge_rgb_sample_t fill = QGE_RGBScaled(color, 0.42f);
+	qge_rgb_sample_t edge = QGE_RGBScaled(color, 1.10f);
+	qge_rgb_sample_t detail = QGE_RGBScaled(color, 1.35f);
+	uint64_t hash;
+	int bands;
+
+	if (!edict || !ref || !ref->debug_cookie)
+		return false;
+	model = (qmodel_t *)(uintptr_t)ref->debug_cookie;
+	if (!model || model->type != mod_sprite || !model->cache.data)
+		return false;
+	sprite = (msprite_t *)model->cache.data;
+	frame = QGE_SpriteFrameFromSnapshot(edict, sprite);
+	if (!frame || !QGE_ProjectSpriteFrameQuad(edict, sprite, frame, pv))
+		return false;
+
+	QGE_FillEntityTriangleColor(&pv[0], &pv[1], &pv[2], &fill);
+	QGE_FillEntityTriangleColor(&pv[0], &pv[2], &pv[3], &fill);
+	QGE_EntityCoeffLine(pv[0].x, pv[0].y, pv[1].x, pv[1].y,
+						&edge, fminf(pv[0].depth, pv[1].depth));
+	QGE_EntityCoeffLine(pv[1].x, pv[1].y, pv[2].x, pv[2].y,
+						&edge, fminf(pv[1].depth, pv[2].depth));
+	QGE_EntityCoeffLine(pv[2].x, pv[2].y, pv[3].x, pv[3].y,
+						&edge, fminf(pv[2].depth, pv[3].depth));
+	QGE_EntityCoeffLine(pv[3].x, pv[3].y, pv[0].x, pv[0].y,
+						&edge, fminf(pv[3].depth, pv[0].depth));
+
+	hash = QGE_SnapshotEntityAssetHash(edict, QGE_RESOURCE_SPRITE);
+	if (frame->gltexture)
+		hash = QGE_RegistryHashStep(hash, frame->gltexture->source_crc);
+	bands = 2 + (int)(hash & 3u);
+	for (int i = 1; i <= bands; i++) {
+		float t = (float)i / (float)(bands + 1);
+		float ax = pv[0].x + (pv[1].x - pv[0].x) * t;
+		float ay = pv[0].y + (pv[1].y - pv[0].y) * t;
+		float bx = pv[3].x + (pv[2].x - pv[3].x) * t;
+		float by = pv[3].y + (pv[2].y - pv[3].y) * t;
+		float depth = (pv[0].depth + pv[1].depth +
+					   pv[2].depth + pv[3].depth) * 0.25f;
+		QGE_EntityCoeffLine(ax, ay, bx, by, &detail, depth);
+	}
+
+	qge_scene_sprite_billboards++;
+	return true;
+}
+
 static void QGE_EncodeAliasModelCoefficients(
 	const qge_snapshot_edict_t *edict,
 	const screen_rect_t *bounds,
@@ -4459,6 +4702,9 @@ static void QGE_EncodeSpriteCoefficients(const qge_snapshot_edict_t *edict,
 	h = y2 - y1;
 	if (w < 1) w = 1;
 	if (h < 1) h = 1;
+
+	if (ref && QGE_EncodeSpriteBillboardCoefficients(edict, ref, color))
+		return;
 
 	QGE_SpatialFillRectColorDepth(bounds, &fill, depth_world);
 	QGE_SpatialOutlineRectColorDepth(bounds, &edge, depth_world);
@@ -4997,7 +5243,7 @@ void QGE_RenderScene(void)
 						   "res=%d coeffs=%d snapshot=%d snapshot_miss=%d "
 						   "texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d microfill=%d "
 						   "culled=%d surrogate=%d micro=%d clipped=%d fallback=%d "
-						   "encoded=%d material=%d edicts=%d alias=%d sprites=%d emesh=%d ecoeff=%d "
+						   "encoded=%d material=%d edicts=%d alias=%d sprites=%d sbill=%d emesh=%d ecoeff=%d "
 						   "viewmodel=%d entity_miss=%d gates=%d shots=%d "
 						   "readout=%.3f edgeq=%.3f ggain=%.3f egain=%.3f "
 						   "nonzero=%d/%d\n",
@@ -5019,6 +5265,7 @@ void QGE_RenderScene(void)
 						   qge_scene_encoded_surfaces,
 						   qge_scene_material_encoded, qge_scene_encoded_edicts,
 						   qge_scene_alias_encoded, qge_scene_sprite_encoded,
+						   qge_scene_sprite_billboards,
 						   qge_scene_entity_mesh_triangles,
 						   qge_scene_entity_coefficients,
 						   qge_scene_viewmodel_encoded, qge_scene_entity_misses,
@@ -5034,7 +5281,7 @@ void QGE_RenderScene(void)
 					"texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d microfill=%d "
 					"culled=%d surrogate=%d micro=%d clipped=%d invalid=%d fallback=%d encoded_surfaces=%d "
 					"material_encoded=%d snapshot_edicts=%d encoded_edicts=%d alias=%d "
-					"sprites=%d entity_mesh_tris=%d entity_coeffs=%d viewmodel=%d entity_misses=%d visedicts=%d nonzero=%d/%d max=%.6f sum=%.3f "
+					"sprites=%d sprite_billboards=%d entity_mesh_tris=%d entity_coeffs=%d viewmodel=%d entity_misses=%d visedicts=%d nonzero=%d/%d max=%.6f sum=%.3f "
 					"gate_kernel=%d gates=%d h=%d ry=%d rz=%d ent=%d phase=%d gate_active=%d "
 					"shots=%d readout_ones=%d edge_ones=%d majority=0x%llx "
 					"gate_p=%.6f gate_edge=%.6f gate_gain=%.6f edge_gain=%.6f material_gain=%.6f "
@@ -5060,7 +5307,8 @@ void QGE_RenderScene(void)
 					qge_scene_encoded_surfaces,
 					qge_scene_material_encoded, qge_scene_snapshot_edicts,
 					qge_scene_encoded_edicts, qge_scene_alias_encoded,
-					qge_scene_sprite_encoded, qge_scene_entity_mesh_triangles,
+					qge_scene_sprite_encoded, qge_scene_sprite_billboards,
+					qge_scene_entity_mesh_triangles,
 					qge_scene_entity_coefficients,
 					qge_scene_viewmodel_encoded,
 					qge_scene_entity_misses, cl_numvisedicts, nonzero_pixels, total_pixels,
