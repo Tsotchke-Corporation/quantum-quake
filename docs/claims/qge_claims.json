@@ -1,0 +1,155 @@
+{
+  "schema": "qge.claims.v0",
+  "claims": [
+    {
+      "accepted_evidence": [
+        "qge_trace.bin contains render_gate_kernel dense_state probes",
+        "trace summary reports qubits, basis states, gate count, shots, and finite-shot readout",
+        "render log shows bounded render-gain effect"
+      ],
+      "allowed_wording": "QGE demonstrates a bounded simulated-QPU render observable with explicit gates and finite-shot readout.",
+      "claim_id": "feasibility.finite_shot_render_observable",
+      "claim_type": "feasibility",
+      "classical_baseline": "gate-off QGE capture required for visual delta claims",
+      "disallowed_wording": "The full frame is rendered by a quantum computer.",
+      "failure_conditions": [
+        "render_gate_kernel probe missing",
+        "shots or gate counts missing",
+        "effect not tied to trace telemetry"
+      ],
+      "input_model": "classical scene statistics angle-encoded into a bounded dense-state simulator register",
+      "output_observable": "finite-shot render gain and edge/material control",
+      "problem_statement": "Show that a real-time Quake frame can consume a bounded simulated-QPU observable.",
+      "quantum_algorithm": "small dense-state circuit with H, RY, RZ, CNOT, CZ, phase, and finite-shot sampling",
+      "required_trace_fields": [
+        "render_gate_kernel",
+        "qubits",
+        "basis",
+        "gates",
+        "shots",
+        "coherence",
+        "max_prob"
+      ],
+      "status": "partial"
+    },
+    {
+      "accepted_evidence": [
+        "classic and quantum_render 2 captures exist for the same scene",
+        "publication_metrics.json reports visual parity metrics",
+        "fallback count is explicit"
+      ],
+      "allowed_wording": "Quantum Quake is progressing toward vanilla Quake conformance under QGE primary rendering.",
+      "claim_id": "engine.vanilla_quake_conformance",
+      "claim_type": "conformance",
+      "classical_baseline": "classic Quake reference capture",
+      "disallowed_wording": "Quantum Quake is a complete vanilla Quake port.",
+      "failure_conditions": [
+        "classic draw output is hidden but required assets are missing",
+        "fallbacks are silent",
+        "HUD, entities, particles, or world materials are unaccounted"
+      ],
+      "input_model": "Quake runtime assets and frame snapshots",
+      "output_observable": "full visible vanilla gameplay frame and media telemetry",
+      "problem_statement": "Establish QGE ownership of all vanilla Quake media required for playable frames.",
+      "quantum_algorithm": "QGE sparse DWT render, quantum runtime trace, and domain-specific Moonlab kernels",
+      "required_trace_fields": [
+        "render_sparse_dwt",
+        "world_registry",
+        "frame_snapshot",
+        "fallback",
+        "asset-class counters"
+      ],
+      "status": "planned"
+    },
+    {
+      "accepted_evidence": [
+        "oracle_scene.json validates against schema",
+        "scene hashes and candidate counts derive from a captured trace/log directory",
+        "cost model records input, readout, and fallback assumptions"
+      ],
+      "allowed_wording": "QGE compiles captured Quake scene state into an auditable scene-oracle IR.",
+      "claim_id": "compiler.scene_oracle_ir",
+      "claim_type": "systems",
+      "classical_baseline": "not applicable; this is an artifact-generation claim",
+      "disallowed_wording": "The IR proves a quantum advantage.",
+      "failure_conditions": [
+        "oracle_scene.json is nondeterministic",
+        "input/readout assumptions are omitted",
+        "source capture cannot be traced"
+      ],
+      "input_model": "QGE trace summary, graphics harness log, README/config, and captured frames",
+      "output_observable": "scene-oracle IR sidecar",
+      "problem_statement": "Provide a stable compiler boundary from game captures to bounded quantum-query workloads.",
+      "quantum_algorithm": "none required for v0; IR targets later amplitude estimation and search kernels",
+      "required_trace_fields": [
+        "records",
+        "state_probes",
+        "world_registry",
+        "frame_snapshot",
+        "render_sparse_dwt"
+      ],
+      "status": "planned"
+    },
+    {
+      "accepted_evidence": [
+        "same observable evaluated by high-sample reference, MC, Sobol, and QAE lab mode",
+        "error-vs-query output shows expected scaling under declared oracle model",
+        "state-prep, qRAM, readout, and baseline caveats are reported"
+      ],
+      "allowed_wording": "On a bounded Quake-derived light-transport observable, QGE demonstrates quantum amplitude-estimation query scaling under an explicit oracle model.",
+      "claim_id": "advantage.light_transport_qae_query_scaling",
+      "claim_type": "sample_complexity",
+      "classical_baseline": "plain Monte Carlo, stratified/Sobol, and high-sample reference",
+      "disallowed_wording": "Quantum Quake proves practical rendering advantage or hardware speedup.",
+      "failure_conditions": [
+        "state-prep cost omitted",
+        "qRAM assumption omitted",
+        "only naive classical baseline used",
+        "full-frame readout is claimed"
+      ],
+      "input_model": "finite sample space over Quake-derived light/path/visibility samples",
+      "output_observable": "bounded mean contribution such as soft-shadow visibility or patch irradiance",
+      "problem_statement": "Compare classical and quantum mean-estimation query scaling on a game-derived observable.",
+      "quantum_algorithm": "iterative or maximum-likelihood quantum amplitude estimation simulator",
+      "required_trace_fields": [
+        "advantage_problem_id",
+        "oracle_eval_count",
+        "state_prep_cost",
+        "readout_model",
+        "shots",
+        "reference_value",
+        "rmse"
+      ],
+      "status": "planned"
+    },
+    {
+      "accepted_evidence": [
+        "visibility candidate benchmark includes naive, BSP/PVS, and adversarial candidate baselines",
+        "query-count model is explicit",
+        "results state when classical structure erases advantage"
+      ],
+      "allowed_wording": "QGE evaluates Grover-style visibility/search query models on Quake-derived candidate sets.",
+      "claim_id": "query.visibility_search_model",
+      "claim_type": "query_advantage",
+      "classical_baseline": "linear scan, Quake BSP/PVS, and structured candidate baseline",
+      "disallowed_wording": "Grover search beats Quake visibility in general.",
+      "failure_conditions": [
+        "BSP/PVS baseline omitted",
+        "candidate set structure ignored",
+        "wall-clock simulator runtime presented as hardware advantage"
+      ],
+      "input_model": "finite candidate surface/entity/occluder set",
+      "output_observable": "marked visible/intersecting/high-contribution candidate",
+      "problem_statement": "Measure where unstructured quantum search models can or cannot help game visibility queries.",
+      "quantum_algorithm": "Grover or minimum-finding model",
+      "required_trace_fields": [
+        "candidate_count",
+        "oracle_kind",
+        "oracle_eval_count",
+        "classical_eval_count",
+        "baseline_id"
+      ],
+      "status": "planned"
+    }
+  ]
+}
