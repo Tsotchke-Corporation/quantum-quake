@@ -832,6 +832,60 @@ void SCR_ScreenShot_f (void)
 	free (buffer);
 }
 
+static qboolean scr_qge_autocapture_configured = false;
+static int scr_qge_autocapture_frames = 0;
+static int scr_qge_autocapture_wait = 0;
+static int scr_qge_autocapture_seen = 0;
+static int scr_qge_autocapture_done = 0;
+static qboolean scr_qge_autocapture_quit = false;
+
+static int SCR_QGECommandLineInt(const char *parm, int fallback)
+{
+	int arg;
+
+	arg = COM_CheckParm(parm);
+	if (arg && arg < com_argc - 1 && com_argv[arg + 1] &&
+		com_argv[arg + 1][0])
+		return Q_atoi(com_argv[arg + 1]);
+	return fallback;
+}
+
+static void SCR_QGEConfigureAutoCapture(void)
+{
+	if (scr_qge_autocapture_configured)
+		return;
+	scr_qge_autocapture_configured = true;
+	scr_qge_autocapture_frames = SCR_QGECommandLineInt("-qgeautocapture", 0);
+	scr_qge_autocapture_wait = SCR_QGECommandLineInt("-qgecapturewait", 2);
+	if (scr_qge_autocapture_frames < 0)
+		scr_qge_autocapture_frames = 0;
+	if (scr_qge_autocapture_wait < 0)
+		scr_qge_autocapture_wait = 0;
+}
+
+static void SCR_QGEAutoCaptureMaybe(void)
+{
+	SCR_QGEConfigureAutoCapture();
+	if (scr_qge_autocapture_frames <= 0 ||
+		scr_qge_autocapture_done >= scr_qge_autocapture_frames ||
+		cls.signon != SIGNONS)
+		return;
+
+	scr_qge_autocapture_seen++;
+	if (scr_qge_autocapture_seen <= scr_qge_autocapture_wait)
+		return;
+
+	scr_qge_autocapture_done++;
+	Cbuf_AddText("screenshot png\n");
+	Con_Printf("QGE_AUTO_CAPTURE %d/%d\n",
+			   scr_qge_autocapture_done, scr_qge_autocapture_frames);
+	if (scr_qge_autocapture_done >= scr_qge_autocapture_frames &&
+		!scr_qge_autocapture_quit) {
+		scr_qge_autocapture_quit = true;
+		Cbuf_AddText("quit\n");
+	}
+}
+
 
 //=============================================================================
 
@@ -1111,6 +1165,7 @@ void SCR_UpdateScreen (void)
 
 	GLSLGamma_GammaCorrect ();
 
+	SCR_QGEAutoCaptureMaybe();
+
 	GL_EndRendering ();
 }
-
