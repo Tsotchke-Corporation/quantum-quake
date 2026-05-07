@@ -65,9 +65,13 @@ agent_manifest_file="$agent_stream/manifest.json"
 agent_icc_file="$agent_stream/qge_agent_stream_icc_evidence.jsonl"
 agent_audio_raw="$agent_audio_dir/quake_mix_s16le.raw"
 agent_audio_meta="$agent_audio_dir/quake_mix_s16le.json"
+agent_frame_count_file="$agent_stream/video/frame_count.txt"
+agent_last_frame_file="$agent_stream/video/latest_frame.txt"
 last_agent_frame=""
 mkdir -p "$outdir" "$agent_video_dir" "$agent_audio_dir" "$agent_log_dir"
 : > "$agent_events_file"
+: > "$agent_frame_count_file"
+: > "$agent_last_frame_file"
 
 agent_event() {
   local event="$1"
@@ -114,6 +118,8 @@ write_agent_manifest() {
   },
   "video": {
     "frames_dir": "$agent_video_dir",
+    "frame_count_file": "$agent_frame_count_file",
+    "latest_frame_file": "$agent_last_frame_file",
     "format": "png"
   },
   "audio": {
@@ -228,9 +234,12 @@ open_log_file="$outdir/open.log"
 agent_open_log_file="$agent_log_dir/open.log"
 qconsole_file="$repo_root/qconsole.log"
 trace_file="$outdir/qge_trace.bin"
+watch_stop_file="$outdir/watch.stop"
 touch "$log_file"
 touch "$agent_log_file" "$agent_open_log_file"
 log_next_line=1
+frame_index=0
+printf '%d\n' "$frame_index" > "$agent_frame_count_file"
 
 find "$gamedir" -maxdepth 1 -name 'spasm*.png' -print | sort > "$before_file"
 cp "$before_file" "$seen_file"
@@ -280,10 +289,45 @@ publish_frame() {
   agent_frame="$agent_video_dir/$frame_name"
   cp "$screenshot" "$agent_frame"
   last_agent_frame="$agent_frame"
+  printf '%d\n' "$frame_index" > "$agent_frame_count_file"
+  printf '%s\n' "$last_agent_frame" > "$agent_last_frame_file"
   agent_event "video_frame" "$agent_frame" "index=$frame_index"
   write_agent_manifest "running"
   echo "QGE_AGENT_VIDEO_FRAME $frame_index $agent_frame"
   echo "QGE_STREAM_FRAME $frame_index $outdir/$frame_name"
+}
+
+collect_new_frames() {
+  find "$gamedir" -maxdepth 1 -name 'spasm*.png' -print | sort > "$current_file"
+  comm -13 "$seen_file" "$current_file" > "$new_file"
+  if [[ -s "$new_file" ]]; then
+    while IFS= read -r screenshot; do
+      publish_frame "$screenshot"
+    done < "$new_file"
+    cp "$current_file" "$seen_file"
+  fi
+}
+
+watch_open_stream() {
+  while [[ ! -f "$watch_stop_file" ]]; do
+    print_log_updates
+    collect_new_frames
+    sleep 1
+  done
+  print_log_updates
+  collect_new_frames
+}
+
+sync_agent_frame_state() {
+  if [[ -s "$agent_frame_count_file" ]]; then
+    frame_index="$(tail -n 1 "$agent_frame_count_file" | tr -d ' ')"
+    if [[ -z "$frame_index" ]]; then
+      frame_index=0
+    fi
+  fi
+  if [[ -s "$agent_last_frame_file" ]]; then
+    last_agent_frame="$(tail -n 1 "$agent_last_frame_file")"
+  fi
 }
 
 video_args=(-window -width "$width" -height "$height")
@@ -314,8 +358,14 @@ if [[ "$launch_mode" == "open" ]]; then
   cp "$open_log_file" "$agent_open_log_file"
   open_args=(-W -n)
   open_args+=("$app_bundle")
+  rm -f "$watch_stop_file"
+  watch_open_stream &
+  watch_pid=$!
   open_status=0
   open "${open_args[@]}" --args "${run_args[@]}" -condebug || open_status=$?
+  touch "$watch_stop_file"
+  wait "$watch_pid" 2>/dev/null || true
+  sync_agent_frame_state
   if (( open_status != 0 )); then
     echo "QGE_OPEN_FAILED status=$open_status" >> "$open_log_file"
     echo "QGE_OPEN_FAILED status=$open_status" >&2
@@ -330,7 +380,6 @@ else
   "$app_bin" "${run_args[@]}" >"$agent_log_file" 2>&1 &
 fi
 
-frame_index=0
 if [[ "$launch_mode" != "open" ]]; then
   game_pid=$!
   elapsed=0
@@ -338,14 +387,7 @@ if [[ "$launch_mode" != "open" ]]; then
 
   while kill -0 "$game_pid" 2>/dev/null; do
     print_log_updates
-    find "$gamedir" -maxdepth 1 -name 'spasm*.png' -print | sort > "$current_file"
-    comm -13 "$seen_file" "$current_file" > "$new_file"
-    if [[ -s "$new_file" ]]; then
-      while IFS= read -r screenshot; do
-        publish_frame "$screenshot"
-      done < "$new_file"
-      cp "$current_file" "$seen_file"
-    fi
+    collect_new_frames
 
     if (( elapsed >= max_seconds )); then
       echo "QGE_STREAM_TIMEOUT killing process $game_pid" >&2
@@ -375,13 +417,9 @@ if [[ -f "$open_log_file" ]]; then
   cp "$open_log_file" "$agent_open_log_file"
 fi
 
-find "$gamedir" -maxdepth 1 -name 'spasm*.png' -print | sort > "$current_file"
-comm -13 "$seen_file" "$current_file" > "$new_file"
-if [[ -s "$new_file" ]]; then
-  while IFS= read -r screenshot; do
-    publish_frame "$screenshot"
-  done < "$new_file"
-fi
+sync_agent_frame_state
+collect_new_frames
+sync_agent_frame_state
 
 cat > "$outdir/README.txt" <<EOF
 Quantum Quake graphics stream

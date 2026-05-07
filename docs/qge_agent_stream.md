@@ -16,6 +16,10 @@ The directory is intentionally simple and tail-friendly:
 - `events.ndjson`: append-only runtime events such as stream start, video frame,
   audio raw, trace done, and stream done.
 - `video/frames/frame_###.png`: copied screenshots as they are produced.
+- `video/frame_count.txt`: current number of mirrored frames, updated as frames
+  arrive.
+- `video/latest_frame.txt`: path to the newest mirrored frame, updated as frames
+  arrive.
 - `audio/quake_mix_s16le.raw`: post-QGE mixed stereo PCM when sound is enabled.
 - `audio/quake_mix_s16le.json`: audio metadata including sample rate, format,
   channels, and sample pair count.
@@ -31,6 +35,12 @@ QGE_AGENT_STREAM <dir>
 QGE_AGENT_VIDEO_FRAME <index> <png>
 QGE_AGENT_STREAM_DONE <dir>
 ```
+
+In macOS `open` launch mode the harness keeps `open -W` in the foreground, but
+now runs a side watcher that tails the game log and mirrors screenshots into the
+agent stream while the app is still running. Consumers should follow
+`events.ndjson` or `video/latest_frame.txt` rather than waiting for
+`QGE_AGENT_STREAM_DONE`.
 
 Audio capture requires the game sound system to run:
 
