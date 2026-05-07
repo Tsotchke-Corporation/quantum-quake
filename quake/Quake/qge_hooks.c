@@ -3862,17 +3862,6 @@ static qboolean QGE_EncodeWorldSurfaceDWT(dwt_framebuffer_t *fb,
 
 	if (!fb || !surface || !encoded_world)
 		return false;
-	if (!QGE_SurfaceScreenBounds(surface, surface->surf, &bounds, &depth_world)) {
-		qge_scene_polygon_fallback++;
-		return false;
-	}
-
-	depth = depth_world / 4096.0f;
-	if (depth > 1.0f) depth = 1.0f;
-	if (depth < 0.0f) depth = 0.0f;
-
-	brightness = surface->brightness * (1.0f - depth * 0.45f) * QGE_WorldEncodeGain();
-	if (brightness < 0.015f) brightness = 0.015f;
 
 	if (QGE_ProjectSurfacePolygon(surface, surface->surf, verts,
 								  QGE_MAX_PROJECTED_POLY_VERTS,
@@ -3888,9 +3877,17 @@ static qboolean QGE_EncodeWorldSurfaceDWT(dwt_framebuffer_t *fb,
 									  depth_world, area);
 	} else if (QGE_ProjectFailIsCull(project_fail)) {
 		qge_scene_polygon_culled++;
-	} else {
+	} else if (QGE_SurfaceScreenBounds(surface, surface->surf, &bounds,
+									   &depth_world)) {
+		depth = depth_world / 4096.0f;
+		if (depth > 1.0f) depth = 1.0f;
+		if (depth < 0.0f) depth = 0.0f;
+		brightness = surface->brightness * (1.0f - depth * 0.45f) * QGE_WorldEncodeGain();
+		if (brightness < 0.015f) brightness = 0.015f;
 		QGE_EncodeSurfaceSurrogateDWT(fb, surface, &bounds, brightness,
 									  depth, depth_world, project_fail);
+	} else {
+		QGE_RecordSurfaceSurrogate(project_fail);
 	}
 	(*encoded_world)++;
 	return true;
