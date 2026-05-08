@@ -411,24 +411,23 @@ static int qge_dwt_coeff_offset(const dwt_framebuffer_t* fb,
     return out_y * base_res + out_x;
 }
 
-static void qge_add_wavelet_coeff_with_threshold(dwt_framebuffer_t* fb,
-                                                  int level,
-                                                  dwt_subband_t subband,
-                                                  int cx, int cy,
-                                                  float value,
-                                                  float threshold) {
-    int coeff_offset;
+static inline void qge_store_wavelet_coeff_with_offset(dwt_framebuffer_t* fb,
+                                                        int level,
+                                                        dwt_subband_t subband,
+                                                        int cx, int cy,
+                                                        int coeff_offset,
+                                                        float value,
+                                                        float threshold) {
+    int active_index;
     uint64_t state_index = 0;
 
     if (!fb || !fb->active_indices || !fb->active_values || !fb->active_offsets) return;
-    if (fb->active_coeff_count >= MAX_ACTIVE_COEFFS) return;
+    active_index = fb->active_coeff_count;
+    if (active_index >= MAX_ACTIVE_COEFFS) return;
 
-    /* Skip if below sparsity threshold */
     if (threshold < 0.0f) threshold = 0.0f;
     if (fabsf(value) < threshold) return;
-
-    coeff_offset = qge_dwt_coeff_offset(fb, level, subband, cx, cy);
-    if (coeff_offset < 0) return;
+    if ((unsigned)coeff_offset >= (unsigned)fb->coeff_size) return;
 
     if (fb->state) {
         int quantized_value = (int)(fabsf(value) * 31.0f);
@@ -440,11 +439,32 @@ static void qge_add_wavelet_coeff_with_threshold(dwt_framebuffer_t* fb,
         }
     }
 
-    /* Track active coefficient */
-    fb->active_indices[fb->active_coeff_count] = state_index;
-    fb->active_values[fb->active_coeff_count] = value;
-    fb->active_offsets[fb->active_coeff_count] = coeff_offset;
-    fb->active_coeff_count++;
+    fb->active_indices[active_index] = state_index;
+    fb->active_values[active_index] = value;
+    fb->active_offsets[active_index] = coeff_offset;
+    fb->active_coeff_count = active_index + 1;
+}
+
+static void qge_add_wavelet_coeff_with_threshold(dwt_framebuffer_t* fb,
+                                                  int level,
+                                                  dwt_subband_t subband,
+                                                  int cx, int cy,
+                                                  float value,
+                                                  float threshold) {
+    int coeff_offset;
+
+    if (!fb || !fb->active_indices || !fb->active_values || !fb->active_offsets) return;
+    if (fb->active_coeff_count >= MAX_ACTIVE_COEFFS) return;
+
+    /* Skip if below sparsity threshold */
+    if (threshold < 0.0f) threshold = 0.0f;
+    if (fabsf(value) < threshold) return;
+
+    coeff_offset = qge_dwt_coeff_offset(fb, level, subband, cx, cy);
+    if (coeff_offset < 0) return;
+
+    qge_store_wavelet_coeff_with_offset(fb, level, subband, cx, cy,
+                                        coeff_offset, value, threshold);
 }
 
 void qge_add_wavelet_coeff(dwt_framebuffer_t* fb,
@@ -989,13 +1009,18 @@ static void qge_dwt_encode_spatial_work(dwt_framebuffer_t* fb, float* work) {
             threshold *= 0.50f;
 
         for (int y = 0; y < half; y++) {
+            int low_row_offset = y * base_res;
+            int high_row_offset = (half + y) * base_res;
             for (int x = 0; x < half; x++) {
-                qge_add_wavelet_coeff_with_threshold(fb, level, SUBBAND_HL, x, y,
-                    work[y * base_res + half + x], threshold);
-                qge_add_wavelet_coeff_with_threshold(fb, level, SUBBAND_LH, x, y,
-                    work[(half + y) * base_res + x], threshold);
-                qge_add_wavelet_coeff_with_threshold(fb, level, SUBBAND_HH, x, y,
-                    work[(half + y) * base_res + half + x], threshold);
+                int hl_offset = low_row_offset + half + x;
+                int lh_offset = high_row_offset + x;
+                int hh_offset = high_row_offset + half + x;
+                qge_store_wavelet_coeff_with_offset(fb, level, SUBBAND_HL, x, y,
+                    hl_offset, work[hl_offset], threshold);
+                qge_store_wavelet_coeff_with_offset(fb, level, SUBBAND_LH, x, y,
+                    lh_offset, work[lh_offset], threshold);
+                qge_store_wavelet_coeff_with_offset(fb, level, SUBBAND_HH, x, y,
+                    hh_offset, work[hh_offset], threshold);
             }
         }
     }
@@ -1005,9 +1030,11 @@ static void qge_dwt_encode_spatial_work(dwt_framebuffer_t* fb, float* work) {
     int coarse_ll = base_res >> levels;
     if (coarse_ll < 1) coarse_ll = 1;
     for (int y = 0; y < coarse_ll; y++) {
+        int row_offset = y * base_res;
         for (int x = 0; x < coarse_ll; x++) {
-            qge_add_wavelet_coeff_with_threshold(fb, coarse_level, SUBBAND_LL, x, y,
-                work[y * base_res + x],
+            int coeff_offset = row_offset + x;
+            qge_store_wavelet_coeff_with_offset(fb, coarse_level, SUBBAND_LL, x, y,
+                coeff_offset, work[coeff_offset],
                 fb->config.sparsity_threshold * 0.10f);
         }
     }
