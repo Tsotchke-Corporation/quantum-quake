@@ -419,7 +419,7 @@ void SV_ConnectClient (int clientnum)
 	memset (client, 0, sizeof(*client));
 	client->netconnection = netconnection;
 
-	strcpy (client->name, "unconnected");
+	q_strlcpy (client->name, "unconnected", sizeof(client->name));
 	client->active = true;
 	client->spawned = false;
 	client->edict = ent;
@@ -1620,4 +1620,3 @@ void SV_SpawnServer (const char *server)
 
 	Con_DPrintf ("Server spawned.\n");
 }
-

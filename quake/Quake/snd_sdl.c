@@ -151,7 +151,7 @@ qboolean SNDDMA_Init (dma_t *dma)
 	}
 #else
 	if (SDL_AudioDriverName(drivername, sizeof(drivername)) == NULL)
-		strcpy(drivername, "(UNKNOWN)");
+		q_strlcpy(drivername, "(UNKNOWN)", sizeof(drivername));
 #endif
 	buffersize = shm->samples * (shm->samplebits / 8);
 	Con_Printf ("SDL audio driver: %s, %d bytes buffer\n", drivername, buffersize);
@@ -209,4 +209,3 @@ void SNDDMA_UnblockSound (void)
 {
 	SDL_PauseAudio(0);
 }
-

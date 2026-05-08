@@ -432,7 +432,7 @@ void M_ScanSaves (void)
 
 	for (i = 0; i < MAX_SAVEGAMES; i++)
 	{
-		strcpy (m_filenames[i], "--- UNUSED SLOT ---");
+		q_strlcpy (m_filenames[i], "--- UNUSED SLOT ---", sizeof(m_filenames[i]));
 		loadable[i] = false;
 		q_snprintf (name, sizeof(name), "%s/s%i.sav", com_gamedir, i);
 		f = fopen (name, "r");
@@ -699,8 +699,8 @@ void M_Menu_Setup_f (void)
 	key_dest = key_menu;
 	m_state = m_setup;
 	m_entersound = true;
-	Q_strcpy(setup_myname, cl_name.string);
-	Q_strcpy(setup_hostname, hostname.string);
+	q_strlcpy(setup_myname, cl_name.string, sizeof(setup_myname));
+	q_strlcpy(setup_hostname, hostname.string, sizeof(setup_hostname));
 	setup_top = setup_oldtop = ((int)cl_color.value) >> 4;
 	setup_bottom = setup_oldbottom = ((int)cl_color.value) & 15;
 }
@@ -1741,7 +1741,7 @@ void M_Menu_LanConfig_f (void)
 	if (StartingGame && lanConfig_cursor == 2)
 		lanConfig_cursor = 1;
 	lanConfig_port = DEFAULTnet_hostport;
-	sprintf(lanConfig_portname, "%u", lanConfig_port);
+	q_snprintf(lanConfig_portname, sizeof(lanConfig_portname), "%u", lanConfig_port);
 
 	m_return_onerror = false;
 	m_return_reason[0] = 0;
@@ -1896,7 +1896,7 @@ void M_LanConfig_Key (int key)
 		l = lanConfig_port;
 	else
 		lanConfig_port = l;
-	sprintf(lanConfig_portname, "%u", lanConfig_port);
+	q_snprintf(lanConfig_portname, sizeof(lanConfig_portname), "%u", lanConfig_port);
 }
 
 
@@ -2791,4 +2791,3 @@ void M_ConfigureNetSubsystem(void)
 	if (IPXConfig || TCPIPConfig)
 		net_hostport = lanConfig_port;
 }
-

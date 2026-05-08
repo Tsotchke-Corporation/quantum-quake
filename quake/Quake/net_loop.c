@@ -55,14 +55,14 @@ void Loop_SearchForHosts (qboolean xmit)
 
 	hostCacheCount = 1;
 	if (Q_strcmp(hostname.string, "UNNAMED") == 0)
-		Q_strcpy(hostcache[0].name, "local");
+		q_strlcpy(hostcache[0].name, "local", sizeof(hostcache[0].name));
 	else
-		Q_strcpy(hostcache[0].name, hostname.string);
-	Q_strcpy(hostcache[0].map, sv.name);
+		q_strlcpy(hostcache[0].name, hostname.string, sizeof(hostcache[0].name));
+	q_strlcpy(hostcache[0].map, sv.name, sizeof(hostcache[0].map));
 	hostcache[0].users = net_activeconnections;
 	hostcache[0].maxusers = svs.maxclients;
 	hostcache[0].driver = net_driverlevel;
-	Q_strcpy(hostcache[0].cname, "local");
+	q_strlcpy(hostcache[0].cname, "local", sizeof(hostcache[0].cname));
 }
 
 
@@ -80,7 +80,7 @@ qsocket_t *Loop_Connect (const char *host)
 			Con_Printf("Loop_Connect: no qsocket available\n");
 			return NULL;
 		}
-		Q_strcpy (loop_client->address, "localhost");
+		q_strlcpy (loop_client->address, "localhost", sizeof(loop_client->address));
 	}
 	loop_client->receiveMessageLength = 0;
 	loop_client->sendMessageLength = 0;
@@ -93,7 +93,7 @@ qsocket_t *Loop_Connect (const char *host)
 			Con_Printf("Loop_Connect: no qsocket available\n");
 			return NULL;
 		}
-		Q_strcpy (loop_server->address, "LOCAL");
+		q_strlcpy (loop_server->address, "LOCAL", sizeof(loop_server->address));
 	}
 	loop_server->receiveMessageLength = 0;
 	loop_server->sendMessageLength = 0;
@@ -247,4 +247,3 @@ void Loop_Close (qsocket_t *sock)
 	else
 		loop_server = NULL;
 }
-

@@ -1367,7 +1367,7 @@ static void Host_Name_f (void)
 		if (Q_strcmp(host_client->name, newName) != 0)
 			Con_Printf ("%s renamed to %s\n", host_client->name, newName);
 	}
-	Q_strcpy (host_client->name, newName);
+	q_strlcpy (host_client->name, newName, sizeof(host_client->name));
 	host_client->edict->v.netname = PR_SetEngineString(host_client->name);
 
 // send notification to all clients

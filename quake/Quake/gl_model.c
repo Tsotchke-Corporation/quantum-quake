@@ -69,11 +69,11 @@ void Mod_Init (void)
 
 	//johnfitz -- create notexture miptex
 	r_notexture_mip = (texture_t *) Hunk_AllocName (sizeof(texture_t), "r_notexture_mip");
-	strcpy (r_notexture_mip->name, "notexture");
+	q_strlcpy (r_notexture_mip->name, "notexture", sizeof(r_notexture_mip->name));
 	r_notexture_mip->height = r_notexture_mip->width = 32;
 
 	r_notexture_mip2 = (texture_t *) Hunk_AllocName (sizeof(texture_t), "r_notexture_mip2");
-	strcpy (r_notexture_mip2->name, "notexture2");
+	q_strlcpy (r_notexture_mip2->name, "notexture2", sizeof(r_notexture_mip2->name));
 	r_notexture_mip2->height = r_notexture_mip2->width = 32;
 	//johnfitz
 }
@@ -280,7 +280,8 @@ static qmodel_t *Mod_FindName (const char *name)
 	{
 		if (mod_numknown == MAX_MOD_KNOWN)
 			Sys_Error ("mod_numknown == MAX_MOD_KNOWN");
-		q_strlcpy (mod->name, name, MAX_QPATH);
+		if (q_strlcpy (mod->name, name, sizeof(mod->name)) >= sizeof(mod->name))
+			Sys_Error ("Mod_FindName: model name too long: %s", name);
 		mod->needload = true;
 		mod_numknown++;
 	}
@@ -2635,10 +2636,11 @@ visdone:
 		{	// duplicate the basic information
 			char	name[12];
 
-			sprintf (name, "*%i", i+1);
+			if (q_snprintf (name, sizeof(name), "*%i", i+1) >= (int)sizeof(name))
+				Sys_Error ("Mod_LoadBrushModel: submodel name too long");
 			loadmodel = Mod_FindName (name);
 			*loadmodel = *mod;
-			strcpy (loadmodel->name, name);
+			q_strlcpy (loadmodel->name, name, sizeof(loadmodel->name));
 			mod = loadmodel;
 		}
 	}
@@ -3410,4 +3412,3 @@ static void Mod_Print (void)
 	}
 	Con_Printf ("%i models\n",mod_numknown); //johnfitz -- print the total too
 }
-
