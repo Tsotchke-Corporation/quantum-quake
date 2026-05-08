@@ -377,21 +377,31 @@ const char *UDP_AddrToString (struct qsockaddr *addr)
 
 int UDP_StringToAddr (const char *string, struct qsockaddr *addr)
 {
-	int	ha1, ha2, ha3, ha4, hp;
+	const char *p;
+	char *endptr;
+	long parts[5];
 	uint32_t ipaddr;
+	int i;
 
-	if (sscanf(string, "%d.%d.%d.%d:%d", &ha1, &ha2, &ha3, &ha4, &hp) != 5)
+	p = string;
+	for (i = 0; i < 4; i++)
+	{
+		parts[i] = strtol(p, &endptr, 10);
+		if (endptr == p || parts[i] < 0 || parts[i] > 255)
+			return -1;
+		if (*endptr != (i == 3 ? ':' : '.'))
+			return -1;
+		p = endptr + 1;
+	}
+	parts[4] = strtol(p, &endptr, 10);
+	if (endptr == p || *endptr != '\0' || parts[4] < 0 || parts[4] > 65535)
 		return -1;
-	if (ha1 < 0 || ha1 > 255 || ha2 < 0 || ha2 > 255 ||
-	    ha3 < 0 || ha3 > 255 || ha4 < 0 || ha4 > 255 ||
-	    hp < 0 || hp > 65535)
-		return -1;
-	ipaddr = ((uint32_t)ha1 << 24) | ((uint32_t)ha2 << 16) |
-	         ((uint32_t)ha3 << 8) | (uint32_t)ha4;
+	ipaddr = ((uint32_t)parts[0] << 24) | ((uint32_t)parts[1] << 16) |
+	         ((uint32_t)parts[2] << 8) | (uint32_t)parts[3];
 
 	addr->qsa_family = AF_INET;
 	((struct sockaddr_in *)addr)->sin_addr.s_addr = htonl(ipaddr);
-	((struct sockaddr_in *)addr)->sin_port = htons((unsigned short)hp);
+	((struct sockaddr_in *)addr)->sin_port = htons((unsigned short)parts[4]);
 	return 0;
 }
 
