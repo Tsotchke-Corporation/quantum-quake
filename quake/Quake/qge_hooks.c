@@ -3133,28 +3133,21 @@ static void QGE_SpatialAddPixelRGBDepthIndex(int idx,
 	bbuf[idx] = QGE_ClampSpatialSignal(bbuf[idx]);
 }
 
-static inline void QGE_SpatialAddPixelRGBDepthPrepared(int idx,
-													   float r,
-													   float g,
-													   float b,
-													   float depth,
-													   float *depth_buffer,
-													   float *rbuf,
-													   float *gbuf,
-													   float *bbuf)
+static inline void QGE_SpatialAddPixelRGBDepthPositivePrepared(int idx,
+															  float r,
+															  float g,
+															  float b,
+															  float depth,
+															  float *depth_buffer,
+															  float *rbuf,
+															  float *gbuf,
+															  float *bbuf)
 {
 	float current_depth = depth_buffer[idx];
 
 	if (!(depth > 0.0f))
 		depth = QGE_SPATIAL_DEPTH_FAR * 0.5f;
-
 	if (depth > current_depth + QGE_SPATIAL_DEPTH_EPSILON)
-		return;
-
-	if (r < 0.0f) r = 0.0f;
-	if (g < 0.0f) g = 0.0f;
-	if (b < 0.0f) b = 0.0f;
-	if (r <= 0.0f && g <= 0.0f && b <= 0.0f)
 		return;
 
 	if (depth < current_depth - QGE_SPATIAL_DEPTH_EPSILON) {
@@ -4550,11 +4543,14 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 
 					pixel_color = QGE_SurfaceSampleColorContext(&sample_ctx, &sample);
 					if (prepared_rgb_depth) {
-						QGE_SpatialAddPixelRGBDepthPrepared(
+						float r = pixel_color.r * value;
+						float g = pixel_color.g * value;
+						float b = pixel_color.b * value;
+						if (r <= 0.0f && g <= 0.0f && b <= 0.0f)
+							continue;
+						QGE_SpatialAddPixelRGBDepthPositivePrepared(
 							row_index + x,
-							pixel_color.r * value,
-							pixel_color.g * value,
-							pixel_color.b * value,
+							r, g, b,
 							sample.depth,
 							depth_buffer, rbuf, gbuf, bbuf);
 					} else {
