@@ -629,7 +629,7 @@ void TexMgr_RecalcWarpImageSize (void)
 //	int	oldsize = gl_warpimagesize;
 	int	mark;
 	gltexture_t *glt;
-	byte *dummy;
+	byte *clear_pixels;
 
 	//
 	// find the new correct size
@@ -650,14 +650,14 @@ void TexMgr_RecalcWarpImageSize (void)
 	// resize the textures in opengl
 	//
 	mark = Hunk_LowMark();
-	dummy = (byte *) Hunk_Alloc (gl_warpimagesize*gl_warpimagesize*4);
+	clear_pixels = (byte *) Hunk_Alloc (gl_warpimagesize*gl_warpimagesize*4);
 
 	for (glt = active_gltextures; glt; glt = glt->next)
 	{
 		if (glt->flags & TEXPREF_WARPIMAGE)
 		{
 			GL_Bind (glt);
-			glTexImage2D (GL_TEXTURE_2D, 0, gl_solid_format, gl_warpimagesize, gl_warpimagesize, 0, GL_RGBA, GL_UNSIGNED_BYTE, dummy);
+			glTexImage2D (GL_TEXTURE_2D, 0, gl_solid_format, gl_warpimagesize, gl_warpimagesize, 0, GL_RGBA, GL_UNSIGNED_BYTE, clear_pixels);
 			glt->width = glt->height = gl_warpimagesize;
 		}
 	}

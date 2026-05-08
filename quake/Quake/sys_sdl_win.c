@@ -296,7 +296,7 @@ void Sys_Error (const char *error, ...)
 {
 	va_list		argptr;
 	char		text[1024];
-	DWORD		dummy;
+	DWORD		bytes_written;
 
 	host_parms->errstate++;
 
@@ -305,7 +305,7 @@ void Sys_Error (const char *error, ...)
 	va_end (argptr);
 
 	if (isDedicated)
-		WriteFile (houtput, errortxt1, strlen(errortxt1), &dummy, NULL);
+		WriteFile (houtput, errortxt1, strlen(errortxt1), &bytes_written, NULL);
 	/* SDL will put these into its own stderr log,
 	   so print to stderr even in graphical mode. */
 	fputs (errortxt1, stderr);
@@ -317,9 +317,9 @@ void Sys_Error (const char *error, ...)
 		PL_ErrorDialog(text);
 	else
 	{
-		WriteFile (houtput, errortxt2, strlen(errortxt2), &dummy, NULL);
-		WriteFile (houtput, text,      strlen(text),      &dummy, NULL);
-		WriteFile (houtput, "\r\n",    2,		  &dummy, NULL);
+		WriteFile (houtput, errortxt2, strlen(errortxt2), &bytes_written, NULL);
+		WriteFile (houtput, text,      strlen(text),      &bytes_written, NULL);
+		WriteFile (houtput, "\r\n",    2,		  &bytes_written, NULL);
 		SDL_Delay (3000);	/* show the console 3 more seconds */
 	}
 
@@ -330,7 +330,7 @@ void Sys_Printf (const char *fmt, ...)
 {
 	va_list		argptr;
 	char		text[1024];
-	DWORD		dummy;
+	DWORD		bytes_written;
 
 	va_start (argptr,fmt);
 	q_vsnprintf (text, sizeof(text), fmt, argptr);
@@ -338,7 +338,7 @@ void Sys_Printf (const char *fmt, ...)
 
 	if (isDedicated)
 	{
-		WriteFile(houtput, text, strlen(text), &dummy, NULL);
+		WriteFile(houtput, text, strlen(text), &bytes_written, NULL);
 	}
 	else
 	{
@@ -369,7 +369,7 @@ const char *Sys_ConsoleInput (void)
 	static int	textlen;
 	INPUT_RECORD	recs[1024];
 	int		ch;
-	DWORD		dummy, numread, numevents;
+	DWORD		bytes_written, numread, numevents;
 
 	for ( ;; )
 	{
@@ -394,7 +394,7 @@ const char *Sys_ConsoleInput (void)
 			switch (ch)
 			{
 			case '\r':
-				WriteFile(houtput, "\r\n", 2, &dummy, NULL);
+				WriteFile(houtput, "\r\n", 2, &bytes_written, NULL);
 
 				if (textlen != 0)
 				{
@@ -406,7 +406,7 @@ const char *Sys_ConsoleInput (void)
 				break;
 
 			case '\b':
-				WriteFile(houtput, "\b \b", 3, &dummy, NULL);
+				WriteFile(houtput, "\b \b", 3, &bytes_written, NULL);
 				if (textlen != 0)
 					textlen--;
 
@@ -415,7 +415,7 @@ const char *Sys_ConsoleInput (void)
 			default:
 				if (ch >= ' ')
 				{
-					WriteFile(houtput, &ch, 1, &dummy, NULL);
+					WriteFile(houtput, &ch, 1, &bytes_written, NULL);
 					con_text[textlen] = ch;
 					textlen = (textlen + 1) & 0xff;
 				}
@@ -440,4 +440,3 @@ void Sys_SendKeyEvents (void)
 	IN_Commands();		//ericw -- allow joysticks to add keys so they can be used to confirm SCR_ModalMessage
 	IN_SendKeyEvents();
 }
-
