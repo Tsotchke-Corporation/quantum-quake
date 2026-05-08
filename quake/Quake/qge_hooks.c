@@ -5940,6 +5940,8 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 	float white = 1.0f;
 	float floor_val;
 	float inv_range;
+	float hist_scale;
+	float tone_index_scale = (float)(QGE_TONE_LUT_SIZE - 1);
 	double abs_total = 0.0;
 	int active = 0;
 	int median_target;
@@ -6003,10 +6005,11 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 		return;
 	}
 
+	hist_scale = (float)(QGE_TONE_BINS - 1) / max_abs;
 	for (i = 0; i < total_pixels; i++) {
 		float v = qge_render_buffer[i];
 		if (v > 0.0001f) {
-			int bin = (int)((v / max_abs) * (float)(QGE_TONE_BINS - 1));
+			int bin = (int)(v * hist_scale);
 			if (bin < 0) bin = 0;
 			if (bin >= QGE_TONE_BINS) bin = QGE_TONE_BINS - 1;
 			hist[bin]++;
@@ -6039,37 +6042,42 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 	qge_last_tone_clipped = 0;
 
 	if (direct_display) {
+		uint8_t *dst = qge_display_buffer;
 		for (i = 0; i < total_pixels; i++) {
-			float r = rbuf[i] > 0.0f ? rbuf[i] : 0.0f;
-			float g = gbuf[i] > 0.0f ? gbuf[i] : 0.0f;
-			float b = bbuf[i] > 0.0f ? bbuf[i] : 0.0f;
 			float v = qge_render_buffer[i];
 			float normalized = (v - floor_val) * inv_range;
 			float scale;
-			int idx;
+			float r, g, b;
+			int tone_index;
 
-			if (normalized <= 0.0f)
-				normalized = 0.0f;
-			else if (normalized >= 1.0f) {
+			if (normalized <= 0.0f || v <= 0.0001f) {
+				dst[0] = 0;
+				dst[1] = 0;
+				dst[2] = 0;
+				dst += 3;
+				continue;
+			}
+			if (normalized >= 1.0f) {
 				normalized = 1.0f;
 				qge_last_tone_clipped++;
 			}
 
-			normalized = qge_tone_lut[(int)(normalized * (float)(QGE_TONE_LUT_SIZE - 1) + 0.5f)];
-			if (v > 0.0001f)
-				scale = normalized / v;
-			else
-				scale = 0.0f;
+			tone_index = (int)(normalized * tone_index_scale + 0.5f);
+			normalized = qge_tone_lut[tone_index];
+			scale = normalized / v;
+			r = rbuf[i] > 0.0f ? rbuf[i] : 0.0f;
+			g = gbuf[i] > 0.0f ? gbuf[i] : 0.0f;
+			b = bbuf[i] > 0.0f ? bbuf[i] : 0.0f;
 			r *= scale;
 			g *= scale;
 			b *= scale;
 			if (r > 1.0f) r = 1.0f;
 			if (g > 1.0f) g = 1.0f;
 			if (b > 1.0f) b = 1.0f;
-			idx = i * 3;
-			qge_display_buffer[idx + 0] = (uint8_t)(r * 255.0f);
-			qge_display_buffer[idx + 1] = (uint8_t)(g * 255.0f);
-			qge_display_buffer[idx + 2] = (uint8_t)(b * 255.0f);
+			dst[0] = (uint8_t)(r * 255.0f);
+			dst[1] = (uint8_t)(g * 255.0f);
+			dst[2] = (uint8_t)(b * 255.0f);
+			dst += 3;
 		}
 	} else {
 		for (int y = 0; y < qge_render_res; y++) {
@@ -6090,7 +6098,7 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 					qge_last_tone_clipped++;
 				}
 
-				normalized = qge_tone_lut[(int)(normalized * (float)(QGE_TONE_LUT_SIZE - 1) + 0.5f)];
+				normalized = qge_tone_lut[(int)(normalized * tone_index_scale + 0.5f)];
 				if (v > 0.0001f)
 					scale = normalized / v;
 				else
