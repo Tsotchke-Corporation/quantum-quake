@@ -195,13 +195,15 @@ static int read_export (fshandle_t *f, const struct upkg_hdr *hdr,
 }
 
 static int read_typname(fshandle_t *f, const struct upkg_hdr *hdr,
-			int idx, char *out)
+			int idx, char *out, size_t out_size)
 {
 	int i, s;
 	long l;
 	char buf[64];
+	const char *name;
 
 	if (idx >= hdr->name_count) return -1;
+	if (out == NULL || out_size == 0) return -1;
 	memset(buf, 0, 64);
 	for (i = 0, l = 0; i <= idx; i++) {
 		if (FS_fseek(f, hdr->name_offset + l, SEEK_SET) < 0) return -1;
@@ -216,7 +218,8 @@ static int read_typname(fshandle_t *f, const struct upkg_hdr *hdr,
 		}
 	}
 
-	strcpy(out, (hdr->file_version >= 64)? &buf[1] : buf);
+	name = (hdr->file_version >= 64) ? &buf[1] : buf;
+	if (q_strlcpy(out, name, out_size) >= out_size) return -1;
 	return 0;
 }
 
@@ -261,7 +264,7 @@ static int probe_umx   (fshandle_t *f, const struct upkg_hdr *hdr,
 	if ((t = read_export(f, hdr, &pos, &s)) < 0) return -1;
 	if (s <= 0 || s > fsiz - pos) return -1;
 
-	if (read_typname(f, hdr, t, buf) < 0) return -1;
+	if (read_typname(f, hdr, t, buf, sizeof(buf)) < 0) return -1;
 	for (i = 0; mustype[i] != NULL; i++) {
 		if (!q_strcasecmp(buf, mustype[i])) {
 			t = i;
@@ -410,4 +413,3 @@ snd_codec_t umx_codec =
 };
 
 #endif	/* USE_CODEC_UMX */
-
