@@ -89,7 +89,7 @@ sys_socket_t UDP_Init (void)
 					myAddr = inet_addr(com_argv[i + 1]);
 					if (myAddr == INADDR_NONE)
 						Sys_Error ("%s is not a valid IP address", com_argv[i + 1]);
-					strcpy(my_tcpip_address, com_argv[i + 1]);
+					q_strlcpy(my_tcpip_address, com_argv[i + 1], sizeof(my_tcpip_address));
 				}
 				else
 				{
@@ -114,7 +114,7 @@ sys_socket_t UDP_Init (void)
 	broadcastaddr.sin_port = htons((unsigned short)net_hostport);
 
 	UDP_GetSocketAddr (net_controlsocket, &addr);
-	strcpy(my_tcpip_address, UDP_AddrToString (&addr));
+	q_strlcpy(my_tcpip_address, UDP_AddrToString (&addr), sizeof(my_tcpip_address));
 	tst = strrchr(my_tcpip_address, ':');
 	if (tst) *tst = 0;
 
@@ -213,7 +213,8 @@ static int PartialIPAddress (const char *in, struct qsockaddr *hostaddr)
 
 	buff[0] = '.';
 	b = buff;
-	strcpy(buff+1, in);
+	if (q_strlcpy(buff + 1, in, sizeof(buff) - 1) >= sizeof(buff) - 1)
+		return -1;
 	if (buff[1] == '.')
 		b++;
 
@@ -376,10 +377,17 @@ const char *UDP_AddrToString (struct qsockaddr *addr)
 
 int UDP_StringToAddr (const char *string, struct qsockaddr *addr)
 {
-	int	ha1, ha2, ha3, ha4, hp, ipaddr;
+	int	ha1, ha2, ha3, ha4, hp;
+	uint32_t ipaddr;
 
-	sscanf(string, "%d.%d.%d.%d:%d", &ha1, &ha2, &ha3, &ha4, &hp);
-	ipaddr = (ha1 << 24) | (ha2 << 16) | (ha3 << 8) | ha4;
+	if (sscanf(string, "%d.%d.%d.%d:%d", &ha1, &ha2, &ha3, &ha4, &hp) != 5)
+		return -1;
+	if (ha1 < 0 || ha1 > 255 || ha2 < 0 || ha2 > 255 ||
+	    ha3 < 0 || ha3 > 255 || ha4 < 0 || ha4 > 255 ||
+	    hp < 0 || hp > 65535)
+		return -1;
+	ipaddr = ((uint32_t)ha1 << 24) | ((uint32_t)ha2 << 16) |
+	         ((uint32_t)ha3 << 8) | (uint32_t)ha4;
 
 	addr->qsa_family = AF_INET;
 	((struct sockaddr_in *)addr)->sin_addr.s_addr = htonl(ipaddr);
@@ -415,11 +423,11 @@ int UDP_GetNameFromAddr (struct qsockaddr *addr, char *name)
 						sizeof(struct in_addr), AF_INET);
 	if (hostentry)
 	{
-		strncpy (name, (char *)hostentry->h_name, NET_NAMELEN - 1);
+		q_strlcpy (name, (char *)hostentry->h_name, NET_NAMELEN);
 		return 0;
 	}
 
-	strcpy (name, UDP_AddrToString (addr));
+	q_strlcpy (name, UDP_AddrToString (addr), NET_NAMELEN);
 	return 0;
 }
 
@@ -477,4 +485,3 @@ int UDP_SetSocketPort (struct qsockaddr *addr, int port)
 }
 
 //=============================================================================
-
