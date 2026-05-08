@@ -5357,15 +5357,21 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 	int white_target;
 	int running;
 	int i;
+	qboolean direct_display = quantum_render_display_filter.value < 0.5f;
+	const float *rbuf = qge_render_color_buffer[QGE_DWT_R];
+	const float *gbuf = qge_render_color_buffer[QGE_DWT_G];
+	const float *bbuf = qge_render_color_buffer[QGE_DWT_B];
 
 	memset(hist, 0, sizeof(hist));
 	*nonzero_pixels = 0;
 	*abs_sum = 0.0;
 
-	for (int y = 0; y < qge_render_res; y++) {
-		for (int x = 0; x < qge_render_res; x++) {
-			i = y * qge_render_res + x;
-			float v = QGE_DisplayEnergyAt(x, y);
+	if (direct_display) {
+		for (i = 0; i < total_pixels; i++) {
+			float r = rbuf && rbuf[i] > 0.0f ? rbuf[i] : 0.0f;
+			float g = gbuf && gbuf[i] > 0.0f ? gbuf[i] : 0.0f;
+			float b = bbuf && bbuf[i] > 0.0f ? bbuf[i] : 0.0f;
+			float v = 0.299f * r + 0.587f * g + 0.114f * b;
 			qge_render_buffer[i] = v;
 			if (v > max_abs)
 				max_abs = v;
@@ -5374,6 +5380,21 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 				active++;
 			}
 			*abs_sum += v;
+		}
+	} else {
+		for (int y = 0; y < qge_render_res; y++) {
+			for (int x = 0; x < qge_render_res; x++) {
+				i = y * qge_render_res + x;
+				float v = QGE_DisplayEnergyAt(x, y);
+				qge_render_buffer[i] = v;
+				if (v > max_abs)
+					max_abs = v;
+				if (v > 0.0001f) {
+					(*nonzero_pixels)++;
+					active++;
+				}
+				*abs_sum += v;
+			}
 		}
 	}
 
@@ -5421,12 +5442,11 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 	qge_last_tone_white = white;
 	qge_last_tone_clipped = 0;
 
-	for (int y = 0; y < qge_render_res; y++) {
-		for (int x = 0; x < qge_render_res; x++) {
-			i = y * qge_render_res + x;
-			float r = QGE_DisplayChannelEnergyAt(qge_render_color_buffer[QGE_DWT_R], x, y);
-			float g = QGE_DisplayChannelEnergyAt(qge_render_color_buffer[QGE_DWT_G], x, y);
-			float b = QGE_DisplayChannelEnergyAt(qge_render_color_buffer[QGE_DWT_B], x, y);
+	if (direct_display) {
+		for (i = 0; i < total_pixels; i++) {
+			float r = rbuf && rbuf[i] > 0.0f ? rbuf[i] : 0.0f;
+			float g = gbuf && gbuf[i] > 0.0f ? gbuf[i] : 0.0f;
+			float b = bbuf && bbuf[i] > 0.0f ? bbuf[i] : 0.0f;
 			float v = qge_render_buffer[i];
 			float normalized = (v - floor_val) * inv_range;
 			float scale;
@@ -5454,6 +5474,42 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 			qge_display_buffer[idx + 0] = (uint8_t)(r * 255.0f);
 			qge_display_buffer[idx + 1] = (uint8_t)(g * 255.0f);
 			qge_display_buffer[idx + 2] = (uint8_t)(b * 255.0f);
+		}
+	} else {
+		for (int y = 0; y < qge_render_res; y++) {
+			for (int x = 0; x < qge_render_res; x++) {
+				i = y * qge_render_res + x;
+				float r = QGE_DisplayChannelEnergyAt(qge_render_color_buffer[QGE_DWT_R], x, y);
+				float g = QGE_DisplayChannelEnergyAt(qge_render_color_buffer[QGE_DWT_G], x, y);
+				float b = QGE_DisplayChannelEnergyAt(qge_render_color_buffer[QGE_DWT_B], x, y);
+				float v = qge_render_buffer[i];
+				float normalized = (v - floor_val) * inv_range;
+				float scale;
+				int idx;
+
+				if (normalized <= 0.0f)
+					normalized = 0.0f;
+				else if (normalized >= 1.0f) {
+					normalized = 1.0f;
+					qge_last_tone_clipped++;
+				}
+
+				normalized = log1pf(normalized * 4.0f) * inv_log_tone;
+				if (v > 0.0001f)
+					scale = normalized / v;
+				else
+					scale = 0.0f;
+				r *= scale;
+				g *= scale;
+				b *= scale;
+				if (r > 1.0f) r = 1.0f;
+				if (g > 1.0f) g = 1.0f;
+				if (b > 1.0f) b = 1.0f;
+				idx = i * 3;
+				qge_display_buffer[idx + 0] = (uint8_t)(r * 255.0f);
+				qge_display_buffer[idx + 1] = (uint8_t)(g * 255.0f);
+				qge_display_buffer[idx + 2] = (uint8_t)(b * 255.0f);
+			}
 		}
 	}
 
