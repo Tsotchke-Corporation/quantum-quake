@@ -4450,6 +4450,8 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 				 sampler.w1_dy * sample_y;
 
 			if (!edge_samples) {
+				float row_w0 = w0;
+				float row_w1 = w1;
 				float w2 = 1.0f - w0 - w1;
 				float inv_depth = w0 * sampler.ia + w1 * sampler.ib +
 								  w2 * sampler.ic;
@@ -4466,8 +4468,8 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 									w1 * sampler.b_light_t_ib +
 									w2 * sampler.c_light_t_ic;
 
-				for (int x = sx1; x <= sx2;
-					 x++, w0 += sampler.w0_dx, w1 += sampler.w1_dx,
+				for (int x = sx1, x_offset = 0; x <= sx2;
+					 x++, x_offset++,
 					 inv_depth += sampler.inv_depth_dx,
 					 tex_s_num += sampler.tex_s_num_dx,
 					 tex_t_num += sampler.tex_t_num_dx,
@@ -4477,8 +4479,13 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 					qge_rgb_sample_t pixel_color;
 
 					if (inv_depth <= 0.000001f || !isfinite(inv_depth)) {
+						float fallback_w0 = row_w0 +
+											sampler.w0_dx * (float)x_offset;
+						float fallback_w1 = row_w1 +
+											sampler.w1_dx * (float)x_offset;
 						if (!QGE_ProjectedTriangleSampleWeightsUnchecked(&sampler,
-																		 w0, w1,
+																		 fallback_w0,
+																		 fallback_w1,
 																		 &sample))
 							continue;
 					} else {
