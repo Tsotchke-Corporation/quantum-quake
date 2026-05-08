@@ -26,6 +26,7 @@
 
 static qrng_v3_ctx_t *rng_ctx = NULL;
 static volatile bool rng_initialized = false;
+static volatile bool rng_failed = false;
 static qge_quantum_runtime_t *rng_runtime = NULL;
 
 /* Thread safety - mutex protects ALL RNG state access */
@@ -35,16 +36,34 @@ static pthread_mutex_t rng_mutex = PTHREAD_MUTEX_INITIALIZER;
 #define RNG_BATCH_SIZE 256
 static uint16_t rng_batch[RNG_BATCH_SIZE];
 static int rng_batch_index = RNG_BATCH_SIZE; /* Start empty to force first fill */
+static uint64_t rng_fallback_state = 0x5151455f524e4731ULL;
 
 /* ============================================================================
  * Internal Functions
  * ============================================================================ */
 
+static uint64_t qge_rng_fallback_u64(void) {
+    uint64_t z = (rng_fallback_state += 0x9e3779b97f4a7c15ULL);
+    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
+    return z ^ (z >> 31);
+}
+
+static void fill_rng_batch_fallback(void) {
+    for (int i = 0; i < RNG_BATCH_SIZE; i++) {
+        rng_batch[i] = (uint16_t)(qge_rng_fallback_u64() >> 16);
+    }
+    rng_batch_index = 0;
+}
+
 /**
- * @brief Initialize the quantum RNG
+ * @brief Initialize the quantum RNG.
+ *
+ * Called with rng_mutex held.
  */
-static void ensure_rng_initialized(void) {
-    if (rng_initialized) return;
+static int ensure_rng_initialized(void) {
+    if (rng_failed) return -1;
+    if (rng_initialized) return 0;
 
     /* Initialize QRNG v3 with custom configuration for game use */
     qrng_v3_config_t config;
@@ -68,7 +87,8 @@ static void ensure_rng_initialized(void) {
     if (err != QRNG_V3_SUCCESS) {
         fprintf(stderr, "QGE RNG: Failed to initialize QRNG v3: %s\n",
                 qrng_v3_error_string(err));
-        exit(1);
+        rng_failed = true;
+        return -1;
     }
 
     /* Run initial Bell test to verify quantum behavior */
@@ -81,13 +101,21 @@ static void ensure_rng_initialized(void) {
     /* Memory barrier before publishing initialized flag */
     __sync_synchronize();
     rng_initialized = true;
+    return 0;
 }
 
 /**
  * @brief Fill the batch buffer with quantum random values
  */
 static void fill_rng_batch(void) {
-    ensure_rng_initialized();
+    if (rng_failed) {
+        fill_rng_batch_fallback();
+        return;
+    }
+    if (ensure_rng_initialized() != 0) {
+        fill_rng_batch_fallback();
+        return;
+    }
 
     /* Generate bytes using QRNG v3 */
     uint8_t buffer[RNG_BATCH_SIZE * 2];
@@ -95,8 +123,9 @@ static void fill_rng_batch(void) {
     if (err != QRNG_V3_SUCCESS) {
         fprintf(stderr, "QGE RNG: Failed to generate bytes: %s\n",
                 qrng_v3_error_string(err));
-        /* Fallback: fill with zeros (this should never happen) */
-        memset(buffer, 0, sizeof(buffer));
+        rng_failed = true;
+        fill_rng_batch_fallback();
+        return;
     }
 
     /* Convert to 16-bit values */
@@ -140,6 +169,9 @@ static uint64_t qge_rng_entropy_callback(void *user_data,
 
 int qge_rng_init(void) {
     /* Quick check without mutex */
+    if (rng_failed) {
+        return -1;
+    }
     if (rng_initialized) {
         return 0; /* Already initialized */
     }
@@ -147,6 +179,10 @@ int qge_rng_init(void) {
     pthread_mutex_lock(&rng_mutex);
 
     /* Double-check under mutex */
+    if (rng_failed) {
+        pthread_mutex_unlock(&rng_mutex);
+        return -1;
+    }
     if (rng_initialized) {
         pthread_mutex_unlock(&rng_mutex);
         return 0;
@@ -176,6 +212,7 @@ int qge_rng_init(void) {
     if (err != QRNG_V3_SUCCESS) {
         fprintf(stderr, "QGE RNG: Failed to initialize QRNG v3: %s\n",
                 qrng_v3_error_string(err));
+        rng_failed = true;
         pthread_mutex_unlock(&rng_mutex);
         return -1;
     }
@@ -202,6 +239,10 @@ int qge_rng_init(void) {
             rng_batch[i] = (uint16_t)(buffer[i * 2] | (buffer[i * 2 + 1] << 8));
         }
         rng_batch_index = 0;
+    } else {
+        fprintf(stderr, "QGE RNG: Failed to prefill QRNG batch: %s\n",
+                qrng_v3_error_string(err));
+        fill_rng_batch_fallback();
     }
 
     /* Memory barrier before publishing initialized flag */
@@ -286,11 +327,14 @@ void qge_rng_set_runtime(qge_quantum_runtime_t* runtime) {
  * ============================================================================ */
 
 void qge_rng_shutdown(void) {
+    pthread_mutex_lock(&rng_mutex);
     rng_runtime = NULL;
-    if (rng_initialized && rng_ctx) {
+    if (rng_ctx) {
         qrng_v3_free(rng_ctx);
         rng_ctx = NULL;
-        rng_initialized = false;
-        rng_batch_index = RNG_BATCH_SIZE;
     }
+    rng_initialized = false;
+    rng_batch_index = RNG_BATCH_SIZE;
+    rng_failed = false;
+    pthread_mutex_unlock(&rng_mutex);
 }

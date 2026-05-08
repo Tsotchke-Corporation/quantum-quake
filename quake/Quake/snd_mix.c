@@ -65,6 +65,47 @@ static short QGE_AgentAudioClamp16(int value)
 	return (short)value;
 }
 
+static void QGE_AgentAudioWriteJsonString(FILE *file, const char *value)
+{
+	const unsigned char *cursor = (const unsigned char *)(value ? value : "");
+
+	fputc('"', file);
+	for (; *cursor; cursor++)
+	{
+		switch (*cursor)
+		{
+		case '\\':
+			fputs("\\\\", file);
+			break;
+		case '"':
+			fputs("\\\"", file);
+			break;
+		case '\b':
+			fputs("\\b", file);
+			break;
+		case '\f':
+			fputs("\\f", file);
+			break;
+		case '\n':
+			fputs("\\n", file);
+			break;
+		case '\r':
+			fputs("\\r", file);
+			break;
+		case '\t':
+			fputs("\\t", file);
+			break;
+		default:
+			if (*cursor < 0x20)
+				fprintf(file, "\\u%04x", *cursor);
+			else
+				fputc(*cursor, file);
+			break;
+		}
+	}
+	fputc('"', file);
+}
+
 static void QGE_AgentAudioWriteMetadata(void)
 {
 	FILE *meta;
@@ -87,10 +128,11 @@ static void QGE_AgentAudioWriteMetadata(void)
 		"  \"sample_rate\": %d,\n"
 		"  \"sample_bits\": 16,\n"
 		"  \"sample_pairs\": %d,\n"
-		"  \"raw_file\": \"%s\"\n"
-		"}\n",
-		shm->speed, qge_agent_audio_sample_pairs,
-		qge_agent_audio_raw_path);
+		"  \"raw_file\": ",
+		shm->speed, qge_agent_audio_sample_pairs);
+	QGE_AgentAudioWriteJsonString(meta, qge_agent_audio_raw_path);
+	fprintf(meta, "\n"
+		"}\n");
 	fclose(meta);
 }
 

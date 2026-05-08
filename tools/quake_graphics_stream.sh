@@ -76,12 +76,29 @@ mkdir -p "$outdir" "$agent_video_dir" "$agent_audio_dir" "$agent_log_dir"
 : > "$agent_frame_count_file"
 : > "$agent_last_frame_file"
 
+json_escape() {
+  local value="${1:-}"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  printf '%s' "$value"
+}
+
+json_string() {
+  printf '"%s"' "$(json_escape "${1:-}")"
+}
+
 agent_event() {
   local event="$1"
   local path="${2:-}"
   local detail="${3:-}"
-  printf '{"ts":"%s","event":"%s","path":"%s","detail":"%s"}\n' \
-    "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$event" "$path" "$detail" \
+  printf '{"ts":%s,"event":%s,"path":%s,"detail":%s}\n' \
+    "$(json_string "$(date -u +"%Y-%m-%dT%H:%M:%SZ")")" \
+    "$(json_string "$event")" \
+    "$(json_string "$path")" \
+    "$(json_string "$detail")" \
     >> "$agent_events_file"
 }
 
@@ -102,10 +119,10 @@ write_agent_manifest() {
   cat > "$agent_manifest_file" <<EOF
 {
   "schema": "qge.agent_stream.v0",
-  "status": "$status",
-  "stream_dir": "$agent_stream",
-  "capture_dir": "$outdir",
-  "map": "$map_name",
+  "status": $(json_string "$status"),
+  "stream_dir": $(json_string "$agent_stream"),
+  "capture_dir": $(json_string "$outdir"),
+  "map": $(json_string "$map_name"),
   "frames_requested": $frames,
   "waits_per_frame": $waits_per_frame,
   "engine_capture": $engine_capture,
@@ -115,31 +132,31 @@ write_agent_manifest() {
   "render": {
     "quantum_render": $render_value,
     "quantum_render_res": $render_res,
-    "quantum_render_threshold": "$render_threshold",
-    "quantum_render_edge_gain": "$render_edge_gain",
-    "quantum_render_material_gain": "$render_material_gain"
+    "quantum_render_threshold": $(json_string "$render_threshold"),
+    "quantum_render_edge_gain": $(json_string "$render_edge_gain"),
+    "quantum_render_material_gain": $(json_string "$render_material_gain")
   },
   "video": {
-    "frames_dir": "$agent_video_dir",
-    "frame_count_file": "$agent_frame_count_file",
-    "latest_frame_file": "$agent_last_frame_file",
+    "frames_dir": $(json_string "$agent_video_dir"),
+    "frame_count_file": $(json_string "$agent_frame_count_file"),
+    "latest_frame_file": $(json_string "$agent_last_frame_file"),
     "format": "png"
   },
   "audio": {
-    "status": "$audio_status",
-    "raw_file": "$agent_audio_raw",
-    "metadata_file": "$agent_audio_meta",
-    "bytes_file": "$agent_audio_bytes_file",
+    "status": $(json_string "$audio_status"),
+    "raw_file": $(json_string "$agent_audio_raw"),
+    "metadata_file": $(json_string "$agent_audio_meta"),
+    "bytes_file": $(json_string "$agent_audio_bytes_file"),
     "format": "s16le",
     "bytes": $audio_bytes
   },
   "logs": {
-    "runtime_log": "$agent_log_dir/quantum_quake.log",
-    "open_log": "$agent_log_dir/open.log",
-    "events": "$agent_events_file"
+    "runtime_log": $(json_string "$agent_log_dir/quantum_quake.log"),
+    "open_log": $(json_string "$agent_log_dir/open.log"),
+    "events": $(json_string "$agent_events_file")
   },
-  "icc_evidence": "$agent_icc_file",
-  "trace": "$outdir/qge_trace.bin"
+  "icc_evidence": $(json_string "$agent_icc_file"),
+  "trace": $(json_string "$outdir/qge_trace.bin")
 }
 EOF
 }
@@ -154,13 +171,13 @@ write_agent_icc_evidence() {
     audio_meta_file="$agent_audio_meta"
   fi
   {
-    printf '{"kind":"runtime_backend","name":"runtime_backend","value":"qge_agent_media_stream","path":"%s"}\n' "$agent_icc_file"
-    printf '{"kind":"completion_condition","name":"completion_reason","value":"qge_agent_media_stream_complete","path":"%s"}\n' "$agent_icc_file"
-    printf '{"kind":"artifact","name":"agent_stream_manifest_file","value":"%s","path":"%s"}\n' "$agent_manifest_file" "$agent_icc_file"
-    printf '{"kind":"artifact","name":"agent_events_file","value":"%s","path":"%s"}\n' "$agent_events_file" "$agent_icc_file"
-    printf '{"kind":"artifact","name":"agent_video_frame_file","value":"%s","path":"%s"}\n' "$last_agent_frame" "$agent_icc_file"
-    printf '{"kind":"artifact","name":"agent_audio_raw_file","value":"%s","path":"%s"}\n' "$audio_raw_file" "$agent_icc_file"
-    printf '{"kind":"artifact","name":"agent_audio_metadata_file","value":"%s","path":"%s"}\n' "$audio_meta_file" "$agent_icc_file"
+    printf '{"kind":"runtime_backend","name":"runtime_backend","value":"qge_agent_media_stream","path":%s}\n' "$(json_string "$agent_icc_file")"
+    printf '{"kind":"completion_condition","name":"completion_reason","value":"qge_agent_media_stream_complete","path":%s}\n' "$(json_string "$agent_icc_file")"
+    printf '{"kind":"artifact","name":"agent_stream_manifest_file","value":%s,"path":%s}\n' "$(json_string "$agent_manifest_file")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"artifact","name":"agent_events_file","value":%s,"path":%s}\n' "$(json_string "$agent_events_file")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"artifact","name":"agent_video_frame_file","value":%s,"path":%s}\n' "$(json_string "$last_agent_frame")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"artifact","name":"agent_audio_raw_file","value":%s,"path":%s}\n' "$(json_string "$audio_raw_file")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"artifact","name":"agent_audio_metadata_file","value":%s,"path":%s}\n' "$(json_string "$audio_meta_file")" "$(json_string "$agent_icc_file")"
   } > "$agent_icc_file"
 }
 
@@ -351,6 +368,18 @@ watch_open_stream() {
   poll_agent_audio
 }
 
+kill_open_run_processes() {
+  local app_pid
+  local app_cmd
+
+  ps -axo pid=,command= | while read -r app_pid app_cmd; do
+    [[ -n "$app_pid" ]] || continue
+    if [[ "$app_cmd" == *"$app_bin"* && "$app_cmd" == *"$agent_stream"* ]]; then
+      kill "$app_pid" 2>/dev/null || true
+    fi
+  done
+}
+
 sync_agent_frame_state() {
   if [[ -s "$agent_frame_count_file" ]]; then
     frame_index="$(tail -n 1 "$agent_frame_count_file" | tr -d ' ')"
@@ -402,15 +431,13 @@ if [[ "$launch_mode" == "open" ]]; then
   rm -f "$watch_stop_file"
   watch_open_stream &
   watch_pid=$!
-  (
-    sleep "$max_seconds"
-    if [[ ! -f "$watch_stop_file" ]]; then
-      echo "QGE_STREAM_TIMEOUT killing app launched by open" >&2
-      pgrep -f "$app_bin" | while read -r app_pid; do
-        kill "$app_pid" 2>/dev/null || true
-      done
-    fi
-  ) &
+	  (
+	    sleep "$max_seconds"
+	    if [[ ! -f "$watch_stop_file" ]]; then
+	      echo "QGE_STREAM_TIMEOUT killing app launched by open" >&2
+	      kill_open_run_processes
+	    fi
+	  ) &
   watchdog_pid=$!
   open_status=0
   open "${open_args[@]}" --args "${run_args[@]}" -condebug || open_status=$?
