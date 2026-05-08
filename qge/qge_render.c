@@ -94,10 +94,8 @@ struct dwt_framebuffer_s {
 
     /* Reconstruction buffers */
     float* coeff_buffer;        /* Extracted coefficients */
-    float* pixel_buffer;        /* Reconstructed pixels */
     float* transform_scratch;   /* Row/column scratch for DWT passes */
     int coeff_size;             /* Size of coefficient buffer */
-    int pixel_size;             /* Size of pixel buffer */
     int transform_scratch_size;  /* Number of floats in transform_scratch */
 
     bool initialized;
@@ -294,13 +292,11 @@ dwt_framebuffer_t* qge_dwt_framebuffer_create(qge_context_t* ctx,
     /* Allocate reconstruction buffers */
     int base_res = fb->config.base_resolution;
     fb->coeff_size = base_res * base_res;
-    fb->pixel_size = base_res * base_res;
 
     fb->coeff_buffer = calloc(fb->coeff_size, sizeof(float));
-    fb->pixel_buffer = calloc(fb->pixel_size, sizeof(float));
     fb->transform_scratch_size = base_res;
     fb->transform_scratch = calloc(fb->transform_scratch_size, sizeof(float));
-    if (!fb->coeff_buffer || !fb->pixel_buffer || !fb->transform_scratch) {
+    if (!fb->coeff_buffer || !fb->transform_scratch) {
         if (fb->state) {
             quantum_state_free(fb->state);
             free(fb->state);
@@ -314,7 +310,6 @@ dwt_framebuffer_t* qge_dwt_framebuffer_create(qge_context_t* ctx,
         free(fb->active_values);
         free(fb->active_offsets);
         free(fb->coeff_buffer);
-        free(fb->pixel_buffer);
         free(fb->transform_scratch);
         free(fb);
         return NULL;
@@ -344,7 +339,6 @@ void qge_dwt_framebuffer_reset(dwt_framebuffer_t* fb) {
     }
     fb->active_coeff_count = 0;
     memset(fb->coeff_buffer, 0, fb->coeff_size * sizeof(float));
-    memset(fb->pixel_buffer, 0, fb->pixel_size * sizeof(float));
 }
 
 void qge_dwt_framebuffer_free(dwt_framebuffer_t* fb) {
@@ -363,7 +357,6 @@ void qge_dwt_framebuffer_free(dwt_framebuffer_t* fb) {
     free(fb->active_values);
     free(fb->active_offsets);
     free(fb->coeff_buffer);
-    free(fb->pixel_buffer);
     free(fb->transform_scratch);
     free(fb);
 }
@@ -979,13 +972,10 @@ void qge_dwt_render(dwt_framebuffer_t* fb, float* output) {
     /* Step 1: Extract coefficients from quantum state into DWT pyramid layout */
     qge_extract_coefficients(fb, fb->coeff_buffer);
 
-    /* Step 2: Inverse DWT to reconstruct spatial image */
-    qge_inverse_dwt_scratch(fb->coeff_buffer, fb->pixel_buffer,
+    /* Step 2: Inverse DWT directly into the caller's output buffer. */
+    qge_inverse_dwt_scratch(fb->coeff_buffer, output,
                             base_res, base_res, fb->config.num_levels,
                             fb->config.mode, fb->transform_scratch);
-
-    /* Step 3: Copy to output */
-    memcpy(output, fb->pixel_buffer, base_res * base_res * sizeof(float));
 }
 
 /* ============================================================================
