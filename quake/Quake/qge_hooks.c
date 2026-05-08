@@ -346,6 +346,18 @@ typedef struct {
 	float ia;
 	float ib;
 	float ic;
+	float a_tex_s_ia;
+	float b_tex_s_ib;
+	float c_tex_s_ic;
+	float a_tex_t_ia;
+	float b_tex_t_ib;
+	float c_tex_t_ic;
+	float a_light_s_ia;
+	float b_light_s_ib;
+	float c_light_s_ic;
+	float a_light_t_ia;
+	float b_light_t_ib;
+	float c_light_t_ic;
 	float w0_origin;
 	float w1_origin;
 	float w0_dx;
@@ -3250,13 +3262,13 @@ static qboolean QGE_ProjectedTriangleSampleAt(float x,
 
 	sample->depth = 1.0f / inv_depth;
 	sample->tex_s = (w0 * a->tex_s * ia + w1 * b->tex_s * ib +
-					 w2 * c->tex_s * ic) / inv_depth;
+					 w2 * c->tex_s * ic) * sample->depth;
 	sample->tex_t = (w0 * a->tex_t * ia + w1 * b->tex_t * ib +
-					 w2 * c->tex_t * ic) / inv_depth;
+					 w2 * c->tex_t * ic) * sample->depth;
 	sample->light_s = (w0 * a->light_s * ia + w1 * b->light_s * ib +
-					   w2 * c->light_s * ic) / inv_depth;
+					   w2 * c->light_s * ic) * sample->depth;
 	sample->light_t = (w0 * a->light_t * ia + w1 * b->light_t * ib +
-					   w2 * c->light_t * ic) / inv_depth;
+					   w2 * c->light_t * ic) * sample->depth;
 	return true;
 }
 
@@ -3287,6 +3299,18 @@ static qboolean QGE_PrepareProjectedTriangleSampler(
 	sampler->ia = a->depth > 0.0001f ? 1.0f / a->depth : 1.0f;
 	sampler->ib = b->depth > 0.0001f ? 1.0f / b->depth : 1.0f;
 	sampler->ic = c->depth > 0.0001f ? 1.0f / c->depth : 1.0f;
+	sampler->a_tex_s_ia = a->tex_s * sampler->ia;
+	sampler->b_tex_s_ib = b->tex_s * sampler->ib;
+	sampler->c_tex_s_ic = c->tex_s * sampler->ic;
+	sampler->a_tex_t_ia = a->tex_t * sampler->ia;
+	sampler->b_tex_t_ib = b->tex_t * sampler->ib;
+	sampler->c_tex_t_ic = c->tex_t * sampler->ic;
+	sampler->a_light_s_ia = a->light_s * sampler->ia;
+	sampler->b_light_s_ib = b->light_s * sampler->ib;
+	sampler->c_light_s_ic = c->light_s * sampler->ic;
+	sampler->a_light_t_ia = a->light_t * sampler->ia;
+	sampler->b_light_t_ib = b->light_t * sampler->ib;
+	sampler->c_light_t_ic = c->light_t * sampler->ic;
 	w0_x = (b->y - c->y) * sampler->inv_denom;
 	w0_y = (c->x - b->x) * sampler->inv_denom;
 	w1_x = (c->y - a->y) * sampler->inv_denom;
@@ -3312,6 +3336,7 @@ static qboolean QGE_ProjectedTriangleSampleWeights(
 	const qge_projected_vertex_t *c;
 	float w2;
 	float inv_depth;
+	float depth_scale;
 
 	if (!sampler || !sampler->valid || !sample)
 		return false;
@@ -3334,19 +3359,20 @@ static qboolean QGE_ProjectedTriangleSampleWeights(
 		return true;
 	}
 
-	sample->depth = 1.0f / inv_depth;
-	sample->tex_s = (w0 * a->tex_s * sampler->ia +
-					 w1 * b->tex_s * sampler->ib +
-					 w2 * c->tex_s * sampler->ic) / inv_depth;
-	sample->tex_t = (w0 * a->tex_t * sampler->ia +
-					 w1 * b->tex_t * sampler->ib +
-					 w2 * c->tex_t * sampler->ic) / inv_depth;
-	sample->light_s = (w0 * a->light_s * sampler->ia +
-					   w1 * b->light_s * sampler->ib +
-					   w2 * c->light_s * sampler->ic) / inv_depth;
-	sample->light_t = (w0 * a->light_t * sampler->ia +
-					   w1 * b->light_t * sampler->ib +
-					   w2 * c->light_t * sampler->ic) / inv_depth;
+	depth_scale = 1.0f / inv_depth;
+	sample->depth = depth_scale;
+	sample->tex_s = (w0 * sampler->a_tex_s_ia +
+					 w1 * sampler->b_tex_s_ib +
+					 w2 * sampler->c_tex_s_ic) * depth_scale;
+	sample->tex_t = (w0 * sampler->a_tex_t_ia +
+					 w1 * sampler->b_tex_t_ib +
+					 w2 * sampler->c_tex_t_ic) * depth_scale;
+	sample->light_s = (w0 * sampler->a_light_s_ia +
+					   w1 * sampler->b_light_s_ib +
+					   w2 * sampler->c_light_s_ic) * depth_scale;
+	sample->light_t = (w0 * sampler->a_light_t_ia +
+					   w1 * sampler->b_light_t_ib +
+					   w2 * sampler->c_light_t_ic) * depth_scale;
 	return true;
 }
 
