@@ -5109,6 +5109,7 @@ static void QGE_FillEntityTriangleColor(const qge_projected_vertex_t *a,
 	float *gbuf = qge_spatial_color_buffer[QGE_DWT_G];
 	float *bbuf = qge_spatial_color_buffer[QGE_DWT_B];
 	qge_projected_triangle_sampler_t sampler;
+	qge_projected_triangle_t tri;
 	qboolean prepared_rgb_depth = depth_buffer && rbuf && gbuf && bbuf;
 
 	if (!a || !b || !c || !color)
@@ -5117,6 +5118,9 @@ static void QGE_FillEntityTriangleColor(const qge_projected_vertex_t *a,
 		return;
 	if (!QGE_PrepareProjectedTriangleSampler(a, b, c, &sampler))
 		return;
+	tri.v[0] = *a;
+	tri.v[1] = *b;
+	tri.v[2] = *c;
 
 	x1 = (int)floorf(fminf(fminf(a->x, b->x), c->x));
 	y1 = (int)floorf(fminf(fminf(a->y, b->y), c->y));
@@ -5130,24 +5134,43 @@ static void QGE_FillEntityTriangleColor(const qge_projected_vertex_t *a,
 		return;
 
 	for (int y = y1; y <= y2; y++) {
-		for (int x = x1; x <= x2; x++) {
+		float sample_y = (float)y + 0.5f;
+		int sx1 = x1;
+		int sx2 = x2;
+		float w0, w1;
+
+		if (!QGE_ProjectedTriangleRowSpan(&tri, sample_y, &sx1, &sx2))
+			continue;
+		if (sx1 < x1) sx1 = x1;
+		if (sx2 > x2) sx2 = x2;
+		if (sx2 < sx1)
+			continue;
+
+		w0 = sampler.w0_origin +
+			 sampler.w0_dx * ((float)sx1 + 0.5f) +
+			 sampler.w0_dy * sample_y;
+		w1 = sampler.w1_origin +
+			 sampler.w1_dx * ((float)sx1 + 0.5f) +
+			 sampler.w1_dy * sample_y;
+
+		for (int x = sx1; x <= sx2;
+			 x++, w0 += sampler.w0_dx, w1 += sampler.w1_dx) {
 			qge_projected_sample_t sample;
-			float coverage;
 			qge_rgb_sample_t pixel;
 
-			if (!QGE_ProjectedTrianglePixelSamplePrepared(x, y, &sampler,
-														  &sample, &coverage))
+			if (!QGE_ProjectedTriangleSampleWeightsUnchecked(&sampler, w0, w1,
+															 &sample))
 				continue;
 			if (prepared_rgb_depth) {
 				QGE_SpatialAddPixelRGBDepthPositivePrepared(
 					y * qge_render_res + x,
-					color->r * coverage,
-					color->g * coverage,
-					color->b * coverage,
+					color->r,
+					color->g,
+					color->b,
 					sample.depth,
 					depth_buffer, rbuf, gbuf, bbuf);
 			} else {
-				pixel = QGE_RGBScaled(*color, coverage);
+				pixel = *color;
 				QGE_SpatialAddPixelColorDepth(x, y, &pixel, sample.depth);
 			}
 		}
