@@ -286,10 +286,10 @@ eval_t *GetEdictFieldValue(edict_t *ed, const char *field)
 
 	def = ED_FindField (field);
 
-	if (strlen(field) < MAX_FIELD_LEN)
+	if (strlen(field) < sizeof(gefvCache[rep].field))
 	{
 		gefvCache[rep].pcache = def;
-		strcpy (gefvCache[rep].field, field);
+		q_strlcpy (gefvCache[rep].field, field, sizeof(gefvCache[rep].field));
 		rep ^= 1;
 	}
 
@@ -432,10 +432,10 @@ const char *PR_GlobalString (int ofs)
 
 	i = strlen(line);
 	for ( ; i < 20; i++)
-		strcat (line, " ");
+		q_strlcat (line, " ", sizeof(line));
 
 	if (i < lastchari)
-		strcat (line, " ");
+		q_strlcat (line, " ", sizeof(line));
 	else
 		line[lastchari] = ' ';
 
@@ -457,10 +457,10 @@ const char *PR_GlobalStringNoContents (int ofs)
 
 	i = strlen(line);
 	for ( ; i < 20; i++)
-		strcat (line, " ");
+		q_strlcat (line, " ", sizeof(line));
 
 	if (i < lastchari)
-		strcat (line, " ");
+		q_strlcat (line, " ", sizeof(line));
 	else
 		line[lastchari] = ' ';
 
@@ -906,7 +906,7 @@ const char *ED_ParseEdict (const char *data, edict_t *ent)
 		// and allow them to be turned into vectors. (FIXME...)
 		if (!strcmp(com_token, "angle"))
 		{
-			strcpy (com_token, "angles");
+			q_strlcpy (com_token, "angles", sizeof(com_token));
 			anglehack = true;
 		}
 		else
@@ -914,7 +914,7 @@ const char *ED_ParseEdict (const char *data, edict_t *ent)
 
 		// FIXME: change light to _light to get rid of this hack
 		if (!strcmp(com_token, "light"))
-			strcpy (com_token, "light_lev");	// hack for single light def
+			q_strlcpy (com_token, "light_lev", sizeof(com_token));	// hack for single light def
 
 		q_strlcpy (keyname, com_token, sizeof(keyname));
 
@@ -960,9 +960,10 @@ const char *ED_ParseEdict (const char *data, edict_t *ent)
 
 		if (anglehack)
 		{
-			char	temp[32];
-			strcpy (temp, com_token);
-			sprintf (com_token, "0 %s 0", temp);
+			char	temp[sizeof(com_token)];
+			q_strlcpy (temp, com_token, sizeof(temp));
+			if (q_snprintf (com_token, sizeof(com_token), "0 %s 0", temp) >= (int)sizeof(com_token))
+				Host_Error ("ED_ParseEdict: angle value too long");
 		}
 
 		if (!ED_ParseEpair ((void *)&ent->v, key, com_token))
@@ -1419,4 +1420,3 @@ int PR_AllocString (int size, char **ptr)
 		*ptr = (char *) pr_knownstrings[i];
 	return -1 - i;
 }
-
