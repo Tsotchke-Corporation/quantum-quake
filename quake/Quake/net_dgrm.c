@@ -100,8 +100,8 @@ static void NET_Ban_f (void)
 	case 1:
 		if (banAddr.s_addr != INADDR_ANY)
 		{
-			Q_strcpy(addrStr, inet_ntoa(banAddr));
-			Q_strcpy(maskStr, inet_ntoa(banMask));
+			q_strlcpy(addrStr, inet_ntoa(banAddr), sizeof(addrStr));
+			q_strlcpy(maskStr, inet_ntoa(banMask), sizeof(maskStr));
 			print_fn("Banning %s [%s]\n", addrStr, maskStr);
 		}
 		else
@@ -1083,7 +1083,7 @@ static qsocket_t *_Datagram_CheckNewConnections (void)
 	sock->socket = newsock;
 	sock->landriver = net_landriverlevel;
 	sock->addr = clientaddr;
-	Q_strcpy(sock->address, dfunc.AddrToString(&clientaddr));
+	q_strlcpy(sock->address, dfunc.AddrToString(&clientaddr), sizeof(sock->address));
 
 	// send him back the info about the server connection he has been allocated
 	SZ_Clear(&net_message);
@@ -1339,7 +1339,7 @@ static qsocket_t *_Datagram_Connect (const char *host)
 	{
 		reason = "No Response";
 		Con_Printf("%s\n", reason);
-		Q_strcpy(m_return_reason, reason);
+		q_strlcpy(m_return_reason, reason, sizeof(m_return_reason));
 		goto ErrorReturn;
 	}
 
@@ -1347,7 +1347,7 @@ static qsocket_t *_Datagram_Connect (const char *host)
 	{
 		reason = "Network Error";
 		Con_Printf("%s\n", reason);
-		Q_strcpy(m_return_reason, reason);
+		q_strlcpy(m_return_reason, reason, sizeof(m_return_reason));
 		goto ErrorReturn;
 	}
 
@@ -1369,7 +1369,7 @@ static qsocket_t *_Datagram_Connect (const char *host)
 	{
 		reason = "Bad Response";
 		Con_Printf("%s\n", reason);
-		Q_strcpy(m_return_reason, reason);
+		q_strlcpy(m_return_reason, reason, sizeof(m_return_reason));
 		goto ErrorReturn;
 	}
 
@@ -1383,7 +1383,7 @@ static qsocket_t *_Datagram_Connect (const char *host)
 	{
 		reason = "Connect to Game failed";
 		Con_Printf("%s\n", reason);
-		Q_strcpy(m_return_reason, reason);
+		q_strlcpy(m_return_reason, reason, sizeof(m_return_reason));
 		goto ErrorReturn;
 	}
 

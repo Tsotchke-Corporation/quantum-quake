@@ -292,7 +292,8 @@ qpic_t	*Draw_CachePic (const char *path)
 	if (menu_numcachepics == MAX_CACHED_PICS)
 		Sys_Error ("menu_numcachepics == MAX_CACHED_PICS");
 	menu_numcachepics++;
-	strcpy (pic->name, path);
+	if (q_strlcpy (pic->name, path, sizeof(pic->name)) >= sizeof(pic->name))
+		Sys_Error ("Draw_CachePic: path too long: %s", path);
 
 //
 // load the pic from disk
