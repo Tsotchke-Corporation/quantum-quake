@@ -90,6 +90,7 @@ struct dwt_framebuffer_s {
     int active_coeff_count;
     uint64_t* active_indices;   /* State indices with non-zero amplitude */
     float* active_values;       /* Corresponding values */
+    int* active_offsets;        /* DWT coefficient-buffer offsets */
 
     /* Reconstruction buffers */
     float* coeff_buffer;        /* Extracted coefficients */
@@ -128,19 +129,6 @@ static uint64_t encode_dwt_index(int level, dwt_subband_t subband,
     index |= ((uint64_t)(value & VALUE_MASK)) << VALUE_OFFSET;
     index |= ((uint64_t)(color & COLOR_MASK)) << COLOR_OFFSET;
     return index;
-}
-
-/**
- * @brief Decode state index to DWT coefficient location
- */
-static void decode_dwt_index(uint64_t index, int* level, dwt_subband_t* subband,
-                              int* cx, int* cy, int* value, int* color) {
-    if (level) *level = (index >> LEVEL_OFFSET) & LEVEL_MASK;
-    if (subband) *subband = (dwt_subband_t)((index >> SUBBAND_OFFSET) & SUBBAND_MASK);
-    if (cx) *cx = (index >> COEFF_X_OFFSET) & COEFF_X_MASK;
-    if (cy) *cy = (index >> COEFF_Y_OFFSET) & COEFF_Y_MASK;
-    if (value) *value = (index >> VALUE_OFFSET) & VALUE_MASK;
-    if (color) *color = (index >> COLOR_OFFSET) & COLOR_MASK;
 }
 
 /* ============================================================================
@@ -284,7 +272,8 @@ dwt_framebuffer_t* qge_dwt_framebuffer_create(qge_context_t* ctx,
     /* Allocate coefficient tracking */
     fb->active_indices = calloc(MAX_ACTIVE_COEFFS, sizeof(uint64_t));
     fb->active_values = calloc(MAX_ACTIVE_COEFFS, sizeof(float));
-    if (!fb->active_indices || !fb->active_values) {
+    fb->active_offsets = calloc(MAX_ACTIVE_COEFFS, sizeof(int));
+    if (!fb->active_indices || !fb->active_values || !fb->active_offsets) {
         if (fb->state) {
             quantum_state_free(fb->state);
             free(fb->state);
@@ -296,6 +285,7 @@ dwt_framebuffer_t* qge_dwt_framebuffer_create(qge_context_t* ctx,
         }
         free(fb->active_indices);
         free(fb->active_values);
+        free(fb->active_offsets);
         free(fb);
         return NULL;
     }
@@ -322,6 +312,7 @@ dwt_framebuffer_t* qge_dwt_framebuffer_create(qge_context_t* ctx,
         }
         free(fb->active_indices);
         free(fb->active_values);
+        free(fb->active_offsets);
         free(fb->coeff_buffer);
         free(fb->pixel_buffer);
         free(fb->transform_scratch);
@@ -370,6 +361,7 @@ void qge_dwt_framebuffer_free(dwt_framebuffer_t* fb) {
     }
     free(fb->active_indices);
     free(fb->active_values);
+    free(fb->active_offsets);
     free(fb->coeff_buffer);
     free(fb->pixel_buffer);
     free(fb->transform_scratch);
@@ -380,39 +372,86 @@ void qge_dwt_framebuffer_free(dwt_framebuffer_t* fb) {
  * Wavelet Coefficient Encoding
  * ============================================================================ */
 
+static int qge_dwt_coeff_offset(const dwt_framebuffer_t* fb,
+                                int level,
+                                dwt_subband_t subband,
+                                int cx,
+                                int cy) {
+    int base_res, level_size, half;
+    int out_x, out_y;
+
+    if (!fb) return -1;
+    base_res = fb->config.base_resolution;
+    if (base_res <= 0 || level < 0) return -1;
+
+    level_size = base_res >> level;
+    half = level_size / 2;
+    if (half <= 0) return -1;
+
+    if (cx >= half) cx = half - 1;
+    if (cy >= half) cy = half - 1;
+    if (cx < 0) cx = 0;
+    if (cy < 0) cy = 0;
+
+    switch (subband) {
+        case SUBBAND_LL:
+            out_x = cx;
+            out_y = cy;
+            break;
+        case SUBBAND_HL:
+            out_x = half + cx;
+            out_y = cy;
+            break;
+        case SUBBAND_LH:
+            out_x = cx;
+            out_y = half + cy;
+            break;
+        case SUBBAND_HH:
+            out_x = half + cx;
+            out_y = half + cy;
+            break;
+        default:
+            return -1;
+    }
+
+    if (out_x < 0 || out_x >= base_res || out_y < 0 || out_y >= base_res)
+        return -1;
+    return out_y * base_res + out_x;
+}
+
 static void qge_add_wavelet_coeff_with_threshold(dwt_framebuffer_t* fb,
                                                   int level,
                                                   dwt_subband_t subband,
                                                   int cx, int cy,
                                                   float value,
                                                   float threshold) {
-    if (!fb || !fb->active_indices || !fb->active_values) return;
+    int coeff_offset;
+    uint64_t state_index = 0;
+
+    if (!fb || !fb->active_indices || !fb->active_values || !fb->active_offsets) return;
     if (fb->active_coeff_count >= MAX_ACTIVE_COEFFS) return;
 
     /* Skip if below sparsity threshold */
     if (threshold < 0.0f) threshold = 0.0f;
     if (fabsf(value) < threshold) return;
 
-    /* Quantize value to 5-bit range (0-31) */
-    int quantized_value = (int)(fabsf(value) * 31.0f);
-    if (quantized_value > 31) quantized_value = 31;
+    coeff_offset = qge_dwt_coeff_offset(fb, level, subband, cx, cy);
+    if (coeff_offset < 0) return;
 
-    /* Encode into state index (grayscale for now, color=0) */
-    uint64_t state_index = encode_dwt_index(level, subband, cx, cy,
-                                             quantized_value, 0);
-
-    /* Add amplitude at this index */
-    /* The amplitude represents the wavelet coefficient value */
-    double amplitude = (double)value;
-
-    /* Direct amplitude assignment (simplified encoding) */
-    if (fb->state && state_index < fb->state->state_dim) {
-        fb->state->amplitudes[state_index] += amplitude;
+    if (fb->state) {
+        int quantized_value = (int)(fabsf(value) * 31.0f);
+        if (quantized_value > 31) quantized_value = 31;
+        state_index = encode_dwt_index(level, subband, cx, cy,
+                                       quantized_value, 0);
+        if (state_index < fb->state->state_dim) {
+            fb->state->amplitudes[state_index] += (double)value;
+        }
     }
 
     /* Track active coefficient */
     fb->active_indices[fb->active_coeff_count] = state_index;
     fb->active_values[fb->active_coeff_count] = value;
+    fb->active_offsets[fb->active_coeff_count] = coeff_offset;
     fb->active_coeff_count++;
 }
 
@@ -581,56 +620,11 @@ void qge_extract_coefficients(dwt_framebuffer_t* fb, float* coeffs) {
      */
 
     for (int i = 0; i < fb->active_coeff_count; i++) {
-        uint64_t index = fb->active_indices[i];
         float value = fb->active_values[i];
+        int offset = fb->active_offsets[i];
 
-        int level, cx, cy;
-        dwt_subband_t subband;
-        decode_dwt_index(index, &level, &subband, &cx, &cy, NULL, NULL);
-
-        /* Calculate the offset for this level's subbands
-         * At level L, the detail subbands are at offset (base_res >> (L+1))
-         */
-        int level_size = base_res >> level;      /* Size of region at this level */
-        int half = level_size / 2;               /* Half size = subband size */
-
-        /* Clamp coordinates to valid range */
-        if (cx >= half) cx = half - 1;
-        if (cy >= half) cy = half - 1;
-        if (cx < 0) cx = 0;
-        if (cy < 0) cy = 0;
-
-        int out_x, out_y;
-
-        switch (subband) {
-            case SUBBAND_LL:
-                /* LL is only meaningful at coarsest level, stored at top-left */
-                out_x = cx;
-                out_y = cy;
-                break;
-            case SUBBAND_HL:
-                /* HL (horizontal detail) is in top-right of level's region */
-                out_x = half + cx;
-                out_y = cy;
-                break;
-            case SUBBAND_LH:
-                /* LH (vertical detail) is in bottom-left of level's region */
-                out_x = cx;
-                out_y = half + cy;
-                break;
-            case SUBBAND_HH:
-                /* HH (diagonal detail) is in bottom-right of level's region */
-                out_x = half + cx;
-                out_y = half + cy;
-                break;
-            default:
-                continue;
-        }
-
-        /* Accumulate coefficient */
-        if (out_x >= 0 && out_x < base_res && out_y >= 0 && out_y < base_res) {
-            coeffs[out_y * base_res + out_x] += value;
-        }
+        if ((unsigned)offset < (unsigned)(base_res * base_res))
+            coeffs[offset] += value;
     }
 }
 
