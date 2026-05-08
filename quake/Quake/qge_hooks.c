@@ -5804,6 +5804,14 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 	const float *gbuf = qge_render_color_buffer[QGE_DWT_G];
 	const float *bbuf = qge_render_color_buffer[QGE_DWT_B];
 
+	if (!rbuf || !gbuf || !bbuf) {
+		memset(qge_display_buffer, 0, total_pixels * 3);
+		*max_val = max_abs;
+		*nonzero_pixels = 0;
+		*abs_sum = 0.0;
+		return;
+	}
+
 	QGE_InitToneLut();
 	memset(hist, 0, sizeof(hist));
 	*nonzero_pixels = 0;
@@ -5811,9 +5819,9 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 
 	if (direct_display) {
 		for (i = 0; i < total_pixels; i++) {
-			float r = rbuf && rbuf[i] > 0.0f ? rbuf[i] : 0.0f;
-			float g = gbuf && gbuf[i] > 0.0f ? gbuf[i] : 0.0f;
-			float b = bbuf && bbuf[i] > 0.0f ? bbuf[i] : 0.0f;
+			float r = rbuf[i] > 0.0f ? rbuf[i] : 0.0f;
+			float g = gbuf[i] > 0.0f ? gbuf[i] : 0.0f;
+			float b = bbuf[i] > 0.0f ? bbuf[i] : 0.0f;
 			float v = 0.299f * r + 0.587f * g + 0.114f * b;
 			qge_render_buffer[i] = v;
 			if (v > max_abs)
@@ -5887,9 +5895,9 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 
 	if (direct_display) {
 		for (i = 0; i < total_pixels; i++) {
-			float r = rbuf && rbuf[i] > 0.0f ? rbuf[i] : 0.0f;
-			float g = gbuf && gbuf[i] > 0.0f ? gbuf[i] : 0.0f;
-			float b = bbuf && bbuf[i] > 0.0f ? bbuf[i] : 0.0f;
+			float r = rbuf[i] > 0.0f ? rbuf[i] : 0.0f;
+			float g = gbuf[i] > 0.0f ? gbuf[i] : 0.0f;
+			float b = bbuf[i] > 0.0f ? bbuf[i] : 0.0f;
 			float v = qge_render_buffer[i];
 			float normalized = (v - floor_val) * inv_range;
 			float scale;
