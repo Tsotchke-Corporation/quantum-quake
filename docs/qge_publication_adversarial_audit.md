@@ -1,6 +1,8 @@
 # QGE Publication Adversarial Audit
 
-Status: drafted 2026-05-07 after the finite-shot render-gate slice.
+Status: drafted 2026-05-07 after the finite-shot render-gate slice; refreshed
+2026-05-08 after the publication artifact pack, scene-oracle export,
+light-transport QAE benchmark, fallback cleanup, and backend gate.
 
 Verdict: the current architecture can support a research-grade systems paper
 only if the claim is narrowed to a reproducible hybrid quantum-rendering
@@ -20,6 +22,17 @@ classical input/readout accounting. It does not yet support an end-to-end
   `dense_state`, `basis=64`, `qubits=6`, `gates=26`, `shots=64`.
 - The trace runtime records domains, representations, measurements, probes,
   entropy events, fallbacks, and entanglement edges through a common contract.
+- QGE now has a reproducible publication pack that bundles vanilla conformance
+  captures, agent media stream artifacts, scene-oracle IR, claims evidence,
+  advantage-benchmark metrics, circuit output, source documents, and ICC
+  completion evidence.
+- The scene-oracle exporter emits `oracle_scene.json`, `claims_evidence.json`,
+  and `qge_icc_evidence.json` sidecars for captured Quake-derived workloads.
+- The light-transport benchmark evaluates a bounded soft-shadow visibility
+  observable with classical MC, stratified sampling, and a finite-shot MLAE
+  simulator under an explicit oracle/input/readout model.
+- The backend selection path is now explicit in the QGE API and logs the
+  selected backend as accelerated or portable.
 
 ## Claims That Would Fail Review
 
@@ -41,11 +54,13 @@ Relevant code:
 
 ### Quantum advantage
 
-There is no baseline experiment proving asymptotic or empirical advantage over
-classical rendering, visibility, compression, or denoising. Current smoke
-evidence proves traceability and QGE ownership, not advantage.
+There is now an executable light-transport benchmark with classical baselines
+and finite-shot QAE-style estimates, but it does not prove practical renderer
+speedup, hardware advantage, or full-frame quantum rendering. Current smoke and
+benchmark evidence prove traceability, artifact completeness, and benchmark
+execution under an explicit oracle model.
 
-Minimum missing evidence:
+Minimum missing evidence for stronger advantage language:
 
 - runtime and quality curves versus classic Quake and classical DWT baselines
 - ablation with `quantum_render_gate_kernel 0`
@@ -120,10 +135,10 @@ https://arxiv.org/abs/quant-ph/0309070
 
 5. "Fallbacks and synthetic paths hide the real behavior."
 
-   Response required: every production fallback must be trace-recorded with
-   reason, domain, and representation. ICC currently marks publication
-   readiness blocked because generic fallback/synthetic-path criteria are not
-   proven.
+   Current response: the known generic fallback/stub false positives have been
+   cleaned up or fenced, `condump.txt` has an artifact validator, and backend
+   selection is explicit. Continue requiring every production fallback to be
+   trace-recorded with reason, domain, and representation.
 
 6. "The visual output is not yet media-grade."
 
@@ -150,7 +165,9 @@ workloads with adversarial runtime traces.
 
 ### 1. Claims ledger and trace schema
 
-Add explicit per-probe fields or companion records for:
+Status: v0 exists and is exercised by the publication pack.
+
+Continue expanding explicit per-probe fields or companion records for:
 
 - `encoding`: sparse_dwt, dense_state, classical_oracle, sampled_observable
 - `input_cost`: surfaces, vertices, texture samples, lightmap samples,
@@ -161,6 +178,10 @@ Add explicit per-probe fields or companion records for:
 - `baseline_id` and `reconstruction_metrics`
 
 ### 2. Baseline harness
+
+Status: partially complete. The QAE benchmark has MC, stratified, and
+finite-shot MLAE comparisons. Renderer-facing gate-off/gate-on and visual
+quality comparisons still need more coverage.
 
 Capture matched frames for:
 
@@ -196,6 +217,9 @@ readout. Candidate properties:
 
 ### 5. Fallback audit
 
+Status: improved. ICC no longer reports unmarked production stub/fallback paths
+for the current deep-audit readiness target.
+
 Turn every production fallback into a trace event. No silent fallback should be
 allowed in a publication smoke.
 
@@ -216,11 +240,16 @@ Keep these terms precise:
 
 No-go for a top-tier quantum-computing publication today.
 
-Potential go for a systems/workshop paper after:
+Potential go for a systems/workshop artifact or short paper now if the claims
+stay narrow: reproducible hybrid quantum-media testbed, bounded simulated-QPU
+observable, scene-oracle IR, ICC-evaluable evidence, and explicit no-advantage
+caveats.
+
+Potential go for a fuller systems/workshop paper after:
 
 - baseline harness
 - metrics table over multiple maps/seeds
-- fallback-free trace contract
+- broader fallback-free trace contract
 - circuit diagram and ablation for the finite-shot render observable
 - precise claims that avoid quantum-advantage language
 

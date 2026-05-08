@@ -35,7 +35,7 @@
     {
       "accepted_evidence": [
         "classic and quantum_render 2 captures exist for the same scene",
-        "publication_metrics.json reports visual parity metrics",
+        "vanilla_capture_matrix.json reports capture matrix metrics",
         "fallback count is explicit"
       ],
       "allowed_wording": "Quantum Quake is progressing toward vanilla Quake conformance under QGE primary rendering.",
@@ -59,7 +59,7 @@
         "fallback",
         "asset-class counters"
       ],
-      "status": "planned"
+      "status": "partial"
     },
     {
       "accepted_evidence": [
@@ -88,7 +88,7 @@
         "frame_snapshot",
         "render_sparse_dwt"
       ],
-      "status": "planned"
+      "status": "supported"
     },
     {
       "accepted_evidence": [
@@ -96,11 +96,11 @@
         "error-vs-query output shows expected scaling under declared oracle model",
         "state-prep, qRAM, readout, and baseline caveats are reported"
       ],
-      "allowed_wording": "On a bounded Quake-derived light-transport observable, QGE demonstrates quantum amplitude-estimation query scaling under an explicit oracle model.",
+      "allowed_wording": "On a bounded Quake-derived light-transport observable, QGE evaluates quantum amplitude-estimation query scaling under an explicit oracle model.",
       "claim_id": "advantage.light_transport_qae_query_scaling",
       "claim_type": "sample_complexity",
       "classical_baseline": "plain Monte Carlo, stratified/Sobol, and high-sample reference",
-      "disallowed_wording": "Quantum Quake proves practical rendering advantage or hardware speedup.",
+      "disallowed_wording": "Quantum Quake proves practical rendering advantage, hardware speedup, or full-frame quantum rendering.",
       "failure_conditions": [
         "state-prep cost omitted",
         "qRAM assumption omitted",
@@ -120,7 +120,7 @@
         "reference_value",
         "rmse"
       ],
-      "status": "planned"
+      "status": "partial"
     },
     {
       "accepted_evidence": [

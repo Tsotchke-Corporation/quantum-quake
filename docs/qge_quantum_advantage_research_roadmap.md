@@ -1,6 +1,6 @@
 # QGE Quantum Advantage Research Roadmap
 
-Status: drafted 2026-05-07.
+Status: drafted 2026-05-07; evidence status refreshed 2026-05-08.
 
 Goal: identify what Quantum Quake would need in order to credibly demonstrate
 some form of quantum advantage, while avoiding weak or easily attacked claims.
@@ -17,11 +17,11 @@ query-limited or sample-limited:
 4. **QSP/QSVT-style operator transforms only after we define real block
    encodings**
 
-The best near-term "big splash" target is a Quake-backed quantum Monte Carlo
-light-transport benchmark: demonstrate the expected amplitude-estimation error
-scaling on real game geometry and assets, with explicit oracle/input/readout
-costs. That is a more defensible advantage story than trying to claim a full
-quantum framebuffer.
+The first executable version of that target now exists as the QGE
+light-transport QAE benchmark. It consumes a scene-oracle sidecar, compares
+plain Monte Carlo and stratified baselines with a finite-shot MLAE simulator,
+and emits metrics, circuit, scaling, and ICC evidence artifacts. That is a
+defensible benchmark artifact, not a practical rendering-speedup claim.
 
 ## Advantage Claim Ladder
 
@@ -30,7 +30,9 @@ quantum framebuffer.
 Claim: a real-time game engine can host bounded simulated-QPU observables with
 traceable gates, shots, and render effects.
 
-Current status: partially demonstrated by `render_gate_kernel`.
+Current status: demonstrated as a bounded simulated-QPU observable by
+`render_gate_kernel`, with trace-side qubits, gates, shots, and finite-shot
+readout.
 
 Evidence needed:
 
@@ -64,10 +66,12 @@ Requirement:
 ### Level 2: Sample-Complexity Advantage
 
 Claim: for an observable such as pixel luminance, patch irradiance, soft-shadow
-visibility, or indirect-light contribution, QGE reaches error `epsilon` using
-asymptotically fewer oracle evaluations than classical Monte Carlo.
+visibility, or indirect-light contribution, QGE can evaluate the query model
+needed to study amplitude-estimation scaling against classical Monte Carlo.
 
-This is the strongest near-term path.
+This remains the strongest near-term path. The current artifact proves the
+benchmark harness and cost accounting exist, but it does not yet justify
+language stronger than "evaluates" or "studies" quantum query scaling.
 
 Formal problem:
 
@@ -85,6 +89,20 @@ What QGE must build:
 - amplitude-estimation circuit or faithful simulator
 - matching classical MC estimator
 - error-versus-oracle-call plots over multiple seeds and scene settings
+
+Current artifact status:
+
+- `tools/qge_oracle_export.py` emits `oracle_scene.json`,
+  `claims_evidence.json`, and `qge_icc_evidence.json`.
+- `tools/qge_advantage_benchmark.py` emits `advantage_metrics.json`,
+  `scaling_summary.json`, `qae_curve.csv`, `qae_circuit.txt`, and
+  `qge_advantage_icc_evidence.json`.
+- The publication pack at
+  `diagnostics/publication_pack/20260507-soundstream-pack/` bundles the
+  benchmark, oracle, trace, stream, vanilla, claims, and source artifacts.
+- Current metrics are evidence for a reproducible QAE-style benchmark under an
+  explicit oracle model, not evidence for hardware advantage or end-to-end
+  renderer acceleration.
 
 ### Level 3: Practical Simulator Advantage
 
@@ -307,7 +325,9 @@ implementation.
 
 ### Slice 1: Advantage Claims Ledger
 
-Add a machine-readable ledger:
+Status: v0 exists at `docs/claims/qge_claims.json`.
+
+Maintain the machine-readable ledger:
 
 - claim id
 - problem statement
@@ -321,9 +341,18 @@ Add a machine-readable ledger:
 
 ### Slice 2: Baseline and Metrics Harness
 
-Add:
+Status: partially implemented.
+
+Present in v0:
 
 - `tools/qge_advantage_benchmark.py`
+- classical MC, stratified low-discrepancy, and finite-shot MLAE simulator
+  comparisons
+- `advantage_metrics.json`, `scaling_summary.json`, `qae_curve.csv`, and
+  circuit artifact output
+
+Still needed for stronger renderer claims:
+
 - classic/QGE/gate-off/gate-on capture modes
 - controlled camera/seed/map runner
 - PSNR/SSIM/edge-energy/hole metrics
@@ -334,7 +363,9 @@ credible.
 
 ### Slice 3: Oracle Cost Trace Schema
 
-Extend traces or add companion records for:
+Status: sidecar v0 exists for the QAE benchmark.
+
+Continue extending traces or companion records for:
 
 - oracle calls
 - state preparation
@@ -347,7 +378,7 @@ Extend traces or add companion records for:
 
 ### Slice 4: Amplitude Estimation Module
 
-Implement a Moonlab/QGE lab module:
+Status: v0 exists as a finite-shot MLAE simulator. Continue hardening it with:
 
 - Bernoulli/amplitude oracle tests
 - mean-estimation harness
@@ -357,7 +388,8 @@ Implement a Moonlab/QGE lab module:
 
 ### Slice 5: Quake Light Observable
 
-Implement the first real workload:
+Status: v0 exists for `light_transport.soft_shadow_visibility`. Remaining
+work:
 
 - patch irradiance or soft-shadow estimator
 - controlled area-light samples
