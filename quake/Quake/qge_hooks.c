@@ -346,6 +346,12 @@ typedef struct {
 	float ia;
 	float ib;
 	float ic;
+	float w0_origin;
+	float w1_origin;
+	float w0_dx;
+	float w0_dy;
+	float w1_dx;
+	float w1_dy;
 	qboolean valid;
 } qge_projected_triangle_sampler_t;
 
@@ -3230,6 +3236,10 @@ static qboolean QGE_PrepareProjectedTriangleSampler(
 	qge_projected_triangle_sampler_t *sampler)
 {
 	float denom;
+	float w0_x;
+	float w0_y;
+	float w1_x;
+	float w1_y;
 
 	if (!a || !b || !c || !sampler)
 		return false;
@@ -3246,20 +3256,30 @@ static qboolean QGE_PrepareProjectedTriangleSampler(
 	sampler->ia = a->depth > 0.0001f ? 1.0f / a->depth : 1.0f;
 	sampler->ib = b->depth > 0.0001f ? 1.0f / b->depth : 1.0f;
 	sampler->ic = c->depth > 0.0001f ? 1.0f / c->depth : 1.0f;
+	w0_x = (b->y - c->y) * sampler->inv_denom;
+	w0_y = (c->x - b->x) * sampler->inv_denom;
+	w1_x = (c->y - a->y) * sampler->inv_denom;
+	w1_y = (a->x - c->x) * sampler->inv_denom;
+	sampler->w0_dx = w0_x;
+	sampler->w0_dy = w0_y;
+	sampler->w1_dx = w1_x;
+	sampler->w1_dy = w1_y;
+	sampler->w0_origin = -(w0_x * c->x + w0_y * c->y);
+	sampler->w1_origin = -(w1_x * c->x + w1_y * c->y);
 	sampler->valid = true;
 	return true;
 }
 
-static qboolean QGE_ProjectedTriangleSamplePrepared(
-	float x,
-	float y,
+static qboolean QGE_ProjectedTriangleSampleWeights(
 	const qge_projected_triangle_sampler_t *sampler,
+	float w0,
+	float w1,
 	qge_projected_sample_t *sample)
 {
 	const qge_projected_vertex_t *a;
 	const qge_projected_vertex_t *b;
 	const qge_projected_vertex_t *c;
-	float w0, w1, w2;
+	float w2;
 	float inv_depth;
 
 	if (!sampler || !sampler->valid || !sample)
@@ -3268,10 +3288,6 @@ static qboolean QGE_ProjectedTriangleSamplePrepared(
 	a = sampler->a;
 	b = sampler->b;
 	c = sampler->c;
-	w0 = ((b->y - c->y) * (x - c->x) +
-		  (c->x - b->x) * (y - c->y)) * sampler->inv_denom;
-	w1 = ((c->y - a->y) * (x - c->x) +
-		  (a->x - c->x) * (y - c->y)) * sampler->inv_denom;
 	w2 = 1.0f - w0 - w1;
 
 	if (w0 < -0.001f || w1 < -0.001f || w2 < -0.001f)
@@ -3301,6 +3317,21 @@ static qboolean QGE_ProjectedTriangleSamplePrepared(
 					   w1 * b->light_t * sampler->ib +
 					   w2 * c->light_t * sampler->ic) / inv_depth;
 	return true;
+}
+
+static qboolean QGE_ProjectedTriangleSamplePrepared(
+	float x,
+	float y,
+	const qge_projected_triangle_sampler_t *sampler,
+	qge_projected_sample_t *sample)
+{
+	float w0, w1;
+
+	if (!sampler || !sampler->valid)
+		return false;
+	w0 = sampler->w0_origin + sampler->w0_dx * x + sampler->w0_dy * y;
+	w1 = sampler->w1_origin + sampler->w1_dx * x + sampler->w1_dy * y;
+	return QGE_ProjectedTriangleSampleWeights(sampler, w0, w1, sample);
 }
 
 static qboolean QGE_ProjectedTrianglePixelSamplePrepared(
@@ -3949,12 +3980,22 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 			continue;
 
 		for (int y = ty1; y <= ty2; y++) {
-			for (int x = tx1; x <= tx2; x++) {
+			float sample_y = (float)y + 0.5f;
+			float w0 = sampler.w0_origin +
+					   sampler.w0_dx * ((float)tx1 + 0.5f) +
+					   sampler.w0_dy * sample_y;
+			float w1 = sampler.w1_origin +
+					   sampler.w1_dx * ((float)tx1 + 0.5f) +
+					   sampler.w1_dy * sample_y;
+			for (int x = tx1; x <= tx2;
+				 x++, w0 += sampler.w0_dx, w1 += sampler.w1_dx) {
 				qge_projected_sample_t sample;
 				qge_rgb_sample_t pixel_color;
-				float coverage;
+				float coverage = 1.0f;
 
-				if (!QGE_ProjectedTrianglePixelSamplePrepared(x, y,
+				if (!QGE_ProjectedTriangleSampleWeights(&sampler, w0, w1,
+														&sample) &&
+					!QGE_ProjectedTrianglePixelSamplePrepared(x, y,
 															  &sampler,
 															  &sample,
 															  &coverage))
