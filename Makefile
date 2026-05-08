@@ -160,10 +160,18 @@ test_qge: qge
 		-o $(BIN_DIR)/test_qge
 	@echo "Test built: $(BIN_DIR)/test_qge"
 
+test_console_contract: dirs
+	@echo "Building console artifact contract test..."
+	@$(CC) $(CFLAGS) tests/test_console_contract.c \
+		-o $(BIN_DIR)/test_console_contract
+	@echo "Test built: $(BIN_DIR)/test_console_contract"
+
 # Run tests
-test: test_qge
+test: test_qge test_console_contract
 	@echo "Running QGE tests..."
 	@./$(BIN_DIR)/test_qge
+	@echo "Running console artifact contract test..."
+	@./$(BIN_DIR)/test_console_contract
 
 clean:
 	rm -rf $(BUILD_DIR) $(BIN_DIR)
