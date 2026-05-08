@@ -3500,6 +3500,50 @@ static qboolean QGE_ProjectedTrianglePixelSampleAt(
 	return true;
 }
 
+static qboolean QGE_ProjectedTriangleRowSpan(
+	const qge_projected_triangle_t *tri,
+	float sample_y,
+	int *span_x1,
+	int *span_x2)
+{
+	float xs[3];
+	int hits = 0;
+
+	if (!tri || !span_x1 || !span_x2)
+		return false;
+
+	for (int i = 0; i < 3; i++) {
+		const qge_projected_vertex_t *a = &tri->v[i];
+		const qge_projected_vertex_t *b = &tri->v[(i + 1) % 3];
+		float y_min = fminf(a->y, b->y);
+		float y_max = fmaxf(a->y, b->y);
+		float dy = b->y - a->y;
+		float t;
+
+		if (fabsf(dy) < 0.0001f)
+			continue;
+		if (sample_y < y_min || sample_y >= y_max)
+			continue;
+		t = (sample_y - a->y) / dy;
+		if (hits < 3)
+			xs[hits++] = a->x + (b->x - a->x) * t;
+	}
+	if (hits < 2)
+		return false;
+
+	{
+		float min_x = xs[0];
+		float max_x = xs[0];
+		for (int i = 1; i < hits; i++) {
+			if (xs[i] < min_x) min_x = xs[i];
+			if (xs[i] > max_x) max_x = xs[i];
+		}
+		*span_x1 = (int)ceilf(min_x - 0.5f);
+		*span_x2 = (int)floorf(max_x - 0.5f);
+	}
+	return *span_x2 >= *span_x1;
+}
+
 static float QGE_ProjectedTriangleArea2D(const qge_projected_vertex_t *a,
 										 const qge_projected_vertex_t *b,
 										 const qge_projected_vertex_t *c)
@@ -4087,13 +4131,26 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 
 		for (int y = ty1; y <= ty2; y++) {
 			float sample_y = (float)y + 0.5f;
-			float w0 = sampler.w0_origin +
-					   sampler.w0_dx * ((float)tx1 + 0.5f) +
-					   sampler.w0_dy * sample_y;
-			float w1 = sampler.w1_origin +
-					   sampler.w1_dx * ((float)tx1 + 0.5f) +
-					   sampler.w1_dy * sample_y;
-			for (int x = tx1; x <= tx2;
+			int sx1 = tx1;
+			int sx2 = tx2;
+			float w0, w1;
+
+			if (!edge_samples) {
+				if (!QGE_ProjectedTriangleRowSpan(tri, sample_y, &sx1, &sx2))
+					continue;
+				if (sx1 < tx1) sx1 = tx1;
+				if (sx2 > tx2) sx2 = tx2;
+				if (sx2 < sx1)
+					continue;
+			}
+
+			w0 = sampler.w0_origin +
+				 sampler.w0_dx * ((float)sx1 + 0.5f) +
+				 sampler.w0_dy * sample_y;
+			w1 = sampler.w1_origin +
+				 sampler.w1_dx * ((float)sx1 + 0.5f) +
+				 sampler.w1_dy * sample_y;
+			for (int x = sx1; x <= sx2;
 				 x++, w0 += sampler.w0_dx, w1 += sampler.w1_dx) {
 				qge_projected_sample_t sample;
 				qge_rgb_sample_t pixel_color;
