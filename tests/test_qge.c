@@ -122,6 +122,7 @@ static int test_quantum_trace_roundtrip(void) {
     const char* path = "/tmp/qge_trace_roundtrip.bin";
     qge_quantum_runtime_t* rt = qge_quantum_runtime_create();
     qge_trace_reader_t* reader;
+    qge_trace_reader_t* skip_reader;
     qge_trace_header_t header;
     qge_trace_record_header_t record;
     unsigned char payload[256];
@@ -163,6 +164,16 @@ static int test_quantum_trace_roundtrip(void) {
 
     qge_quantum_frame_end(rt);
     qge_quantum_runtime_free(rt);
+
+    skip_reader = qge_trace_reader_open(path);
+    if (!skip_reader) return 0;
+    if (qge_trace_reader_next(skip_reader, &record, NULL, 0) != -2 ||
+        qge_trace_reader_next(skip_reader, &record, payload, sizeof(payload)) != 1 ||
+        record.kind != QGE_TRACE_RECORD_ENTROPY) {
+        qge_trace_reader_close(skip_reader);
+        return 0;
+    }
+    qge_trace_reader_close(skip_reader);
 
     reader = qge_trace_reader_open(path);
     if (!reader) return 0;

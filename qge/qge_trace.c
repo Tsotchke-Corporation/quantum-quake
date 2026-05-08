@@ -44,6 +44,14 @@ static int trace_write_record(qge_trace_writer_t *writer,
     return 0;
 }
 
+static int trace_skip_payload(FILE *file, uint32_t payload_size)
+{
+    if (payload_size == 0) {
+        return 0;
+    }
+    return fseek(file, (long)payload_size, SEEK_CUR);
+}
+
 qge_trace_writer_t *qge_trace_writer_open(const char *path,
                                           uint64_t run_id,
                                           uint32_t flags)
@@ -215,8 +223,8 @@ int qge_trace_reader_next(qge_trace_reader_t *reader,
     if (record->version != QGE_TRACE_VERSION) {
         return -1;
     }
-    if (record->payload_size > payload_capacity) {
-        if (fseek(reader->file, (long)record->payload_size, SEEK_CUR) != 0) {
+    if (record->payload_size > payload_capacity || (record->payload_size > 0 && !payload)) {
+        if (trace_skip_payload(reader->file, record->payload_size) != 0) {
             return -1;
         }
         return -2;
