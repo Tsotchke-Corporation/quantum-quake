@@ -95,6 +95,7 @@ static qboolean qge_initialized = false;
 #define QGE_RENDER_GATE_DIM (1u << QGE_RENDER_GATE_QUBITS)
 #define QGE_RENDER_GATE_FLAG_ACTIVE 0x20000u
 #define QGE_RENDER_GATE_FLAG_ERROR 0x40000u
+#define QGE_TONE_LUT_SIZE 4096
 
 static quantum_state_t qge_render_gate_state;
 static qboolean qge_render_gate_initialized = false;
@@ -120,6 +121,8 @@ static float qge_render_gate_entropy = 0.0f;
 static float qge_render_gate_max_probability = 1.0f;
 static uint64_t qge_render_gate_majority_basis = 0;
 static uint64_t qge_render_gate_state_hash = 0;
+static float qge_tone_lut[QGE_TONE_LUT_SIZE];
+static qboolean qge_tone_lut_ready = false;
 
 static const char *QGE_CommandLineTracePath(void)
 {
@@ -5401,6 +5404,19 @@ static float QGE_DisplayEnergyAt(int x, int y)
 	return 0.299f * r + 0.587f * g + 0.114f * b;
 }
 
+static void QGE_InitToneLut(void)
+{
+	const float inv_log_tone = 1.0f / log1pf(4.0f);
+
+	if (qge_tone_lut_ready)
+		return;
+	for (int i = 0; i < QGE_TONE_LUT_SIZE; i++) {
+		float normalized = (float)i / (float)(QGE_TONE_LUT_SIZE - 1);
+		qge_tone_lut[i] = log1pf(normalized * 4.0f) * inv_log_tone;
+	}
+	qge_tone_lut_ready = true;
+}
+
 static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 											 float *max_val,
 											 int *nonzero_pixels,
@@ -5413,7 +5429,6 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 	float white = 1.0f;
 	float floor_val;
 	float inv_range;
-	const float inv_log_tone = 1.0f / log1pf(4.0f);
 	int active = 0;
 	int median_target;
 	int white_target;
@@ -5424,6 +5439,7 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 	const float *gbuf = qge_render_color_buffer[QGE_DWT_G];
 	const float *bbuf = qge_render_color_buffer[QGE_DWT_B];
 
+	QGE_InitToneLut();
 	memset(hist, 0, sizeof(hist));
 	*nonzero_pixels = 0;
 	*abs_sum = 0.0;
@@ -5521,7 +5537,7 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 				qge_last_tone_clipped++;
 			}
 
-			normalized = log1pf(normalized * 4.0f) * inv_log_tone;
+			normalized = qge_tone_lut[(int)(normalized * (float)(QGE_TONE_LUT_SIZE - 1) + 0.5f)];
 			if (v > 0.0001f)
 				scale = normalized / v;
 			else
@@ -5556,7 +5572,7 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 					qge_last_tone_clipped++;
 				}
 
-				normalized = log1pf(normalized * 4.0f) * inv_log_tone;
+				normalized = qge_tone_lut[(int)(normalized * (float)(QGE_TONE_LUT_SIZE - 1) + 0.5f)];
 				if (v > 0.0001f)
 					scale = normalized / v;
 				else
