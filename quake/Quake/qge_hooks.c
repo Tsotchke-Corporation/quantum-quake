@@ -3694,6 +3694,40 @@ static float QGE_TexturePaletteSample(const qge_scene_surface_t *surface,
 	return 1.0f;
 }
 
+static float QGE_TexturePaletteSampleDirect(const qge_scene_surface_t *surface,
+											const texture_t *tex,
+											int tx,
+											int ty,
+											qge_rgb_sample_t *color)
+{
+	const byte *pixels;
+	const byte *rgba;
+	int palette_index;
+
+	if (!surface || !tex || !color)
+		return 0.0f;
+
+	pixels = (const byte *)(tex + 1);
+	palette_index = pixels[ty * (int)tex->width + tx];
+	rgba = (const byte *)&d_8to24table[palette_index];
+	if (rgba[3] == 0 || ((surface->flags & SURF_DRAWFENCE) && palette_index == 255)) {
+		color->r = 0.0f;
+		color->g = 0.0f;
+		color->b = 0.0f;
+		return 0.0f;
+	}
+
+	color->r = (float)rgba[0] / 255.0f;
+	color->g = (float)rgba[1] / 255.0f;
+	color->b = (float)rgba[2] / 255.0f;
+	if (palette_index >= 224) {
+		color->r += 0.25f;
+		color->g += 0.25f;
+		color->b += 0.25f;
+	}
+	return 1.0f;
+}
+
 static qboolean QGE_SurfaceTextureColorPrepared(const qge_scene_surface_t *surface,
 												texture_t *tex,
 												float tex_s,
@@ -3723,17 +3757,21 @@ static qboolean QGE_SurfaceTextureColorPrepared(const qge_scene_surface_t *surfa
 	if (!width || !height)
 		return true;
 
-	tex_s = tex_s - floorf(tex_s);
-	tex_t = tex_t - floorf(tex_t);
-	if (tex_s < 0.0f) tex_s += 1.0f;
-	if (tex_t < 0.0f) tex_t += 1.0f;
+	if (tex_s < 0.0f || tex_s >= 1.0f) {
+		tex_s = tex_s - floorf(tex_s);
+		if (tex_s < 0.0f) tex_s += 1.0f;
+	}
+	if (tex_t < 0.0f || tex_t >= 1.0f) {
+		tex_t = tex_t - floorf(tex_t);
+		if (tex_t < 0.0f) tex_t += 1.0f;
+	}
 
 	if (quantum_render_bilinear_samples.value < 0.5f) {
 		x0 = (int)(tex_s * (float)width);
 		y0 = (int)(tex_t * (float)height);
 		if (x0 >= (int)width) x0 = (int)width - 1;
 		if (y0 >= (int)height) y0 = (int)height - 1;
-		return QGE_TexturePaletteSample(surface, tex, x0, y0, color) > 0.0f;
+		return QGE_TexturePaletteSampleDirect(surface, tex, x0, y0, color) > 0.0f;
 	}
 
 	fx = tex_s * (float)width - 0.5f;
@@ -3848,12 +3886,17 @@ static qge_rgb_sample_t QGE_SurfaceLightColorPrepared(const msurface_t *surf,
 	if (quantum_render_bilinear_samples.value < 0.5f) {
 		s0 = (int)(sf + 0.5f);
 		t0 = (int)(tf + 0.5f);
+		if (s0 < 0) s0 = 0;
+		if (t0 < 0) t0 = 0;
+		if (s0 >= smax) s0 = smax - 1;
+		if (t0 >= tmax) t0 = tmax - 1;
 		for (int map = 0; map < MAXLIGHTMAPS && surf->styles[map] != 255; map++) {
-			qge_rgb_sample_t c = QGE_LightmapSampleTexel(surf, map, s0, t0,
-														 smax, tmax, size);
-			color.r += c.r;
-			color.g += c.g;
-			color.b += c.b;
+			const byte *p = surf->samples + map * size * 3 +
+							(t0 * smax + s0) * 3;
+			float scale = (float)d_lightstylevalue[surf->styles[map]] / 256.0f;
+			color.r += ((float)p[0] / 255.0f) * scale;
+			color.g += ((float)p[1] / 255.0f) * scale;
+			color.b += ((float)p[2] / 255.0f) * scale;
 			maps++;
 		}
 		if (!maps) {
