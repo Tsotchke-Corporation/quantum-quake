@@ -2937,8 +2937,13 @@ static void QGE_SpatialAddPixelColorDepthIndex(int idx,
 	float current_depth;
 	qge_rgb_sample_t sample;
 	float value;
+	float *encode = qge_spatial_encode_buffer;
+	float *depth_buffer = qge_spatial_depth_buffer;
+	float *rbuf = qge_spatial_color_buffer[QGE_DWT_R];
+	float *gbuf = qge_spatial_color_buffer[QGE_DWT_G];
+	float *bbuf = qge_spatial_color_buffer[QGE_DWT_B];
 
-	if (!color || !qge_spatial_encode_buffer)
+	if (!color || !encode)
 		return;
 	sample = *color;
 	if (sample.r < 0.0f) sample.r = 0.0f;
@@ -2952,50 +2957,71 @@ static void QGE_SpatialAddPixelColorDepthIndex(int idx,
 	if (depth <= 0.0f || !isfinite(depth))
 		depth = QGE_SPATIAL_DEPTH_FAR * 0.5f;
 
-	if (!qge_spatial_depth_buffer) {
-		qge_spatial_encode_buffer[idx] += value;
-		if (qge_spatial_color_buffer[QGE_DWT_R])
-			qge_spatial_color_buffer[QGE_DWT_R][idx] += sample.r;
-		if (qge_spatial_color_buffer[QGE_DWT_G])
-			qge_spatial_color_buffer[QGE_DWT_G][idx] += sample.g;
-		if (qge_spatial_color_buffer[QGE_DWT_B])
-			qge_spatial_color_buffer[QGE_DWT_B][idx] += sample.b;
-	} else {
-		current_depth = qge_spatial_depth_buffer[idx];
+	if (depth_buffer && rbuf && gbuf && bbuf) {
+		current_depth = depth_buffer[idx];
 		if (depth > current_depth + QGE_SPATIAL_DEPTH_EPSILON)
 			return;
 		if (depth < current_depth - QGE_SPATIAL_DEPTH_EPSILON) {
-			qge_spatial_encode_buffer[idx] = value;
-			if (qge_spatial_color_buffer[QGE_DWT_R])
-				qge_spatial_color_buffer[QGE_DWT_R][idx] = sample.r;
-			if (qge_spatial_color_buffer[QGE_DWT_G])
-				qge_spatial_color_buffer[QGE_DWT_G][idx] = sample.g;
-			if (qge_spatial_color_buffer[QGE_DWT_B])
-				qge_spatial_color_buffer[QGE_DWT_B][idx] = sample.b;
-			qge_spatial_depth_buffer[idx] = depth;
+			encode[idx] = value;
+			rbuf[idx] = sample.r;
+			gbuf[idx] = sample.g;
+			bbuf[idx] = sample.b;
+			depth_buffer[idx] = depth;
 		} else {
-			qge_spatial_encode_buffer[idx] += value;
-			if (qge_spatial_color_buffer[QGE_DWT_R])
-				qge_spatial_color_buffer[QGE_DWT_R][idx] += sample.r;
-			if (qge_spatial_color_buffer[QGE_DWT_G])
-				qge_spatial_color_buffer[QGE_DWT_G][idx] += sample.g;
-			if (qge_spatial_color_buffer[QGE_DWT_B])
-				qge_spatial_color_buffer[QGE_DWT_B][idx] += sample.b;
+			encode[idx] += value;
+			rbuf[idx] += sample.r;
+			gbuf[idx] += sample.g;
+			bbuf[idx] += sample.b;
 			if (depth < current_depth)
-				qge_spatial_depth_buffer[idx] = depth;
+				depth_buffer[idx] = depth;
+		}
+		encode[idx] = QGE_ClampSpatialSignal(encode[idx]);
+		rbuf[idx] = QGE_ClampSpatialSignal(rbuf[idx]);
+		gbuf[idx] = QGE_ClampSpatialSignal(gbuf[idx]);
+		bbuf[idx] = QGE_ClampSpatialSignal(bbuf[idx]);
+		return;
+	}
+
+	if (!depth_buffer) {
+		encode[idx] += value;
+		if (rbuf)
+			rbuf[idx] += sample.r;
+		if (gbuf)
+			gbuf[idx] += sample.g;
+		if (bbuf)
+			bbuf[idx] += sample.b;
+	} else {
+		current_depth = depth_buffer[idx];
+		if (depth > current_depth + QGE_SPATIAL_DEPTH_EPSILON)
+			return;
+		if (depth < current_depth - QGE_SPATIAL_DEPTH_EPSILON) {
+			encode[idx] = value;
+			if (rbuf)
+				rbuf[idx] = sample.r;
+			if (gbuf)
+				gbuf[idx] = sample.g;
+			if (bbuf)
+				bbuf[idx] = sample.b;
+			depth_buffer[idx] = depth;
+		} else {
+			encode[idx] += value;
+			if (rbuf)
+				rbuf[idx] += sample.r;
+			if (gbuf)
+				gbuf[idx] += sample.g;
+			if (bbuf)
+				bbuf[idx] += sample.b;
+			if (depth < current_depth)
+				depth_buffer[idx] = depth;
 		}
 	}
-	qge_spatial_encode_buffer[idx] =
-		QGE_ClampSpatialSignal(qge_spatial_encode_buffer[idx]);
-	if (qge_spatial_color_buffer[QGE_DWT_R])
-		qge_spatial_color_buffer[QGE_DWT_R][idx] =
-			QGE_ClampSpatialSignal(qge_spatial_color_buffer[QGE_DWT_R][idx]);
-	if (qge_spatial_color_buffer[QGE_DWT_G])
-		qge_spatial_color_buffer[QGE_DWT_G][idx] =
-			QGE_ClampSpatialSignal(qge_spatial_color_buffer[QGE_DWT_G][idx]);
-	if (qge_spatial_color_buffer[QGE_DWT_B])
-		qge_spatial_color_buffer[QGE_DWT_B][idx] =
-			QGE_ClampSpatialSignal(qge_spatial_color_buffer[QGE_DWT_B][idx]);
+	encode[idx] = QGE_ClampSpatialSignal(encode[idx]);
+	if (rbuf)
+		rbuf[idx] = QGE_ClampSpatialSignal(rbuf[idx]);
+	if (gbuf)
+		gbuf[idx] = QGE_ClampSpatialSignal(gbuf[idx]);
+	if (bbuf)
+		bbuf[idx] = QGE_ClampSpatialSignal(bbuf[idx]);
 }
 
 static void QGE_SpatialAddPixelDepth(int x, int y, float value, float depth)
