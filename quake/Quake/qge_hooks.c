@@ -362,6 +362,11 @@ typedef struct {
 	float a_light_t_ia;
 	float b_light_t_ib;
 	float c_light_t_ic;
+	float inv_depth_dx;
+	float tex_s_num_dx;
+	float tex_t_num_dx;
+	float light_s_num_dx;
+	float light_t_num_dx;
 	float w0_origin;
 	float w1_origin;
 	float w0_dx;
@@ -3398,6 +3403,21 @@ static qboolean QGE_PrepareProjectedTriangleSampler(
 	sampler->w0_dy = w0_y;
 	sampler->w1_dx = w1_x;
 	sampler->w1_dy = w1_y;
+	sampler->inv_depth_dx =
+		w0_x * (sampler->ia - sampler->ic) +
+		w1_x * (sampler->ib - sampler->ic);
+	sampler->tex_s_num_dx =
+		w0_x * (sampler->a_tex_s_ia - sampler->c_tex_s_ic) +
+		w1_x * (sampler->b_tex_s_ib - sampler->c_tex_s_ic);
+	sampler->tex_t_num_dx =
+		w0_x * (sampler->a_tex_t_ia - sampler->c_tex_t_ic) +
+		w1_x * (sampler->b_tex_t_ib - sampler->c_tex_t_ic);
+	sampler->light_s_num_dx =
+		w0_x * (sampler->a_light_s_ia - sampler->c_light_s_ic) +
+		w1_x * (sampler->b_light_s_ib - sampler->c_light_s_ic);
+	sampler->light_t_num_dx =
+		w0_x * (sampler->a_light_t_ia - sampler->c_light_t_ic) +
+		w1_x * (sampler->b_light_t_ib - sampler->c_light_t_ic);
 	sampler->w0_origin = -(w0_x * c->x + w0_y * c->y);
 	sampler->w1_origin = -(w1_x * c->x + w1_y * c->y);
 	sampler->valid = true;
@@ -4428,33 +4448,82 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 			w1 = sampler.w1_origin +
 				 sampler.w1_dx * ((float)sx1 + 0.5f) +
 				 sampler.w1_dy * sample_y;
-			for (int x = sx1; x <= sx2;
-				 x++, w0 += sampler.w0_dx, w1 += sampler.w1_dx) {
-				qge_projected_sample_t sample;
-				qge_rgb_sample_t pixel_color;
-				float coverage = 1.0f;
 
-				if (!edge_samples) {
-					if (!QGE_ProjectedTriangleSampleWeightsUnchecked(&sampler,
-																	 w0, w1,
-																	 &sample))
-						continue;
-				} else if (!QGE_ProjectedTriangleSampleWeights(&sampler, w0, w1,
-															   &sample)) {
-					if (!QGE_ProjectedTrianglePixelSamplePrepared(x, y,
-																  &sampler,
-																  &sample,
-																  &coverage))
-						continue;
+			if (!edge_samples) {
+				float w2 = 1.0f - w0 - w1;
+				float inv_depth = w0 * sampler.ia + w1 * sampler.ib +
+								  w2 * sampler.ic;
+				float tex_s_num = w0 * sampler.a_tex_s_ia +
+								  w1 * sampler.b_tex_s_ib +
+								  w2 * sampler.c_tex_s_ic;
+				float tex_t_num = w0 * sampler.a_tex_t_ia +
+								  w1 * sampler.b_tex_t_ib +
+								  w2 * sampler.c_tex_t_ic;
+				float light_s_num = w0 * sampler.a_light_s_ia +
+									w1 * sampler.b_light_s_ib +
+									w2 * sampler.c_light_s_ic;
+				float light_t_num = w0 * sampler.a_light_t_ia +
+									w1 * sampler.b_light_t_ib +
+									w2 * sampler.c_light_t_ic;
+
+				for (int x = sx1; x <= sx2;
+					 x++, w0 += sampler.w0_dx, w1 += sampler.w1_dx,
+					 inv_depth += sampler.inv_depth_dx,
+					 tex_s_num += sampler.tex_s_num_dx,
+					 tex_t_num += sampler.tex_t_num_dx,
+					 light_s_num += sampler.light_s_num_dx,
+					 light_t_num += sampler.light_t_num_dx) {
+					qge_projected_sample_t sample;
+					qge_rgb_sample_t pixel_color;
+
+					if (inv_depth <= 0.000001f || !isfinite(inv_depth)) {
+						if (!QGE_ProjectedTriangleSampleWeightsUnchecked(&sampler,
+																		 w0, w1,
+																		 &sample))
+							continue;
+					} else {
+						float depth_scale = 1.0f / inv_depth;
+						sample.depth = depth_scale;
+						sample.tex_s = tex_s_num * depth_scale;
+						sample.tex_t = tex_t_num * depth_scale;
+						sample.light_s = light_s_num * depth_scale;
+						sample.light_t = light_t_num * depth_scale;
+					}
+
+					pixel_color = QGE_SurfaceSampleColorContext(&sample_ctx, &sample);
+					QGE_SpatialAddPixelRGBDepthIndex(
+						y * qge_render_res + x,
+						pixel_color.r * value,
+						pixel_color.g * value,
+						pixel_color.b * value,
+						sample.depth);
+					filled++;
 				}
-				pixel_color = QGE_SurfaceSampleColorContext(&sample_ctx, &sample);
-				QGE_SpatialAddPixelRGBDepthIndex(
-					y * qge_render_res + x,
-					pixel_color.r * value * coverage,
-					pixel_color.g * value * coverage,
-					pixel_color.b * value * coverage,
-					sample.depth);
-				filled++;
+			} else {
+				for (int x = sx1; x <= sx2;
+					 x++, w0 += sampler.w0_dx, w1 += sampler.w1_dx) {
+					qge_projected_sample_t sample;
+					qge_rgb_sample_t pixel_color;
+					float coverage = 1.0f;
+
+					if (!QGE_ProjectedTriangleSampleWeights(&sampler, w0, w1,
+														   &sample)) {
+						if (!QGE_ProjectedTrianglePixelSamplePrepared(x, y,
+																	  &sampler,
+																	  &sample,
+																	  &coverage))
+							continue;
+					}
+					pixel_color = QGE_SurfaceSampleColorContext(&sample_ctx,
+																&sample);
+					QGE_SpatialAddPixelRGBDepthIndex(
+						y * qge_render_res + x,
+						pixel_color.r * value * coverage,
+						pixel_color.g * value * coverage,
+						pixel_color.b * value * coverage,
+						sample.depth);
+					filled++;
+				}
 			}
 		}
 	}
