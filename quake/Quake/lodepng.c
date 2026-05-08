@@ -5713,7 +5713,7 @@ static unsigned filter(unsigned char* out, const unsigned char* in, unsigned w, 
     unsigned char* attempt[5]; /*five filtering attempts, one for each filter type*/
     size_t smallest = 0;
     unsigned type = 0, bestType = 0;
-    unsigned char* dummy;
+    unsigned char* compressed_probe;
     LodePNGCompressSettings zlibsettings;
     lodepng_memcpy(&zlibsettings, &settings->zlibsettings, sizeof(LodePNGCompressSettings));
     /*use fixed tree on the attempts so that the tree is not adapted to the filtertype on purpose,
@@ -5737,9 +5737,9 @@ static unsigned filter(unsigned char* out, const unsigned char* in, unsigned w, 
 
           filterScanline(attempt[type], &in[y * linebytes], prevline, linebytes, bytewidth, type);
           size[type] = 0;
-          dummy = NULL;
-          zlib_compress(&dummy, &size[type], attempt[type], testsize, &zlibsettings);
-          lodepng_free(dummy);
+          compressed_probe = NULL;
+          zlib_compress(&compressed_probe, &size[type], attempt[type], testsize, &zlibsettings);
+          lodepng_free(compressed_probe);
           /*check if this is smallest size (or if type == 0 it's the first case so always store the values)*/
           if(type == 0 || size[type] < smallest) {
             bestType = type;
