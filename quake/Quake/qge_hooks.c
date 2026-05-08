@@ -45,6 +45,7 @@ cvar_t quantum_render_threshold = {"quantum_render_threshold", "0.001", CVAR_ARC
 cvar_t quantum_render_edge_gain = {"quantum_render_edge_gain", "0.06", CVAR_ARCHIVE};
 cvar_t quantum_render_material_gain = {"quantum_render_material_gain", "0.18", CVAR_ARCHIVE};
 cvar_t quantum_render_bilinear_samples = {"quantum_render_bilinear_samples", "0", CVAR_ARCHIVE};
+cvar_t quantum_render_display_filter = {"quantum_render_display_filter", "0", CVAR_ARCHIVE};
 cvar_t quantum_render_gate_kernel = {"quantum_render_gate_kernel", "1", CVAR_ARCHIVE};
 cvar_t quantum_render_gate_shots = {"quantum_render_gate_shots", "64", CVAR_ARCHIVE};
 
@@ -1852,6 +1853,7 @@ void QGE_Init(void)
 	Cvar_RegisterVariable(&quantum_render_edge_gain);
 	Cvar_RegisterVariable(&quantum_render_material_gain);
 	Cvar_RegisterVariable(&quantum_render_bilinear_samples);
+	Cvar_RegisterVariable(&quantum_render_display_filter);
 	Cvar_RegisterVariable(&quantum_render_gate_kernel);
 	Cvar_RegisterVariable(&quantum_render_gate_shots);
 	QGE_ApplyEarlyRenderOverrides();
@@ -3603,12 +3605,6 @@ static qboolean QGE_SurfaceTextureColorPrepared(const qge_scene_surface_t *surfa
 												texture_t *tex,
 												float tex_s,
 												float tex_t,
-												qge_rgb_sample_t *color);
-
-static qboolean QGE_SurfaceTextureColorPrepared(const qge_scene_surface_t *surface,
-												texture_t *tex,
-												float tex_s,
-												float tex_t,
 												qge_rgb_sample_t *color)
 {
 	unsigned int width, height;
@@ -5270,6 +5266,9 @@ static float QGE_DisplayChannelEnergyAt(const float *buffer, int x, int y)
 		return 0.0f;
 
 	center = buffer[idx] > 0.0f ? buffer[idx] : 0.0f;
+	if (quantum_render_display_filter.value < 0.5f)
+		return center;
+
 	if (x > 0)
 		axial += buffer[idx - 1] > 0.0f ? buffer[idx - 1] : 0.0f;
 	if (x + 1 < res)
