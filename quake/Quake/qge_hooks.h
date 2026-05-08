@@ -100,6 +100,10 @@ void QGE_VisSetupViewpoint(float eye_x, float eye_y, float eye_z,
 /* Draw particles using quantum wave packet system */
 void QGE_DrawParticles(void);
 
+/* Copy currently active classic Quake particles into the QGE frame snapshot.
+ * Implemented by r_part.c because the classic particle list is renderer-local. */
+void QGE_CaptureClassicParticles(qge_frame_snapshot_t *snapshot);
+
 /* ============================================================================
  * Quantum Physics
  * ============================================================================ */

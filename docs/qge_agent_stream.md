@@ -88,6 +88,23 @@ QGE_STARTUP_FAILED <reason> <log>
 Prefer the stream files for long-running consumers. Stdout is useful for launch
 wrappers and CI logs, but it is not the canonical live state.
 
+## Performance Timing
+
+When `quantum_debug 1` is active, `QGE render frame=...` log lines include a
+high-resolution CPU timing split:
+
+- `encode`: total scene encoding before inverse DWT.
+- `setup`: QGE frame reset, snapshot lookup, and render-gate work.
+- `raster`: world/entity/particle rasterization into sparse spatial fields.
+- `fdwt`: forward sparse DWT encoding for the RGB spatial fields.
+- `dwt`: sparse coefficient extraction plus inverse DWT reconstruction.
+- `convert`: tone mapping and RGB display-buffer conversion.
+- `blit`: OpenGL texture upload and screen draw.
+
+For CPU-only profiling, keep `QGE_RENDER_RES` fixed and compare these fields
+across runs. A slow 1024 run is usually dominated by `raster`, not by the
+LaunchServices wrapper.
+
 ## Launch Modes
 
 `QGE_STREAM_LAUNCH=auto` is the default. On macOS it selects `open`; on other
@@ -167,5 +184,8 @@ audio pointer files remain present for consumers that expect a stable contract.
   controls.
 - `QGE_RENDER`, `QGE_RENDER_RES`, `QGE_RENDER_THRESHOLD`,
   `QGE_RENDER_EDGE_GAIN`, `QGE_RENDER_MATERIAL_GAIN`: QGE render controls.
+  `QGE_RENDER_RES` and `QGE_RENDER_THRESHOLD` are also passed as early
+  `-qgerenderres` / `-qgerenderthreshold` launch arguments so DWT buffers are
+  allocated at the requested size before `autoexec.cfg` runs.
 - `QGE_PHYSICS`, `QGE_PROJECTILES`, `QGE_PARTICLES`: QGE simulation toggles.
 - `QGE_SCENE_SURFACE_BUDGET`: QGE scene surface budget.

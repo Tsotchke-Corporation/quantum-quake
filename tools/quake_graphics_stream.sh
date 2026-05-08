@@ -399,6 +399,7 @@ fi
 
 run_args=(-basedir "$basedir" "${video_args[@]}")
 run_args+=(-qgestreamdir "$agent_stream")
+run_args+=(-qgerenderres "$render_res" -qgerenderthreshold "$render_threshold")
 if [[ "$engine_capture" == "1" ]]; then
   if [[ -n "$capture_wait_override" ]]; then
     engine_capture_wait="$capture_wait_override"

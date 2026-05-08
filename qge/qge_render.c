@@ -94,8 +94,10 @@ struct dwt_framebuffer_s {
     /* Reconstruction buffers */
     float* coeff_buffer;        /* Extracted coefficients */
     float* pixel_buffer;        /* Reconstructed pixels */
+    float* transform_scratch;   /* Row/column scratch for DWT passes */
     int coeff_size;             /* Size of coefficient buffer */
     int pixel_size;             /* Size of pixel buffer */
+    int transform_scratch_size;  /* Number of floats in transform_scratch */
 
     bool initialized;
 };
@@ -306,7 +308,9 @@ dwt_framebuffer_t* qge_dwt_framebuffer_create(qge_context_t* ctx,
 
     fb->coeff_buffer = calloc(fb->coeff_size, sizeof(float));
     fb->pixel_buffer = calloc(fb->pixel_size, sizeof(float));
-    if (!fb->coeff_buffer || !fb->pixel_buffer) {
+    fb->transform_scratch_size = base_res;
+    fb->transform_scratch = calloc(fb->transform_scratch_size, sizeof(float));
+    if (!fb->coeff_buffer || !fb->pixel_buffer || !fb->transform_scratch) {
         if (fb->state) {
             quantum_state_free(fb->state);
             free(fb->state);
@@ -320,6 +324,7 @@ dwt_framebuffer_t* qge_dwt_framebuffer_create(qge_context_t* ctx,
         free(fb->active_values);
         free(fb->coeff_buffer);
         free(fb->pixel_buffer);
+        free(fb->transform_scratch);
         free(fb);
         return NULL;
     }
@@ -367,6 +372,7 @@ void qge_dwt_framebuffer_free(dwt_framebuffer_t* fb) {
     free(fb->active_values);
     free(fb->coeff_buffer);
     free(fb->pixel_buffer);
+    free(fb->transform_scratch);
     free(fb);
 }
 
@@ -635,10 +641,14 @@ void qge_extract_coefficients(dwt_framebuffer_t* fb, float* coeffs) {
 /**
  * @brief 1D Haar inverse wavelet transform (lifting scheme)
  */
-static void haar_inverse_1d(float* data, int n) {
+static void haar_inverse_1d_scratch(float* data, int n, float* temp) {
     if (n < 2) return;
 
-    float* temp = malloc(n * sizeof(float));
+    bool free_temp = false;
+    if (!temp) {
+        temp = malloc(n * sizeof(float));
+        free_temp = true;
+    }
     if (!temp) return;
 
     int half = n / 2;
@@ -652,16 +662,24 @@ static void haar_inverse_1d(float* data, int n) {
     }
 
     memcpy(data, temp, n * sizeof(float));
-    free(temp);
+    if (free_temp) free(temp);
+}
+
+static void haar_inverse_1d(float* data, int n) {
+    haar_inverse_1d_scratch(data, n, NULL);
 }
 
 /**
  * @brief 1D Haar inverse with stride (for vertical transform)
  */
-static void haar_inverse_1d_strided(float* data, int n, int stride) {
+static void haar_inverse_1d_strided_scratch(float* data, int n, int stride, float* temp) {
     if (n < 2) return;
 
-    float* temp = malloc(n * sizeof(float));
+    bool free_temp = false;
+    if (!temp) {
+        temp = malloc(n * sizeof(float));
+        free_temp = true;
+    }
     if (!temp) return;
 
     /* Copy strided data to temp */
@@ -669,26 +687,32 @@ static void haar_inverse_1d_strided(float* data, int n, int stride) {
         temp[i] = data[i * stride];
     }
 
-    /* Apply inverse transform out-of-place. Updating temp in-place corrupts
-     * later low coefficients, which collapses reconstructed geometry into
-     * vertical bands. */
-    haar_inverse_1d(temp, n);
-
-    /* Copy back to strided positions */
-    for (int i = 0; i < n; i++) {
-        data[i * stride] = temp[i];
+    int half = n / 2;
+    for (int i = 0; i < half; i++) {
+        float low = temp[i];
+        float high = temp[half + i];
+        data[(2 * i) * stride] = low + high * 0.5f;
+        data[(2 * i + 1) * stride] = low - high * 0.5f;
     }
 
-    free(temp);
+    if (free_temp) free(temp);
+}
+
+static void haar_inverse_1d_strided(float* data, int n, int stride) {
+    haar_inverse_1d_strided_scratch(data, n, stride, NULL);
 }
 
 /**
  * @brief 1D Haar forward wavelet transform matching haar_inverse_1d().
  */
-static void haar_forward_1d(float* data, int n) {
+static void haar_forward_1d_scratch(float* data, int n, float* temp) {
     if (n < 2) return;
 
-    float* temp = malloc(n * sizeof(float));
+    bool free_temp = false;
+    if (!temp) {
+        temp = malloc(n * sizeof(float));
+        free_temp = true;
+    }
     if (!temp) return;
 
     int half = n / 2;
@@ -700,35 +724,42 @@ static void haar_forward_1d(float* data, int n) {
     }
 
     memcpy(data, temp, n * sizeof(float));
-    free(temp);
+    if (free_temp) free(temp);
 }
 
 /**
  * @brief 1D Haar forward transform with stride for vertical passes.
  */
-static void haar_forward_1d_strided(float* data, int n, int stride) {
+static void haar_forward_1d_strided_scratch(float* data, int n, int stride, float* temp) {
     if (n < 2) return;
 
-    float* temp = malloc(n * sizeof(float));
+    bool free_temp = false;
+    if (!temp) {
+        temp = malloc(n * sizeof(float));
+        free_temp = true;
+    }
     if (!temp) return;
 
     for (int i = 0; i < n; i++) {
         temp[i] = data[i * stride];
     }
 
-    haar_forward_1d(temp, n);
-
-    for (int i = 0; i < n; i++) {
-        data[i * stride] = temp[i];
+    int half = n / 2;
+    for (int i = 0; i < half; i++) {
+        float even = temp[2 * i];
+        float odd = temp[2 * i + 1];
+        data[i * stride] = (even + odd) * 0.5f;
+        data[(half + i) * stride] = even - odd;
     }
 
-    free(temp);
+    if (free_temp) free(temp);
 }
 
 static void qge_forward_haar_dwt(float* pixels,
                                   int width,
                                   int height,
-                                  int levels) {
+                                  int levels,
+                                  float* scratch) {
     if (!pixels || width <= 0 || height <= 0 || width != height) return;
 
     for (int level = 0; level < levels; level++) {
@@ -738,10 +769,10 @@ static void qge_forward_haar_dwt(float* pixels,
         /* qge_inverse_dwt() applies row inverse then column inverse. The
          * matching forward transform must reverse that order at each level. */
         for (int x = 0; x < size; x++) {
-            haar_forward_1d_strided(&pixels[x], size, width);
+            haar_forward_1d_strided_scratch(&pixels[x], size, width, scratch);
         }
         for (int y = 0; y < size; y++) {
-            haar_forward_1d(&pixels[y * width], size);
+            haar_forward_1d_scratch(&pixels[y * width], size, scratch);
         }
     }
 }
@@ -816,9 +847,9 @@ static void daub4_inverse_1d_strided(float* data, int n, int stride) {
     free(temp);
 }
 
-void qge_inverse_dwt(const float* coeffs, float* pixels,
-                     int width, int height, int levels,
-                     dwt_mode_t mode) {
+static void qge_inverse_dwt_scratch(const float* coeffs, float* pixels,
+                                    int width, int height, int levels,
+                                    dwt_mode_t mode, float* scratch) {
     if (!coeffs || !pixels) return;
 
     /* Copy coefficients to output (will be transformed in-place) */
@@ -839,13 +870,19 @@ void qge_inverse_dwt(const float* coeffs, float* pixels,
         } else {
             /* Haar (default): fastest, sharp edges */
             for (int y = 0; y < size; y++) {
-                haar_inverse_1d(&pixels[y * width], size);
+                haar_inverse_1d_scratch(&pixels[y * width], size, scratch);
             }
             for (int x = 0; x < size; x++) {
-                haar_inverse_1d_strided(&pixels[x], size, width);
+                haar_inverse_1d_strided_scratch(&pixels[x], size, width, scratch);
             }
         }
     }
+}
+
+void qge_inverse_dwt(const float* coeffs, float* pixels,
+                     int width, int height, int levels,
+                     dwt_mode_t mode) {
+    qge_inverse_dwt_scratch(coeffs, pixels, width, height, levels, mode, NULL);
 }
 
 void qge_dwt_encode_spatial(dwt_framebuffer_t* fb,
@@ -876,7 +913,8 @@ void qge_dwt_encode_spatial(dwt_framebuffer_t* fb,
         }
     }
 
-    qge_forward_haar_dwt(fb->coeff_buffer, base_res, base_res, levels);
+    qge_forward_haar_dwt(fb->coeff_buffer, base_res, base_res, levels,
+                         fb->transform_scratch);
 
     for (int level = 0; level < levels; level++) {
         int size = base_res >> level;
@@ -948,9 +986,9 @@ void qge_dwt_render(dwt_framebuffer_t* fb, float* output) {
     qge_extract_coefficients(fb, fb->coeff_buffer);
 
     /* Step 2: Inverse DWT to reconstruct spatial image */
-    qge_inverse_dwt(fb->coeff_buffer, fb->pixel_buffer,
-                    base_res, base_res, fb->config.num_levels,
-                    fb->config.mode);
+    qge_inverse_dwt_scratch(fb->coeff_buffer, fb->pixel_buffer,
+                            base_res, base_res, fb->config.num_levels,
+                            fb->config.mode, fb->transform_scratch);
 
     /* Step 3: Copy to output */
     memcpy(output, fb->pixel_buffer, base_res * base_res * sizeof(float));

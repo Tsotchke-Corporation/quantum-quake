@@ -819,6 +819,37 @@ void CL_RunParticles (void)
 	}
 }
 
+void QGE_CaptureClassicParticles(qge_frame_snapshot_t *snapshot)
+{
+	particle_t	*p;
+	uint32_t	index = 0;
+
+	if (!snapshot || snapshot->sealed || !r_particles.value)
+		return;
+
+	for (p = active_particles; p; p = p->next)
+	{
+		qge_snapshot_particle_t item;
+		float lifetime;
+
+		memset(&item, 0, sizeof(item));
+		item.particle_id = qge_resource_id_make(QGE_RESOURCE_PARTICLE,
+												 index + 1u);
+		item.origin.x = p->org[0];
+		item.origin.y = p->org[1];
+		item.origin.z = p->org[2];
+		item.velocity.x = p->vel[0];
+		item.velocity.y = p->vel[1];
+		item.velocity.z = p->vel[2];
+		item.color = (uint32_t)((int)p->color & 0xff);
+		lifetime = p->die - cl.time;
+		item.lifetime = lifetime > 0.0f ? lifetime : 0.0f;
+		if (qge_frame_snapshot_add_particle(snapshot, &item) != 0)
+			return;
+		index++;
+	}
+}
+
 /*
 ===============
 R_DrawParticles -- johnfitz -- moved all non-drawing code to CL_RunParticles
@@ -1025,4 +1056,3 @@ void R_DrawParticles_ShowTris (void)
 		glEnd ();
 	}
 }
-
