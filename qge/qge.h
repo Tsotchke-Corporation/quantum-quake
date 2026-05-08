@@ -338,6 +338,17 @@ void qge_dwt_encode_spatial(dwt_framebuffer_t* fb,
                             int height);
 
 /**
+ * Encode a spatial luminance buffer in place.
+ *
+ * This destructive variant may transform `pixels` as scratch storage. Use it
+ * only when the caller no longer needs the source buffer after encoding.
+ */
+void qge_dwt_encode_spatial_inplace(dwt_framebuffer_t* fb,
+                                    float* pixels,
+                                    int width,
+                                    int height);
+
+/**
  * Perform inverse DWT to get spatial image.
  */
 void qge_inverse_dwt(const float* coeffs, float* pixels,

@@ -5578,11 +5578,11 @@ static void QGE_EncodeScene(void)
 	after_raster = Sys_DoubleTime();
 
 	for (int ch = 0; ch < QGE_DWT_CHANNELS; ch++) {
-		const float *source = qge_spatial_color_buffer[ch] ?
-							  qge_spatial_color_buffer[ch] :
-							  qge_spatial_encode_buffer;
-		qge_dwt_encode_spatial(qge_dwt_fb[ch], source,
-							   qge_render_res, qge_render_res);
+		float *source = qge_spatial_color_buffer[ch] ?
+						qge_spatial_color_buffer[ch] :
+						qge_spatial_encode_buffer;
+		qge_dwt_encode_spatial_inplace(qge_dwt_fb[ch], source,
+									   qge_render_res, qge_render_res);
 	}
 	after_forward = Sys_DoubleTime();
 	qge_scene_setup_ms = (after_setup - start) * 1000.0;

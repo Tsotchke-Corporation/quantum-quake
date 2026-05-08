@@ -1022,6 +1022,10 @@ extern void qge_dwt_encode_spatial(dwt_framebuffer_t* fb,
                                    const float* pixels,
                                    int width,
                                    int height);
+extern void qge_dwt_encode_spatial_inplace(dwt_framebuffer_t* fb,
+                                           float* pixels,
+                                           int width,
+                                           int height);
 
 static int test_dwt_framebuffer_create(void) {
     /* Create DWT framebuffer with default config */
@@ -1334,6 +1338,68 @@ static int test_dwt_gradient_low_frequency_retention(void) {
     free(output);
     qge_dwt_framebuffer_free(fb);
     return active > 0 && right > left + 0.20f;
+}
+
+static int test_dwt_spatial_inplace_matches_copy(void) {
+    const int res = 64;
+    dwt_config_t config = {
+        .mode = DWT_MODE_HAAR,
+        .num_levels = 4,
+        .base_resolution = res,
+        .gpu_reconstruct = false,
+        .sparsity_threshold = 0.01f
+    };
+
+    dwt_framebuffer_t* copy_fb = qge_dwt_framebuffer_create(NULL, &config);
+    dwt_framebuffer_t* inplace_fb = qge_dwt_framebuffer_create(NULL, &config);
+    float* input = calloc(res * res, sizeof(float));
+    float* inplace = calloc(res * res, sizeof(float));
+    float* copy_coeffs = calloc(res * res, sizeof(float));
+    float* inplace_coeffs = calloc(res * res, sizeof(float));
+    if (!copy_fb || !inplace_fb || !input || !inplace || !copy_coeffs || !inplace_coeffs) {
+        qge_dwt_framebuffer_free(copy_fb);
+        qge_dwt_framebuffer_free(inplace_fb);
+        free(input);
+        free(inplace);
+        free(copy_coeffs);
+        free(inplace_coeffs);
+        return 0;
+    }
+
+    for (int y = 0; y < res; y++) {
+        for (int x = 0; x < res; x++) {
+            float v = 0.05f + 0.35f * ((float)x / (float)(res - 1));
+            if (x >= 17 && x <= 39 && y >= 22 && y <= 41)
+                v += 0.55f;
+            input[y * res + x] = v;
+            inplace[y * res + x] = v;
+        }
+    }
+
+    qge_dwt_encode_spatial(copy_fb, input, res, res);
+    qge_dwt_encode_spatial_inplace(inplace_fb, inplace, res, res);
+    qge_extract_coefficients(copy_fb, copy_coeffs);
+    qge_extract_coefficients(inplace_fb, inplace_coeffs);
+
+    float max_delta = 0.0f;
+    float sum_delta = 0.0f;
+    for (int i = 0; i < res * res; i++) {
+        float delta = fabsf(copy_coeffs[i] - inplace_coeffs[i]);
+        if (delta > max_delta) max_delta = delta;
+        sum_delta += delta;
+    }
+    int copy_active = qge_dwt_get_active_count(copy_fb);
+    int inplace_active = qge_dwt_get_active_count(inplace_fb);
+    printf("\n    In-place spatial DWT parity: copy=%d inplace=%d max_delta=%.6f sum_delta=%.6f\n    ",
+           copy_active, inplace_active, max_delta, sum_delta);
+
+    qge_dwt_framebuffer_free(copy_fb);
+    qge_dwt_framebuffer_free(inplace_fb);
+    free(input);
+    free(inplace);
+    free(copy_coeffs);
+    free(inplace_coeffs);
+    return copy_active == inplace_active && max_delta < 0.000001f && sum_delta < 0.001f;
 }
 
 static int test_dwt_sparsity(void) {
@@ -2002,6 +2068,7 @@ int main(void) {
     TEST(dwt_encode_sprite);
     TEST(dwt_render);
     TEST(dwt_spatial_rectangle_roundtrip);
+    TEST(dwt_spatial_inplace_matches_copy);
     TEST(dwt_gradient_low_frequency_retention);
     TEST(dwt_sparsity);
     printf("\n");

@@ -873,35 +873,16 @@ void qge_inverse_dwt(const float* coeffs, float* pixels,
     qge_inverse_dwt_scratch(coeffs, pixels, width, height, levels, mode, NULL);
 }
 
-void qge_dwt_encode_spatial(dwt_framebuffer_t* fb,
-                            const float* pixels,
-                            int width,
-                            int height) {
-    if (!fb || !pixels || !fb->coeff_buffer) return;
+static void qge_dwt_encode_spatial_work(dwt_framebuffer_t* fb, float* work) {
+    int base_res;
+    int levels;
 
-    int base_res = fb->config.base_resolution;
-    int levels = fb->config.num_levels;
+    if (!fb || !work) return;
+    base_res = fb->config.base_resolution;
+    levels = fb->config.num_levels;
     if (base_res <= 0 || levels <= 0) return;
 
-    /* Copy or nearest-resample the caller's spatial buffer into coeff_buffer.
-     * The buffer then becomes an in-place forward-DWT work area. */
-    if (width == base_res && height == base_res) {
-        memcpy(fb->coeff_buffer, pixels, base_res * base_res * sizeof(float));
-    } else {
-        if (width <= 0 || height <= 0) return;
-        for (int y = 0; y < base_res; y++) {
-            int src_y = (y * height) / base_res;
-            if (src_y >= height) src_y = height - 1;
-            for (int x = 0; x < base_res; x++) {
-                int src_x = (x * width) / base_res;
-                if (src_x >= width) src_x = width - 1;
-                fb->coeff_buffer[y * base_res + x] =
-                    pixels[src_y * width + src_x];
-            }
-        }
-    }
-
-    qge_forward_haar_dwt(fb->coeff_buffer, base_res, base_res, levels,
+    qge_forward_haar_dwt(work, base_res, base_res, levels,
                          fb->transform_scratch);
 
     for (int level = 0; level < levels; level++) {
@@ -922,11 +903,11 @@ void qge_dwt_encode_spatial(dwt_framebuffer_t* fb,
         for (int y = 0; y < half; y++) {
             for (int x = 0; x < half; x++) {
                 qge_add_wavelet_coeff_with_threshold(fb, level, SUBBAND_HL, x, y,
-                    fb->coeff_buffer[y * base_res + half + x], threshold);
+                    work[y * base_res + half + x], threshold);
                 qge_add_wavelet_coeff_with_threshold(fb, level, SUBBAND_LH, x, y,
-                    fb->coeff_buffer[(half + y) * base_res + x], threshold);
+                    work[(half + y) * base_res + x], threshold);
                 qge_add_wavelet_coeff_with_threshold(fb, level, SUBBAND_HH, x, y,
-                    fb->coeff_buffer[(half + y) * base_res + half + x], threshold);
+                    work[(half + y) * base_res + half + x], threshold);
             }
         }
     }
@@ -938,10 +919,54 @@ void qge_dwt_encode_spatial(dwt_framebuffer_t* fb,
     for (int y = 0; y < coarse_ll; y++) {
         for (int x = 0; x < coarse_ll; x++) {
             qge_add_wavelet_coeff_with_threshold(fb, coarse_level, SUBBAND_LL, x, y,
-                fb->coeff_buffer[y * base_res + x],
+                work[y * base_res + x],
                 fb->config.sparsity_threshold * 0.10f);
         }
     }
+}
+
+void qge_dwt_encode_spatial(dwt_framebuffer_t* fb,
+                            const float* pixels,
+                            int width,
+                            int height) {
+    if (!fb || !pixels || !fb->coeff_buffer) return;
+
+    int base_res = fb->config.base_resolution;
+    if (base_res <= 0) return;
+
+    /* Copy or nearest-resample the caller's spatial buffer into coeff_buffer.
+     * The buffer then becomes an in-place forward-DWT work area. */
+    if (width == base_res && height == base_res) {
+        memcpy(fb->coeff_buffer, pixels, base_res * base_res * sizeof(float));
+    } else {
+        if (width <= 0 || height <= 0) return;
+        for (int y = 0; y < base_res; y++) {
+            int src_y = (y * height) / base_res;
+            if (src_y >= height) src_y = height - 1;
+            for (int x = 0; x < base_res; x++) {
+                int src_x = (x * width) / base_res;
+                if (src_x >= width) src_x = width - 1;
+                fb->coeff_buffer[y * base_res + x] =
+                    pixels[src_y * width + src_x];
+            }
+        }
+    }
+
+    qge_dwt_encode_spatial_work(fb, fb->coeff_buffer);
+}
+
+void qge_dwt_encode_spatial_inplace(dwt_framebuffer_t* fb,
+                                    float* pixels,
+                                    int width,
+                                    int height) {
+    if (!fb || !pixels) return;
+
+    int base_res = fb->config.base_resolution;
+    if (width == base_res && height == base_res) {
+        qge_dwt_encode_spatial_work(fb, pixels);
+        return;
+    }
+    qge_dwt_encode_spatial(fb, pixels, width, height);
 }
 
 /* ============================================================================
