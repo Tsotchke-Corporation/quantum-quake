@@ -44,6 +44,7 @@ cvar_t quantum_render_res = {"quantum_render_res", "1024", CVAR_ARCHIVE};
 cvar_t quantum_render_threshold = {"quantum_render_threshold", "0.001", CVAR_ARCHIVE};
 cvar_t quantum_render_edge_gain = {"quantum_render_edge_gain", "0.06", CVAR_ARCHIVE};
 cvar_t quantum_render_material_gain = {"quantum_render_material_gain", "0.18", CVAR_ARCHIVE};
+cvar_t quantum_render_bilinear_samples = {"quantum_render_bilinear_samples", "0", CVAR_ARCHIVE};
 cvar_t quantum_render_gate_kernel = {"quantum_render_gate_kernel", "1", CVAR_ARCHIVE};
 cvar_t quantum_render_gate_shots = {"quantum_render_gate_shots", "64", CVAR_ARCHIVE};
 
@@ -1850,6 +1851,7 @@ void QGE_Init(void)
 	Cvar_RegisterVariable(&quantum_render_threshold);
 	Cvar_RegisterVariable(&quantum_render_edge_gain);
 	Cvar_RegisterVariable(&quantum_render_material_gain);
+	Cvar_RegisterVariable(&quantum_render_bilinear_samples);
 	Cvar_RegisterVariable(&quantum_render_gate_kernel);
 	Cvar_RegisterVariable(&quantum_render_gate_shots);
 	QGE_ApplyEarlyRenderOverrides();
@@ -3637,6 +3639,14 @@ static qboolean QGE_SurfaceTextureColorPrepared(const qge_scene_surface_t *surfa
 	if (tex_s < 0.0f) tex_s += 1.0f;
 	if (tex_t < 0.0f) tex_t += 1.0f;
 
+	if (quantum_render_bilinear_samples.value < 0.5f) {
+		x0 = (int)(tex_s * (float)width);
+		y0 = (int)(tex_t * (float)height);
+		if (x0 >= (int)width) x0 = (int)width - 1;
+		if (y0 >= (int)height) y0 = (int)height - 1;
+		return QGE_TexturePaletteSample(surface, tex, x0, y0, color) > 0.0f;
+	}
+
 	fx = tex_s * (float)width - 0.5f;
 	fy = tex_t * (float)height - 0.5f;
 	x0 = (int)floorf(fx);
@@ -3745,6 +3755,30 @@ static qge_rgb_sample_t QGE_SurfaceLightColorPrepared(const msurface_t *surf,
 			  (float)(surf->light_t * 16) - 8.0f;
 	sf = local_s / 16.0f;
 	tf = local_t / 16.0f;
+
+	if (quantum_render_bilinear_samples.value < 0.5f) {
+		s0 = (int)(sf + 0.5f);
+		t0 = (int)(tf + 0.5f);
+		for (int map = 0; map < MAXLIGHTMAPS && surf->styles[map] != 255; map++) {
+			qge_rgb_sample_t c = QGE_LightmapSampleTexel(surf, map, s0, t0,
+														 smax, tmax, size);
+			color.r += c.r;
+			color.g += c.g;
+			color.b += c.b;
+			maps++;
+		}
+		if (!maps) {
+			color.r = 0.85f;
+			color.g = 0.85f;
+			color.b = 0.85f;
+			return color;
+		}
+		if (color.r > 1.35f) color.r = 1.35f;
+		if (color.g > 1.35f) color.g = 1.35f;
+		if (color.b > 1.35f) color.b = 1.35f;
+		return color;
+	}
+
 	s0 = (int)floorf(sf);
 	t0 = (int)floorf(tf);
 	s1 = s0 + 1;

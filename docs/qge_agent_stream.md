@@ -183,7 +183,11 @@ audio pointer files remain present for consumers that expect a stable contract.
 - `QGE_STREAM_WIDTH`, `QGE_STREAM_HEIGHT`, `QGE_STREAM_FULLSCREEN`: window
   controls.
 - `QGE_RENDER`, `QGE_RENDER_RES`, `QGE_RENDER_THRESHOLD`,
-  `QGE_RENDER_EDGE_GAIN`, `QGE_RENDER_MATERIAL_GAIN`: QGE render controls.
+  `QGE_RENDER_EDGE_GAIN`, `QGE_RENDER_MATERIAL_GAIN`,
+  `QGE_RENDER_BILINEAR_SAMPLES`: QGE render controls.
+  `QGE_RENDER_BILINEAR_SAMPLES=0` uses nearest texture/light samples in the
+  quantum rasterizer for faster CPU-only captures; set it to `1` for smoother
+  per-pixel sampling.
   `QGE_RENDER_RES` and `QGE_RENDER_THRESHOLD` are also passed as early
   `-qgerenderres` / `-qgerenderthreshold` launch arguments so DWT buffers are
   allocated at the requested size before `autoexec.cfg` runs.
