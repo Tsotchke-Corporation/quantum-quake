@@ -4280,6 +4280,14 @@ static qge_rgb_sample_t QGE_SurfaceLightColorContext(
 	if (t0 >= ctx->light_tmax) t0 = ctx->light_tmax - 1;
 
 	sample_base = surf->samples + (t0 * ctx->light_smax + s0) * 3;
+	if (ctx->light_map_count == 1) {
+		float scale = ctx->light_scales[0];
+		color.r = (float)sample_base[0] * scale;
+		color.g = (float)sample_base[1] * scale;
+		color.b = (float)sample_base[2] * scale;
+		return color;
+	}
+
 	color.r = 0.0f;
 	color.g = 0.0f;
 	color.b = 0.0f;
