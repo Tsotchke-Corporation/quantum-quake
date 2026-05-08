@@ -411,6 +411,8 @@ typedef struct {
 	int light_smax;
 	int light_tmax;
 	int light_size;
+	int light_map_count;
+	float light_scales[MAXLIGHTMAPS];
 	qboolean has_light;
 	qboolean bilinear;
 	qboolean sky;
@@ -4124,6 +4126,7 @@ static void QGE_PrepareSurfaceSampleContext(qge_surface_sample_context_t *ctx,
 	ctx->light_tmax = light_tmax;
 	ctx->light_size = light_size;
 	ctx->has_light = light_smax > 0 && light_tmax > 0 && light_size > 0;
+	ctx->light_map_count = 0;
 	ctx->bilinear = quantum_render_bilinear_samples.value >= 0.5f;
 	ctx->sky = surface && (surface->flags & SURF_DRAWSKY);
 
@@ -4132,9 +4135,79 @@ static void QGE_PrepareSurfaceSampleContext(qge_surface_sample_context_t *ctx,
 		if (surface->flags & (SURF_DRAWLAVA | SURF_DRAWTELE))
 			gain *= 1.20f;
 	}
+	if (ctx->has_light && ctx->surf && ctx->surf->samples) {
+		for (int map = 0;
+			 map < MAXLIGHTMAPS && ctx->surf->styles[map] != 255;
+			 map++) {
+			ctx->light_scales[ctx->light_map_count++] =
+				(float)d_lightstylevalue[ctx->surf->styles[map]] /
+				(256.0f * 255.0f);
+		}
+	}
 	ctx->color_gain_r = gain * qge_render_gate_color_gain[QGE_DWT_R];
 	ctx->color_gain_g = gain * qge_render_gate_color_gain[QGE_DWT_G];
 	ctx->color_gain_b = gain * qge_render_gate_color_gain[QGE_DWT_B];
+}
+
+static qge_rgb_sample_t QGE_SurfaceLightColorContext(
+	const qge_surface_sample_context_t *ctx,
+	const qge_projected_sample_t *sample)
+{
+	const msurface_t *surf;
+	const byte *sample_base;
+	int s0, t0;
+	float local_s, local_t;
+	qge_rgb_sample_t color;
+
+	color.r = 0.95f;
+	color.g = 0.95f;
+	color.b = 0.95f;
+
+	if (!ctx || !sample)
+		return color;
+	if (!ctx->has_light || !ctx->surf || !ctx->surf->samples)
+		return QGE_SurfaceLightColor(ctx->surf, sample);
+	if (ctx->bilinear)
+		return QGE_SurfaceLightColorPrepared(ctx->surf, sample,
+											 ctx->light_smax,
+											 ctx->light_tmax,
+											 ctx->light_size,
+											 true);
+
+	if (ctx->light_map_count <= 0) {
+		color.r = 0.85f;
+		color.g = 0.85f;
+		color.b = 0.85f;
+		return color;
+	}
+
+	surf = ctx->surf;
+	local_s = sample->light_s * (float)(LMBLOCK_WIDTH * 16) -
+			  (float)(surf->light_s * 16) - 8.0f;
+	local_t = sample->light_t * (float)(LMBLOCK_HEIGHT * 16) -
+			  (float)(surf->light_t * 16) - 8.0f;
+	s0 = (int)(local_s / 16.0f + 0.5f);
+	t0 = (int)(local_t / 16.0f + 0.5f);
+	if (s0 < 0) s0 = 0;
+	if (t0 < 0) t0 = 0;
+	if (s0 >= ctx->light_smax) s0 = ctx->light_smax - 1;
+	if (t0 >= ctx->light_tmax) t0 = ctx->light_tmax - 1;
+
+	sample_base = surf->samples + (t0 * ctx->light_smax + s0) * 3;
+	color.r = 0.0f;
+	color.g = 0.0f;
+	color.b = 0.0f;
+	for (int map = 0; map < ctx->light_map_count; map++) {
+		const byte *p = sample_base + map * ctx->light_size * 3;
+		float scale = ctx->light_scales[map];
+		color.r += (float)p[0] * scale;
+		color.g += (float)p[1] * scale;
+		color.b += (float)p[2] * scale;
+	}
+	if (color.r > 1.35f) color.r = 1.35f;
+	if (color.g > 1.35f) color.g = 1.35f;
+	if (color.b > 1.35f) color.b = 1.35f;
+	return color;
 }
 
 static qge_rgb_sample_t QGE_SurfaceSampleColorContext(
@@ -4169,14 +4242,7 @@ static qge_rgb_sample_t QGE_SurfaceSampleColorContext(
 		out.b = 0.0f;
 		return out;
 	}
-	if (ctx->has_light)
-		light_color = QGE_SurfaceLightColorPrepared(ctx->surf, sample,
-													ctx->light_smax,
-													ctx->light_tmax,
-													ctx->light_size,
-													ctx->bilinear);
-	else
-		light_color = QGE_SurfaceLightColor(ctx->surf, sample);
+	light_color = QGE_SurfaceLightColorContext(ctx, sample);
 
 	out.r = (0.18f + tex_color.r * 0.82f) *
 			(0.30f + light_color.r * 0.90f) * ctx->color_gain_r;
