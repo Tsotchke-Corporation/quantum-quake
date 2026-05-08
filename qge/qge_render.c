@@ -338,7 +338,6 @@ void qge_dwt_framebuffer_reset(dwt_framebuffer_t* fb) {
         fb->state->amplitudes[0] = 1.0 + 0.0*I;
     }
     fb->active_coeff_count = 0;
-    memset(fb->coeff_buffer, 0, fb->coeff_size * sizeof(float));
 }
 
 void qge_dwt_framebuffer_free(dwt_framebuffer_t* fb) {
@@ -839,8 +838,10 @@ static void qge_inverse_dwt_scratch(const float* coeffs, float* pixels,
                                     dwt_mode_t mode, float* scratch) {
     if (!coeffs || !pixels) return;
 
-    /* Copy coefficients to output (will be transformed in-place) */
-    memcpy(pixels, coeffs, width * height * sizeof(float));
+    /* Copy coefficients to output when callers do not already provide an
+     * in-place reconstruction buffer. */
+    if (pixels != coeffs)
+        memcpy(pixels, coeffs, width * height * sizeof(float));
 
     /* Reconstruct from coarsest to finest level */
     for (int level = levels - 1; level >= 0; level--) {
@@ -969,11 +970,11 @@ void qge_dwt_render(dwt_framebuffer_t* fb, float* output) {
         quantum_state_normalize(fb->state);
     }
 
-    /* Step 1: Extract coefficients from quantum state into DWT pyramid layout */
-    qge_extract_coefficients(fb, fb->coeff_buffer);
+    /* Step 1: Extract coefficients directly into the caller's output buffer. */
+    qge_extract_coefficients(fb, output);
 
-    /* Step 2: Inverse DWT directly into the caller's output buffer. */
-    qge_inverse_dwt_scratch(fb->coeff_buffer, output,
+    /* Step 2: Inverse DWT in place. */
+    qge_inverse_dwt_scratch(output, output,
                             base_res, base_res, fb->config.num_levels,
                             fb->config.mode, fb->transform_scratch);
 }
