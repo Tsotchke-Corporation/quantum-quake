@@ -3344,60 +3344,6 @@ static qge_projected_sample_t QGE_ProjectedPolygonAverageSample(const qge_projec
 	return sample;
 }
 
-static qboolean QGE_ProjectedTriangleSampleAt(float x,
-											  float y,
-											  const qge_projected_vertex_t *a,
-											  const qge_projected_vertex_t *b,
-											  const qge_projected_vertex_t *c,
-											  qge_projected_sample_t *sample)
-{
-	float denom;
-	float w0, w1, w2;
-	float ia, ib, ic;
-	float inv_depth;
-
-	if (!a || !b || !c || !sample)
-		return false;
-
-	denom = (b->y - c->y) * (a->x - c->x) +
-			(c->x - b->x) * (a->y - c->y);
-	if (fabsf(denom) < 0.0001f)
-		return false;
-
-	w0 = ((b->y - c->y) * (x - c->x) +
-		  (c->x - b->x) * (y - c->y)) / denom;
-	w1 = ((c->y - a->y) * (x - c->x) +
-		  (a->x - c->x) * (y - c->y)) / denom;
-	w2 = 1.0f - w0 - w1;
-
-	if (w0 < -0.001f || w1 < -0.001f || w2 < -0.001f)
-		return false;
-
-	ia = a->depth > 0.0001f ? 1.0f / a->depth : 1.0f;
-	ib = b->depth > 0.0001f ? 1.0f / b->depth : 1.0f;
-	ic = c->depth > 0.0001f ? 1.0f / c->depth : 1.0f;
-	inv_depth = w0 * ia + w1 * ib + w2 * ic;
-	if (inv_depth <= 0.000001f || !isfinite(inv_depth)) {
-		sample->depth = w0 * a->depth + w1 * b->depth + w2 * c->depth;
-		sample->tex_s = w0 * a->tex_s + w1 * b->tex_s + w2 * c->tex_s;
-		sample->tex_t = w0 * a->tex_t + w1 * b->tex_t + w2 * c->tex_t;
-		sample->light_s = w0 * a->light_s + w1 * b->light_s + w2 * c->light_s;
-		sample->light_t = w0 * a->light_t + w1 * b->light_t + w2 * c->light_t;
-		return true;
-	}
-
-	sample->depth = 1.0f / inv_depth;
-	sample->tex_s = (w0 * a->tex_s * ia + w1 * b->tex_s * ib +
-					 w2 * c->tex_s * ic) * sample->depth;
-	sample->tex_t = (w0 * a->tex_t * ia + w1 * b->tex_t * ib +
-					 w2 * c->tex_t * ic) * sample->depth;
-	sample->light_s = (w0 * a->light_s * ia + w1 * b->light_s * ib +
-					   w2 * c->light_s * ic) * sample->depth;
-	sample->light_t = (w0 * a->light_t * ia + w1 * b->light_t * ib +
-					   w2 * c->light_t * ic) * sample->depth;
-	return true;
-}
-
 static qboolean QGE_PrepareProjectedTriangleSampler(
 	const qge_projected_vertex_t *a,
 	const qge_projected_vertex_t *b,
@@ -3597,59 +3543,6 @@ static qboolean QGE_ProjectedTrianglePixelSamplePrepared(
 		if (!QGE_ProjectedTriangleSamplePrepared((float)x + offsets[i][0],
 												 (float)y + offsets[i][1],
 												 sampler, &sub))
-			continue;
-		sample->depth += sub.depth;
-		sample->tex_s += sub.tex_s;
-		sample->tex_t += sub.tex_t;
-		sample->light_s += sub.light_s;
-		sample->light_t += sub.light_t;
-		hits++;
-	}
-	if (!hits)
-		return false;
-
-	sample->depth /= (float)hits;
-	sample->tex_s /= (float)hits;
-	sample->tex_t /= (float)hits;
-	sample->light_s /= (float)hits;
-	sample->light_t /= (float)hits;
-	*coverage = (float)hits * 0.25f;
-	qge_scene_triangle_edge_fills++;
-	return true;
-}
-
-static qboolean QGE_ProjectedTrianglePixelSampleAt(
-	int x,
-	int y,
-	const qge_projected_vertex_t *a,
-	const qge_projected_vertex_t *b,
-	const qge_projected_vertex_t *c,
-	qge_projected_sample_t *sample,
-	float *coverage)
-{
-	static const float offsets[4][2] = {
-		{0.25f, 0.25f},
-		{0.75f, 0.25f},
-		{0.25f, 0.75f},
-		{0.75f, 0.75f}
-	};
-	qge_projected_sample_t sub;
-	int hits = 0;
-
-	if (!sample || !coverage)
-		return false;
-	if (QGE_ProjectedTriangleSampleAt((float)x + 0.5f,
-									  (float)y + 0.5f,
-									  a, b, c, sample)) {
-		*coverage = 1.0f;
-		return true;
-	}
-
-	memset(sample, 0, sizeof(*sample));
-	for (int i = 0; i < 4; i++) {
-		if (!QGE_ProjectedTriangleSampleAt((float)x + offsets[i][0],
-										   (float)y + offsets[i][1],
-										   a, b, c, &sub))
 			continue;
 		sample->depth += sub.depth;
 		sample->tex_s += sub.tex_s;
@@ -5189,10 +5082,18 @@ static void QGE_FillEntityTriangleColor(const qge_projected_vertex_t *a,
 										const qge_rgb_sample_t *color)
 {
 	int x1, y1, x2, y2;
+	float *depth_buffer = qge_spatial_depth_buffer;
+	float *rbuf = qge_spatial_color_buffer[QGE_DWT_R];
+	float *gbuf = qge_spatial_color_buffer[QGE_DWT_G];
+	float *bbuf = qge_spatial_color_buffer[QGE_DWT_B];
+	qge_projected_triangle_sampler_t sampler;
+	qboolean prepared_rgb_depth = depth_buffer && rbuf && gbuf && bbuf;
 
 	if (!a || !b || !c || !color)
 		return;
 	if (fabsf(QGE_ProjectedTriangleArea2D(a, b, c)) < 0.35f)
+		return;
+	if (!QGE_PrepareProjectedTriangleSampler(a, b, c, &sampler))
 		return;
 
 	x1 = (int)floorf(fminf(fminf(a->x, b->x), c->x));
@@ -5212,11 +5113,21 @@ static void QGE_FillEntityTriangleColor(const qge_projected_vertex_t *a,
 			float coverage;
 			qge_rgb_sample_t pixel;
 
-			if (!QGE_ProjectedTrianglePixelSampleAt(x, y, a, b, c,
-													&sample, &coverage))
+			if (!QGE_ProjectedTrianglePixelSamplePrepared(x, y, &sampler,
+														  &sample, &coverage))
 				continue;
-			pixel = QGE_RGBScaled(*color, coverage);
-			QGE_SpatialAddPixelColorDepth(x, y, &pixel, sample.depth);
+			if (prepared_rgb_depth) {
+				QGE_SpatialAddPixelRGBDepthPositivePrepared(
+					y * qge_render_res + x,
+					color->r * coverage,
+					color->g * coverage,
+					color->b * coverage,
+					sample.depth,
+					depth_buffer, rbuf, gbuf, bbuf);
+			} else {
+				pixel = QGE_RGBScaled(*color, coverage);
+				QGE_SpatialAddPixelColorDepth(x, y, &pixel, sample.depth);
+			}
 		}
 	}
 	qge_scene_entity_mesh_triangles++;
