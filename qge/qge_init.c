@@ -69,9 +69,12 @@ qge_hardware_tier_t qge_detect_hardware(void) {
         char line[128];
         while (fgets(line, sizeof(line), f)) {
             if (strncmp(line, "MemTotal:", 9) == 0) {
-                sscanf(line + 9, "%zu", &total_memory);
-                total_memory *= 1024; /* Convert from KB to bytes */
-                break;
+                char* endptr = line + 9;
+                unsigned long long mem_kb = strtoull(line + 9, &endptr, 10);
+                if (endptr != line + 9) {
+                    total_memory = (size_t)mem_kb * 1024; /* Convert from KB to bytes */
+                    break;
+                }
             }
         }
         fclose(f);

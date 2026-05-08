@@ -593,7 +593,7 @@ void GL_BuildLightmaps (void)
 		lm->rectchange.h = 0;
 
 		//johnfitz -- use texture manager
-		sprintf(name, "lightmap%07i",i);
+		q_snprintf(name, sizeof(name), "lightmap%07i", i);
 		lm->texture = TexMgr_LoadImage (cl.worldmodel, name, LMBLOCK_WIDTH, LMBLOCK_HEIGHT,
 						SRC_LIGHTMAP, lm->data, "", (src_offset_t)lm->data, TEXPREF_LINEAR | TEXPREF_NOPICMIP);
 		//johnfitz

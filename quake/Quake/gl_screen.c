@@ -763,7 +763,7 @@ void SCR_ScreenShot_f (void)
 	int	i, quality;
 	qboolean	ok;
 
-	Q_strncpy (ext, "png", sizeof(ext));
+	q_strlcpy (ext, "png", sizeof(ext));
 
 	if (Cmd_Argc () >= 2)
 	{
@@ -772,7 +772,7 @@ void SCR_ScreenShot_f (void)
 		if (!q_strcasecmp ("png", requested_ext)
 		    || !q_strcasecmp ("tga", requested_ext)
 		    || !q_strcasecmp ("jpg", requested_ext))
-			Q_strncpy (ext, requested_ext, sizeof(ext));
+			q_strlcpy (ext, requested_ext, sizeof(ext));
 		else
 		{
 			SCR_ScreenShot_Usage ();

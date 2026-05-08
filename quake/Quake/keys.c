@@ -372,7 +372,7 @@ void Key_Console (int key)
 
 	case K_UPARROW:
 		if (history_line == edit_line)
-			Q_strcpy(current, workline);
+			q_strlcpy(current, workline, sizeof(current));
 
 		history_line_last = history_line;
 		do
@@ -1236,4 +1236,3 @@ void Key_UpdateForDest (void)
 		break;
 	}
 }
-
