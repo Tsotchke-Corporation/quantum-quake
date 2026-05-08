@@ -31,8 +31,10 @@ classical input/readout accounting. It does not yet support an end-to-end
 - The light-transport benchmark evaluates a bounded soft-shadow visibility
   observable with classical MC, stratified sampling, and a finite-shot MLAE
   simulator under an explicit oracle/input/readout model.
-- The backend selection path is now explicit in the QGE API and logs the
-  selected backend as accelerated or portable.
+- The backend selection path is now explicit in the QGE API and logs both the
+  selected backend capability and whether acceleration is active for the live
+  context. A Metal-capable host is no longer reported as actively accelerated
+  unless a GPU context has been initialized for that runtime path.
 
 ## Claims That Would Fail Review
 

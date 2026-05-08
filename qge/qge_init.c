@@ -144,6 +144,39 @@ bool qge_backend_is_accelerated(qge_backend_t backend) {
     }
 }
 
+bool qge_context_has_active_acceleration(qge_context_t* ctx) {
+    if (!ctx) {
+        return false;
+    }
+
+    switch (ctx->backend) {
+        case QGE_BACKEND_METAL:
+        case QGE_BACKEND_VULKAN:
+        case QGE_BACKEND_OPENCL:
+            return ctx->gpu_context != NULL;
+        case QGE_BACKEND_AVX512:
+        case QGE_BACKEND_AVX2:
+        case QGE_BACKEND_NEON:
+            return true;
+        case QGE_BACKEND_FALLBACK:
+        default:
+            return false;
+    }
+}
+
+const char* qge_context_acceleration_status(qge_context_t* ctx) {
+    if (!ctx) {
+        return "uninitialized";
+    }
+    if (qge_context_has_active_acceleration(ctx)) {
+        return "active acceleration";
+    }
+    if (qge_backend_is_accelerated(ctx->backend)) {
+        return "capable, inactive";
+    }
+    return "portable";
+}
+
 static int qubits_for_tier(qge_hardware_tier_t tier) {
     switch (tier) {
         case QGE_TIER_ULTRA:  return 28;
@@ -305,7 +338,7 @@ qge_context_t* qge_init_with_config(qge_hardware_tier_t tier,
     printf("==================================================================\n");
     printf("  Hardware Tier: %-10s  Backend: %-10s (%s)\n",
            tier_names[ctx->tier], qge_backend_name(ctx->backend),
-           qge_backend_is_accelerated(ctx->backend) ? "accelerated" : "portable");
+           qge_context_acceleration_status(ctx));
     printf("  Qubits: %-2d               Render Mode: %-10s\n",
            ctx->num_qubits, mode_names[ctx->render_mode]);
     printf("  State Memory: lazy sparse (%.1f GB dense cap)\n",

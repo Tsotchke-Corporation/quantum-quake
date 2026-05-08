@@ -338,6 +338,22 @@ static int test_context_backend_gate(void) {
          strcmp(name, "Unknown") != 0 &&
          qge_backend_is_accelerated(QGE_BACKEND_FALLBACK) == false;
 
+    if (ok) {
+        const char* status = qge_context_acceleration_status(ctx);
+        int active = qge_context_has_active_acceleration(ctx);
+
+        ok = status != NULL && strcmp(status, "uninitialized") != 0;
+        if (ok && (backend == QGE_BACKEND_METAL ||
+                   backend == QGE_BACKEND_VULKAN ||
+                   backend == QGE_BACKEND_OPENCL)) {
+            ok = active == 0 && strcmp(status, "capable, inactive") == 0;
+        } else if (ok && qge_backend_is_accelerated(backend)) {
+            ok = active != 0 && strcmp(status, "active acceleration") == 0;
+        } else if (ok) {
+            ok = active == 0 && strcmp(status, "portable") == 0;
+        }
+    }
+
     qge_shutdown(ctx);
     return ok;
 }

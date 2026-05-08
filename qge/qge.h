@@ -150,9 +150,22 @@ const char* qge_backend_name(qge_backend_t backend);
 
 /**
  * Return true when a backend uses platform acceleration instead of the
- * portable fallback path.
+ * portable fallback path. This describes backend capability, not whether a
+ * specific context has initialized an accelerator for the active render path.
  */
 bool qge_backend_is_accelerated(qge_backend_t backend);
+
+/**
+ * Return true when this context has active acceleration attached to the live
+ * runtime path. GPU-style backends require an initialized GPU context; CPU SIMD
+ * backends are active when selected.
+ */
+bool qge_context_has_active_acceleration(qge_context_t* ctx);
+
+/**
+ * Human-readable active acceleration state for logs and evidence.
+ */
+const char* qge_context_acceleration_status(qge_context_t* ctx);
 
 /**
  * Get recommended resolution for detected hardware.
