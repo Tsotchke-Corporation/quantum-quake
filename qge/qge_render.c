@@ -445,6 +445,24 @@ static inline void qge_store_wavelet_coeff_with_offset(dwt_framebuffer_t* fb,
     fb->active_coeff_count = active_index + 1;
 }
 
+static inline int qge_store_sparse_coeff_fast(uint64_t* active_indices,
+                                              float* active_values,
+                                              int* active_offsets,
+                                              int active_count,
+                                              int coeff_offset,
+                                              int coeff_size,
+                                              float value,
+                                              float threshold) {
+    if (value < threshold && value > -threshold) return active_count;
+    if (active_count >= MAX_ACTIVE_COEFFS) return active_count;
+    if ((unsigned)coeff_offset >= (unsigned)coeff_size) return active_count;
+
+    active_indices[active_count] = 0;
+    active_values[active_count] = value;
+    active_offsets[active_count] = coeff_offset;
+    return active_count + 1;
+}
+
 static void qge_add_wavelet_coeff_with_threshold(dwt_framebuffer_t* fb,
                                                   int level,
                                                   dwt_subband_t subband,
@@ -983,6 +1001,7 @@ void qge_inverse_dwt(const float* coeffs, float* pixels,
 static void qge_dwt_encode_spatial_work(dwt_framebuffer_t* fb, float* work) {
     int base_res;
     int levels;
+    bool sparse_fast;
 
     if (!fb || !work) return;
     base_res = fb->config.base_resolution;
@@ -992,6 +1011,72 @@ static void qge_dwt_encode_spatial_work(dwt_framebuffer_t* fb, float* work) {
     qge_forward_haar_dwt_matrix_scratch(work, base_res, base_res, levels,
                                         fb->transform_scratch,
                                         fb->coeff_buffer);
+
+    sparse_fast = !fb->state && fb->active_indices &&
+                  fb->active_values && fb->active_offsets;
+    if (sparse_fast) {
+        uint64_t* active_indices = fb->active_indices;
+        float* active_values = fb->active_values;
+        int* active_offsets = fb->active_offsets;
+        int active_count = fb->active_coeff_count;
+        int coeff_size = fb->coeff_size;
+
+        for (int level = 0; level < levels; level++) {
+            int size = base_res >> level;
+            int half = size / 2;
+            float threshold = fb->config.sparsity_threshold;
+            if (half <= 0) break;
+
+            if (level >= levels - 2)
+                threshold *= 0.20f;
+            else if (level >= levels - 4)
+                threshold *= 0.50f;
+            if (threshold < 0.0f)
+                threshold = 0.0f;
+
+            for (int y = 0; y < half; y++) {
+                int low_row_offset = y * base_res;
+                int high_row_offset = (half + y) * base_res;
+                for (int x = 0; x < half; x++) {
+                    int hl_offset = low_row_offset + half + x;
+                    int lh_offset = high_row_offset + x;
+                    int hh_offset = high_row_offset + half + x;
+                    active_count = qge_store_sparse_coeff_fast(
+                        active_indices, active_values, active_offsets,
+                        active_count, hl_offset, coeff_size,
+                        work[hl_offset], threshold);
+                    active_count = qge_store_sparse_coeff_fast(
+                        active_indices, active_values, active_offsets,
+                        active_count, lh_offset, coeff_size,
+                        work[lh_offset], threshold);
+                    active_count = qge_store_sparse_coeff_fast(
+                        active_indices, active_values, active_offsets,
+                        active_count, hh_offset, coeff_size,
+                        work[hh_offset], threshold);
+                }
+            }
+        }
+
+        {
+            int coarse_ll = base_res >> levels;
+            float threshold = fb->config.sparsity_threshold * 0.10f;
+            if (coarse_ll < 1) coarse_ll = 1;
+            if (threshold < 0.0f) threshold = 0.0f;
+            for (int y = 0; y < coarse_ll; y++) {
+                int row_offset = y * base_res;
+                for (int x = 0; x < coarse_ll; x++) {
+                    int coeff_offset = row_offset + x;
+                    active_count = qge_store_sparse_coeff_fast(
+                        active_indices, active_values, active_offsets,
+                        active_count, coeff_offset, coeff_size,
+                        work[coeff_offset], threshold);
+                }
+            }
+        }
+
+        fb->active_coeff_count = active_count;
+        return;
+    }
 
     for (int level = 0; level < levels; level++) {
         int size = base_res >> level;
