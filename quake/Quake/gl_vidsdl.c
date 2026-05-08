@@ -1368,10 +1368,37 @@ static void GL_Init (void)
 	Con_SafePrintf ("GL_RENDERER: %s\n", gl_renderer);
 	Con_SafePrintf ("GL_VERSION: %s\n", gl_version);
 	
-	if (gl_version == NULL || sscanf(gl_version, "%d.%d", &gl_version_major, &gl_version_minor) < 2)
+	if (gl_version == NULL)
 	{
 		gl_version_major = 0;
 		gl_version_minor = 0;
+	}
+	else
+	{
+		char *endptr;
+		long major = strtol(gl_version, &endptr, 10);
+
+		if (endptr == gl_version || *endptr != '.')
+		{
+			gl_version_major = 0;
+			gl_version_minor = 0;
+		}
+		else
+		{
+			const char *minor_start = endptr + 1;
+			long minor = strtol(minor_start, &endptr, 10);
+
+			if (endptr == minor_start)
+			{
+				gl_version_major = 0;
+				gl_version_minor = 0;
+			}
+			else
+			{
+				gl_version_major = (int)major;
+				gl_version_minor = (int)minor;
+			}
+		}
 	}
 
 	if (gl_extensions_nice != NULL)

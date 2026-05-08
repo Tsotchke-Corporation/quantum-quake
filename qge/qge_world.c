@@ -51,10 +51,15 @@ struct qge_world_s {
 };
 
 static void qge_copy_name(char dst[QGE_WORLD_NAME_MAX], const char* src) {
+    size_t len = 0;
+
     if (!dst) return;
     if (!src) src = "";
-    strncpy(dst, src, QGE_WORLD_NAME_MAX - 1);
-    dst[QGE_WORLD_NAME_MAX - 1] = '\0';
+    while (len < QGE_WORLD_NAME_MAX - 1 && src[len]) {
+        len++;
+    }
+    memcpy(dst, src, len);
+    dst[len] = '\0';
 }
 
 static int qge_grow_array(void** items,

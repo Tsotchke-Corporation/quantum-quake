@@ -358,7 +358,7 @@ void Cmd_Alias_f (void)
 			a->next = cmd_alias;
 			cmd_alias = a;
 		}
-		strcpy (a->name, s);
+		q_strlcpy (a->name, s, sizeof(a->name));
 
 		// copy the rest of the command line
 		cmd[0] = 0;		// start out with a null string
@@ -866,4 +866,3 @@ int Cmd_CheckParm (const char *parm)
 
 	return 0;
 }
-

@@ -229,7 +229,24 @@ void Fog_ParseWorldspawn (void)
 
 		if (!strcmp("fog", key))
 		{
-			sscanf(value, "%f %f %f %f", &fog_density, &fog_red, &fog_green, &fog_blue);
+			char	*next = value;
+			float	parsed[4];
+			int	i;
+
+			for (i = 0; i < 4; i++)
+			{
+				char *start = next;
+				parsed[i] = strtof(start, &next);
+				if (next == start)
+					break;
+			}
+			if (i == 4)
+			{
+				fog_density = parsed[0];
+				fog_red = parsed[1];
+				fog_green = parsed[2];
+				fog_blue = parsed[3];
+			}
 		}
 	}
 }
