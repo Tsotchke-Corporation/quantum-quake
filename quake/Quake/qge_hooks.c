@@ -428,6 +428,10 @@ typedef struct {
 	int light_tmax;
 	int light_size;
 	int light_map_count;
+	float light_s_scale;
+	float light_t_scale;
+	float light_s_offset;
+	float light_t_offset;
 	float light_scales[MAXLIGHTMAPS];
 	qboolean has_light;
 	qboolean bilinear;
@@ -4211,6 +4215,10 @@ static void QGE_PrepareSurfaceSampleContext(qge_surface_sample_context_t *ctx,
 	ctx->light_size = light_size;
 	ctx->has_light = light_smax > 0 && light_tmax > 0 && light_size > 0;
 	ctx->light_map_count = 0;
+	ctx->light_s_scale = (float)LMBLOCK_WIDTH;
+	ctx->light_t_scale = (float)LMBLOCK_HEIGHT;
+	ctx->light_s_offset = ctx->surf ? -(float)ctx->surf->light_s : 0.0f;
+	ctx->light_t_offset = ctx->surf ? -(float)ctx->surf->light_t : 0.0f;
 	ctx->bilinear = quantum_render_bilinear_samples.value >= 0.5f;
 	ctx->sky = surface && (surface->flags & SURF_DRAWSKY);
 	ctx->fence = surface && (surface->flags & SURF_DRAWFENCE);
@@ -4246,7 +4254,6 @@ static qge_rgb_sample_t QGE_SurfaceLightColorContext(
 	const msurface_t *surf;
 	const byte *sample_base;
 	int s0, t0;
-	float local_s, local_t;
 	qge_rgb_sample_t color;
 
 	color.r = 0.95f;
@@ -4272,12 +4279,8 @@ static qge_rgb_sample_t QGE_SurfaceLightColorContext(
 	}
 
 	surf = ctx->surf;
-	local_s = sample->light_s * (float)(LMBLOCK_WIDTH * 16) -
-			  (float)(surf->light_s * 16) - 8.0f;
-	local_t = sample->light_t * (float)(LMBLOCK_HEIGHT * 16) -
-			  (float)(surf->light_t * 16) - 8.0f;
-	s0 = (int)(local_s / 16.0f + 0.5f);
-	t0 = (int)(local_t / 16.0f + 0.5f);
+	s0 = (int)(sample->light_s * ctx->light_s_scale + ctx->light_s_offset);
+	t0 = (int)(sample->light_t * ctx->light_t_scale + ctx->light_t_offset);
 	if (s0 < 0) s0 = 0;
 	if (t0 < 0) t0 = 0;
 	if (s0 >= ctx->light_smax) s0 = ctx->light_smax - 1;
