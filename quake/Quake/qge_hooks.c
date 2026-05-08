@@ -3046,6 +3046,55 @@ static void QGE_SpatialAddPixelColorDepthIndex(int idx,
 		bbuf[idx] = QGE_ClampSpatialSignal(bbuf[idx]);
 }
 
+static void QGE_SpatialAddPixelRGBDepthIndex(int idx,
+											 float r,
+											 float g,
+											 float b,
+											 float depth)
+{
+	float current_depth;
+	float value;
+	float *depth_buffer = qge_spatial_depth_buffer;
+	float *rbuf = qge_spatial_color_buffer[QGE_DWT_R];
+	float *gbuf = qge_spatial_color_buffer[QGE_DWT_G];
+	float *bbuf = qge_spatial_color_buffer[QGE_DWT_B];
+
+	if (!(depth_buffer && rbuf && gbuf && bbuf)) {
+		qge_rgb_sample_t color = {r, g, b};
+		QGE_SpatialAddPixelColorDepthIndex(idx, &color, depth);
+		return;
+	}
+
+	if (r < 0.0f) r = 0.0f;
+	if (g < 0.0f) g = 0.0f;
+	if (b < 0.0f) b = 0.0f;
+	value = 0.299f * r + 0.587f * g + 0.114f * b;
+	if (value <= 0.0f)
+		return;
+
+	if (depth <= 0.0f || !isfinite(depth))
+		depth = QGE_SPATIAL_DEPTH_FAR * 0.5f;
+
+	current_depth = depth_buffer[idx];
+	if (depth > current_depth + QGE_SPATIAL_DEPTH_EPSILON)
+		return;
+	if (depth < current_depth - QGE_SPATIAL_DEPTH_EPSILON) {
+		rbuf[idx] = r;
+		gbuf[idx] = g;
+		bbuf[idx] = b;
+		depth_buffer[idx] = depth;
+	} else {
+		rbuf[idx] += r;
+		gbuf[idx] += g;
+		bbuf[idx] += b;
+		if (depth < current_depth)
+			depth_buffer[idx] = depth;
+	}
+	rbuf[idx] = QGE_ClampSpatialSignal(rbuf[idx]);
+	gbuf[idx] = QGE_ClampSpatialSignal(gbuf[idx]);
+	bbuf[idx] = QGE_ClampSpatialSignal(bbuf[idx]);
+}
+
 static void QGE_SpatialAddPixelDepth(int x, int y, float value, float depth)
 {
 	qge_rgb_sample_t gray;
@@ -4208,11 +4257,12 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 															 tex, light_smax,
 															 light_tmax,
 															 light_size);
-				pixel_color.r *= value * coverage;
-				pixel_color.g *= value * coverage;
-				pixel_color.b *= value * coverage;
-				QGE_SpatialAddPixelColorDepthIndex(y * qge_render_res + x,
-												   &pixel_color, sample.depth);
+				QGE_SpatialAddPixelRGBDepthIndex(
+					y * qge_render_res + x,
+					pixel_color.r * value * coverage,
+					pixel_color.g * value * coverage,
+					pixel_color.b * value * coverage,
+					sample.depth);
 				filled++;
 			}
 		}
