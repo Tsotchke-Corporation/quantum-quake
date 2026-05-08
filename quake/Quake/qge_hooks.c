@@ -5794,6 +5794,7 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 	float white = 1.0f;
 	float floor_val;
 	float inv_range;
+	double abs_total = 0.0;
 	int active = 0;
 	int median_target;
 	int white_target;
@@ -5814,8 +5815,6 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 
 	QGE_InitToneLut();
 	memset(hist, 0, sizeof(hist));
-	*nonzero_pixels = 0;
-	*abs_sum = 0.0;
 
 	if (direct_display) {
 		for (i = 0; i < total_pixels; i++) {
@@ -5827,10 +5826,9 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 			if (v > max_abs)
 				max_abs = v;
 			if (v > 0.0001f) {
-				(*nonzero_pixels)++;
 				active++;
 			}
-			*abs_sum += v;
+			abs_total += v;
 		}
 	} else {
 		for (int y = 0; y < qge_render_res; y++) {
@@ -5841,13 +5839,14 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 				if (v > max_abs)
 					max_abs = v;
 				if (v > 0.0001f) {
-					(*nonzero_pixels)++;
 					active++;
 				}
-				*abs_sum += v;
+				abs_total += v;
 			}
 		}
 	}
+	*nonzero_pixels = active;
+	*abs_sum = abs_total;
 
 	if (active <= 0) {
 		memset(qge_display_buffer, 0, total_pixels * 3);
