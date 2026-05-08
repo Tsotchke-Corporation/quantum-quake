@@ -3068,7 +3068,6 @@ static void QGE_SpatialAddPixelRGBDepthIndex(int idx,
 											 float depth)
 {
 	float current_depth;
-	float value;
 	float *depth_buffer = qge_spatial_depth_buffer;
 	float *rbuf = qge_spatial_color_buffer[QGE_DWT_R];
 	float *gbuf = qge_spatial_color_buffer[QGE_DWT_G];
@@ -3080,19 +3079,19 @@ static void QGE_SpatialAddPixelRGBDepthIndex(int idx,
 		return;
 	}
 
-	if (r < 0.0f) r = 0.0f;
-	if (g < 0.0f) g = 0.0f;
-	if (b < 0.0f) b = 0.0f;
-	value = 0.299f * r + 0.587f * g + 0.114f * b;
-	if (value <= 0.0f)
-		return;
-
 	if (depth <= 0.0f || !isfinite(depth))
 		depth = QGE_SPATIAL_DEPTH_FAR * 0.5f;
 
 	current_depth = depth_buffer[idx];
 	if (depth > current_depth + QGE_SPATIAL_DEPTH_EPSILON)
 		return;
+
+	if (r < 0.0f) r = 0.0f;
+	if (g < 0.0f) g = 0.0f;
+	if (b < 0.0f) b = 0.0f;
+	if (r <= 0.0f && g <= 0.0f && b <= 0.0f)
+		return;
+
 	if (depth < current_depth - QGE_SPATIAL_DEPTH_EPSILON) {
 		rbuf[idx] = r;
 		gbuf[idx] = g;
