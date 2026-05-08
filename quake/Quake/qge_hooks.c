@@ -409,6 +409,10 @@ typedef struct {
 	float b;
 } qge_rgb_sample_t;
 
+static qge_rgb_sample_t qge_palette_lut[256];
+static qboolean qge_palette_opaque[256];
+static qboolean qge_palette_lut_ready = false;
+
 typedef struct {
 	const qge_scene_surface_t *surface;
 	const msurface_t *surf;
@@ -3868,6 +3872,23 @@ static void QGE_RGBClamp(qge_rgb_sample_t *color)
 	color->b = QGE_ClampSpatialSignal(color->b);
 }
 
+static void QGE_InitPaletteLut(void)
+{
+	const float inv_255 = 1.0f / 255.0f;
+
+	if (qge_palette_lut_ready)
+		return;
+	for (int i = 0; i < 256; i++) {
+		const byte *rgba = (const byte *)&d_8to24table[i];
+		float fullbright_boost = i >= 224 ? 0.25f : 0.0f;
+		qge_palette_lut[i].r = (float)rgba[0] * inv_255 + fullbright_boost;
+		qge_palette_lut[i].g = (float)rgba[1] * inv_255 + fullbright_boost;
+		qge_palette_lut[i].b = (float)rgba[2] * inv_255 + fullbright_boost;
+		qge_palette_opaque[i] = rgba[3] != 0;
+	}
+	qge_palette_lut_ready = true;
+}
+
 static float QGE_TexturePaletteSample(const qge_scene_surface_t *surface,
 									  const texture_t *tex,
 									  int tx,
@@ -3875,11 +3896,11 @@ static float QGE_TexturePaletteSample(const qge_scene_surface_t *surface,
 									  qge_rgb_sample_t *color)
 {
 	const byte *pixels;
-	const byte *rgba;
 	int palette_index;
 
 	if (!surface || !tex || !color || tex->width <= 0 || tex->height <= 0)
 		return 0.0f;
+	QGE_InitPaletteLut();
 
 	tx %= (int)tex->width;
 	ty %= (int)tex->height;
@@ -3888,22 +3909,15 @@ static float QGE_TexturePaletteSample(const qge_scene_surface_t *surface,
 
 	pixels = (const byte *)(tex + 1);
 	palette_index = pixels[ty * (int)tex->width + tx];
-	rgba = (const byte *)&d_8to24table[palette_index];
-	if (rgba[3] == 0 || ((surface->flags & SURF_DRAWFENCE) && palette_index == 255)) {
+	if (!qge_palette_opaque[palette_index] ||
+		((surface->flags & SURF_DRAWFENCE) && palette_index == 255)) {
 		color->r = 0.0f;
 		color->g = 0.0f;
 		color->b = 0.0f;
 		return 0.0f;
 	}
 
-	color->r = (float)rgba[0] / 255.0f;
-	color->g = (float)rgba[1] / 255.0f;
-	color->b = (float)rgba[2] / 255.0f;
-	if (palette_index >= 224) {
-		color->r += 0.25f;
-		color->g += 0.25f;
-		color->b += 0.25f;
-	}
+	*color = qge_palette_lut[palette_index];
 	QGE_RGBClamp(color);
 	return 1.0f;
 }
@@ -3915,30 +3929,23 @@ static float QGE_TexturePaletteSampleDirect(const qge_scene_surface_t *surface,
 											qge_rgb_sample_t *color)
 {
 	const byte *pixels;
-	const byte *rgba;
 	int palette_index;
 
 	if (!surface || !tex || !color)
 		return 0.0f;
+	QGE_InitPaletteLut();
 
 	pixels = (const byte *)(tex + 1);
 	palette_index = pixels[ty * (int)tex->width + tx];
-	rgba = (const byte *)&d_8to24table[palette_index];
-	if (rgba[3] == 0 || ((surface->flags & SURF_DRAWFENCE) && palette_index == 255)) {
+	if (!qge_palette_opaque[palette_index] ||
+		((surface->flags & SURF_DRAWFENCE) && palette_index == 255)) {
 		color->r = 0.0f;
 		color->g = 0.0f;
 		color->b = 0.0f;
 		return 0.0f;
 	}
 
-	color->r = (float)rgba[0] / 255.0f;
-	color->g = (float)rgba[1] / 255.0f;
-	color->b = (float)rgba[2] / 255.0f;
-	if (palette_index >= 224) {
-		color->r += 0.25f;
-		color->g += 0.25f;
-		color->b += 0.25f;
-	}
+	*color = qge_palette_lut[palette_index];
 	return 1.0f;
 }
 
@@ -4210,6 +4217,8 @@ static void QGE_PrepareSurfaceSampleContext(qge_surface_sample_context_t *ctx,
 	ctx->tex_power2 = ctx->tex_width && ctx->tex_height &&
 					  ((ctx->tex_width & ctx->tex_width_mask) == 0u) &&
 					  ((ctx->tex_height & ctx->tex_height_mask) == 0u);
+	if (ctx->tex_pixels && ctx->tex_width && ctx->tex_height)
+		QGE_InitPaletteLut();
 
 	if (surface) {
 		gain = 0.85f + surface->material_signal * 0.25f;
@@ -4299,7 +4308,6 @@ static qboolean QGE_SurfaceTextureColorContext(
 {
 	int x0, y0;
 	int palette_index;
-	const byte *rgba;
 
 	if (!color)
 		return false;
@@ -4335,22 +4343,15 @@ static qboolean QGE_SurfaceTextureColorContext(
 	}
 
 	palette_index = ctx->tex_pixels[y0 * (int)ctx->tex_width + x0];
-	rgba = (const byte *)&d_8to24table[palette_index];
-	if (rgba[3] == 0 || (ctx->fence && palette_index == 255)) {
+	if (!qge_palette_opaque[palette_index] ||
+		(ctx->fence && palette_index == 255)) {
 		color->r = 0.0f;
 		color->g = 0.0f;
 		color->b = 0.0f;
 		return false;
 	}
 
-	color->r = (float)rgba[0] / 255.0f;
-	color->g = (float)rgba[1] / 255.0f;
-	color->b = (float)rgba[2] / 255.0f;
-	if (palette_index >= 224) {
-		color->r += 0.25f;
-		color->g += 0.25f;
-		color->b += 0.25f;
-	}
+	*color = qge_palette_lut[palette_index];
 	return true;
 }
 
