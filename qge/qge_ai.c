@@ -202,13 +202,9 @@ static void apply_situation_bias(int qubit_offset, float aggression,
  * @brief Find slot for enemy, allocating if needed
  */
 static int find_enemy_slot(int enemy_id) {
-    /* First check if enemy already has a slot */
-    for (int i = 0; i < MAX_ENEMIES; i++) {
-        if (enemies[i].active && i == enemy_id % MAX_ENEMIES) {
-            return i;
-        }
-    }
-    return -1;
+    int slot = enemy_id % MAX_ENEMIES;
+    if (slot < 0) slot += MAX_ENEMIES;
+    return enemies[slot].active ? slot : -1;
 }
 
 /* ============================================================================
@@ -219,7 +215,12 @@ void qge_ai_init_enemy(int enemy_id, int enemy_type) {
     ensure_ai_initialized();
     if (!ai_state) return;
 
-    int slot = enemy_id % MAX_ENEMIES;
+    int slot = find_enemy_slot(enemy_id);
+    if (slot < 0) {
+        slot = enemy_id % MAX_ENEMIES;
+        if (slot < 0) slot += MAX_ENEMIES;
+    }
+    bool was_active = enemies[slot].active;
 
     enemies[slot].active = true;
     enemies[slot].enemy_type = enemy_type;
@@ -228,7 +229,7 @@ void qge_ai_init_enemy(int enemy_id, int enemy_type) {
     enemies[slot].decision_count = 0;
     enemies[slot].last_action = AI_IDLE;
 
-    active_enemy_count++;
+    if (!was_active) active_enemy_count++;
 
     /* Initialize this enemy's qubits to superposition */
     for (int q = 0; q < ACTION_QUBITS; q++) {

@@ -337,8 +337,6 @@ void qge_particle_spawn(qge_particle_system_t* sys,
 void qge_particle_evolve(qge_particle_system_t* sys, float dt) {
     if (!sys || sys->active_count == 0) return;
 
-    float scale = 100.0f;
-
     /* Evolve each particle classically (position update) */
     for (int p = 0; p < sys->max_particles; p++) {
         if (!sys->particles[p].active) continue;

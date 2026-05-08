@@ -193,7 +193,6 @@ void qge_oscillator_excite(qge_oscillator_t* osc, int target_level) {
     /* Reset to ground state */
     quantum_state_reset(osc->state);
 
-    int qubits = osc->state->num_qubits;
     uint64_t state_dim = osc->state->state_dim;
 
     /* Create superposition with Gaussian distribution centered at target_level
@@ -335,7 +334,6 @@ void qge_audio_synthesize(float* buffer, int samples, qge_oscillator_t* osc) {
             double amp_i = cimag(osc->state->amplitudes[h]);
             float prob = (float)(amp_r * amp_r + amp_i * amp_i);
             if (prob > 0.01f) {
-                float harmonic_freq = osc->last_frequency * (float)(h + 1);
                 float harmonic_phase = osc->phase * (float)(h + 1);
                 harmonic_sum += sqrtf(prob) * sinf(harmonic_phase) * 0.5f;
             }
@@ -449,9 +447,8 @@ void qge_audio_phase(float* samples, int count, float depth) {
         lfo_phase += two_pi * lfo_freq * dt;
         if (lfo_phase >= two_pi) lfo_phase -= two_pi;
 
-        /* Variable delay based on LFO (1-10ms range) */
-        float delay_ms = 1.0f + 4.5f * (1.0f + lfo);
-        float delay_time = delay_ms * 0.001f * (float)AUDIO_SAMPLE_RATE;
+        /* LFO-modulated all-pass feedback gives the phase sweep its motion. */
+        float modulated_feedback = feedback * (0.75f + 0.25f * (1.0f + lfo) * 0.5f);
 
         /* Apply all-pass stages for phase shift */
         float input = samples[i];
@@ -459,8 +456,8 @@ void qge_audio_phase(float* samples, int count, float depth) {
 
         for (int s = 0; s < num_stages; s++) {
             float delayed = delay_samples[s];
-            float new_delay = input + feedback * delayed;
-            output = delayed - feedback * new_delay;
+            float new_delay = input + modulated_feedback * delayed;
+            output = delayed - modulated_feedback * new_delay;
             delay_samples[s] = new_delay;
             input = output;
         }
