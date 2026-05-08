@@ -927,6 +927,7 @@ static char *GL_MakeNiceExtensionsList (const char *in)
 {
 	char *copy, *token, *out;
 	int i, count;
+	size_t out_size;
 
 	if (!in) return Z_Strdup("(none)");
 
@@ -937,14 +938,15 @@ static char *GL_MakeNiceExtensionsList (const char *in)
 			count++;
 	}
 
-	out = (char *) Z_Malloc (strlen(in) + count*3 + 1); //usually about 1-2k
+	out_size = strlen(in) + count*3 + 2; //usually about 1-2k
+	out = (char *) Z_Malloc (out_size);
 	out[0] = 0;
 
 	copy = (char *) Z_Strdup(in);
 	for (token = strtok(copy, " "); token; token = strtok(NULL, " "))
 	{
-		strcat(out, "\n   ");
-		strcat(out, token);
+		q_strlcat(out, "\n   ", out_size);
+		q_strlcat(out, token, out_size);
 	}
 
 	Z_Free (copy);

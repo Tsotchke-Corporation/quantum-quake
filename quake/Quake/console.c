@@ -151,7 +151,7 @@ Con_Dump_f -- johnfitz -- adapted from quake2 source
 */
 static void Con_Dump_f (void)
 {
-	int		l, x;
+	int		l, x, copy_len;
 	const char	*line;
 	FILE	*f;
 	char	buffer[1024];
@@ -178,12 +178,13 @@ static void Con_Dump_f (void)
 	}
 
 	// write the remaining lines
-	buffer[con_linewidth] = 0;
+	copy_len = q_min(con_linewidth, (int)sizeof(buffer) - 1);
+	buffer[copy_len] = 0;
 	for ( ; l <= con_current; l++)
 	{
 		line = con_text + (l%con_totallines)*con_linewidth;
-		strncpy (buffer, line, con_linewidth);
-		for (x = con_linewidth - 1; x >= 0; x--)
+		memcpy (buffer, line, copy_len);
+		for (x = copy_len - 1; x >= 0; x--)
 		{
 			if (buffer[x] == ' ')
 				buffer[x] = 0;
@@ -763,8 +764,7 @@ void AddToTabList (const char *name, const char *type)
 
 	if (!*bash_partial)
 	{
-		strncpy (bash_partial, name, 79);
-		bash_partial[79] = '\0';
+		q_strlcpy (bash_partial, name, sizeof(bash_partial));
 	}
 	else
 	{
@@ -856,8 +856,7 @@ const char *FindCompletion (const char *partial, filelist_item_t *filelist, int 
 			if (init == 0)
 			{
 				init = 1;
-				strncpy (matched, file->name, sizeof(matched)-1);
-				matched[sizeof(matched)-1] = '\0';
+				q_strlcpy (matched, file->name, sizeof(matched));
 			}
 			else
 			{ // find max common
