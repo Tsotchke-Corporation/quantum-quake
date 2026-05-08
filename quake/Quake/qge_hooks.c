@@ -404,6 +404,21 @@ typedef struct {
 	float b;
 } qge_rgb_sample_t;
 
+typedef struct {
+	const qge_scene_surface_t *surface;
+	const msurface_t *surf;
+	texture_t *tex;
+	int light_smax;
+	int light_tmax;
+	int light_size;
+	qboolean has_light;
+	qboolean bilinear;
+	qboolean sky;
+	float color_gain_r;
+	float color_gain_g;
+	float color_gain_b;
+} qge_surface_sample_context_t;
+
 #define QGE_MAX_HUD_IMAGE_REFS 256
 typedef struct {
 	qboolean used;
@@ -3860,7 +3875,8 @@ static qboolean QGE_SurfaceTextureColorPrepared(const qge_scene_surface_t *surfa
 												texture_t *tex,
 												float tex_s,
 												float tex_t,
-												qge_rgb_sample_t *color)
+												qge_rgb_sample_t *color,
+												qboolean bilinear)
 {
 	unsigned int width, height;
 	float fx, fy;
@@ -3894,7 +3910,7 @@ static qboolean QGE_SurfaceTextureColorPrepared(const qge_scene_surface_t *surfa
 		if (tex_t < 0.0f) tex_t += 1.0f;
 	}
 
-	if (quantum_render_bilinear_samples.value < 0.5f) {
+	if (!bilinear) {
 		x0 = (int)(tex_s * (float)width);
 		y0 = (int)(tex_t * (float)height);
 		if (x0 >= (int)width) x0 = (int)width - 1;
@@ -3982,7 +3998,8 @@ static qge_rgb_sample_t QGE_SurfaceLightColorPrepared(const msurface_t *surf,
 													  const qge_projected_sample_t *sample,
 													  int smax,
 													  int tmax,
-													  int size)
+													  int size,
+													  qboolean bilinear)
 {
 	int s0, t0, s1, t1;
 	float local_s, local_t;
@@ -4011,7 +4028,7 @@ static qge_rgb_sample_t QGE_SurfaceLightColorPrepared(const msurface_t *surf,
 	sf = local_s / 16.0f;
 	tf = local_t / 16.0f;
 
-	if (quantum_render_bilinear_samples.value < 0.5f) {
+	if (!bilinear) {
 		s0 = (int)(sf + 0.5f);
 		t0 = (int)(tf + 0.5f);
 		if (s0 < 0) s0 = 0;
@@ -4085,67 +4102,94 @@ static qge_rgb_sample_t QGE_SurfaceLightColor(const msurface_t *surf,
 		color.b = 0.95f;
 		return color;
 	}
-	return QGE_SurfaceLightColorPrepared(surf, sample, smax, tmax, size);
+	return QGE_SurfaceLightColorPrepared(surf, sample, smax, tmax, size,
+										 quantum_render_bilinear_samples.value >= 0.5f);
 }
 
-static qge_rgb_sample_t QGE_SurfaceSampleColorPrepared(const qge_scene_surface_t *surface,
-													   const qge_projected_sample_t *sample,
-													   texture_t *tex,
-													   int light_smax,
-													   int light_tmax,
-													   int light_size)
+static void QGE_PrepareSurfaceSampleContext(qge_surface_sample_context_t *ctx,
+											const qge_scene_surface_t *surface,
+											texture_t *tex,
+											int light_smax,
+											int light_tmax,
+											int light_size)
+{
+	float gain = 1.0f;
+
+	if (!ctx)
+		return;
+
+	ctx->surface = surface;
+	ctx->surf = surface ? surface->surf : NULL;
+	ctx->tex = tex;
+	ctx->light_smax = light_smax;
+	ctx->light_tmax = light_tmax;
+	ctx->light_size = light_size;
+	ctx->has_light = light_smax > 0 && light_tmax > 0 && light_size > 0;
+	ctx->bilinear = quantum_render_bilinear_samples.value >= 0.5f;
+	ctx->sky = surface && (surface->flags & SURF_DRAWSKY);
+
+	if (surface) {
+		gain = 0.85f + surface->material_signal * 0.25f;
+		if (surface->flags & (SURF_DRAWLAVA | SURF_DRAWTELE))
+			gain *= 1.20f;
+	}
+	ctx->color_gain_r = gain * qge_render_gate_color_gain[QGE_DWT_R];
+	ctx->color_gain_g = gain * qge_render_gate_color_gain[QGE_DWT_G];
+	ctx->color_gain_b = gain * qge_render_gate_color_gain[QGE_DWT_B];
+}
+
+static qge_rgb_sample_t QGE_SurfaceSampleColorContext(
+	const qge_surface_sample_context_t *ctx,
+	const qge_projected_sample_t *sample)
 {
 	qge_rgb_sample_t tex_color;
 	qge_rgb_sample_t light_color;
 	qge_rgb_sample_t out;
-	float material_gain;
+	float luma;
 
 	out.r = 1.0f;
 	out.g = 1.0f;
 	out.b = 1.0f;
-	if (!surface || !sample)
+	if (!ctx || !sample)
+		return out;
+	if (!ctx->surface)
 		return out;
 
-	if (surface->flags & SURF_DRAWSKY) {
+	if (ctx->sky) {
 		out.r = 0.020f;
 		out.g = 0.035f;
 		out.b = 0.090f;
 		return out;
 	}
 
-	if (!QGE_SurfaceTextureColorPrepared(surface, tex, sample->tex_s,
-										 sample->tex_t, &tex_color)) {
+	if (!QGE_SurfaceTextureColorPrepared(ctx->surface, ctx->tex, sample->tex_s,
+										 sample->tex_t, &tex_color,
+										 ctx->bilinear)) {
 		out.r = 0.0f;
 		out.g = 0.0f;
 		out.b = 0.0f;
 		return out;
 	}
-	if (light_smax > 0 && light_tmax > 0 && light_size > 0)
-		light_color = QGE_SurfaceLightColorPrepared(surface->surf, sample,
-													light_smax, light_tmax,
-													light_size);
+	if (ctx->has_light)
+		light_color = QGE_SurfaceLightColorPrepared(ctx->surf, sample,
+													ctx->light_smax,
+													ctx->light_tmax,
+													ctx->light_size,
+													ctx->bilinear);
 	else
-		light_color = QGE_SurfaceLightColor(surface->surf, sample);
-	material_gain = 0.85f + surface->material_signal * 0.25f;
+		light_color = QGE_SurfaceLightColor(ctx->surf, sample);
 
 	out.r = (0.18f + tex_color.r * 0.82f) *
-			(0.30f + light_color.r * 0.90f) * material_gain;
+			(0.30f + light_color.r * 0.90f) * ctx->color_gain_r;
 	out.g = (0.18f + tex_color.g * 0.82f) *
-			(0.30f + light_color.g * 0.90f) * material_gain;
+			(0.30f + light_color.g * 0.90f) * ctx->color_gain_g;
 	out.b = (0.18f + tex_color.b * 0.82f) *
-			(0.30f + light_color.b * 0.90f) * material_gain;
-	if (surface->flags & (SURF_DRAWLAVA | SURF_DRAWTELE)) {
-		out.r *= 1.20f;
-		out.g *= 1.20f;
-		out.b *= 1.20f;
-	}
-	out.r *= qge_render_gate_color_gain[QGE_DWT_R];
-	out.g *= qge_render_gate_color_gain[QGE_DWT_G];
-	out.b *= qge_render_gate_color_gain[QGE_DWT_B];
+			(0.30f + light_color.b * 0.90f) * ctx->color_gain_b;
 	out.r = QGE_ClampSpatialSignal(out.r);
 	out.g = QGE_ClampSpatialSignal(out.g);
 	out.b = QGE_ClampSpatialSignal(out.b);
-	if (QGE_RGBLuma(&out) < 0.05f) {
+	luma = QGE_RGBLuma(&out);
+	if (luma < 0.05f) {
 		out.r += 0.05f;
 		out.g += 0.05f;
 		out.b += 0.05f;
@@ -4170,6 +4214,7 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 	int light_smax = 0;
 	int light_tmax = 0;
 	int light_size = 0;
+	qge_surface_sample_context_t sample_ctx;
 	qboolean edge_samples = quantum_render_edge_samples.value >= 0.5f;
 
 	if (!verts || num_verts < 3 || !bounds || value <= 0.0f)
@@ -4178,6 +4223,8 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 	if (tex)
 		tex = R_TextureAnimation(tex, 0);
 	QGE_SurfaceLightGeometry(surf, &light_smax, &light_tmax, &light_size);
+	QGE_PrepareSurfaceSampleContext(&sample_ctx, surface, tex,
+									light_smax, light_tmax, light_size);
 
 	avg_sample = QGE_ProjectedPolygonAverageSample(verts, num_verts);
 	num_tris = QGE_TriangulateProjectedPolygon(verts, num_verts,
@@ -4253,10 +4300,7 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 																  &coverage))
 						continue;
 				}
-				pixel_color = QGE_SurfaceSampleColorPrepared(surface, &sample,
-															 tex, light_smax,
-															 light_tmax,
-															 light_size);
+				pixel_color = QGE_SurfaceSampleColorContext(&sample_ctx, &sample);
 				QGE_SpatialAddPixelRGBDepthIndex(
 					y * qge_render_res + x,
 					pixel_color.r * value * coverage,
@@ -4285,9 +4329,7 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 
 	if (!filled) {
 		qge_rgb_sample_t fill_color =
-			QGE_SurfaceSampleColorPrepared(surface, &avg_sample, tex,
-										   light_smax, light_tmax,
-										   light_size);
+			QGE_SurfaceSampleColorContext(&sample_ctx, &avg_sample);
 		fill_color.r *= value;
 		fill_color.g *= value;
 		fill_color.b *= value;
