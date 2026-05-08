@@ -116,6 +116,34 @@ static qge_backend_t detect_backend(void) {
 #endif
 }
 
+const char* qge_backend_name(qge_backend_t backend) {
+    switch (backend) {
+        case QGE_BACKEND_METAL:    return "Metal";
+        case QGE_BACKEND_VULKAN:   return "Vulkan";
+        case QGE_BACKEND_OPENCL:   return "OpenCL";
+        case QGE_BACKEND_AVX512:   return "AVX-512";
+        case QGE_BACKEND_AVX2:     return "AVX2";
+        case QGE_BACKEND_NEON:     return "NEON";
+        case QGE_BACKEND_FALLBACK: return "Fallback";
+        default:                   return "Unknown";
+    }
+}
+
+bool qge_backend_is_accelerated(qge_backend_t backend) {
+    switch (backend) {
+        case QGE_BACKEND_METAL:
+        case QGE_BACKEND_VULKAN:
+        case QGE_BACKEND_OPENCL:
+        case QGE_BACKEND_AVX512:
+        case QGE_BACKEND_AVX2:
+        case QGE_BACKEND_NEON:
+            return true;
+        case QGE_BACKEND_FALLBACK:
+        default:
+            return false;
+    }
+}
+
 static int qubits_for_tier(qge_hardware_tier_t tier) {
     switch (tier) {
         case QGE_TIER_ULTRA:  return 28;
@@ -269,16 +297,15 @@ qge_context_t* qge_init_with_config(qge_hardware_tier_t tier,
 
     /* Print initialization info */
     const char* tier_names[] = {"Ultra", "High", "Medium", "Low", "Potato"};
-    const char* backend_names[] = {"Metal", "Vulkan", "OpenCL", "AVX-512",
-                                    "AVX2", "NEON", "Fallback"};
     const char* mode_names[] = {"DWT", "Scanline", "Frequency", "Direct", "Diffusion"};
 
     printf("\n");
     printf("==================================================================\n");
     printf("           QUANTUM GAME ENGINE INITIALIZED\n");
     printf("==================================================================\n");
-    printf("  Hardware Tier: %-10s  Backend: %-10s\n",
-           tier_names[ctx->tier], backend_names[ctx->backend]);
+    printf("  Hardware Tier: %-10s  Backend: %-10s (%s)\n",
+           tier_names[ctx->tier], qge_backend_name(ctx->backend),
+           qge_backend_is_accelerated(ctx->backend) ? "accelerated" : "portable");
     printf("  Qubits: %-2d               Render Mode: %-10s\n",
            ctx->num_qubits, mode_names[ctx->render_mode]);
     printf("  State Memory: lazy sparse (%.1f GB dense cap)\n",
@@ -334,6 +361,10 @@ void qge_set_adaptive_quality(qge_context_t* ctx, bool enabled) {
 
 qge_quantum_runtime_t* qge_get_quantum_runtime(qge_context_t* ctx) {
     return ctx ? ctx->quantum_runtime : NULL;
+}
+
+qge_backend_t qge_get_backend(qge_context_t* ctx) {
+    return ctx ? ctx->backend : QGE_BACKEND_FALLBACK;
 }
 
 /* ============================================================================

@@ -2,13 +2,13 @@
  * @file qge.h
  * @brief Quantum Game Engine - Main Header
  *
- * QGE provides quantum computation backends for game rendering,
- * AI, physics, audio, and visibility determination.
+ * QGE provides the shared quantum-runtime contracts used by rendering,
+ * AI, physics, audio, RNG, and visibility experiments.
  *
  * Primary rendering: Quantum DWT (Discrete Wavelet Transform)
- * - Scene encoded as wavelet coefficients in quantum amplitudes
- * - GPU-accelerated projection from 2^28 states to display
- * - 8-10% coefficient sparsity for real-time performance
+ * - Scene data is encoded into sparse wavelet-style coefficient fields
+ * - Dense Moonlab states are initialized lazily for bounded kernels
+ * - The real-time Quake path favors sparse reconstruction over full-state readout
  */
 
 #ifndef QGE_H
@@ -142,6 +142,17 @@ void qge_shutdown(qge_context_t* ctx);
  * Auto-detect hardware capabilities.
  */
 qge_hardware_tier_t qge_detect_hardware(void);
+
+/**
+ * Get a stable display name for a runtime backend.
+ */
+const char* qge_backend_name(qge_backend_t backend);
+
+/**
+ * Return true when a backend uses platform acceleration instead of the
+ * portable fallback path.
+ */
+bool qge_backend_is_accelerated(qge_backend_t backend);
 
 /**
  * Get recommended resolution for detected hardware.
@@ -659,6 +670,11 @@ void qge_set_adaptive_quality(qge_context_t* ctx, bool enabled);
  * Get the shared quantum runtime attached to this QGE context.
  */
 qge_quantum_runtime_t* qge_get_quantum_runtime(qge_context_t* ctx);
+
+/**
+ * Get the selected runtime backend attached to this QGE context.
+ */
+qge_backend_t qge_get_backend(qge_context_t* ctx);
 
 /**
  * Get the process-global QGE context used by convenience systems.

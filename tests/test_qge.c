@@ -308,6 +308,40 @@ static int test_context_with_config(void) {
     return 1;
 }
 
+static int test_context_backend_gate(void) {
+    qge_context_t* ctx = qge_init_with_config(
+        QGE_TIER_MEDIUM,
+        QGE_RENDER_DWT,
+        QGE_RES_640x480
+    );
+    qge_backend_t backend;
+    const char* name;
+    qge_backend_t expected;
+    int ok;
+
+    if (!ctx) return 0;
+
+#if defined(__APPLE__)
+    expected = QGE_BACKEND_METAL;
+#elif defined(__linux__) && defined(__AVX512F__)
+    expected = QGE_BACKEND_AVX512;
+#elif defined(__linux__) && defined(__AVX2__)
+    expected = QGE_BACKEND_AVX2;
+#else
+    expected = QGE_BACKEND_FALLBACK;
+#endif
+
+    backend = qge_get_backend(ctx);
+    name = qge_backend_name(backend);
+    ok = backend == expected &&
+         name != NULL &&
+         strcmp(name, "Unknown") != 0 &&
+         qge_backend_is_accelerated(QGE_BACKEND_FALLBACK) == false;
+
+    qge_shutdown(ctx);
+    return ok;
+}
+
 static int test_context_quantum_runtime(void) {
     qge_context_t* ctx = qge_init_with_config(
         QGE_TIER_MEDIUM,
@@ -1914,6 +1948,7 @@ int main(void) {
     printf("Context Tests:\n");
     TEST(context_init);
     TEST(context_with_config);
+    TEST(context_backend_gate);
     TEST(context_quantum_runtime);
     printf("\n");
 
