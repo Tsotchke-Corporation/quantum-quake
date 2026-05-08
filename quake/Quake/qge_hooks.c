@@ -3381,6 +3381,41 @@ static qboolean QGE_ProjectedTriangleSampleWeights(
 	return true;
 }
 
+static qboolean QGE_ProjectedTriangleSampleWeightsUnchecked(
+	const qge_projected_triangle_sampler_t *sampler,
+	float w0,
+	float w1,
+	qge_projected_sample_t *sample)
+{
+	float w2;
+	float inv_depth;
+	float depth_scale;
+
+	if (!sampler || !sampler->valid || !sample)
+		return false;
+
+	w2 = 1.0f - w0 - w1;
+	inv_depth = w0 * sampler->ia + w1 * sampler->ib + w2 * sampler->ic;
+	if (inv_depth <= 0.000001f || !isfinite(inv_depth))
+		return QGE_ProjectedTriangleSampleWeights(sampler, w0, w1, sample);
+
+	depth_scale = 1.0f / inv_depth;
+	sample->depth = depth_scale;
+	sample->tex_s = (w0 * sampler->a_tex_s_ia +
+					 w1 * sampler->b_tex_s_ib +
+					 w2 * sampler->c_tex_s_ic) * depth_scale;
+	sample->tex_t = (w0 * sampler->a_tex_t_ia +
+					 w1 * sampler->b_tex_t_ib +
+					 w2 * sampler->c_tex_t_ic) * depth_scale;
+	sample->light_s = (w0 * sampler->a_light_s_ia +
+					   w1 * sampler->b_light_s_ib +
+					   w2 * sampler->c_light_s_ic) * depth_scale;
+	sample->light_t = (w0 * sampler->a_light_t_ia +
+					   w1 * sampler->b_light_t_ib +
+					   w2 * sampler->c_light_t_ic) * depth_scale;
+	return true;
+}
+
 static qboolean QGE_ProjectedTriangleSamplePrepared(
 	float x,
 	float y,
@@ -4156,10 +4191,14 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 				qge_rgb_sample_t pixel_color;
 				float coverage = 1.0f;
 
-				if (!QGE_ProjectedTriangleSampleWeights(&sampler, w0, w1,
-														&sample)) {
-					if (!edge_samples ||
-						!QGE_ProjectedTrianglePixelSamplePrepared(x, y,
+				if (!edge_samples) {
+					if (!QGE_ProjectedTriangleSampleWeightsUnchecked(&sampler,
+																	 w0, w1,
+																	 &sample))
+						continue;
+				} else if (!QGE_ProjectedTriangleSampleWeights(&sampler, w0, w1,
+															   &sample)) {
+					if (!QGE_ProjectedTrianglePixelSamplePrepared(x, y,
 																  &sampler,
 																  &sample,
 																  &coverage))
