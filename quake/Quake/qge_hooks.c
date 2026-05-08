@@ -2885,10 +2885,15 @@ static qboolean QGE_ProjectSurfacePolygon(const qge_scene_surface_t *surface,
 
 static void QGE_SpatialClear(void)
 {
-	if (!qge_spatial_encode_buffer)
+	qboolean rgb_ready = qge_spatial_color_buffer[QGE_DWT_R] &&
+						 qge_spatial_color_buffer[QGE_DWT_G] &&
+						 qge_spatial_color_buffer[QGE_DWT_B];
+	if (!qge_spatial_encode_buffer && !rgb_ready)
 		return;
-	memset(qge_spatial_encode_buffer, 0,
-		   qge_render_res * qge_render_res * sizeof(float));
+	if (qge_spatial_encode_buffer && !rgb_ready) {
+		memset(qge_spatial_encode_buffer, 0,
+			   qge_render_res * qge_render_res * sizeof(float));
+	}
 	for (int ch = 0; ch < QGE_DWT_CHANNELS; ch++) {
 		if (qge_spatial_color_buffer[ch]) {
 			memset(qge_spatial_color_buffer[ch], 0,
@@ -2922,7 +2927,7 @@ static void QGE_SpatialAddPixelColorDepth(int x,
 {
 	int idx;
 
-	if (!color || !qge_spatial_encode_buffer || x < 0 || y < 0 ||
+	if (!color || x < 0 || y < 0 ||
 		x >= qge_render_res || y >= qge_render_res)
 		return;
 
@@ -2943,7 +2948,7 @@ static void QGE_SpatialAddPixelColorDepthIndex(int idx,
 	float *gbuf = qge_spatial_color_buffer[QGE_DWT_G];
 	float *bbuf = qge_spatial_color_buffer[QGE_DWT_B];
 
-	if (!color || !encode)
+	if (!color)
 		return;
 	sample = *color;
 	if (sample.r < 0.0f) sample.r = 0.0f;
@@ -2962,25 +2967,25 @@ static void QGE_SpatialAddPixelColorDepthIndex(int idx,
 		if (depth > current_depth + QGE_SPATIAL_DEPTH_EPSILON)
 			return;
 		if (depth < current_depth - QGE_SPATIAL_DEPTH_EPSILON) {
-			encode[idx] = value;
 			rbuf[idx] = sample.r;
 			gbuf[idx] = sample.g;
 			bbuf[idx] = sample.b;
 			depth_buffer[idx] = depth;
 		} else {
-			encode[idx] += value;
 			rbuf[idx] += sample.r;
 			gbuf[idx] += sample.g;
 			bbuf[idx] += sample.b;
 			if (depth < current_depth)
 				depth_buffer[idx] = depth;
 		}
-		encode[idx] = QGE_ClampSpatialSignal(encode[idx]);
 		rbuf[idx] = QGE_ClampSpatialSignal(rbuf[idx]);
 		gbuf[idx] = QGE_ClampSpatialSignal(gbuf[idx]);
 		bbuf[idx] = QGE_ClampSpatialSignal(bbuf[idx]);
 		return;
 	}
+
+	if (!encode)
+		return;
 
 	if (!depth_buffer) {
 		encode[idx] += value;
