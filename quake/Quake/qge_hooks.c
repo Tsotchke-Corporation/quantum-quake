@@ -45,6 +45,7 @@ cvar_t quantum_render_threshold = {"quantum_render_threshold", "0.001", CVAR_ARC
 cvar_t quantum_render_edge_gain = {"quantum_render_edge_gain", "0.06", CVAR_ARCHIVE};
 cvar_t quantum_render_material_gain = {"quantum_render_material_gain", "0.18", CVAR_ARCHIVE};
 cvar_t quantum_render_bilinear_samples = {"quantum_render_bilinear_samples", "0", CVAR_ARCHIVE};
+cvar_t quantum_render_edge_samples = {"quantum_render_edge_samples", "0", CVAR_ARCHIVE};
 cvar_t quantum_render_display_filter = {"quantum_render_display_filter", "0", CVAR_ARCHIVE};
 cvar_t quantum_render_gate_kernel = {"quantum_render_gate_kernel", "1", CVAR_ARCHIVE};
 cvar_t quantum_render_gate_shots = {"quantum_render_gate_shots", "64", CVAR_ARCHIVE};
@@ -1871,6 +1872,7 @@ void QGE_Init(void)
 	Cvar_RegisterVariable(&quantum_render_edge_gain);
 	Cvar_RegisterVariable(&quantum_render_material_gain);
 	Cvar_RegisterVariable(&quantum_render_bilinear_samples);
+	Cvar_RegisterVariable(&quantum_render_edge_samples);
 	Cvar_RegisterVariable(&quantum_render_display_filter);
 	Cvar_RegisterVariable(&quantum_render_gate_kernel);
 	Cvar_RegisterVariable(&quantum_render_gate_shots);
@@ -3994,6 +3996,7 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 	int light_smax = 0;
 	int light_tmax = 0;
 	int light_size = 0;
+	qboolean edge_samples = quantum_render_edge_samples.value >= 0.5f;
 
 	if (!verts || num_verts < 3 || !bounds || value <= 0.0f)
 		return;
@@ -4051,12 +4054,14 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 				float coverage = 1.0f;
 
 				if (!QGE_ProjectedTriangleSampleWeights(&sampler, w0, w1,
-														&sample) &&
-					!QGE_ProjectedTrianglePixelSamplePrepared(x, y,
-															  &sampler,
-															  &sample,
-															  &coverage))
-					continue;
+														&sample)) {
+					if (!edge_samples ||
+						!QGE_ProjectedTrianglePixelSamplePrepared(x, y,
+																  &sampler,
+																  &sample,
+																  &coverage))
+						continue;
+				}
 				pixel_color = QGE_SurfaceSampleColorPrepared(surface, &sample,
 															 tex, light_smax,
 															 light_tmax,

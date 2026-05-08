@@ -184,11 +184,14 @@ audio pointer files remain present for consumers that expect a stable contract.
   controls.
 - `QGE_RENDER`, `QGE_RENDER_RES`, `QGE_RENDER_THRESHOLD`,
   `QGE_RENDER_EDGE_GAIN`, `QGE_RENDER_MATERIAL_GAIN`,
-  `QGE_RENDER_BILINEAR_SAMPLES`, `QGE_RENDER_DISPLAY_FILTER`: QGE render
-  controls.
+  `QGE_RENDER_BILINEAR_SAMPLES`, `QGE_RENDER_EDGE_SAMPLES`,
+  `QGE_RENDER_DISPLAY_FILTER`: QGE render controls.
   `QGE_RENDER_BILINEAR_SAMPLES=0` uses nearest texture/light samples in the
   quantum rasterizer for faster CPU-only captures; set it to `1` for smoother
   per-pixel sampling.
+  `QGE_RENDER_EDGE_SAMPLES=0` uses center-sampled triangle coverage in the
+  quantum rasterizer for faster high-resolution captures; set it to `1` to
+  restore subpixel edge coverage.
   `QGE_RENDER_DISPLAY_FILTER=0` skips neighbor smoothing during display-buffer
   conversion for faster high-resolution CPU captures; set it to `1` to restore
   the smoothed display filter.

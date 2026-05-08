@@ -17,6 +17,7 @@ render_res="${QGE_RENDER_RES:-1024}"
 render_threshold="${QGE_RENDER_THRESHOLD:-0.001}"
 render_edge_gain="${QGE_RENDER_EDGE_GAIN:-0.06}"
 render_material_gain="${QGE_RENDER_MATERIAL_GAIN:-0.18}"
+render_edge_samples="${QGE_RENDER_EDGE_SAMPLES:-0}"
 scene_surface_budget="${QGE_SCENE_SURFACE_BUDGET:-1024}"
 width="${QGE_STREAM_WIDTH:-800}"
 height="${QGE_STREAM_HEIGHT:-600}"
@@ -54,6 +55,7 @@ capture_mode() {
        QGE_RENDER_THRESHOLD="$render_threshold" \
        QGE_RENDER_EDGE_GAIN="$render_edge_gain" \
        QGE_RENDER_MATERIAL_GAIN="$render_material_gain" \
+       QGE_RENDER_EDGE_SAMPLES="$render_edge_samples" \
        QGE_SCENE_SURFACE_BUDGET="$scene_surface_budget" \
        QGE_STREAM_WIDTH="$width" \
        QGE_STREAM_HEIGHT="$height" \
@@ -131,6 +133,7 @@ QGE candidate:
   quantum_render_threshold $render_threshold
   quantum_render_edge_gain $render_edge_gain
   quantum_render_material_gain $render_material_gain
+  quantum_render_edge_samples $render_edge_samples
   quantum_scene_surface_budget $scene_surface_budget
   image: $quantum_png
   log: $outdir/quantum.log
