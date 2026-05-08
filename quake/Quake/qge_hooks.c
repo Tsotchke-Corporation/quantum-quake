@@ -411,6 +411,8 @@ typedef struct {
 	const byte *tex_pixels;
 	unsigned int tex_width;
 	unsigned int tex_height;
+	unsigned int tex_width_mask;
+	unsigned int tex_height_mask;
 	float tex_width_f;
 	float tex_height_f;
 	int light_smax;
@@ -422,6 +424,7 @@ typedef struct {
 	qboolean bilinear;
 	qboolean sky;
 	qboolean fence;
+	qboolean tex_power2;
 	float color_gain_r;
 	float color_gain_g;
 	float color_gain_b;
@@ -4131,6 +4134,8 @@ static void QGE_PrepareSurfaceSampleContext(qge_surface_sample_context_t *ctx,
 	ctx->tex_pixels = tex ? (const byte *)(tex + 1) : NULL;
 	ctx->tex_width = tex ? tex->width : 0;
 	ctx->tex_height = tex ? tex->height : 0;
+	ctx->tex_width_mask = ctx->tex_width ? ctx->tex_width - 1u : 0u;
+	ctx->tex_height_mask = ctx->tex_height ? ctx->tex_height - 1u : 0u;
 	ctx->tex_width_f = (float)ctx->tex_width;
 	ctx->tex_height_f = (float)ctx->tex_height;
 	ctx->light_smax = light_smax;
@@ -4141,6 +4146,9 @@ static void QGE_PrepareSurfaceSampleContext(qge_surface_sample_context_t *ctx,
 	ctx->bilinear = quantum_render_bilinear_samples.value >= 0.5f;
 	ctx->sky = surface && (surface->flags & SURF_DRAWSKY);
 	ctx->fence = surface && (surface->flags & SURF_DRAWFENCE);
+	ctx->tex_power2 = ctx->tex_width && ctx->tex_height &&
+					  ((ctx->tex_width & ctx->tex_width_mask) == 0u) &&
+					  ((ctx->tex_height & ctx->tex_height_mask) == 0u);
 
 	if (surface) {
 		gain = 0.85f + surface->material_signal * 0.25f;
@@ -4246,19 +4254,24 @@ static qboolean QGE_SurfaceTextureColorContext(
 	if (!ctx->tex_pixels || !ctx->tex_width || !ctx->tex_height)
 		return true;
 
-	if (tex_s < 0.0f || tex_s >= 1.0f) {
-		tex_s = tex_s - floorf(tex_s);
-		if (tex_s < 0.0f) tex_s += 1.0f;
-	}
-	if (tex_t < 0.0f || tex_t >= 1.0f) {
-		tex_t = tex_t - floorf(tex_t);
-		if (tex_t < 0.0f) tex_t += 1.0f;
-	}
+	if (ctx->tex_power2 && tex_s >= 0.0f && tex_t >= 0.0f) {
+		x0 = ((int)(tex_s * ctx->tex_width_f)) & (int)ctx->tex_width_mask;
+		y0 = ((int)(tex_t * ctx->tex_height_f)) & (int)ctx->tex_height_mask;
+	} else {
+		if (tex_s < 0.0f || tex_s >= 1.0f) {
+			tex_s = tex_s - floorf(tex_s);
+			if (tex_s < 0.0f) tex_s += 1.0f;
+		}
+		if (tex_t < 0.0f || tex_t >= 1.0f) {
+			tex_t = tex_t - floorf(tex_t);
+			if (tex_t < 0.0f) tex_t += 1.0f;
+		}
 
-	x0 = (int)(tex_s * ctx->tex_width_f);
-	y0 = (int)(tex_t * ctx->tex_height_f);
-	if (x0 >= (int)ctx->tex_width) x0 = (int)ctx->tex_width - 1;
-	if (y0 >= (int)ctx->tex_height) y0 = (int)ctx->tex_height - 1;
+		x0 = (int)(tex_s * ctx->tex_width_f);
+		y0 = (int)(tex_t * ctx->tex_height_f);
+		if (x0 >= (int)ctx->tex_width) x0 = (int)ctx->tex_width - 1;
+		if (y0 >= (int)ctx->tex_height) y0 = (int)ctx->tex_height - 1;
+	}
 
 	palette_index = ctx->tex_pixels[y0 * (int)ctx->tex_width + x0];
 	rgba = (const byte *)&d_8to24table[palette_index];
