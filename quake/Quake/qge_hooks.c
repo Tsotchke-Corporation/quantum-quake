@@ -3264,17 +3264,39 @@ static void QGE_SpatialLineColorDepth(float x1,
 	float dx = x2 - x1;
 	float dy = y2 - y1;
 	int samples = (int)fmaxf(fabsf(dx), fabsf(dy)) + 1;
+	float *depth_buffer = qge_spatial_depth_buffer;
+	float *rbuf = qge_spatial_color_buffer[QGE_DWT_R];
+	float *gbuf = qge_spatial_color_buffer[QGE_DWT_G];
+	float *bbuf = qge_spatial_color_buffer[QGE_DWT_B];
+	qboolean prepared_rgb_depth = depth_buffer && rbuf && gbuf && bbuf;
+	float r, g, b;
 
 	if (!color)
 		return;
 	if (samples < 1)
 		samples = 1;
+	if (prepared_rgb_depth) {
+		r = color->r > 0.0f ? color->r : 0.0f;
+		g = color->g > 0.0f ? color->g : 0.0f;
+		b = color->b > 0.0f ? color->b : 0.0f;
+		if (r <= 0.0f && g <= 0.0f && b <= 0.0f)
+			return;
+	}
 	for (int i = 0; i <= samples; i++) {
 		float t = (float)i / (float)samples;
 		int x = (int)(x1 + dx * t + 0.5f);
 		int y = (int)(y1 + dy * t + 0.5f);
 		float depth = depth1 + (depth2 - depth1) * t;
-		QGE_SpatialAddPixelColorDepth(x, y, color, depth);
+		if (prepared_rgb_depth) {
+			if (x < 0 || y < 0 || x >= qge_render_res || y >= qge_render_res)
+				continue;
+			QGE_SpatialAddPixelRGBDepthPositivePrepared(
+				y * qge_render_res + x,
+				r, g, b, depth,
+				depth_buffer, rbuf, gbuf, bbuf);
+		} else {
+			QGE_SpatialAddPixelColorDepth(x, y, color, depth);
+		}
 	}
 }
 
