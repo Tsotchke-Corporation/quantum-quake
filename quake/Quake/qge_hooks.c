@@ -26,6 +26,12 @@
 
 /* GL headers come via quakedef.h → SDL_opengl.h */
 
+#if defined(__GNUC__) || defined(__clang__)
+#define QGE_HOT_INLINE static inline __attribute__((always_inline))
+#else
+#define QGE_HOT_INLINE static inline
+#endif
+
 /* ============================================================================
  * CVars
  * ============================================================================ */
@@ -80,6 +86,7 @@ static int qge_render_res = 1024;  /* Internal quantum render resolution */
 
 /* GL texture for quantum framebuffer */
 static GLuint qge_texture = 0;
+static GLint qge_blit_texture_units = 1;
 static GLenum qge_last_gl_upload_error = GL_NO_ERROR;
 static GLenum qge_last_gl_draw_error = GL_NO_ERROR;
 static float qge_last_tone_floor = 0.0f;
@@ -2028,6 +2035,15 @@ void QGE_Init(void)
 				 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 	glBindTexture(GL_TEXTURE_2D, 0);  /* Unbind — don't corrupt Quake's GL state */
 
+	qge_blit_texture_units = 1;
+	if (GL_SelectTextureFunc) {
+		glGetIntegerv(GL_MAX_TEXTURE_UNITS, &qge_blit_texture_units);
+		if (qge_blit_texture_units < 1)
+			qge_blit_texture_units = 1;
+		if (qge_blit_texture_units > 8)
+			qge_blit_texture_units = 8;
+	}
+
 	/* Phase 4.2: Enable adaptive quality for real-time performance */
 	qge_set_adaptive_quality(qge_ctx, true);
 
@@ -2963,7 +2979,7 @@ static void QGE_SpatialClear(void)
 	}
 }
 
-static float QGE_ClampSpatialSignal(float value)
+QGE_HOT_INLINE float QGE_ClampSpatialSignal(float value)
 {
 	if (value < 0.0f)
 		return 0.0f;
@@ -3768,7 +3784,7 @@ static int QGE_TriangulateProjectedPolygon(const qge_projected_vertex_t *verts,
 	return num_tris;
 }
 
-static float QGE_RGBLuma(const qge_rgb_sample_t *color)
+QGE_HOT_INLINE float QGE_RGBLuma(const qge_rgb_sample_t *color)
 {
 	if (!color)
 		return 0.0f;
@@ -4155,7 +4171,7 @@ static void QGE_PrepareSurfaceSampleContext(qge_surface_sample_context_t *ctx,
 	ctx->color_gain_b = gain * qge_render_gate_color_gain[QGE_DWT_B];
 }
 
-static qge_rgb_sample_t QGE_SurfaceLightColorContext(
+QGE_HOT_INLINE qge_rgb_sample_t QGE_SurfaceLightColorContext(
 	const qge_surface_sample_context_t *ctx,
 	const qge_projected_sample_t *sample)
 {
@@ -4219,7 +4235,7 @@ static qge_rgb_sample_t QGE_SurfaceLightColorContext(
 	return color;
 }
 
-static qboolean QGE_SurfaceTextureColorContext(
+QGE_HOT_INLINE qboolean QGE_SurfaceTextureColorContext(
 	const qge_surface_sample_context_t *ctx,
 	float tex_s,
 	float tex_t,
@@ -4274,7 +4290,7 @@ static qboolean QGE_SurfaceTextureColorContext(
 	return true;
 }
 
-static qge_rgb_sample_t QGE_SurfaceSampleColorContext(
+QGE_HOT_INLINE qge_rgb_sample_t QGE_SurfaceSampleColorContext(
 	const qge_surface_sample_context_t *ctx,
 	const qge_projected_sample_t *sample)
 {
@@ -6161,15 +6177,7 @@ static void QGE_EncodeScene(void)
 static void QGE_ResetTextureUnitsForBlit(void)
 {
 	if (GL_SelectTextureFunc) {
-		GLint max_units = 1;
-
-		glGetIntegerv(GL_MAX_TEXTURE_UNITS, &max_units);
-		if (max_units < 1)
-			max_units = 1;
-		if (max_units > 8)
-			max_units = 8;
-
-		for (int unit = max_units - 1; unit >= 3; unit--) {
+		for (int unit = qge_blit_texture_units - 1; unit >= 3; unit--) {
 			GL_SelectTextureFunc(GL_TEXTURE0_ARB + unit);
 			glDisable(GL_TEXTURE_2D);
 			glBindTexture(GL_TEXTURE_2D, 0);
