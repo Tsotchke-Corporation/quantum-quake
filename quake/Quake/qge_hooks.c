@@ -4512,6 +4512,10 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 						sample.light_t = light_t_num * depth_scale;
 					}
 
+					if (prepared_rgb_depth &&
+						sample.depth > depth_buffer[row_index + x] +
+									   QGE_SPATIAL_DEPTH_EPSILON)
+						continue;
 					pixel_color = QGE_SurfaceSampleColorContext(&sample_ctx, &sample);
 					if (prepared_rgb_depth) {
 						float r = pixel_color.r * value;
@@ -4549,6 +4553,10 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 																	  &coverage))
 							continue;
 					}
+					if (prepared_rgb_depth &&
+						sample.depth > depth_buffer[row_index + x] +
+									   QGE_SPATIAL_DEPTH_EPSILON)
+						continue;
 					pixel_color = QGE_SurfaceSampleColorContext(&sample_ctx,
 																&sample);
 					QGE_SpatialAddPixelRGBDepthIndex(
