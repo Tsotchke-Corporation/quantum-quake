@@ -618,10 +618,21 @@ static void QGE_RecordRenderGateProbe(qge_quantum_runtime_t *rt)
 	qge_quantum_record_probe(rt, &probe);
 }
 
-static uint64_t QGE_RenderGateSampleBasis(qge_quantum_runtime_t *rt)
+QGE_HOT_INLINE uint64_t QGE_RenderGateNextShotEntropy(uint64_t *state)
 {
-	uint64_t raw = qge_quantum_entropy_u64(rt, QGE_DOMAIN_RENDER,
-										   qge_frame_count);
+	uint64_t value;
+
+	if (!state)
+		return 0;
+	*state += 0x9e3779b97f4a7c15ULL;
+	value = *state;
+	value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9ULL;
+	value = (value ^ (value >> 27)) * 0x94d049bb133111ebULL;
+	return value ^ (value >> 31);
+}
+
+static uint64_t QGE_RenderGateSampleBasis(uint64_t raw)
+{
 	double sample = (double)(raw >> 11) * (1.0 / 9007199254740992.0);
 	double cumulative = 0.0;
 
@@ -767,8 +778,11 @@ static void QGE_RunRenderGateKernel(const qge_frame_snapshot_t *snapshot)
 	qge_render_gate_shots = QGE_RenderGateShotCount();
 	memset(basis_counts, 0, sizeof(basis_counts));
 	rt = QGE_Runtime();
+	uint64_t shot_state = qge_quantum_entropy_u64(rt, QGE_DOMAIN_RENDER,
+												  qge_frame_count);
 	for (int shot = 0; shot < qge_render_gate_shots; shot++) {
-		uint64_t basis = QGE_RenderGateSampleBasis(rt);
+		uint64_t basis = QGE_RenderGateSampleBasis(
+			QGE_RenderGateNextShotEntropy(&shot_state));
 
 		if (basis < QGE_RENDER_GATE_DIM)
 			basis_counts[basis]++;
