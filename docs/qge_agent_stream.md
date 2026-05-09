@@ -101,6 +101,12 @@ high-resolution CPU timing split:
 - `convert`: tone mapping and RGB display-buffer conversion.
 - `blit`: OpenGL texture upload and screen draw.
 
+`quantum_render_update_interval` controls how often the expensive 1024-frame
+QGE field is regenerated. The default interval is `8`, which reuses the last
+QGE texture between updates while still drawing at the requested resolution.
+Skipped frames also avoid collecting world surfaces for the QGE encoder. Set
+`QGE_RENDER_UPDATE_INTERVAL=1` for strict every-frame profiling.
+
 For CPU-only profiling, keep `QGE_RENDER_RES` fixed and compare these fields
 across runs. A slow 1024 run is usually dominated by `raster`, not by the
 LaunchServices wrapper.
@@ -185,7 +191,8 @@ audio pointer files remain present for consumers that expect a stable contract.
 - `QGE_RENDER`, `QGE_RENDER_RES`, `QGE_RENDER_THRESHOLD`,
   `QGE_RENDER_EDGE_GAIN`, `QGE_RENDER_MATERIAL_GAIN`,
   `QGE_RENDER_BILINEAR_SAMPLES`, `QGE_RENDER_EDGE_SAMPLES`,
-  `QGE_RENDER_DISPLAY_FILTER`: QGE render controls.
+  `QGE_RENDER_DISPLAY_FILTER`, `QGE_RENDER_UPDATE_INTERVAL`: QGE render
+  controls.
   `QGE_RENDER_BILINEAR_SAMPLES=0` uses nearest texture/light samples in the
   quantum rasterizer for faster CPU-only captures; set it to `1` for smoother
   per-pixel sampling.
@@ -195,6 +202,9 @@ audio pointer files remain present for consumers that expect a stable contract.
   `QGE_RENDER_DISPLAY_FILTER=0` skips neighbor smoothing during display-buffer
   conversion for faster high-resolution CPU captures; set it to `1` to restore
   the smoothed display filter.
+  `QGE_RENDER_UPDATE_INTERVAL=8` updates the full QGE frame every eighth host
+  frame and reuses the last texture between updates; set it to `1` to update
+  every frame. Values above `16` are clamped.
   `QGE_RENDER_RES` and `QGE_RENDER_THRESHOLD` are also passed as early
   `-qgerenderres` / `-qgerenderthreshold` launch arguments so DWT buffers are
   allocated at the requested size before `autoexec.cfg` runs.

@@ -53,6 +53,7 @@ cvar_t quantum_render_material_gain = {"quantum_render_material_gain", "0.18", C
 cvar_t quantum_render_bilinear_samples = {"quantum_render_bilinear_samples", "0", CVAR_ARCHIVE};
 cvar_t quantum_render_edge_samples = {"quantum_render_edge_samples", "0", CVAR_ARCHIVE};
 cvar_t quantum_render_display_filter = {"quantum_render_display_filter", "0", CVAR_ARCHIVE};
+cvar_t quantum_render_update_interval = {"quantum_render_update_interval", "8", CVAR_ARCHIVE};
 cvar_t quantum_render_gate_kernel = {"quantum_render_gate_kernel", "1", CVAR_ARCHIVE};
 cvar_t quantum_render_gate_shots = {"quantum_render_gate_shots", "64", CVAR_ARCHIVE};
 
@@ -87,6 +88,7 @@ static int qge_render_res = 1024;  /* Internal quantum render resolution */
 /* GL texture for quantum framebuffer */
 static GLuint qge_texture = 0;
 static GLint qge_blit_texture_units = 1;
+static qboolean qge_display_texture_dirty = false;
 static GLenum qge_last_gl_upload_error = GL_NO_ERROR;
 static GLenum qge_last_gl_draw_error = GL_NO_ERROR;
 static float qge_last_tone_floor = 0.0f;
@@ -95,8 +97,14 @@ static int qge_last_tone_clipped = 0;
 static int qge_render_classic_3d_passes = 0;
 static int qge_render_suppressed_3d_passes = 0;
 static int qge_render_qge_primary_owned = 0;
+static int qge_render_last_update_frame = -1;
+static int qge_render_reused_frames = 0;
+static qboolean qge_render_collect_frame = true;
 
 static qboolean qge_initialized = false;
+
+static int QGE_RenderUpdateInterval(void);
+static qboolean QGE_RenderShouldUpdateFrame(void);
 
 #define QGE_RENDER_GATE_QUBITS 6
 #define QGE_RENDER_GATE_DIM (1u << QGE_RENDER_GATE_QUBITS)
@@ -1937,6 +1945,7 @@ void QGE_Init(void)
 	Cvar_RegisterVariable(&quantum_render_bilinear_samples);
 	Cvar_RegisterVariable(&quantum_render_edge_samples);
 	Cvar_RegisterVariable(&quantum_render_display_filter);
+	Cvar_RegisterVariable(&quantum_render_update_interval);
 	Cvar_RegisterVariable(&quantum_render_gate_kernel);
 	Cvar_RegisterVariable(&quantum_render_gate_shots);
 	QGE_ApplyEarlyRenderOverrides();
@@ -2048,6 +2057,9 @@ void QGE_Init(void)
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, qge_render_res, qge_render_res,
 				 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 	glBindTexture(GL_TEXTURE_2D, 0);  /* Unbind — don't corrupt Quake's GL state */
+	qge_display_texture_dirty = false;
+	qge_render_last_update_frame = -1;
+	qge_render_reused_frames = 0;
 
 	qge_blit_texture_units = 1;
 	if (GL_SelectTextureFunc) {
@@ -2117,6 +2129,9 @@ void QGE_Shutdown(void)
 	}
 	free(qge_display_buffer);
 	qge_display_buffer = NULL;
+	qge_display_texture_dirty = false;
+	qge_render_last_update_frame = -1;
+	qge_render_reused_frames = 0;
 	free(qge_spatial_encode_buffer);
 	qge_spatial_encode_buffer = NULL;
 	for (int ch = 0; ch < QGE_DWT_CHANNELS; ch++) {
@@ -2143,6 +2158,7 @@ void QGE_FrameBegin(void)
 	qge_frame_start = Sys_DoubleTime();
 	qge_quantum_frame_begin(QGE_Runtime(), qge_frame_count, QGE_ServerTimeMsec());
 	QGE_RegisterWorldIfNeeded();
+	qge_render_collect_frame = QGE_RenderShouldUpdateFrame();
 	QGE_FrameSnapshotBeginCurrent();
 	QGE_SceneBegin();
 	qge_phys_toss_count = 0;
@@ -2514,6 +2530,8 @@ void QGE_SceneSubmitWorldSurface(qmodel_t *model, msurface_t *surf)
 	int i;
 
 	if (!qge_initialized || !model || !surf)
+		return;
+	if (!qge_render_collect_frame)
 		return;
 
 	qge_scene_world_surfaces++;
@@ -3489,7 +3507,7 @@ static qboolean QGE_ProjectedTriangleSampleWeights(
 		return false;
 
 	inv_depth = w0 * sampler->ia + w1 * sampler->ib + w2 * sampler->ic;
-	if (inv_depth <= 0.000001f || !isfinite(inv_depth)) {
+	if (!(inv_depth > 0.000001f)) {
 		sample->depth = w0 * a->depth + w1 * b->depth + w2 * c->depth;
 		sample->tex_s = w0 * a->tex_s + w1 * b->tex_s + w2 * c->tex_s;
 		sample->tex_t = w0 * a->tex_t + w1 * b->tex_t + w2 * c->tex_t;
@@ -3530,7 +3548,7 @@ static qboolean QGE_ProjectedTriangleSampleWeightsUnchecked(
 
 	w2 = 1.0f - w0 - w1;
 	inv_depth = w0 * sampler->ia + w1 * sampler->ib + w2 * sampler->ic;
-	if (inv_depth <= 0.000001f || !isfinite(inv_depth))
+	if (!(inv_depth > 0.000001f))
 		return QGE_ProjectedTriangleSampleWeights(sampler, w0, w1, sample);
 
 	depth_scale = 1.0f / inv_depth;
@@ -4475,7 +4493,7 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 					qge_projected_sample_t sample;
 					qge_rgb_sample_t pixel_color;
 
-					if (inv_depth <= 0.000001f || !isfinite(inv_depth)) {
+					if (!(inv_depth > 0.000001f)) {
 						float fallback_w0 = row_w0 +
 											sampler.w0_dx * (float)x_offset;
 						float fallback_w1 = row_w1 +
@@ -5938,6 +5956,8 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 	float tone_index_scale = (float)(QGE_TONE_LUT_SIZE - 1);
 	double abs_total = 0.0;
 	int active = 0;
+	int hist_active = 0;
+	int hist_stride = 1;
 	int median_target;
 	int white_target;
 	int running;
@@ -5999,19 +6019,35 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 		return;
 	}
 
+	if (direct_display && total_pixels >= 512 * 512)
+		hist_stride = 4;
+
 	hist_scale = (float)(QGE_TONE_BINS - 1) / max_abs;
-	for (i = 0; i < total_pixels; i++) {
+	for (i = 0; i < total_pixels; i += hist_stride) {
 		float v = qge_render_buffer[i];
 		if (v > 0.0001f) {
 			int bin = (int)(v * hist_scale);
 			if (bin < 0) bin = 0;
 			if (bin >= QGE_TONE_BINS) bin = QGE_TONE_BINS - 1;
 			hist[bin]++;
+			hist_active++;
+		}
+	}
+	if (hist_active <= 0 && hist_stride > 1) {
+		for (i = 0; i < total_pixels; i++) {
+			float v = qge_render_buffer[i];
+			if (v > 0.0001f) {
+				int bin = (int)(v * hist_scale);
+				if (bin < 0) bin = 0;
+				if (bin >= QGE_TONE_BINS) bin = QGE_TONE_BINS - 1;
+				hist[bin]++;
+				hist_active++;
+			}
 		}
 	}
 
-	median_target = active / 2;
-	white_target = (active * 992) / 1000;
+	median_target = hist_active / 2;
+	white_target = (hist_active * 992) / 1000;
 	if (white_target < median_target + 1)
 		white_target = median_target + 1;
 
@@ -6227,10 +6263,15 @@ static void QGE_BlitToScreen(void)
 
 	/* Upload quantum frame to GL texture */
 	glBindTexture(GL_TEXTURE_2D, qge_texture);
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, qge_render_res, qge_render_res,
-					GL_RGB, GL_UNSIGNED_BYTE, qge_display_buffer);
-	qge_last_gl_upload_error = glGetError();
+	if (qge_display_texture_dirty) {
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, qge_render_res, qge_render_res,
+						GL_RGB, GL_UNSIGNED_BYTE, qge_display_buffer);
+		qge_last_gl_upload_error = glGetError();
+		qge_display_texture_dirty = false;
+	} else {
+		qge_last_gl_upload_error = GL_NO_ERROR;
+	}
 
 	/* Save GL state */
 	glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -6272,6 +6313,31 @@ static void QGE_BlitToScreen(void)
 	QGE_ResetTextureUnitsForBlit();
 }
 
+static int QGE_RenderUpdateInterval(void)
+{
+	int interval = (int)(quantum_render_update_interval.value + 0.5f);
+
+	if (interval < 1)
+		interval = 1;
+	if (interval > 16)
+		interval = 16;
+	return interval;
+}
+
+static qboolean QGE_RenderShouldUpdateFrame(void)
+{
+	int interval;
+
+	if (!qge_initialized || quantum_render.value < 0.5f)
+		return false;
+	interval = QGE_RenderUpdateInterval();
+	if (qge_render_last_update_frame < 0)
+		return true;
+	if (qge_frame_count <= qge_render_last_update_frame)
+		return true;
+	return qge_frame_count - qge_render_last_update_frame >= interval;
+}
+
 void QGE_RenderScene(void)
 {
 	int active = 0;
@@ -6279,6 +6345,7 @@ void QGE_RenderScene(void)
 	int total_coefficients;
 	double after_encode, after_dwt, after_convert, after_blit;
 	double encode_ms, dwt_ms, convert_ms, blit_ms;
+	int update_interval;
 
 	if (!qge_initialized ||
 		!qge_dwt_fb[QGE_DWT_R] || !qge_dwt_fb[QGE_DWT_G] ||
@@ -6291,6 +6358,13 @@ void QGE_RenderScene(void)
 
 	if (quantum_render.value < 0.5f)
 		return;
+
+	update_interval = QGE_RenderUpdateInterval();
+	if (!QGE_RenderShouldUpdateFrame()) {
+		qge_render_reused_frames++;
+		QGE_BlitToScreen();
+		return;
+	}
 
 	double start = Sys_DoubleTime();
 
@@ -6313,11 +6387,13 @@ void QGE_RenderScene(void)
 	double abs_sum = 0.0;
 	int total_pixels = qge_render_res * qge_render_res;
 	QGE_ConvertRenderBufferToDisplay(total_pixels, &max_val, &nonzero_pixels, &abs_sum);
+	qge_display_texture_dirty = true;
 	after_convert = Sys_DoubleTime();
 
 	/* Step 4: Blit to screen */
 	QGE_BlitToScreen();
 	after_blit = Sys_DoubleTime();
+	qge_render_last_update_frame = qge_frame_count;
 
 	double elapsed = (after_blit - start) * 1000.0;
 	encode_ms = (after_encode - start) * 1000.0;
@@ -6361,7 +6437,7 @@ void QGE_RenderScene(void)
 			if (qge_frame_count < 5 || (qge_frame_count % 60) == 0 ||
 				qge_scene_encoded_particles > 0) {
 				Con_Printf("QGE render frame=%d mode=%s owner=%s classic3d=%d suppressed3d=%d "
-						   "res=%d time=%.1f encode=%.1f setup=%.1f raster=%.1f fdwt=%.1f dwt=%.1f convert=%.1f blit=%.1f "
+						   "res=%d time=%.1f encode=%.1f setup=%.1f raster=%.1f fdwt=%.1f dwt=%.1f convert=%.1f blit=%.1f reuse=%d interval=%d "
 						   "coeffs=%d snapshot=%d snapshot_miss=%d "
 						   "texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d microfill=%d "
 						   "culled=%d surrogate=%d micro=%d clipped=%d fallback=%d "
@@ -6377,6 +6453,7 @@ void QGE_RenderScene(void)
 						   qge_scene_setup_ms, qge_scene_raster_ms,
 						   qge_scene_forward_dwt_ms, dwt_ms,
 						   convert_ms, blit_ms,
+						   qge_render_reused_frames, update_interval,
 						   active, qge_scene_snapshot_surfaces,
 						   qge_scene_snapshot_misses, qge_scene_texture_cache_hits,
 						   qge_scene_texture_cache_misses, qge_scene_lightmap_cache_hits,
@@ -6404,7 +6481,7 @@ void QGE_RenderScene(void)
 						   nonzero_pixels, total_pixels);
 			}
 			fprintf(stderr, "QGE render frame=%d mode=%s owner=%s classic3d=%d suppressed3d=%d "
-					"res=%d time=%.1fms encode=%.1fms setup=%.1fms raster=%.1fms fdwt=%.1fms dwt=%.1fms convert=%.1fms blit=%.1fms "
+					"res=%d time=%.1fms encode=%.1fms setup=%.1fms raster=%.1fms fdwt=%.1fms dwt=%.1fms convert=%.1fms blit=%.1fms reuse=%d interval=%d "
 					"coeffs=%d sparse=%.1f%% "
 					"scene_surfaces=%d snapshot_surfaces=%d snapshot_misses=%d "
 					"texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d microfill=%d "
@@ -6424,7 +6501,8 @@ void QGE_RenderScene(void)
 					qge_render_res, elapsed, encode_ms,
 					qge_scene_setup_ms, qge_scene_raster_ms,
 					qge_scene_forward_dwt_ms, dwt_ms, convert_ms,
-					blit_ms, active, sparsity * 100.0f,
+					blit_ms, qge_render_reused_frames, update_interval,
+					active, sparsity * 100.0f,
 					qge_scene_surface_count, qge_scene_snapshot_surfaces,
 					qge_scene_snapshot_misses, qge_scene_texture_cache_hits,
 					qge_scene_texture_cache_misses, qge_scene_lightmap_cache_hits,

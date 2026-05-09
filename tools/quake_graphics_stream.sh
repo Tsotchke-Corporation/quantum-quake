@@ -22,6 +22,7 @@ render_material_gain="${QGE_RENDER_MATERIAL_GAIN:-0.18}"
 render_bilinear_samples="${QGE_RENDER_BILINEAR_SAMPLES:-0}"
 render_edge_samples="${QGE_RENDER_EDGE_SAMPLES:-0}"
 render_display_filter="${QGE_RENDER_DISPLAY_FILTER:-0}"
+render_update_interval="${QGE_RENDER_UPDATE_INTERVAL:-8}"
 physics_value="${QGE_PHYSICS:-1}"
 projectiles_value="${QGE_PROJECTILES:-1}"
 particles_value="${QGE_PARTICLES:-0}"
@@ -140,7 +141,8 @@ write_agent_manifest() {
     "quantum_render_material_gain": $(json_string "$render_material_gain"),
     "quantum_render_bilinear_samples": $render_bilinear_samples,
     "quantum_render_edge_samples": $render_edge_samples,
-    "quantum_render_display_filter": $render_display_filter
+    "quantum_render_display_filter": $render_display_filter,
+    "quantum_render_update_interval": $render_update_interval
   },
   "video": {
     "frames_dir": $(json_string "$agent_video_dir"),
@@ -218,6 +220,7 @@ trap restore_autoexec EXIT
   echo "quantum_render_bilinear_samples $render_bilinear_samples"
   echo "quantum_render_edge_samples $render_edge_samples"
   echo "quantum_render_display_filter $render_display_filter"
+  echo "quantum_render_update_interval $render_update_interval"
   echo "quantum_overlay_alpha $overlay_alpha"
   echo "quantum_scene_surface_budget $scene_surface_budget"
   echo "quantum_physics $physics_value"
@@ -278,7 +281,7 @@ cp "$before_file" "$seen_file"
 echo "Streaming Quantum Quake graphics diagnostics"
 echo "  outdir=$outdir"
 echo "  agent_stream=$agent_stream"
-echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_particles=$particles_value"
+echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter update_interval=$render_update_interval quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_particles=$particles_value"
 echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame fullscreen=$fullscreen sound=$sound trace=$trace fire_test=$fire_test scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture"
 echo "QGE_AGENT_STREAM $agent_stream"
 
