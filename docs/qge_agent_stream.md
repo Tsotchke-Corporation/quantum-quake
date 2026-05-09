@@ -116,10 +116,14 @@ LaunchServices wrapper.
 `QGE_STREAM_LAUNCH=auto` is the default. On macOS it selects `open`; on other
 platforms it selects direct binary execution.
 
-In macOS `open` mode, the harness uses `open -W -n -F`: it waits for the app,
-starts a new instance, and asks LaunchServices to ignore restored window state.
-A side watcher tails `qconsole.log`, mirrors screenshots, and refreshes audio
-byte counts while the app is still running.
+In macOS `open` mode, the harness uses `open -W -n -F` plus the app's
+`-nolauncher` argument: it waits for the app, starts a new instance, bypasses
+the click-through launcher window, and asks LaunchServices to ignore restored
+window state, and does not require a manual click. It also passes `-nomouse`
+by default so SDL does not enter relative mouse mode or warp/capture the user
+cursor. Set `QGE_STREAM_ACTIVATE=1` only if the local window manager requires a
+foreground app for capture. A side watcher tails `qconsole.log`, mirrors
+screenshots, and refreshes audio byte counts while the app is still running.
 
 Use `QGE_STREAM_LAUNCH=direct` when running the app binary directly is more
 reliable in the local environment. Direct mode redirects the runtime log through
@@ -183,9 +187,20 @@ audio pointer files remain present for consumers that expect a stable contract.
 - `QGE_STREAM_TRACE`: write `qge_trace.bin` when set to `1`.
 - `QGE_STREAM_SOUND`: run with game sound enabled when set to `1`.
 - `QGE_STREAM_FIRE_TEST`: run the scripted weapon smoke when set to `1`.
+  With the default Noesis player this selects the Noesis `fire` plan unless
+  `QGE_NOESIS_PLAN` is set explicitly.
 - `QGE_STREAM_ENGINE_CAPTURE`: use engine auto-capture when set to `1`, default
   `1`.
 - `QGE_STREAM_LAUNCH`: `auto`, `open`, or `direct`.
+- `QGE_STREAM_MOUSE`: pass through SDL mouse input when set to `1`. The default
+  is `0`, which launches Quake with `-nomouse` so the harness never captures
+  the user's cursor.
+- `QGE_STREAM_PLAYER`: scripted input owner, default `noesis`. Set to `none`
+  to disable harness-generated gameplay commands.
+- `QGE_NOESIS_DIR`: Noesis repo path used for player provenance, default
+  `~/Desktop/noesis`.
+- `QGE_NOESIS_PLAN`: Noesis command-buffer plan, default `patrol`; supported
+  plans are `patrol`, `scout`, and `fire`.
 - `QGE_STREAM_WIDTH`, `QGE_STREAM_HEIGHT`, `QGE_STREAM_FULLSCREEN`: window
   controls.
 - `QGE_RENDER`, `QGE_RENDER_RES`, `QGE_RENDER_THRESHOLD`,
@@ -209,4 +224,11 @@ audio pointer files remain present for consumers that expect a stable contract.
   `-qgerenderres` / `-qgerenderthreshold` launch arguments so DWT buffers are
   allocated at the requested size before `autoexec.cfg` runs.
 - `QGE_PHYSICS`, `QGE_PROJECTILES`, `QGE_PARTICLES`: QGE simulation toggles.
-- `QGE_SCENE_SURFACE_BUDGET`: QGE scene surface budget.
+- `QGE_SCENE_SURFACE_BUDGET`: QGE scene surface budget, default `128`.
+  This is independent of `QGE_RENDER_RES`; raising it improves surface coverage
+  but increases CPU raster and sparse-DWT cost.
+- `QGE_STREAM_ACTIVATE`: macOS `open` mode foreground activation, default `0`.
+  Set to `1` only when the local window manager requires the app to be brought
+  foreground for capture.
+- `QGE_STREAM_ACTIVATE_ATTEMPTS`: number of activation attempts after the
+  harnessed app process appears, default `8`.

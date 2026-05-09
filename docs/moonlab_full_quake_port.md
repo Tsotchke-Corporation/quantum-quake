@@ -74,8 +74,9 @@ Current implementation status:
   Quake's PVS/frustum traversal.
 - `quantum_scene_surface_budget` controls how many submitted surfaces the
   current DWT encoder consumes per frame. The buffer keeps the full submitted
-  set; the budget prevents the placeholder wall encoder from saturating the
-  coefficient field until the texture/lightmap-specific encoders exist.
+  set; the default budget is 128 surfaces, sampled across the visible set, to
+  keep 1024-resolution primary QGE updates responsive on CPU-bound machines.
+  Raise it for high-fidelity captures when runtime performance is secondary.
 
 ### 2. Full Graphics Ownership
 

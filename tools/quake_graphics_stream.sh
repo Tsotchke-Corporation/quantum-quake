@@ -6,6 +6,7 @@ cd "$repo_root"
 
 app_bin="$repo_root/QuantumQuake.app/Contents/MacOS/quantum_quake"
 app_bundle="$repo_root/QuantumQuake.app"
+app_bundle_id="com.quantumquake.QuantumQuake"
 basedir="$repo_root/assets"
 gamedir="$basedir/id1"
 autoexec="$gamedir/autoexec.cfg"
@@ -27,7 +28,13 @@ physics_value="${QGE_PHYSICS:-1}"
 projectiles_value="${QGE_PROJECTILES:-1}"
 particles_value="${QGE_PARTICLES:-0}"
 overlay_alpha="${QGE_OVERLAY_ALPHA:-0.10}"
-scene_surface_budget="${QGE_SCENE_SURFACE_BUDGET:-1024}"
+scene_surface_budget="${QGE_SCENE_SURFACE_BUDGET:-128}"
+stream_mouse="${QGE_STREAM_MOUSE:-0}"
+stream_player="${QGE_STREAM_PLAYER:-noesis}"
+stream_activate="${QGE_STREAM_ACTIVATE:-0}"
+stream_activate_attempts="${QGE_STREAM_ACTIVATE_ATTEMPTS:-8}"
+noesis_dir="${QGE_NOESIS_DIR:-$HOME/Desktop/noesis}"
+noesis_plan="${QGE_NOESIS_PLAN:-patrol}"
 width="${QGE_STREAM_WIDTH:-800}"
 height="${QGE_STREAM_HEIGHT:-600}"
 fullscreen="${QGE_STREAM_FULLSCREEN:-0}"
@@ -47,6 +54,20 @@ if [[ "$engine_capture" == "1" ]]; then
   engine_capture=1
 else
   engine_capture=0
+fi
+if [[ "$stream_mouse" == "1" ]]; then
+  stream_mouse=1
+else
+  stream_mouse=0
+fi
+if [[ "$fire_test" == "1" && "$stream_player" == "noesis" && -z "${QGE_NOESIS_PLAN+x}" ]]; then
+  noesis_plan="fire"
+fi
+case "$stream_activate_attempts" in
+  ''|*[!0-9]*) stream_activate_attempts=8 ;;
+esac
+if (( stream_activate_attempts < 1 )); then
+  stream_activate_attempts=1
 fi
 
 if [[ ! -f "$gamedir/pak0.pak" ]]; then
@@ -130,9 +151,22 @@ write_agent_manifest() {
   "frames_requested": $frames,
   "waits_per_frame": $waits_per_frame,
   "engine_capture": $engine_capture,
+  "launch": {
+    "mode": $(json_string "$launch_mode"),
+    "macos_bundle_id": $(json_string "$app_bundle_id"),
+    "macos_nolauncher": $([[ "$launch_mode" == "open" ]] && printf '1' || printf '0'),
+    "macos_activate": $([[ "$launch_mode" == "open" && "$stream_activate" == "1" ]] && printf '1' || printf '0'),
+    "macos_activate_attempts": $stream_activate_attempts
+  },
   "window": {"width": $width, "height": $height, "fullscreen": $fullscreen},
   "sound_requested": $sound,
   "trace_requested": $trace,
+  "input": {
+    "mouse_enabled": $stream_mouse,
+    "player": $(json_string "$stream_player"),
+    "noesis_dir": $(json_string "$noesis_dir"),
+    "noesis_plan": $(json_string "$noesis_plan")
+  },
   "render": {
     "quantum_render": $render_value,
     "quantum_render_res": $render_res,
@@ -192,6 +226,77 @@ write_agent_icc_evidence() {
 write_agent_manifest "running"
 agent_event "stream_start" "$agent_stream" "outdir=$outdir"
 
+emit_waits() {
+  local count="$1"
+  local i=0
+  while (( i < count )); do
+    echo "wait"
+    i=$((i + 1))
+  done
+}
+
+emit_noesis_player_script() {
+  local noesis_status="missing"
+
+  if [[ -d "$noesis_dir" ]]; then
+    noesis_status="present"
+  fi
+
+  echo "echo QGE_NOESIS_PLAYER start dir=$noesis_dir status=$noesis_status plan=$noesis_plan"
+  emit_waits 16
+  case "$noesis_plan" in
+    scout)
+      echo "+forward"
+      emit_waits 18
+      echo "-forward"
+      echo "+right"
+      emit_waits 8
+      echo "-right"
+      echo "+forward"
+      emit_waits 18
+      echo "-forward"
+      ;;
+    fire)
+      echo "give 7"
+      echo "give r 100"
+      echo "impulse 7"
+      emit_waits 8
+      echo "+attack"
+      emit_waits 8
+      echo "-attack"
+      emit_waits 8
+      echo "+right"
+      emit_waits 6
+      echo "-right"
+      echo "+attack"
+      emit_waits 8
+      echo "-attack"
+      ;;
+    patrol|*)
+      echo "+forward"
+      emit_waits 12
+      echo "-forward"
+      echo "+right"
+      emit_waits 6
+      echo "-right"
+      echo "+forward"
+      emit_waits 12
+      echo "-forward"
+      echo "+left"
+      emit_waits 6
+      echo "-left"
+      echo "give 7"
+      echo "give r 100"
+      echo "impulse 7"
+      emit_waits 4
+      echo "+attack"
+      emit_waits 6
+      echo "-attack"
+      ;;
+  esac
+  echo "echo QGE_NOESIS_PLAYER done"
+}
+
 restore_autoexec() {
   if [[ -f "$outdir/autoexec.cfg.before" ]]; then
     cp "$outdir/autoexec.cfg.before" "$autoexec"
@@ -227,7 +332,9 @@ trap restore_autoexec EXIT
   echo "quantum_projectiles $projectiles_value"
   echo "quantum_particles $particles_value"
   echo "map $map_name"
-  if [[ "$fire_test" == "1" ]]; then
+  if [[ "$stream_player" == "noesis" ]]; then
+    emit_noesis_player_script
+  elif [[ "$fire_test" == "1" ]]; then
     for _ in $(seq 1 40); do
       echo "wait"
     done
@@ -282,7 +389,7 @@ echo "Streaming Quantum Quake graphics diagnostics"
 echo "  outdir=$outdir"
 echo "  agent_stream=$agent_stream"
 echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter update_interval=$render_update_interval quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_particles=$particles_value"
-echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame fullscreen=$fullscreen sound=$sound trace=$trace fire_test=$fire_test scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture"
+echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame fullscreen=$fullscreen sound=$sound trace=$trace fire_test=$fire_test scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan"
 echo "QGE_AGENT_STREAM $agent_stream"
 
 print_log_updates() {
@@ -392,6 +499,59 @@ kill_open_run_processes() {
   done
 }
 
+open_run_process_exists() {
+  local app_pid
+  local app_cmd
+
+  while read -r app_pid app_cmd; do
+    [[ -n "$app_pid" ]] || continue
+    if [[ "$app_cmd" == *"$app_bin"* && "$app_cmd" == *"$agent_stream"* ]]; then
+      return 0
+    fi
+  done < <(ps -axo pid=,command=)
+  return 1
+}
+
+activate_open_stream() {
+  local attempts=0
+  local status=0
+  local activated=0
+
+  if [[ "$stream_activate" != "1" ]]; then
+    return
+  fi
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    return
+  fi
+
+  while [[ ! -f "$watch_stop_file" ]]; do
+    if ! open_run_process_exists; then
+      sleep 0.25
+      continue
+    fi
+
+    status=0
+    osascript -e "tell application id \"$app_bundle_id\" to activate" \
+      >> "$open_log_file" 2>&1 || status=$?
+    if (( status == 0 )); then
+      if (( activated == 0 )); then
+        echo "QGE_OPEN_ACTIVATED bundle_id=$app_bundle_id" >> "$open_log_file"
+        agent_event "open_activated" "$app_bundle" "bundle_id=$app_bundle_id"
+        activated=1
+      fi
+    else
+      echo "QGE_OPEN_ACTIVATE_FAILED status=$status bundle_id=$app_bundle_id" \
+        >> "$open_log_file"
+    fi
+
+    attempts=$((attempts + 1))
+    if (( attempts >= stream_activate_attempts )); then
+      return
+    fi
+    sleep 1
+  done
+}
+
 sync_agent_frame_state() {
   if [[ -s "$agent_frame_count_file" ]]; then
     frame_index="$(tail -n 1 "$agent_frame_count_file" | tr -d ' ')"
@@ -410,6 +570,9 @@ if [[ "$fullscreen" == "1" ]]; then
 fi
 
 run_args=(-basedir "$basedir" "${video_args[@]}")
+if [[ "$stream_mouse" != "1" ]]; then
+  run_args+=(-nomouse)
+fi
 run_args+=(-qgestreamdir "$agent_stream")
 run_args+=(-qgerenderres "$render_res" -qgerenderthreshold "$render_threshold")
 if [[ "$engine_capture" == "1" ]]; then
@@ -435,15 +598,19 @@ fi
 max_seconds=$((60 + frames * waits_per_frame / 20))
 
 if [[ "$launch_mode" == "open" ]]; then
+  run_args=(-nolauncher "${run_args[@]}")
   runtime_log_file="$qconsole_file"
   : > "$runtime_log_file"
   echo "open output is not redirected; qconsole.log is captured as the runtime log." > "$open_log_file"
+  echo "QGE_OPEN_NOLAUNCHER enabled" >> "$open_log_file"
   cp "$open_log_file" "$agent_open_log_file"
   open_args=(-W -n -F)
   open_args+=("$app_bundle")
   rm -f "$watch_stop_file"
   watch_open_stream &
   watch_pid=$!
+  activate_open_stream &
+  activator_pid=$!
 	  (
 	    sleep "$max_seconds"
 	    if [[ ! -f "$watch_stop_file" ]]; then
@@ -455,7 +622,9 @@ if [[ "$launch_mode" == "open" ]]; then
   open_status=0
   open "${open_args[@]}" --args "${run_args[@]}" -condebug || open_status=$?
   touch "$watch_stop_file"
+  kill "$activator_pid" 2>/dev/null || true
   kill "$watchdog_pid" 2>/dev/null || true
+  wait "$activator_pid" 2>/dev/null || true
   wait "$watchdog_pid" 2>/dev/null || true
   wait "$watch_pid" 2>/dev/null || true
   sync_agent_frame_state
