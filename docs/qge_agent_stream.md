@@ -114,6 +114,10 @@ For CPU-only profiling, keep `QGE_RENDER_RES` fixed and compare these fields
 across runs. A slow 1024 run is usually dominated by `raster`, not by the
 LaunchServices wrapper.
 
+Startup logs and traces also include a `backend_gate` probe. It reports the
+selected backend, whether acceleration is active for the live context, and the
+reason when a capable backend is intentionally running the sparse CPU path.
+
 ## Launch Modes
 
 `QGE_STREAM_LAUNCH=auto` is the default. On macOS it selects `open`; on other

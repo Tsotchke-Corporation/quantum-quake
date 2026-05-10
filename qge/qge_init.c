@@ -144,6 +144,21 @@ bool qge_backend_is_accelerated(qge_backend_t backend) {
     }
 }
 
+static bool qge_backend_requires_gpu_context(qge_backend_t backend) {
+    switch (backend) {
+        case QGE_BACKEND_METAL:
+        case QGE_BACKEND_VULKAN:
+        case QGE_BACKEND_OPENCL:
+            return true;
+        case QGE_BACKEND_AVX512:
+        case QGE_BACKEND_AVX2:
+        case QGE_BACKEND_NEON:
+        case QGE_BACKEND_FALLBACK:
+        default:
+            return false;
+    }
+}
+
 bool qge_context_has_active_acceleration(qge_context_t* ctx) {
     if (!ctx) {
         return false;
@@ -175,6 +190,43 @@ const char* qge_context_acceleration_status(qge_context_t* ctx) {
         return "capable, inactive";
     }
     return "portable";
+}
+
+uint32_t qge_context_backend_flags(qge_context_t* ctx) {
+    uint32_t flags = 0;
+
+    if (!ctx) {
+        return flags;
+    }
+    if (qge_backend_is_accelerated(ctx->backend)) {
+        flags |= QGE_BACKEND_FLAG_ACCELERATED_CAPABLE;
+    }
+    if (qge_context_has_active_acceleration(ctx)) {
+        flags |= QGE_BACKEND_FLAG_ACTIVE_ACCELERATION;
+    }
+    if (qge_backend_requires_gpu_context(ctx->backend)) {
+        flags |= QGE_BACKEND_FLAG_GPU_CONTEXT_REQUIRED;
+        if (!ctx->gpu_context) {
+            flags |= QGE_BACKEND_FLAG_INTENTIONAL_CPU_PATH;
+        }
+    }
+    return flags;
+}
+
+const char* qge_context_backend_reason(qge_context_t* ctx) {
+    if (!ctx) {
+        return "uninitialized";
+    }
+    if (qge_context_has_active_acceleration(ctx)) {
+        return "accelerator_context_active";
+    }
+    if (qge_backend_requires_gpu_context(ctx->backend)) {
+        return "sparse_dwt_cpu_path_pending_gpu_context";
+    }
+    if (qge_backend_is_accelerated(ctx->backend)) {
+        return "cpu_simd_backend_active";
+    }
+    return "portable_fallback_selected";
 }
 
 static int qubits_for_tier(qge_hardware_tier_t tier) {
@@ -339,6 +391,10 @@ qge_context_t* qge_init_with_config(qge_hardware_tier_t tier,
     printf("  Hardware Tier: %-10s  Backend: %-10s (%s)\n",
            tier_names[ctx->tier], qge_backend_name(ctx->backend),
            qge_context_acceleration_status(ctx));
+    printf("  Backend Gate: active=%d flags=0x%x reason=%s\n",
+           qge_context_has_active_acceleration(ctx) ? 1 : 0,
+           qge_context_backend_flags(ctx),
+           qge_context_backend_reason(ctx));
     printf("  Qubits: %-2d               Render Mode: %-10s\n",
            ctx->num_qubits, mode_names[ctx->render_mode]);
     printf("  State Memory: lazy sparse (%.1f GB dense cap)\n",

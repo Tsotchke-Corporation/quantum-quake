@@ -46,6 +46,11 @@ typedef enum {
     QGE_BACKEND_FALLBACK
 } qge_backend_t;
 
+#define QGE_BACKEND_FLAG_ACCELERATED_CAPABLE      (1u << 0)
+#define QGE_BACKEND_FLAG_ACTIVE_ACCELERATION      (1u << 1)
+#define QGE_BACKEND_FLAG_GPU_CONTEXT_REQUIRED     (1u << 2)
+#define QGE_BACKEND_FLAG_INTENTIONAL_CPU_PATH     (1u << 3)
+
 /* ============================================================================
  * Rendering Modes
  * ============================================================================ */
@@ -166,6 +171,16 @@ bool qge_context_has_active_acceleration(qge_context_t* ctx);
  * Human-readable active acceleration state for logs and evidence.
  */
 const char* qge_context_acceleration_status(qge_context_t* ctx);
+
+/**
+ * Machine-readable backend gate flags for runtime evidence.
+ */
+uint32_t qge_context_backend_flags(qge_context_t* ctx);
+
+/**
+ * Stable backend gate reason string for logs and ICC/runtime evidence.
+ */
+const char* qge_context_backend_reason(qge_context_t* ctx);
 
 /**
  * Get recommended resolution for detected hardware.

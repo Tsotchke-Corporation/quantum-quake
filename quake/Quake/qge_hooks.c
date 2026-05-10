@@ -480,6 +480,59 @@ static qge_quantum_runtime_t *QGE_Runtime(void)
 	return qge_get_quantum_runtime(qge_ctx);
 }
 
+static void QGE_TraceBackendGate(void)
+{
+	qge_quantum_runtime_t *rt;
+	qge_state_probe_t probe;
+	qge_profile_t profile;
+	qge_backend_t backend;
+	uint32_t flags;
+	int active;
+	const char *backend_name;
+	const char *status;
+	const char *reason;
+
+	if (!qge_ctx)
+		return;
+
+	rt = QGE_Runtime();
+	backend = qge_get_backend(qge_ctx);
+	flags = qge_context_backend_flags(qge_ctx);
+	active = qge_context_has_active_acceleration(qge_ctx) ? 1 : 0;
+	backend_name = qge_backend_name(backend);
+	status = qge_context_acceleration_status(qge_ctx);
+	reason = qge_context_backend_reason(qge_ctx);
+	memset(&profile, 0, sizeof(profile));
+	qge_get_profile(qge_ctx, &profile);
+
+	Con_Printf("QGE: Backend gate backend=%s status=%s active=%d flags=0x%x reason=%s\n",
+			   backend_name, status, active, flags, reason);
+	fprintf(stderr, "QGE backend gate backend=%s status=%s active=%d flags=0x%x reason=%s qubits=%d memory=%llu\n",
+			backend_name, status, active, flags, reason, profile.current_qubits,
+			(unsigned long long)profile.memory_used_bytes);
+
+	if (!rt)
+		return;
+
+	memset(&probe, 0, sizeof(probe));
+	probe.frame = qge_frame_count;
+	probe.server_time_msec = QGE_ServerTimeMsec();
+	probe.domain = QGE_DOMAIN_RENDER;
+	probe.representation = QGE_REP_CLASSICAL_ORACLE;
+	probe.subject_id = (int32_t)backend;
+	probe.flags = flags;
+	probe.state_hash = ((uint64_t)backend << 32) ^ (uint64_t)flags;
+	probe.entropy = qge_backend_is_accelerated(backend) ? 1.0 : 0.0;
+	probe.coherence = active ? 1.0 : 0.0;
+	probe.max_probability = active ? 1.0 : 0.0;
+	probe.total_probability = 1.0;
+	probe.active_basis_count = active;
+	probe.qubit_count = profile.current_qubits;
+	probe.memory_bytes = profile.memory_used_bytes;
+	strlcpy(probe.label, "backend_gate", sizeof(probe.label));
+	qge_quantum_record_probe(rt, &probe);
+}
+
 static float QGE_ClampUnit(float value)
 {
 	if (value < 0.0f)
@@ -1991,6 +2044,7 @@ void QGE_Init(void)
 			fprintf(stderr, "QGE trace open failed path=%s\n", trace_path);
 		}
 	}
+	QGE_TraceBackendGate();
 
 	fprintf(stderr, "QGE: RNG done, creating DWT framebuffers...\n");
 	qge_render_res = QGE_ClampRenderResolution(quantum_render_res.value);
