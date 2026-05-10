@@ -179,10 +179,10 @@ audio pointer files remain present for consumers that expect a stable contract.
 
 ## Noesis Action Files
 
-`tools/noesis_quake_player.sh` translates a small line-oriented action plan into
-Quake console commands. Blank lines and `#` comments are ignored. Each action
-accepts an optional wait-count argument, so `forward 12` emits `+forward`,
-twelve `wait` commands, then `-forward`.
+`tools/noesis_quake_player.sh` translates a small line-oriented action stream
+into Quake console commands. Blank lines and `#` comments are ignored. Each
+action accepts an optional wait-count argument, so `forward 12` emits
+`+forward`, twelve `wait` commands, then `-forward`.
 
 Example:
 
@@ -197,6 +197,11 @@ Supported movement/action verbs are `forward`, `back`, `turn-left`,
 `turn-right`, `strafe-left`, `strafe-right`, `attack`, `wait`, `weapon`, and
 `give`. `cmd` or `quake` passes the remaining text through as a raw Quake
 console command for targeted probes.
+
+Action streams can come from either `QGE_NOESIS_ACTIONS_FILE` or
+`QGE_NOESIS_CMD`. The command provider runs from `QGE_NOESIS_DIR` and should
+print the same action lines to stdout; this is the hook for a Noesis policy
+runtime that writes actions instead of capturing the user's mouse.
 
 ## Common Environment Variables
 
@@ -230,6 +235,9 @@ console command for targeted probes.
 - `QGE_NOESIS_START_WAIT`: command-buffer waits emitted before Noesis actions,
   default `16`. Set to `0` when the action file already includes its own
   startup delay.
+- `QGE_NOESIS_CMD`: optional Noesis action provider command. When set, the
+  harness runs it from `QGE_NOESIS_DIR` and translates its stdout action lines;
+  this takes precedence over `QGE_NOESIS_ACTIONS_FILE`.
 - `QGE_STREAM_WIDTH`, `QGE_STREAM_HEIGHT`, `QGE_STREAM_FULLSCREEN`: window
   controls.
 - `QGE_RENDER`, `QGE_RENDER_RES`, `QGE_RENDER_THRESHOLD`,

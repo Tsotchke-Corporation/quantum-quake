@@ -37,6 +37,7 @@ noesis_dir="${QGE_NOESIS_DIR:-$HOME/Desktop/noesis}"
 noesis_plan="${QGE_NOESIS_PLAN:-patrol}"
 noesis_actions_file="${QGE_NOESIS_ACTIONS_FILE:-}"
 noesis_start_wait="${QGE_NOESIS_START_WAIT:-16}"
+noesis_cmd="${QGE_NOESIS_CMD:-}"
 noesis_player_tool="$repo_root/tools/noesis_quake_player.sh"
 width="${QGE_STREAM_WIDTH:-800}"
 height="${QGE_STREAM_HEIGHT:-600}"
@@ -174,6 +175,7 @@ write_agent_manifest() {
     "noesis_plan": $(json_string "$noesis_plan"),
     "noesis_actions_file": $(json_string "$noesis_actions_file"),
     "noesis_start_wait": $noesis_start_wait,
+    "noesis_cmd": $(json_string "$noesis_cmd"),
     "noesis_player_tool": $(json_string "$noesis_player_tool")
   },
   "render": {
@@ -240,6 +242,7 @@ emit_noesis_player_script() {
     QGE_NOESIS_PLAN="$noesis_plan" \
     QGE_NOESIS_ACTIONS_FILE="$noesis_actions_file" \
     QGE_NOESIS_START_WAIT="$noesis_start_wait" \
+    QGE_NOESIS_CMD="$noesis_cmd" \
     "$noesis_player_tool"
 }
 

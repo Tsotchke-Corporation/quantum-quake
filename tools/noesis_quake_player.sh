@@ -5,6 +5,7 @@ noesis_dir="${QGE_NOESIS_DIR:-$HOME/Desktop/noesis}"
 plan="${QGE_NOESIS_PLAN:-patrol}"
 actions_file="${QGE_NOESIS_ACTIONS_FILE:-}"
 start_wait="${QGE_NOESIS_START_WAIT:-16}"
+noesis_cmd="${QGE_NOESIS_CMD:-}"
 
 emit_waits() {
   local count="${1:-1}"
@@ -136,6 +137,24 @@ emit_builtin_plan() {
   esac
 }
 
+emit_start() {
+  local source="$1"
+  local detail="${2:-}"
+
+  echo "echo QGE_NOESIS_PLAYER start dir=$noesis_dir status=$noesis_status source=$source plan=$plan start_wait=$start_wait${detail:+ $detail}"
+  if (( start_wait > 0 )); then
+    emit_waits "$start_wait"
+  fi
+}
+
+emit_actions_from_file() {
+  local path="$1"
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    emit_action "$line"
+  done < "$path"
+}
+
 noesis_status="missing"
 if [[ -d "$noesis_dir" ]]; then
   noesis_status="present"
@@ -144,24 +163,34 @@ case "$start_wait" in
   ''|*[!0-9]*) start_wait=16 ;;
 esac
 
-if [[ -n "$actions_file" ]]; then
-  echo "echo QGE_NOESIS_PLAYER start dir=$noesis_dir status=$noesis_status source=file actions=$actions_file plan=$plan start_wait=$start_wait"
-  if (( start_wait > 0 )); then
-    emit_waits "$start_wait"
+if [[ -n "$noesis_cmd" ]]; then
+  emit_start "cmd" "provider=QGE_NOESIS_CMD"
+  cmd_output="$(mktemp "${TMPDIR:-/tmp}/qge-noesis-actions.XXXXXX")"
+  cmd_status=0
+  set +e
+  (cd "$noesis_dir" 2>/dev/null || cd /; bash -lc "$noesis_cmd") > "$cmd_output"
+  cmd_status=$?
+  set -e
+  if (( cmd_status != 0 )); then
+    echo "echo QGE_NOESIS_PLAYER command_failed status=$cmd_status"
   fi
+  if [[ -s "$cmd_output" ]]; then
+    emit_actions_from_file "$cmd_output"
+  else
+    echo "echo QGE_NOESIS_PLAYER empty_command_output"
+    emit_builtin_plan
+  fi
+  rm -f "$cmd_output"
+elif [[ -n "$actions_file" ]]; then
+  emit_start "file" "actions=$actions_file"
   if [[ -f "$actions_file" ]]; then
-    while IFS= read -r line || [[ -n "$line" ]]; do
-      emit_action "$line"
-    done < "$actions_file"
+    emit_actions_from_file "$actions_file"
   else
     echo "echo QGE_NOESIS_PLAYER missing_actions_file=$actions_file"
     emit_builtin_plan
   fi
 else
-  echo "echo QGE_NOESIS_PLAYER start dir=$noesis_dir status=$noesis_status source=builtin plan=$plan start_wait=$start_wait"
-  if (( start_wait > 0 )); then
-    emit_waits "$start_wait"
-  fi
+  emit_start "builtin"
   emit_builtin_plan
 fi
 echo "echo QGE_NOESIS_PLAYER done"
