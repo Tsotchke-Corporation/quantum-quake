@@ -28,6 +28,13 @@ scene_surface_budget="${QGE_SCENE_SURFACE_BUDGET:-128}"
 width="${QGE_STREAM_WIDTH:-800}"
 height="${QGE_STREAM_HEIGHT:-600}"
 sound="${QGE_CRASH_SOUND:-0}"
+stream_mouse="${QGE_STREAM_MOUSE:-0}"
+
+if [[ "$stream_mouse" == "1" ]]; then
+  stream_mouse=1
+else
+  stream_mouse=0
+fi
 
 if [[ ! -x "$app_bin" ]]; then
   echo "QuantumQuake.app is missing; building it first." >&2
@@ -108,7 +115,7 @@ log_next_line=1
 
 echo "Watching Quantum Quake for crashes"
 echo "  outdir=$outdir"
-echo "  seconds=$seconds script_waits=$script_waits map=$map_name window=${width}x${height} sound=$sound"
+echo "  seconds=$seconds script_waits=$script_waits map=$map_name window=${width}x${height} sound=$sound mouse=$stream_mouse"
 echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain quantum_rng=$rng_value quantum_ai=$ai_value"
 echo "  quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_particles=$particles_value"
 
@@ -138,6 +145,9 @@ print_log_updates() {
 }
 
 run_args=(-basedir "$basedir" -window -width "$width" -height "$height")
+if [[ "$stream_mouse" != "1" ]]; then
+  run_args+=(-nomouse)
+fi
 if [[ "$sound" != "1" ]]; then
   run_args+=(-nosound)
 fi

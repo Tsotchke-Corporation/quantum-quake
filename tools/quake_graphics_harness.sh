@@ -88,6 +88,8 @@ capture_mode() {
   if [[ -n "$agent_stream" && -d "$agent_stream" ]]; then
     cp "$agent_stream/manifest.json" "$outdir/${mode}.agent_stream.json" 2>/dev/null || true
     cp "$agent_stream/events.ndjson" "$outdir/${mode}.agent_events.ndjson" 2>/dev/null || true
+    cp "$agent_stream/input/noesis_actions.txt" "$outdir/${mode}.noesis_actions.txt" 2>/dev/null || true
+    cp "$agent_stream/input/noesis_commands.cfg" "$outdir/${mode}.noesis_commands.cfg" 2>/dev/null || true
     cp "$agent_stream/qge_agent_stream_icc_evidence.jsonl" "$outdir/${mode}.agent_icc_evidence.jsonl" 2>/dev/null || true
   fi
   echo "$outdir/${mode}.png"
@@ -125,6 +127,8 @@ Classic reference:
   log: $outdir/classic.log
   stream stdout: $outdir/classic.stream.txt
   agent stream manifest: $outdir/classic.agent_stream.json
+  Noesis actions: $outdir/classic.noesis_actions.txt
+  Noesis commands: $outdir/classic.noesis_commands.cfg
   agent stream ICC: $outdir/classic.agent_icc_evidence.jsonl
 
 QGE candidate:
@@ -139,6 +143,8 @@ QGE candidate:
   log: $outdir/quantum.log
   stream stdout: $outdir/quantum.stream.txt
   agent stream manifest: $outdir/quantum.agent_stream.json
+  Noesis actions: $outdir/quantum.noesis_actions.txt
+  Noesis commands: $outdir/quantum.noesis_commands.cfg
   agent stream ICC: $outdir/quantum.agent_icc_evidence.jsonl
 
 Metrics:

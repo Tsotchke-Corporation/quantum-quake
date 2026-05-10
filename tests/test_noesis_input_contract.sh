@@ -5,6 +5,11 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/qge-noesis-contract.XXXXXX")"
 trap 'rm -rf "$tmpdir"' EXIT
 
+grep -q 'stream_mouse="${QGE_STREAM_MOUSE:-0}"' "$repo_root/tools/quake_graphics_stream.sh"
+grep -Fq 'run_args+=(-nomouse)' "$repo_root/tools/quake_graphics_stream.sh"
+grep -q 'stream_mouse="${QGE_STREAM_MOUSE:-0}"' "$repo_root/tools/quake_crash_watch.sh"
+grep -Fq 'run_args+=(-nomouse)' "$repo_root/tools/quake_crash_watch.sh"
+
 actions_file="$tmpdir/actions.txt"
 commands_file="$tmpdir/commands.cfg"
 stdout_file="$tmpdir/stdout.cfg"
