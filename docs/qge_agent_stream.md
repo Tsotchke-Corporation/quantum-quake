@@ -161,8 +161,11 @@ comparison artifact directory.
 
 `tools/quake_crash_watch.sh` uses the same Noesis player/provider contract for
 its scripted movement by default, stores `input/noesis_actions.txt` and
-`input/noesis_commands.cfg` under its crash-watch output directory, and also
-passes `-nomouse` unless `QGE_STREAM_MOUSE=1`.
+`input/noesis_commands.cfg` under its crash-watch output directory, passes
+`-nomouse` unless `QGE_STREAM_MOUSE=1`, and pins the same high-resolution CPU
+render defaults as the stream harness: 1024 internal render resolution, no
+bilinear/edge/display smoothing, and `QGE_RENDER_UPDATE_INTERVAL=8` unless
+overridden.
 
 ## Audio
 

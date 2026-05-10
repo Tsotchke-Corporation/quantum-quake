@@ -11,6 +11,7 @@ grep -q 'stream_mouse="${QGE_STREAM_MOUSE:-0}"' "$repo_root/tools/quake_crash_wa
 grep -Fq 'run_args+=(-nomouse)' "$repo_root/tools/quake_crash_watch.sh"
 grep -q 'stream_player="${QGE_STREAM_PLAYER:-noesis}"' "$repo_root/tools/quake_crash_watch.sh"
 grep -q 'emit_noesis_player_script' "$repo_root/tools/quake_crash_watch.sh"
+grep -q 'quantum_render_update_interval \$render_update_interval' "$repo_root/tools/quake_crash_watch.sh"
 grep -q 'input/noesis_actions.txt' "$repo_root/docs/qge_agent_stream.md"
 
 actions_file="$tmpdir/actions.txt"
