@@ -2374,21 +2374,43 @@ void QGE_SceneBegin(void)
 	QGE_ResetRenderGateTelemetry();
 }
 
-static float QGE_SurfaceBrightness(const msurface_t *surf)
+static float QGE_SurfaceBrightness(const qge_scene_surface_t *surface)
 {
+	const msurface_t *surf;
+	float brightness;
+
+	if (!surface)
+		return 0.25f;
+	surf = surface->surf;
 	if (!surf)
 		return 0.25f;
-	if (surf->flags & SURF_DRAWSKY)
+
+	if (surface->light_energy > 0.0f || surface->light_contrast > 0.0f) {
+		brightness = 0.18f + surface->light_energy * 0.72f +
+					 surface->light_contrast * 0.18f;
+	} else if (surf->samples) {
+		brightness = 0.48f;
+	} else {
+		brightness = 0.42f;
+	}
+
+	brightness = brightness * 0.72f + surface->material_signal * 0.28f;
+
+	if (surface->flags & SURF_DRAWSKY)
 		return 0.08f;
-	if (surf->flags & SURF_DRAWLAVA)
-		return 0.85f;
-	if (surf->flags & SURF_DRAWTELE)
-		return 0.75f;
-	if (surf->flags & (SURF_DRAWWATER | SURF_DRAWTURB | SURF_DRAWSLIME))
-		return 0.32f;
-	if (surf->samples)
-		return 0.58f;
-	return 0.42f;
+	if (surface->flags & SURF_DRAWLAVA)
+		brightness = fmaxf(brightness, 0.85f);
+	if (surface->flags & SURF_DRAWTELE)
+		brightness = fmaxf(brightness, 0.75f);
+	if (surface->flags & (SURF_DRAWWATER | SURF_DRAWTURB | SURF_DRAWSLIME))
+		brightness = brightness * 0.55f + 0.32f * 0.45f;
+	if (surface->has_fullbright)
+		brightness = fmaxf(brightness, 0.72f);
+	if (brightness < 0.08f)
+		brightness = 0.08f;
+	if (brightness > 1.0f)
+		brightness = 1.0f;
+	return brightness;
 }
 
 static unsigned int QGE_HashStep(unsigned int hash, unsigned int value)
@@ -2620,7 +2642,6 @@ void QGE_SceneSubmitWorldSurface(qmodel_t *model, msurface_t *surf)
 	}
 	dst->flags = surf->flags;
 	dst->lightmap = surf->lightmaptexturenum;
-	dst->brightness = QGE_SurfaceBrightness(surf);
 	dst->light_hash = QGE_CachedSurfaceLightSignal(dst->surface_id, surf,
 												  &dst->light_energy,
 												  &dst->light_contrast);
@@ -2640,6 +2661,7 @@ void QGE_SceneSubmitWorldSurface(qmodel_t *model, msurface_t *surf)
 		dst->texture_name[i] = 0;
 	} else
 		dst->material_signal = QGE_SurfaceMaterialSignal(dst);
+	dst->brightness = QGE_SurfaceBrightness(dst);
 
 	dst->numverts = surf->polys ? surf->polys->numverts : surf->numedges;
 	{
