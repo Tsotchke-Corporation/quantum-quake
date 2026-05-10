@@ -141,6 +141,11 @@ override is provided, the harness captures at roughly two-thirds of
 `QGE_STREAM_WAIT_FRAMES`, with a floor that falls back to the normal wait for
 very small values.
 
+For the default Noesis player, the implicit capture frame is never earlier than
+`QGE_NOESIS_START_WAIT + 4`, so short smoke runs still capture after the policy
+provider has started emitting actions. An explicit `QGE_STREAM_CAPTURE_WAIT`
+continues to mean exactly the frame requested.
+
 Set `QGE_STREAM_ENGINE_CAPTURE=0` to use scripted `screenshot png` commands
 instead of engine auto-capture. This mode still mirrors discovered `spasm*.png`
 files into the agent stream.

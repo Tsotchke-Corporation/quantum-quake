@@ -363,6 +363,7 @@ print_log_updates() {
 	      -e '/QGE snapshot /p' \
 	      -e '/QGE physics frame=/p' \
 	      -e '/QGE trace /p' \
+	      -e '/QGE_NOESIS_/p' \
 	      -e '/Sound Initialization/p' \
 	      -e '/SDL audio/p' \
 	      -e '/QGE quantum audio/p' \
@@ -542,6 +543,12 @@ if [[ "$engine_capture" == "1" ]]; then
       engine_capture_wait=$((waits_per_frame * 2 / 3))
       if (( engine_capture_wait < 8 )); then
         engine_capture_wait="$waits_per_frame"
+      fi
+    fi
+    if [[ "$stream_player" == "noesis" ]]; then
+      noesis_capture_min=$((noesis_start_wait + 4))
+      if (( engine_capture_wait < noesis_capture_min )); then
+        engine_capture_wait="$noesis_capture_min"
       fi
     fi
   fi
