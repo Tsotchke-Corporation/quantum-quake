@@ -98,18 +98,23 @@ outdir="$repo_root/diagnostics/quake_stream/$stamp"
 agent_stream="${QGE_AGENT_STREAM_DIR:-$repo_root/diagnostics/agent_stream/$stamp}"
 agent_video_dir="$agent_stream/video/frames"
 agent_audio_dir="$agent_stream/audio"
+agent_input_dir="$agent_stream/input"
 agent_log_dir="$agent_stream/logs"
 agent_events_file="$agent_stream/events.ndjson"
 agent_manifest_file="$agent_stream/manifest.json"
 agent_icc_file="$agent_stream/qge_agent_stream_icc_evidence.jsonl"
+agent_input_actions_file="$agent_input_dir/noesis_actions.txt"
+agent_input_commands_file="$agent_input_dir/noesis_commands.cfg"
 agent_audio_raw="$agent_audio_dir/quake_mix_s16le.raw"
 agent_audio_meta="$agent_audio_dir/quake_mix_s16le.json"
 agent_audio_bytes_file="$agent_audio_dir/bytes.txt"
 agent_frame_count_file="$agent_stream/video/frame_count.txt"
 agent_last_frame_file="$agent_stream/video/latest_frame.txt"
 last_agent_frame=""
-mkdir -p "$outdir" "$agent_video_dir" "$agent_audio_dir" "$agent_log_dir"
+mkdir -p "$outdir" "$agent_video_dir" "$agent_audio_dir" "$agent_input_dir" "$agent_log_dir"
 : > "$agent_events_file"
+: > "$agent_input_actions_file"
+: > "$agent_input_commands_file"
 : > "$agent_audio_bytes_file"
 : > "$agent_frame_count_file"
 : > "$agent_last_frame_file"
@@ -183,7 +188,9 @@ write_agent_manifest() {
     "noesis_start_wait": $noesis_start_wait,
     "noesis_cmd": $(json_string "$noesis_cmd"),
     "noesis_cmd_default": $noesis_cmd_default,
-    "noesis_player_tool": $(json_string "$noesis_player_tool")
+    "noesis_player_tool": $(json_string "$noesis_player_tool"),
+    "action_trace_file": $(json_string "$agent_input_actions_file"),
+    "command_trace_file": $(json_string "$agent_input_commands_file")
   },
   "render": {
     "quantum_render": $render_value,
@@ -235,6 +242,8 @@ write_agent_icc_evidence() {
     printf '{"kind":"completion_condition","name":"completion_reason","value":"qge_agent_media_stream_complete","path":%s}\n' "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_stream_manifest_file","value":%s,"path":%s}\n' "$(json_string "$agent_manifest_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_events_file","value":%s,"path":%s}\n' "$(json_string "$agent_events_file")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"artifact","name":"agent_input_actions_file","value":%s,"path":%s}\n' "$(json_string "$agent_input_actions_file")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"artifact","name":"agent_input_commands_file","value":%s,"path":%s}\n' "$(json_string "$agent_input_commands_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_video_frame_file","value":%s,"path":%s}\n' "$(json_string "$last_agent_frame")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_audio_raw_file","value":%s,"path":%s}\n' "$(json_string "$audio_raw_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_audio_metadata_file","value":%s,"path":%s}\n' "$(json_string "$audio_meta_file")" "$(json_string "$agent_icc_file")"
@@ -250,6 +259,8 @@ emit_noesis_player_script() {
     QGE_NOESIS_ACTIONS_FILE="$noesis_actions_file" \
     QGE_NOESIS_START_WAIT="$noesis_start_wait" \
     QGE_NOESIS_CMD="$noesis_cmd" \
+    QGE_NOESIS_ACTION_TRACE_FILE="$agent_input_actions_file" \
+    QGE_NOESIS_COMMAND_TRACE_FILE="$agent_input_commands_file" \
     QGE_STREAM_MAP="$map_name" \
     QGE_STREAM_FIRE_TEST="$fire_test" \
     "$noesis_player_tool"
@@ -320,6 +331,13 @@ trap restore_autoexec EXIT
   fi
 } > "$autoexec"
 cp "$autoexec" "$outdir/autoexec.cfg.used"
+if [[ "$stream_player" == "noesis" ]]; then
+  input_action_count="$(wc -l < "$agent_input_actions_file" | tr -d ' ')"
+  input_command_count="$(wc -l < "$agent_input_commands_file" | tr -d ' ')"
+  agent_event "input_actions" "$agent_input_actions_file" "actions=$input_action_count"
+  agent_event "input_commands" "$agent_input_commands_file" "commands=$input_command_count"
+  write_agent_manifest "running"
+fi
 
 before_file="$outdir/screens.before"
 seen_file="$outdir/screens.seen"

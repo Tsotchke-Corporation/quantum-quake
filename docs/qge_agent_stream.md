@@ -55,11 +55,14 @@ The stream directory is intentionally simple and tail-friendly:
   channels, and sample pair count.
 - `audio/bytes.txt`: current raw PCM byte count. It starts at `0` and is
   overwritten as audio grows.
+- `input/noesis_actions.txt`: Noesis action lines selected for this run.
+- `input/noesis_commands.cfg`: translated Quake console commands emitted by
+  the Noesis player.
 - `logs/quantum_quake.log`: runtime console log mirrored into the stream.
 - `logs/open.log`: LaunchServices notes for macOS `open` mode.
 - `qge_agent_stream_icc_evidence.jsonl`: ICC-native evidence entries for the
-  manifest, events file, latest video frame, raw audio, audio metadata, and
-  completion signal.
+  manifest, events file, Noesis input traces, latest video frame, raw audio,
+  audio metadata, and completion signal.
 
 Consumers should treat `events.ndjson` as append-only and `manifest.json`,
 `video/frame_count.txt`, `video/latest_frame.txt`, and `audio/bytes.txt` as
@@ -207,6 +210,8 @@ Action streams can come from either `QGE_NOESIS_ACTIONS_FILE` or
 `QGE_NOESIS_CMD`. The command provider runs from `QGE_NOESIS_DIR` and should
 print the same action lines to stdout; this is the hook for a Noesis policy
 runtime that writes actions instead of capturing the user's mouse.
+Every run also mirrors the selected action stream and translated Quake command
+stream into `input/noesis_actions.txt` and `input/noesis_commands.cfg`.
 
 When neither is set, the default Noesis player runs
 `tools/noesis_quake_policy.sh`, a repo-local cached-policy provider. It emits a

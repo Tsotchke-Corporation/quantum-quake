@@ -6,6 +6,21 @@ plan="${QGE_NOESIS_PLAN:-patrol}"
 actions_file="${QGE_NOESIS_ACTIONS_FILE:-}"
 start_wait="${QGE_NOESIS_START_WAIT:-16}"
 noesis_cmd="${QGE_NOESIS_CMD:-}"
+action_trace_file="${QGE_NOESIS_ACTION_TRACE_FILE:-}"
+command_trace_file="${QGE_NOESIS_COMMAND_TRACE_FILE:-}"
+
+emit_command() {
+  printf '%s\n' "$*"
+  if [[ -n "$command_trace_file" ]]; then
+    printf '%s\n' "$*" >> "$command_trace_file"
+  fi
+}
+
+record_action() {
+  if [[ -n "$action_trace_file" ]]; then
+    printf '%s\n' "$*" >> "$action_trace_file"
+  fi
+}
 
 emit_waits() {
   local count="${1:-1}"
@@ -19,7 +34,7 @@ emit_waits() {
   fi
 
   while (( i < count )); do
-    echo "wait"
+    emit_command "wait"
     i=$((i + 1))
   done
 }
@@ -28,9 +43,9 @@ hold_command() {
   local command="$1"
   local count="${2:-1}"
 
-  echo "+$command"
+  emit_command "+$command"
   emit_waits "$count"
-  echo "-$command"
+  emit_command "-$command"
 }
 
 emit_action() {
@@ -45,6 +60,7 @@ emit_action() {
   if [[ -z "$line" ]]; then
     return
   fi
+  record_action "$line"
 
   action="${line%%[[:space:]]*}"
   if [[ "$action" == "$line" ]]; then
@@ -81,27 +97,27 @@ emit_action() {
       hold_command "attack" "${arg:-1}"
       ;;
     weapon|impulse)
-      echo "impulse ${arg:-7}"
+      emit_command "impulse ${arg:-7}"
       ;;
     give)
       if [[ -n "${arg:-}" && -n "${rest:-}" ]]; then
-        echo "give $arg $rest"
+        emit_command "give $arg $rest"
       elif [[ -n "${arg:-}" ]]; then
-        echo "give $arg"
+        emit_command "give $arg"
       fi
       ;;
     cmd|quake)
       if [[ -n "${arg:-}" && -n "${rest:-}" ]]; then
-        echo "$arg $rest"
+        emit_command "$arg $rest"
       elif [[ -n "${arg:-}" ]]; then
-        echo "$arg"
+        emit_command "$arg"
       fi
       ;;
     +forward|+back|+left|+right|+moveleft|+moveright|+attack|-forward|-back|-left|-right|-moveleft|-moveright|-attack)
-      echo "$line"
+      emit_command "$line"
       ;;
     *)
-      echo "echo QGE_NOESIS_PLAYER skipped_unknown_action=$action"
+      emit_command "echo QGE_NOESIS_PLAYER skipped_unknown_action=$action"
       ;;
   esac
 }
@@ -141,7 +157,7 @@ emit_start() {
   local source="$1"
   local detail="${2:-}"
 
-  echo "echo QGE_NOESIS_PLAYER start dir=$noesis_dir status=$noesis_status source=$source plan=$plan start_wait=$start_wait${detail:+ $detail}"
+  emit_command "echo QGE_NOESIS_PLAYER start dir=$noesis_dir status=$noesis_status source=$source plan=$plan start_wait=$start_wait${detail:+ $detail}"
   if (( start_wait > 0 )); then
     emit_waits "$start_wait"
   fi
@@ -172,12 +188,12 @@ if [[ -n "$noesis_cmd" ]]; then
   cmd_status=$?
   set -e
   if (( cmd_status != 0 )); then
-    echo "echo QGE_NOESIS_PLAYER command_failed status=$cmd_status"
+    emit_command "echo QGE_NOESIS_PLAYER command_failed status=$cmd_status"
   fi
   if [[ -s "$cmd_output" ]]; then
     emit_actions_from_file "$cmd_output"
   else
-    echo "echo QGE_NOESIS_PLAYER empty_command_output"
+    emit_command "echo QGE_NOESIS_PLAYER empty_command_output"
     emit_builtin_plan
   fi
   rm -f "$cmd_output"
@@ -186,11 +202,11 @@ elif [[ -n "$actions_file" ]]; then
   if [[ -f "$actions_file" ]]; then
     emit_actions_from_file "$actions_file"
   else
-    echo "echo QGE_NOESIS_PLAYER missing_actions_file=$actions_file"
+    emit_command "echo QGE_NOESIS_PLAYER missing_actions_file=$actions_file"
     emit_builtin_plan
   fi
 else
   emit_start "builtin"
   emit_builtin_plan
 fi
-echo "echo QGE_NOESIS_PLAYER done"
+emit_command "echo QGE_NOESIS_PLAYER done"
