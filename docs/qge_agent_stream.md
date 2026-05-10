@@ -153,6 +153,17 @@ Set `QGE_STREAM_ENGINE_CAPTURE=0` to use scripted `screenshot png` commands
 instead of engine auto-capture. This mode still mirrors discovered `spasm*.png`
 files into the agent stream.
 
+## Related Harnesses
+
+`tools/quake_graphics_harness.sh` runs paired classic/QGE captures through the
+stream harness and copies each run's Noesis action and command traces into the
+comparison artifact directory.
+
+`tools/quake_crash_watch.sh` uses the same Noesis player/provider contract for
+its scripted movement by default, stores `input/noesis_actions.txt` and
+`input/noesis_commands.cfg` under its crash-watch output directory, and also
+passes `-nomouse` unless `QGE_STREAM_MOUSE=1`.
+
 ## Audio
 
 Audio is disabled by default because most graphics smokes run with `-nosound`.

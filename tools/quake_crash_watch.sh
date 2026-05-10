@@ -29,11 +29,27 @@ width="${QGE_STREAM_WIDTH:-800}"
 height="${QGE_STREAM_HEIGHT:-600}"
 sound="${QGE_CRASH_SOUND:-0}"
 stream_mouse="${QGE_STREAM_MOUSE:-0}"
+stream_player="${QGE_STREAM_PLAYER:-noesis}"
+noesis_dir="${QGE_NOESIS_DIR:-$HOME/Desktop/noesis}"
+noesis_plan="${QGE_NOESIS_PLAN:-map-scout}"
+noesis_actions_file="${QGE_NOESIS_ACTIONS_FILE:-}"
+noesis_start_wait="${QGE_NOESIS_START_WAIT:-60}"
+noesis_cmd="${QGE_NOESIS_CMD:-}"
+default_noesis_cmd="$repo_root/tools/noesis_quake_policy.sh"
+noesis_cmd_default=0
+noesis_player_tool="$repo_root/tools/noesis_quake_player.sh"
 
 if [[ "$stream_mouse" == "1" ]]; then
   stream_mouse=1
 else
   stream_mouse=0
+fi
+case "$noesis_start_wait" in
+  ''|*[!0-9]*) noesis_start_wait=60 ;;
+esac
+if [[ "$stream_player" == "noesis" && -z "$noesis_cmd" && -z "$noesis_actions_file" && -x "$default_noesis_cmd" ]]; then
+  noesis_cmd="$default_noesis_cmd"
+  noesis_cmd_default=1
 fi
 
 if [[ ! -x "$app_bin" ]]; then
@@ -48,7 +64,12 @@ fi
 
 stamp="$(date +%Y%m%d-%H%M%S)"
 outdir="$repo_root/diagnostics/crash_watch/$stamp"
-mkdir -p "$outdir"
+input_dir="$outdir/input"
+input_actions_file="$input_dir/noesis_actions.txt"
+input_commands_file="$input_dir/noesis_commands.cfg"
+mkdir -p "$outdir" "$input_dir"
+: > "$input_actions_file"
+: > "$input_commands_file"
 
 restore_autoexec() {
   if [[ -f "$outdir/autoexec.cfg.before" ]]; then
@@ -62,6 +83,18 @@ if [[ -f "$autoexec" ]]; then
   cp "$autoexec" "$outdir/autoexec.cfg.before"
 fi
 trap restore_autoexec EXIT
+
+emit_noesis_player_script() {
+  QGE_NOESIS_DIR="$noesis_dir" \
+    QGE_NOESIS_PLAN="$noesis_plan" \
+    QGE_NOESIS_ACTIONS_FILE="$noesis_actions_file" \
+    QGE_NOESIS_START_WAIT="$noesis_start_wait" \
+    QGE_NOESIS_CMD="$noesis_cmd" \
+    QGE_NOESIS_ACTION_TRACE_FILE="$input_actions_file" \
+    QGE_NOESIS_COMMAND_TRACE_FILE="$input_commands_file" \
+    QGE_STREAM_MAP="$map_name" \
+    "$noesis_player_tool"
+}
 
 find /Users/tyr/Library/Logs/DiagnosticReports -maxdepth 1 -type f -print | sort > "$outdir/crash_reports.before"
 rm -f "$basedir/qconsole.log"
@@ -85,22 +118,26 @@ rm -f "$basedir/qconsole.log"
   echo "quantum_projectiles $projectiles_value"
   echo "quantum_particles $particles_value"
   echo "map $map_name"
-  for _ in $(seq 1 60); do
-    echo "wait"
-  done
-  echo "give 7"
-  echo "give r 100"
-  echo "impulse 7"
-  echo "+forward"
-  for _ in $(seq 1 90); do
-    echo "wait"
-  done
-  echo "-forward"
-  echo "+attack"
-  for _ in $(seq 1 45); do
-    echo "wait"
-  done
-  echo "-attack"
+  if [[ "$stream_player" == "noesis" ]]; then
+    emit_noesis_player_script
+  else
+    for _ in $(seq 1 60); do
+      echo "wait"
+    done
+    echo "give 7"
+    echo "give r 100"
+    echo "impulse 7"
+    echo "+forward"
+    for _ in $(seq 1 90); do
+      echo "wait"
+    done
+    echo "-forward"
+    echo "+attack"
+    for _ in $(seq 1 45); do
+      echo "wait"
+    done
+    echo "-attack"
+  fi
   for _ in $(seq 1 "$script_waits"); do
     echo "wait"
   done
@@ -115,7 +152,10 @@ log_next_line=1
 
 echo "Watching Quantum Quake for crashes"
 echo "  outdir=$outdir"
-echo "  seconds=$seconds script_waits=$script_waits map=$map_name window=${width}x${height} sound=$sound mouse=$stream_mouse"
+echo "  seconds=$seconds script_waits=$script_waits map=$map_name window=${width}x${height} sound=$sound mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan"
+if [[ "$stream_player" == "noesis" ]]; then
+  echo "  noesis_cmd=$noesis_cmd noesis_cmd_default=$noesis_cmd_default actions=$input_actions_file commands=$input_commands_file"
+fi
 echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain quantum_rng=$rng_value quantum_ai=$ai_value"
 echo "  quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_particles=$particles_value"
 
@@ -130,6 +170,7 @@ print_log_updates() {
       -e '/QGE registry /p' \
       -e '/QGE snapshot /p' \
       -e '/QGE physics frame=/p' \
+      -e '/QGE_NOESIS_/p' \
       -e '/Sound Initialization/p' \
       -e '/SDL audio/p' \
       -e '/QGE quantum audio/p' \
