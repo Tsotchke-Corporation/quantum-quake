@@ -203,6 +203,12 @@ Action streams can come from either `QGE_NOESIS_ACTIONS_FILE` or
 print the same action lines to stdout; this is the hook for a Noesis policy
 runtime that writes actions instead of capturing the user's mouse.
 
+When neither is set, the default Noesis player runs
+`tools/noesis_quake_policy.sh`, a repo-local cached-policy provider. It emits a
+`QGE_NOESIS_POLICY` marker into the Quake log, then writes action lines for the
+selected plan. `QGE_NOESIS_ACTIONS_FILE` still takes precedence over this
+default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
+
 ## Common Environment Variables
 
 - `QGE_AGENT_STREAM_DIR`: override the agent stream output directory.
@@ -226,7 +232,7 @@ runtime that writes actions instead of capturing the user's mouse.
 - `QGE_NOESIS_DIR`: Noesis repo path used for player provenance, default
   `~/Desktop/noesis`.
 - `QGE_NOESIS_PLAN`: Noesis command-buffer plan, default `patrol`; supported
-  plans are `patrol`, `scout`, and `fire`.
+  plans are `patrol`, `scout`, `fire`, `map-scout`, and `adaptive`.
 - `QGE_NOESIS_ACTIONS_FILE`: optional Noesis action file. When present, the
   harness translates each line into Quake console commands instead of using
   the built-in plan. Supported actions include `forward`, `back`,
@@ -237,7 +243,8 @@ runtime that writes actions instead of capturing the user's mouse.
   startup delay.
 - `QGE_NOESIS_CMD`: optional Noesis action provider command. When set, the
   harness runs it from `QGE_NOESIS_DIR` and translates its stdout action lines;
-  this takes precedence over `QGE_NOESIS_ACTIONS_FILE`.
+  this takes precedence over `QGE_NOESIS_ACTIONS_FILE` and the default
+  `tools/noesis_quake_policy.sh` provider.
 - `QGE_STREAM_WIDTH`, `QGE_STREAM_HEIGHT`, `QGE_STREAM_FULLSCREEN`: window
   controls.
 - `QGE_RENDER`, `QGE_RENDER_RES`, `QGE_RENDER_THRESHOLD`,

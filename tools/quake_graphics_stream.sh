@@ -38,6 +38,8 @@ noesis_plan="${QGE_NOESIS_PLAN:-patrol}"
 noesis_actions_file="${QGE_NOESIS_ACTIONS_FILE:-}"
 noesis_start_wait="${QGE_NOESIS_START_WAIT:-16}"
 noesis_cmd="${QGE_NOESIS_CMD:-}"
+default_noesis_cmd="$repo_root/tools/noesis_quake_policy.sh"
+noesis_cmd_default=0
 noesis_player_tool="$repo_root/tools/noesis_quake_player.sh"
 width="${QGE_STREAM_WIDTH:-800}"
 height="${QGE_STREAM_HEIGHT:-600}"
@@ -70,6 +72,10 @@ fi
 case "$noesis_start_wait" in
   ''|*[!0-9]*) noesis_start_wait=16 ;;
 esac
+if [[ "$stream_player" == "noesis" && -z "$noesis_cmd" && -z "$noesis_actions_file" && -x "$default_noesis_cmd" ]]; then
+  noesis_cmd="$default_noesis_cmd"
+  noesis_cmd_default=1
+fi
 case "$stream_activate_attempts" in
   ''|*[!0-9]*) stream_activate_attempts=8 ;;
 esac
@@ -176,6 +182,7 @@ write_agent_manifest() {
     "noesis_actions_file": $(json_string "$noesis_actions_file"),
     "noesis_start_wait": $noesis_start_wait,
     "noesis_cmd": $(json_string "$noesis_cmd"),
+    "noesis_cmd_default": $noesis_cmd_default,
     "noesis_player_tool": $(json_string "$noesis_player_tool")
   },
   "render": {
@@ -243,6 +250,8 @@ emit_noesis_player_script() {
     QGE_NOESIS_ACTIONS_FILE="$noesis_actions_file" \
     QGE_NOESIS_START_WAIT="$noesis_start_wait" \
     QGE_NOESIS_CMD="$noesis_cmd" \
+    QGE_STREAM_MAP="$map_name" \
+    QGE_STREAM_FIRE_TEST="$fire_test" \
     "$noesis_player_tool"
 }
 
