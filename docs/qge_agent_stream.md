@@ -177,6 +177,27 @@ Even on failure, the harness finalizes the stream: `manifest.json` is written
 with status `complete`, `events.ndjson` receives `stream_done`, and the frame and
 audio pointer files remain present for consumers that expect a stable contract.
 
+## Noesis Action Files
+
+`tools/noesis_quake_player.sh` translates a small line-oriented action plan into
+Quake console commands. Blank lines and `#` comments are ignored. Each action
+accepts an optional wait-count argument, so `forward 12` emits `+forward`,
+twelve `wait` commands, then `-forward`.
+
+Example:
+
+```text
+forward 12
+turn-right 6
+attack 4
+wait 2
+```
+
+Supported movement/action verbs are `forward`, `back`, `turn-left`,
+`turn-right`, `strafe-left`, `strafe-right`, `attack`, `wait`, `weapon`, and
+`give`. `cmd` or `quake` passes the remaining text through as a raw Quake
+console command for targeted probes.
+
 ## Common Environment Variables
 
 - `QGE_AGENT_STREAM_DIR`: override the agent stream output directory.
@@ -201,6 +222,14 @@ audio pointer files remain present for consumers that expect a stable contract.
   `~/Desktop/noesis`.
 - `QGE_NOESIS_PLAN`: Noesis command-buffer plan, default `patrol`; supported
   plans are `patrol`, `scout`, and `fire`.
+- `QGE_NOESIS_ACTIONS_FILE`: optional Noesis action file. When present, the
+  harness translates each line into Quake console commands instead of using
+  the built-in plan. Supported actions include `forward`, `back`,
+  `turn-left`, `turn-right`, `strafe-left`, `strafe-right`, `attack`, `wait`,
+  `weapon`, and `give`, with an optional wait-count argument.
+- `QGE_NOESIS_START_WAIT`: command-buffer waits emitted before Noesis actions,
+  default `16`. Set to `0` when the action file already includes its own
+  startup delay.
 - `QGE_STREAM_WIDTH`, `QGE_STREAM_HEIGHT`, `QGE_STREAM_FULLSCREEN`: window
   controls.
 - `QGE_RENDER`, `QGE_RENDER_RES`, `QGE_RENDER_THRESHOLD`,

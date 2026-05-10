@@ -35,6 +35,9 @@ stream_activate="${QGE_STREAM_ACTIVATE:-0}"
 stream_activate_attempts="${QGE_STREAM_ACTIVATE_ATTEMPTS:-8}"
 noesis_dir="${QGE_NOESIS_DIR:-$HOME/Desktop/noesis}"
 noesis_plan="${QGE_NOESIS_PLAN:-patrol}"
+noesis_actions_file="${QGE_NOESIS_ACTIONS_FILE:-}"
+noesis_start_wait="${QGE_NOESIS_START_WAIT:-16}"
+noesis_player_tool="$repo_root/tools/noesis_quake_player.sh"
 width="${QGE_STREAM_WIDTH:-800}"
 height="${QGE_STREAM_HEIGHT:-600}"
 fullscreen="${QGE_STREAM_FULLSCREEN:-0}"
@@ -63,6 +66,9 @@ fi
 if [[ "$fire_test" == "1" && "$stream_player" == "noesis" && -z "${QGE_NOESIS_PLAN+x}" ]]; then
   noesis_plan="fire"
 fi
+case "$noesis_start_wait" in
+  ''|*[!0-9]*) noesis_start_wait=16 ;;
+esac
 case "$stream_activate_attempts" in
   ''|*[!0-9]*) stream_activate_attempts=8 ;;
 esac
@@ -165,7 +171,10 @@ write_agent_manifest() {
     "mouse_enabled": $stream_mouse,
     "player": $(json_string "$stream_player"),
     "noesis_dir": $(json_string "$noesis_dir"),
-    "noesis_plan": $(json_string "$noesis_plan")
+    "noesis_plan": $(json_string "$noesis_plan"),
+    "noesis_actions_file": $(json_string "$noesis_actions_file"),
+    "noesis_start_wait": $noesis_start_wait,
+    "noesis_player_tool": $(json_string "$noesis_player_tool")
   },
   "render": {
     "quantum_render": $render_value,
@@ -226,75 +235,12 @@ write_agent_icc_evidence() {
 write_agent_manifest "running"
 agent_event "stream_start" "$agent_stream" "outdir=$outdir"
 
-emit_waits() {
-  local count="$1"
-  local i=0
-  while (( i < count )); do
-    echo "wait"
-    i=$((i + 1))
-  done
-}
-
 emit_noesis_player_script() {
-  local noesis_status="missing"
-
-  if [[ -d "$noesis_dir" ]]; then
-    noesis_status="present"
-  fi
-
-  echo "echo QGE_NOESIS_PLAYER start dir=$noesis_dir status=$noesis_status plan=$noesis_plan"
-  emit_waits 16
-  case "$noesis_plan" in
-    scout)
-      echo "+forward"
-      emit_waits 18
-      echo "-forward"
-      echo "+right"
-      emit_waits 8
-      echo "-right"
-      echo "+forward"
-      emit_waits 18
-      echo "-forward"
-      ;;
-    fire)
-      echo "give 7"
-      echo "give r 100"
-      echo "impulse 7"
-      emit_waits 8
-      echo "+attack"
-      emit_waits 8
-      echo "-attack"
-      emit_waits 8
-      echo "+right"
-      emit_waits 6
-      echo "-right"
-      echo "+attack"
-      emit_waits 8
-      echo "-attack"
-      ;;
-    patrol|*)
-      echo "+forward"
-      emit_waits 12
-      echo "-forward"
-      echo "+right"
-      emit_waits 6
-      echo "-right"
-      echo "+forward"
-      emit_waits 12
-      echo "-forward"
-      echo "+left"
-      emit_waits 6
-      echo "-left"
-      echo "give 7"
-      echo "give r 100"
-      echo "impulse 7"
-      emit_waits 4
-      echo "+attack"
-      emit_waits 6
-      echo "-attack"
-      ;;
-  esac
-  echo "echo QGE_NOESIS_PLAYER done"
+  QGE_NOESIS_DIR="$noesis_dir" \
+    QGE_NOESIS_PLAN="$noesis_plan" \
+    QGE_NOESIS_ACTIONS_FILE="$noesis_actions_file" \
+    QGE_NOESIS_START_WAIT="$noesis_start_wait" \
+    "$noesis_player_tool"
 }
 
 restore_autoexec() {
