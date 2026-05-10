@@ -102,7 +102,7 @@ QGE_OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(QGE_SRCS))
 QGE_OBJS += $(patsubst %.mm,$(BUILD_DIR)/%.o,$(QGE_OBJC_SRCS))
 
 # Targets
-.PHONY: all clean test moonlab qge dirs demo demo-sdl quake run-quake
+.PHONY: all clean test moonlab qge dirs demo demo-sdl quake run-quake test_noesis_input_contract
 
 all: dirs moonlab qge test_qge
 
@@ -166,8 +166,12 @@ test_console_contract: dirs
 		-o $(BIN_DIR)/test_console_contract
 	@echo "Test built: $(BIN_DIR)/test_console_contract"
 
+test_noesis_input_contract:
+	@echo "Running Noesis input contract test..."
+	@bash tests/test_noesis_input_contract.sh
+
 # Run tests
-test: test_qge test_console_contract
+test: test_qge test_console_contract test_noesis_input_contract
 	@echo "Running QGE tests..."
 	@./$(BIN_DIR)/test_qge
 	@echo "Running console artifact contract test..."
