@@ -1054,7 +1054,7 @@ static void Host_SavegameComment (char text[SAVEGAME_COMMENT_LENGTH + 1])
 	while ((p = strchr(text, '\r')) != NULL)
 		*p = ' ';
 
-	sprintf (kills,"kills:%3i/%3i", cl.stats[STAT_MONSTERS], cl.stats[STAT_TOTALMONSTERS]);
+	q_snprintf (kills, sizeof(kills), "kills:%3i/%3i", cl.stats[STAT_MONSTERS], cl.stats[STAT_TOTALMONSTERS]);
 	memcpy (text+22, kills, strlen(kills));
 
 // convert space to _ to make stdio happy

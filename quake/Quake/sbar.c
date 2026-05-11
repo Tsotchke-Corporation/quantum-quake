@@ -466,11 +466,11 @@ void Sbar_SoloScoreboard (void)
 	int	minutes, seconds, tens, units;
 	int	left, right, len;
 
-	sprintf (str,"Kills: %i/%i", cl.stats[STAT_MONSTERS], cl.stats[STAT_TOTALMONSTERS]);
+	q_snprintf (str, sizeof(str), "Kills: %i/%i", cl.stats[STAT_MONSTERS], cl.stats[STAT_TOTALMONSTERS]);
 	left = 8 + strlen (str) * 8;
 	Sbar_DrawString (8, 12, str);
 
-	sprintf (str,"Secrets: %i/%i", cl.stats[STAT_SECRETS], cl.stats[STAT_TOTALSECRETS]);
+	q_snprintf (str, sizeof(str), "Secrets: %i/%i", cl.stats[STAT_SECRETS], cl.stats[STAT_TOTALSECRETS]);
 	right = 312 - strlen (str) * 8;
 	Sbar_DrawString (right, 12, str);
 
@@ -491,7 +491,7 @@ void Sbar_SoloScoreboard (void)
 	seconds = cl.time - 60*minutes;
 	tens = seconds / 10;
 	units = seconds - 10*tens;
-	sprintf (str,"%i:%i%i", minutes, tens, units);
+	q_snprintf (str, sizeof(str), "%i:%i%i", minutes, tens, units);
 	Sbar_DrawString (160 - strlen(str)*4, 12, str);
 
 	len = strlen (cl.levelname);
@@ -641,7 +641,7 @@ void Sbar_DrawInventory (void)
 	{
 		val = cl.stats[STAT_SHELLS+i];
 		val = (val < 0)? 0 : q_min(999,val);//johnfitz -- cap displayed value to 999
-		sprintf (num, "%3i", val);
+		q_snprintf (num, sizeof(num), "%3i", val);
 		if (num[0] != ' ')
 			Sbar_DrawCharacter ( (6*i+1)*8 + 2, -24, 18 + num[0] - '0');
 		if (num[1] != ' ')
@@ -773,7 +773,7 @@ void Sbar_DrawFrags (void)
 		Draw_Fill (x + 10, 5, 28, 3, color, 1);
 
 	// number
-		sprintf (num, "%3i", s->frags);
+		q_snprintf (num, sizeof(num), "%3i", s->frags);
 		Sbar_DrawCharacter (x + 12, -24, num[0]);
 		Sbar_DrawCharacter (x + 20, -24, num[1]);
 		Sbar_DrawCharacter (x + 28, -24, num[2]);
@@ -826,7 +826,7 @@ void Sbar_DrawFace (void)
 
 		// draw number
 		f = s->frags;
-		sprintf (num, "%3i",f);
+		q_snprintf (num, sizeof(num), "%3i",f);
 
 		if (top == 8)
 		{
@@ -1162,7 +1162,7 @@ void Sbar_DeathmatchOverlay (void)
 
 	// draw number
 		f = s->frags;
-		sprintf (num, "%3i",f);
+		q_snprintf (num, sizeof(num), "%3i",f);
 
 		Draw_Character ( x+8 , y, num[0]); //johnfitz -- stretched overlays
 		Draw_Character ( x+16 , y, num[1]); //johnfitz -- stretched overlays
@@ -1183,7 +1183,7 @@ void Sbar_DeathmatchOverlay (void)
 		tens = n/10;
 		units = n%10;
 
-		sprintf (num, "%3i:%i%i", minutes, tens, units);
+		q_snprintf (num, sizeof(num), "%3i:%i%i", minutes, tens, units);
 
 		M_Print ( x+48 , y, num); //johnfitz -- was Draw_String, changed for stretched overlays
 }
@@ -1255,7 +1255,7 @@ void Sbar_MiniDeathmatchOverlay (void)
 
 	// number
 		f = s->frags;
-		sprintf (num, "%3i",f);
+		q_snprintf (num, sizeof(num), "%3i",f);
 		Draw_Character (x+ 8, y, num[0]);
 		Draw_Character (x+16, y, num[1]);
 		Draw_Character (x+24, y, num[2]);
@@ -1333,4 +1333,3 @@ void Sbar_FinaleOverlay (void)
 	pic = Draw_CachePic ("gfx/finale.lmp");
 	Draw_Pic ( (320 - pic->width)/2, 16, pic); //johnfitz -- stretched menus
 }
-

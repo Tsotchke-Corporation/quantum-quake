@@ -201,7 +201,7 @@ void CL_SignonReply (void)
 		MSG_WriteString (&cls.message, va("color %i %i\n", ((int)cl_color.value)>>4, ((int)cl_color.value)&15));
 
 		MSG_WriteByte (&cls.message, clc_stringcmd);
-		sprintf (str, "spawn %s", cls.spawnparms);
+		q_snprintf (str, sizeof(str), "spawn %s", cls.spawnparms);
 		MSG_WriteString (&cls.message, str);
 		break;
 
@@ -245,7 +245,7 @@ void CL_NextDemo (void)
 
 	SCR_BeginLoadingPlaque ();
 
-	sprintf (str,"playdemo %s\n", cls.demos[cls.demonum]);
+	q_snprintf (str, sizeof(str), "playdemo %s\n", cls.demos[cls.demonum]);
 	Cbuf_InsertText (str);
 	cls.demonum++;
 }
@@ -838,4 +838,3 @@ void CL_Init (void)
 	Cmd_AddCommand ("tracepos", CL_Tracepos_f); //johnfitz
 	Cmd_AddCommand ("viewpos", CL_Viewpos_f); //johnfitz
 }
-

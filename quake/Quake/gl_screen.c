@@ -468,7 +468,7 @@ void SCR_DrawFPS (void)
 	{
 		char	st[16];
 		int	x, y;
-		sprintf (st, "%4.0f fps", lastfps);
+		q_snprintf (st, sizeof(st), "%4.0f fps", lastfps);
 		x = 320 - (strlen(st)<<3);
 		y = 200 - 8;
 		if (scr_clock.value) y -= 8; //make room for clock
@@ -494,7 +494,7 @@ void SCR_DrawClock (void)
 		minutes = cl.time / 60;
 		seconds = ((int)cl.time)%60;
 
-		sprintf (str,"%i:%i%i", minutes, seconds/10, seconds%10);
+		q_snprintf (str, sizeof(str), "%i:%i%i", minutes, seconds/10, seconds%10);
 	}
 	else
 		return;
@@ -524,31 +524,31 @@ void SCR_DrawDevStats (void)
 
 	Draw_Fill (x, y*8, 19*8, 9*8, 0, 0.5); //dark rectangle
 
-	sprintf (str, "devstats |Curr Peak");
+	q_snprintf (str, sizeof(str), "devstats |Curr Peak");
 	Draw_String (x, (y++)*8-x, str);
 
-	sprintf (str, "---------+---------");
+	q_snprintf (str, sizeof(str), "---------+---------");
 	Draw_String (x, (y++)*8-x, str);
 
-	sprintf (str, "Edicts   |%4i %4i", dev_stats.edicts, dev_peakstats.edicts);
+	q_snprintf (str, sizeof(str), "Edicts   |%4i %4i", dev_stats.edicts, dev_peakstats.edicts);
 	Draw_String (x, (y++)*8-x, str);
 
-	sprintf (str, "Packet   |%4i %4i", dev_stats.packetsize, dev_peakstats.packetsize);
+	q_snprintf (str, sizeof(str), "Packet   |%4i %4i", dev_stats.packetsize, dev_peakstats.packetsize);
 	Draw_String (x, (y++)*8-x, str);
 
-	sprintf (str, "Visedicts|%4i %4i", dev_stats.visedicts, dev_peakstats.visedicts);
+	q_snprintf (str, sizeof(str), "Visedicts|%4i %4i", dev_stats.visedicts, dev_peakstats.visedicts);
 	Draw_String (x, (y++)*8-x, str);
 
-	sprintf (str, "Efrags   |%4i %4i", dev_stats.efrags, dev_peakstats.efrags);
+	q_snprintf (str, sizeof(str), "Efrags   |%4i %4i", dev_stats.efrags, dev_peakstats.efrags);
 	Draw_String (x, (y++)*8-x, str);
 
-	sprintf (str, "Dlights  |%4i %4i", dev_stats.dlights, dev_peakstats.dlights);
+	q_snprintf (str, sizeof(str), "Dlights  |%4i %4i", dev_stats.dlights, dev_peakstats.dlights);
 	Draw_String (x, (y++)*8-x, str);
 
-	sprintf (str, "Beams    |%4i %4i", dev_stats.beams, dev_peakstats.beams);
+	q_snprintf (str, sizeof(str), "Beams    |%4i %4i", dev_stats.beams, dev_peakstats.beams);
 	Draw_String (x, (y++)*8-x, str);
 
-	sprintf (str, "Tempents |%4i %4i", dev_stats.tempents, dev_peakstats.tempents);
+	q_snprintf (str, sizeof(str), "Tempents |%4i %4i", dev_stats.tempents, dev_peakstats.tempents);
 	Draw_String (x, (y++)*8-x, str);
 }
 

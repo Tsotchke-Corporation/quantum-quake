@@ -111,7 +111,7 @@ void SV_Init (void)
 	Cmd_AddCommand ("sv_protocol", &SV_Protocol_f); //johnfitz
 
 	for (i=0 ; i<MAX_MODELS ; i++)
-		sprintf (localmodels[i], "*%i", i);
+		q_snprintf (localmodels[i], sizeof(localmodels[i]), "*%i", i);
 
 	i = COM_CheckParm ("-protocol");
 	if (i && i < com_argc - 1)
@@ -337,7 +337,7 @@ void SV_SendServerinfo (client_t *client)
 	int				i; //johnfitz
 
 	MSG_WriteByte (&client->message, svc_print);
-	sprintf (message, "%c\nFITZQUAKE %1.2f SERVER (%i CRC)\n", 2, FITZQUAKE_VERSION, pr_crc); //johnfitz -- include fitzquake version
+	q_snprintf (message, sizeof(message), "%c\nFITZQUAKE %1.2f SERVER (%i CRC)\n", 2, FITZQUAKE_VERSION, pr_crc); //johnfitz -- include fitzquake version
 	MSG_WriteString (&client->message,message);
 
 	MSG_WriteByte (&client->message, svc_serverinfo);
