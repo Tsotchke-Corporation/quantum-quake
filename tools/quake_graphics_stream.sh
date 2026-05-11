@@ -130,6 +130,7 @@ else
 fi
 game_status=0
 game_timed_out=0
+startup_issue=""
 
 if [[ ! -f "$gamedir/pak0.pak" ]]; then
   echo "Missing $gamedir/pak0.pak" >&2
@@ -206,9 +207,19 @@ write_agent_manifest() {
   local status="$1"
   local audio_status="disabled"
   local audio_bytes=0
+  local manifest_frame_count="${frame_index:-0}"
+  local run_status="ok"
+  local run_success=1
   local manifest_trace_file=""
   local trace_status="not_requested"
   local trace_bytes=0
+  if [[ "$status" == "running" ]]; then
+    run_status="running"
+    run_success=0
+  elif [[ -n "$startup_issue" ]]; then
+    run_status="failed"
+    run_success=0
+  fi
   if [[ "$sound" == "1" ]]; then
     audio_status="requested_missing"
     if [[ -s "$agent_audio_raw" ]]; then
@@ -235,8 +246,16 @@ write_agent_manifest() {
   "capture_dir": $(json_string "$outdir"),
   "map": $(json_string "$map_name"),
   "frames_requested": $frames,
+  "frames_captured": $manifest_frame_count,
   "waits_per_frame": $waits_per_frame,
   "engine_capture": $engine_capture,
+  "run": {
+    "status": $(json_string "$run_status"),
+    "success": $run_success,
+    "startup_issue": $(json_string "$startup_issue"),
+    "process_status": $game_status,
+    "timed_out": $game_timed_out
+  },
   "launch": {
     "mode": $(json_string "$launch_mode"),
     "macos_bundle_id": $(json_string "$app_bundle_id"),
@@ -783,7 +802,6 @@ if [[ "$launch_mode" != "open" && "$game_status" != "0" ]]; then
   echo "QGE_PROCESS_EXIT status=$game_status $runtime_log_file" >&2
 fi
 
-startup_issue=""
 if [[ "$launch_mode" != "open" && "$game_timed_out" == "1" ]]; then
   startup_issue="process_timeout"
 elif [[ "$launch_mode" != "open" && "$game_status" != "0" ]]; then

@@ -52,6 +52,9 @@ The stream directory is intentionally simple and tail-friendly:
   wait cap used by the Noesis command translator for that run. When
   `QGE_STREAM_TRACE=0`, `trace_status` is `not_requested`, `trace_bytes` is
   `0`, and `trace` is an empty string rather than a nonexistent planned path.
+  Top-level `status` reports stream artifact finalization; `run.status`,
+  `run.success`, `run.startup_issue`, `run.process_status`, and
+  `run.timed_out` report the launched game's outcome.
 - `events.ndjson`: append-only runtime events. This is the safest file to tail
   for incremental progress.
 - `video/frames/frame_###.png`: screenshots copied into stable frame names as
@@ -267,8 +270,10 @@ reported as `open_failed` events and `QGE_OPEN_FAILED status=<n>` in
 `logs/open.log`.
 
 Even on failure, the harness finalizes the stream: `manifest.json` is written
-with status `complete`, `events.ndjson` receives `stream_done`, and the frame and
-audio pointer files remain present for consumers that expect a stable contract.
+with top-level status `complete`, `events.ndjson` receives `stream_done`, and
+the frame and audio pointer files remain present for consumers that expect a
+stable contract. Consumers that need launch success should read
+`manifest.json`'s `run.status`, `run.success`, and `run.startup_issue` fields.
 
 ## Noesis Action Files
 
