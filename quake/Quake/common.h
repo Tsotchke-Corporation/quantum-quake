@@ -67,7 +67,7 @@ static inline type clamp_##suffix (type minval, type val, type maxval) { \
 	return (val < minval) ? minval : ((val > maxval) ? maxval : val); \
 }
 
-GENERIC_TYPES (IMPL_GENERIC_FUNCS, NO_COMMA)
+GENERIC_TYPES (IMPL_GENERIC_FUNCS, NO_COMMA);
 
 #define SELECT_Q_MIN(type, suffix) type: q_min_##suffix
 #define q_min(a, b) _Generic((a) + (b), GENERIC_TYPES (SELECT_Q_MIN, COMMA))(a, b)
@@ -412,4 +412,3 @@ extern qboolean		fitzmode;
 	/* if true, run in fitzquake mode disabling custom quakespasm hacks */
 
 #endif	/* _Q_COMMON_H */
-
