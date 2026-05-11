@@ -50,6 +50,8 @@ typedef enum {
 #define QGE_BACKEND_FLAG_ACTIVE_ACCELERATION      (1u << 1)
 #define QGE_BACKEND_FLAG_GPU_CONTEXT_REQUIRED     (1u << 2)
 #define QGE_BACKEND_FLAG_INTENTIONAL_CPU_PATH     (1u << 3)
+#define QGE_BACKEND_FLAG_NATIVE_AVAILABLE         (1u << 4)
+#define QGE_BACKEND_FLAG_RENDER_BRIDGE_PENDING    (1u << 5)
 
 /* ============================================================================
  * Rendering Modes
@@ -168,6 +170,12 @@ bool qge_backend_is_accelerated(qge_backend_t backend);
 bool qge_context_has_active_acceleration(qge_context_t* ctx);
 
 /**
+ * Return true when the selected native backend was probed and is available on
+ * this machine, even if the current render path has not attached it yet.
+ */
+bool qge_context_backend_native_available(qge_context_t* ctx);
+
+/**
  * Human-readable active acceleration state for logs and evidence.
  */
 const char* qge_context_acceleration_status(qge_context_t* ctx);
@@ -181,6 +189,16 @@ uint32_t qge_context_backend_flags(qge_context_t* ctx);
  * Stable backend gate reason string for logs and ICC/runtime evidence.
  */
 const char* qge_context_backend_reason(qge_context_t* ctx);
+
+/**
+ * Stable native backend probe reason string for logs and ICC/runtime evidence.
+ */
+const char* qge_context_backend_probe_reason(qge_context_t* ctx);
+
+/**
+ * Stable runtime path string for backend-gate logs and trace probes.
+ */
+const char* qge_context_backend_runtime_path(qge_context_t* ctx);
 
 /**
  * Get recommended resolution for detected hardware.

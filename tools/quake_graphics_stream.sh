@@ -189,6 +189,8 @@ write_agent_manifest() {
     "mode": $(json_string "$launch_mode"),
     "macos_bundle_id": $(json_string "$app_bundle_id"),
     "macos_nolauncher": $([[ "$launch_mode" == "open" ]] && printf '1' || printf '0'),
+    "macos_fresh_instance": $([[ "$launch_mode" == "open" ]] && printf '1' || printf '0'),
+    "macos_persistence_ignore": $([[ "$launch_mode" == "open" ]] && printf '1' || printf '0'),
     "macos_activate": $([[ "$launch_mode" == "open" && "$stream_activate" == "1" ]] && printf '1' || printf '0'),
     "macos_activate_attempts": $stream_activate_attempts
   },
@@ -645,7 +647,7 @@ if [[ "$launch_mode" == "open" ]]; then
 	  ) &
   watchdog_pid=$!
   open_status=0
-  open "${open_args[@]}" --args "${run_args[@]}" -condebug || open_status=$?
+  open "${open_args[@]}" --args -ApplePersistenceIgnoreState YES "${run_args[@]}" -condebug || open_status=$?
   touch "$watch_stop_file"
   kill "$activator_pid" 2>/dev/null || true
   kill "$watchdog_pid" 2>/dev/null || true

@@ -131,8 +131,11 @@ across runs. A slow 1024 run is usually dominated by `raster`, not by the
 LaunchServices wrapper.
 
 Startup logs and traces also include a `backend_gate` probe. It reports the
-selected backend, whether acceleration is active for the live context, and the
-reason when a capable backend is intentionally running the sparse CPU path.
+selected backend, whether the native backend probe succeeded, whether
+acceleration is active for the live context, the runtime path, the native probe
+reason, and the reason when a capable backend is intentionally running the
+sparse CPU path. The engine emits the gate at init and shutdown so traces prove
+both the selected backend and the teardown path.
 Texture/material setup emits `texture_signal_cache` and
 `lightmap_signal_cache` probes as well. These mark the surface texture and
 lightmap signal paths as intentional CPU-side metadata/sample caches and record
@@ -146,14 +149,16 @@ and copied into the frame snapshot.
 `QGE_STREAM_LAUNCH=auto` is the default. On macOS it selects `open`; on other
 platforms it selects direct binary execution.
 
-In macOS `open` mode, the harness uses `open -W -n -F` plus the app's
-`-nolauncher` argument: it waits for the app, starts a new instance, bypasses
-the click-through launcher window, and asks LaunchServices to ignore restored
-window state, and does not require a manual click. It also passes `-nomouse`
-by default so SDL does not enter relative mouse mode or warp/capture the user
-cursor. Set `QGE_STREAM_ACTIVATE=1` only if the local window manager requires a
-foreground app for capture. A side watcher tails `qconsole.log`, mirrors
-screenshots, and refreshes audio byte counts while the app is still running.
+In macOS `open` mode, the harness uses `open -W -n -F` plus
+`-ApplePersistenceIgnoreState YES` and the app's `-nolauncher` argument: it
+waits for the app, starts a new instance, bypasses the click-through launcher
+window, asks LaunchServices to ignore restored window state, and does not
+require a manual click. The generated app bundle also opts the launcher window
+out of AppKit state restoration. The harness passes `-nomouse` by default so
+SDL does not enter relative mouse mode or warp/capture the user cursor. Set
+`QGE_STREAM_ACTIVATE=1` only if the local window manager requires a foreground
+app for capture. A side watcher tails `qconsole.log`, mirrors screenshots, and
+refreshes audio byte counts while the app is still running.
 The harness also passes `-display "$QGE_STREAM_DISPLAY"` when set. On the
 current capture workstation the default is SDL display `1`, which maps to the
 BenQ PD3200U; SDL display `0` is the LG. The engine logs the available display

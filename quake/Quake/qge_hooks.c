@@ -489,7 +489,7 @@ static qge_quantum_runtime_t *QGE_Runtime(void)
 	return qge_get_quantum_runtime(qge_ctx);
 }
 
-static void QGE_TraceBackendGate(void)
+static void QGE_TraceBackendGate(const char *phase)
 {
 	qge_quantum_runtime_t *rt;
 	qge_state_probe_t probe;
@@ -497,27 +497,35 @@ static void QGE_TraceBackendGate(void)
 	qge_backend_t backend;
 	uint32_t flags;
 	int active;
+	int native_available;
 	const char *backend_name;
 	const char *status;
 	const char *reason;
+	const char *probe_reason;
+	const char *runtime_path;
 
 	if (!qge_ctx)
 		return;
+	if (!phase || !phase[0])
+		phase = "runtime";
 
 	rt = QGE_Runtime();
 	backend = qge_get_backend(qge_ctx);
 	flags = qge_context_backend_flags(qge_ctx);
 	active = qge_context_has_active_acceleration(qge_ctx) ? 1 : 0;
+	native_available = qge_context_backend_native_available(qge_ctx) ? 1 : 0;
 	backend_name = qge_backend_name(backend);
 	status = qge_context_acceleration_status(qge_ctx);
 	reason = qge_context_backend_reason(qge_ctx);
+	probe_reason = qge_context_backend_probe_reason(qge_ctx);
+	runtime_path = qge_context_backend_runtime_path(qge_ctx);
 	memset(&profile, 0, sizeof(profile));
 	qge_get_profile(qge_ctx, &profile);
 
-	Con_Printf("QGE: Backend gate backend=%s status=%s active=%d flags=0x%x reason=%s\n",
-			   backend_name, status, active, flags, reason);
-	fprintf(stderr, "QGE backend gate backend=%s status=%s active=%d flags=0x%x reason=%s qubits=%d memory=%llu\n",
-			backend_name, status, active, flags, reason, profile.current_qubits,
+	Con_Printf("QGE: Backend gate phase=%s backend=%s status=%s native=%d active=%d flags=0x%x path=%s reason=%s probe=%s\n",
+			   phase, backend_name, status, native_available, active, flags, runtime_path, reason, probe_reason);
+	fprintf(stderr, "QGE backend gate phase=%s backend=%s status=%s native=%d active=%d flags=0x%x path=%s reason=%s probe=%s qubits=%d memory=%llu\n",
+			phase, backend_name, status, native_available, active, flags, runtime_path, reason, probe_reason, profile.current_qubits,
 			(unsigned long long)profile.memory_used_bytes);
 
 	if (!rt)
@@ -533,9 +541,9 @@ static void QGE_TraceBackendGate(void)
 	probe.state_hash = ((uint64_t)backend << 32) ^ (uint64_t)flags;
 	probe.entropy = qge_backend_is_accelerated(backend) ? 1.0 : 0.0;
 	probe.coherence = active ? 1.0 : 0.0;
-	probe.max_probability = active ? 1.0 : 0.0;
+	probe.max_probability = native_available ? 1.0 : 0.0;
 	probe.total_probability = 1.0;
-	probe.active_basis_count = active;
+	probe.active_basis_count = native_available + active;
 	probe.qubit_count = profile.current_qubits;
 	probe.memory_bytes = profile.memory_used_bytes;
 	strlcpy(probe.label, "backend_gate", sizeof(probe.label));
@@ -2271,7 +2279,7 @@ void QGE_Init(void)
 			fprintf(stderr, "QGE trace open failed path=%s\n", trace_path);
 		}
 	}
-	QGE_TraceBackendGate();
+	QGE_TraceBackendGate("init");
 
 	fprintf(stderr, "QGE: RNG done, creating DWT framebuffers...\n");
 	qge_render_res = QGE_ClampRenderResolution(quantum_render_res.value);
@@ -2365,7 +2373,7 @@ void QGE_Init(void)
 	Con_Printf("  quantum_physics %d | quantum_projectiles %d | quantum_particles %d\n",
 			   (int)quantum_physics.value, (int)quantum_projectiles.value,
 			   (int)quantum_particles.value);
-	Con_Printf("  RGB sparse DWT | Stable DWT quality | Sparse-only GPU path\n");
+	Con_Printf("  RGB sparse DWT | Stable DWT quality | Backend bridge pending\n");
 	Con_Printf("===================================\n\n");
 }
 
@@ -2426,6 +2434,7 @@ void QGE_Shutdown(void)
 	qge_rng_shutdown();
 
 	if (qge_ctx) {
+		QGE_TraceBackendGate("shutdown");
 		qge_shutdown(qge_ctx);
 		qge_ctx = NULL;
 	}

@@ -13,6 +13,7 @@
 
 #if defined(__APPLE__)
 #include <sys/sysctl.h>
+extern bool qge_metal_available(void);
 #endif
 
 /* ============================================================================
@@ -47,6 +48,8 @@ struct qge_context_s {
 
     /* GPU context */
     void* gpu_context;  /* Metal/Vulkan context */
+    bool backend_native_available;
+    const char* backend_probe_reason;
 };
 
 /* Global context for convenience functions */
@@ -98,21 +101,45 @@ qge_hardware_tier_t qge_detect_hardware(void) {
     }
 }
 
-static qge_backend_t detect_backend(void) {
+typedef struct {
+    qge_backend_t backend;
+    bool native_available;
+    const char* probe_reason;
+} qge_backend_probe_t;
+
+static qge_backend_probe_t detect_backend(void) {
 #if defined(__APPLE__)
-    /* Metal on macOS */
-    return QGE_BACKEND_METAL;
+    if (qge_metal_available()) {
+        return (qge_backend_probe_t){
+            QGE_BACKEND_METAL,
+            true,
+            "metal_system_device_available"
+        };
+    }
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+    return (qge_backend_probe_t){
+        QGE_BACKEND_NEON,
+        true,
+        "metal_unavailable_using_neon_cpu"
+    };
+#else
+    return (qge_backend_probe_t){
+        QGE_BACKEND_FALLBACK,
+        false,
+        "metal_unavailable_portable_fallback"
+    };
+#endif
 #elif defined(__linux__)
     /* Check for AVX-512/AVX2 */
     #if defined(__AVX512F__)
-        return QGE_BACKEND_AVX512;
+        return (qge_backend_probe_t){QGE_BACKEND_AVX512, true, "avx512_compile_probe"};
     #elif defined(__AVX2__)
-        return QGE_BACKEND_AVX2;
+        return (qge_backend_probe_t){QGE_BACKEND_AVX2, true, "avx2_compile_probe"};
     #else
-        return QGE_BACKEND_FALLBACK;
+        return (qge_backend_probe_t){QGE_BACKEND_FALLBACK, false, "simd_compile_probe_unavailable"};
     #endif
 #else
-    return QGE_BACKEND_FALLBACK;
+    return (qge_backend_probe_t){QGE_BACKEND_FALLBACK, false, "portable_platform"};
 #endif
 }
 
@@ -144,7 +171,7 @@ bool qge_backend_is_accelerated(qge_backend_t backend) {
     }
 }
 
-static bool qge_backend_requires_gpu_context(qge_backend_t backend) {
+static bool qge_backend_uses_native_render_bridge(qge_backend_t backend) {
     switch (backend) {
         case QGE_BACKEND_METAL:
         case QGE_BACKEND_VULKAN:
@@ -179,6 +206,13 @@ bool qge_context_has_active_acceleration(qge_context_t* ctx) {
     }
 }
 
+bool qge_context_backend_native_available(qge_context_t* ctx) {
+    if (!ctx) {
+        return false;
+    }
+    return ctx->backend_native_available;
+}
+
 const char* qge_context_acceleration_status(qge_context_t* ctx) {
     if (!ctx) {
         return "uninitialized";
@@ -201,13 +235,19 @@ uint32_t qge_context_backend_flags(qge_context_t* ctx) {
     if (qge_backend_is_accelerated(ctx->backend)) {
         flags |= QGE_BACKEND_FLAG_ACCELERATED_CAPABLE;
     }
+    if (ctx->backend_native_available) {
+        flags |= QGE_BACKEND_FLAG_NATIVE_AVAILABLE;
+    }
     if (qge_context_has_active_acceleration(ctx)) {
         flags |= QGE_BACKEND_FLAG_ACTIVE_ACCELERATION;
     }
-    if (qge_backend_requires_gpu_context(ctx->backend)) {
+    if (qge_backend_uses_native_render_bridge(ctx->backend)) {
         flags |= QGE_BACKEND_FLAG_GPU_CONTEXT_REQUIRED;
         if (!ctx->gpu_context) {
             flags |= QGE_BACKEND_FLAG_INTENTIONAL_CPU_PATH;
+            if (ctx->backend_native_available) {
+                flags |= QGE_BACKEND_FLAG_RENDER_BRIDGE_PENDING;
+            }
         }
     }
     return flags;
@@ -220,13 +260,39 @@ const char* qge_context_backend_reason(qge_context_t* ctx) {
     if (qge_context_has_active_acceleration(ctx)) {
         return "accelerator_context_active";
     }
-    if (qge_backend_requires_gpu_context(ctx->backend)) {
-        return "sparse_dwt_cpu_path_pending_gpu_context";
+    if (qge_backend_uses_native_render_bridge(ctx->backend)) {
+        if (ctx->backend_native_available) {
+            return "native_backend_available_sparse_dwt_cpu_path_pending_renderer_bridge";
+        }
+        return "native_backend_unavailable_sparse_dwt_cpu_path";
     }
     if (qge_backend_is_accelerated(ctx->backend)) {
         return "cpu_simd_backend_active";
     }
     return "portable_fallback_selected";
+}
+
+const char* qge_context_backend_probe_reason(qge_context_t* ctx) {
+    if (!ctx) {
+        return "uninitialized";
+    }
+    return ctx->backend_probe_reason ? ctx->backend_probe_reason : "unknown";
+}
+
+const char* qge_context_backend_runtime_path(qge_context_t* ctx) {
+    if (!ctx) {
+        return "uninitialized";
+    }
+    if (qge_context_has_active_acceleration(ctx)) {
+        return "accelerated_render_path";
+    }
+    if (qge_backend_uses_native_render_bridge(ctx->backend)) {
+        return "sparse_dwt_cpu_render_path";
+    }
+    if (qge_backend_is_accelerated(ctx->backend)) {
+        return "cpu_simd_render_path";
+    }
+    return "portable_render_path";
 }
 
 static int qubits_for_tier(qge_hardware_tier_t tier) {
@@ -339,13 +405,18 @@ qge_context_t* qge_init_with_config(qge_hardware_tier_t tier,
                                      qge_render_mode_t mode,
                                      qge_resolution_t resolution) {
     qge_context_t* ctx = calloc(1, sizeof(qge_context_t));
+    qge_backend_probe_t backend_probe;
+
     if (!ctx) {
         fprintf(stderr, "QGE: Failed to allocate context\n");
         return NULL;
     }
 
     ctx->tier = tier;
-    ctx->backend = detect_backend();
+    backend_probe = detect_backend();
+    ctx->backend = backend_probe.backend;
+    ctx->backend_native_available = backend_probe.native_available;
+    ctx->backend_probe_reason = backend_probe.probe_reason;
     ctx->render_mode = mode;
     ctx->resolution = resolution;
     ctx->num_qubits = qubits_for_tier(tier);
@@ -391,10 +462,13 @@ qge_context_t* qge_init_with_config(qge_hardware_tier_t tier,
     printf("  Hardware Tier: %-10s  Backend: %-10s (%s)\n",
            tier_names[ctx->tier], qge_backend_name(ctx->backend),
            qge_context_acceleration_status(ctx));
-    printf("  Backend Gate: active=%d flags=0x%x reason=%s\n",
+    printf("  Backend Gate: native=%d active=%d flags=0x%x path=%s reason=%s probe=%s\n",
+           qge_context_backend_native_available(ctx) ? 1 : 0,
            qge_context_has_active_acceleration(ctx) ? 1 : 0,
            qge_context_backend_flags(ctx),
-           qge_context_backend_reason(ctx));
+           qge_context_backend_runtime_path(ctx),
+           qge_context_backend_reason(ctx),
+           qge_context_backend_probe_reason(ctx));
     printf("  Qubits: %-2d               Render Mode: %-10s\n",
            ctx->num_qubits, mode_names[ctx->render_mode]);
     printf("  State Memory: lazy sparse (%.1f GB dense cap)\n",

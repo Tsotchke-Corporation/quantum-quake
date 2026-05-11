@@ -317,6 +317,8 @@ static int test_context_backend_gate(void) {
     qge_backend_t backend;
     const char* name;
     const char* reason;
+    const char* probe_reason;
+    const char* runtime_path;
     qge_backend_t expected;
     uint32_t flags;
     int ok;
@@ -336,12 +338,18 @@ static int test_context_backend_gate(void) {
     backend = qge_get_backend(ctx);
     name = qge_backend_name(backend);
     reason = qge_context_backend_reason(ctx);
+    probe_reason = qge_context_backend_probe_reason(ctx);
+    runtime_path = qge_context_backend_runtime_path(ctx);
     flags = qge_context_backend_flags(ctx);
     ok = backend == expected &&
          name != NULL &&
          strcmp(name, "Unknown") != 0 &&
          qge_backend_is_accelerated(QGE_BACKEND_FALLBACK) == false &&
-         reason != NULL;
+         reason != NULL &&
+         probe_reason != NULL &&
+         runtime_path != NULL &&
+         strcmp(probe_reason, "uninitialized") != 0 &&
+         strcmp(runtime_path, "uninitialized") != 0;
 
     if (ok) {
         const char* status = qge_context_acceleration_status(ctx);
@@ -352,11 +360,16 @@ static int test_context_backend_gate(void) {
                    backend == QGE_BACKEND_VULKAN ||
                    backend == QGE_BACKEND_OPENCL)) {
             ok = active == 0 &&
+                 qge_context_backend_native_available(ctx) != 0 &&
                  strcmp(status, "capable, inactive") == 0 &&
-                 strcmp(reason, "sparse_dwt_cpu_path_pending_gpu_context") == 0 &&
+                 strcmp(runtime_path, "sparse_dwt_cpu_render_path") == 0 &&
+                 strcmp(reason, "native_backend_available_sparse_dwt_cpu_path_pending_renderer_bridge") == 0 &&
+                 strcmp(probe_reason, "metal_system_device_available") == 0 &&
                  (flags & QGE_BACKEND_FLAG_ACCELERATED_CAPABLE) != 0 &&
+                 (flags & QGE_BACKEND_FLAG_NATIVE_AVAILABLE) != 0 &&
                  (flags & QGE_BACKEND_FLAG_GPU_CONTEXT_REQUIRED) != 0 &&
                  (flags & QGE_BACKEND_FLAG_INTENTIONAL_CPU_PATH) != 0 &&
+                 (flags & QGE_BACKEND_FLAG_RENDER_BRIDGE_PENDING) != 0 &&
                  (flags & QGE_BACKEND_FLAG_ACTIVE_ACCELERATION) == 0;
         } else if (ok && qge_backend_is_accelerated(backend)) {
             ok = active != 0 &&

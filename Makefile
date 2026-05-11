@@ -9,7 +9,7 @@ LDFLAGS = -lm
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
     CFLAGS += -DPLATFORM_MACOS
-    LDFLAGS += -framework Accelerate -framework Metal -framework MetalKit -framework Foundation -framework Security
+    LDFLAGS += -framework Accelerate -framework Metal -framework MetalKit -framework Foundation -framework Security -lc++
     # Apple Silicon optimizations
     ARCH := $(shell uname -m)
     ifeq ($(ARCH),arm64)
@@ -310,6 +310,7 @@ quake:
 		-c "Add :CFBundleIconFile string QuakeSpasm" \
 		-c "Add :NSMainNibFile string Launcher" \
 		-c "Add :NSPrincipalClass string SDLApplication" \
+		-c "Add :NSQuitAlwaysKeepsWindows bool false" \
 		-c "Add :LSMinimumSystemVersion string 11.0" \
 		-c "Add :CFBundleDevelopmentRegion string English" \
 		-c "Add :CFBundleInfoDictionaryVersion string 6.0" \

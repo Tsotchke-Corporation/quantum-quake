@@ -46,6 +46,23 @@ NSString *FQPrefScreenModeKey = @"ScreenMode";
     [[NSUserDefaults standardUserDefaults] registerDefaults:defaults];
 }
 
+- (BOOL)application:(NSApplication *)application shouldSaveApplicationState:(NSCoder *)coder {
+    (void)application;
+    (void)coder;
+    return NO;
+}
+
+- (BOOL)application:(NSApplication *)application shouldRestoreApplicationState:(NSCoder *)coder {
+    (void)application;
+    (void)coder;
+    return NO;
+}
+
+- (BOOL)applicationSupportsSecureRestorableState:(NSApplication *)application {
+    (void)application;
+    return NO;
+}
+
 - (id)init {
     int i;
 #ifndef USE_SDL2
@@ -115,6 +132,8 @@ NSString *FQPrefScreenModeKey = @"ScreenMode";
 #define NSControlStateValueOn NSOnState
 #endif
 - (void)awakeFromNib {
+    [launcherWindow setRestorable:NO];
+
     if ([arguments count] > 0) {
         [paramTextField setStringValue:[arguments description]];
         if ([arguments argument:@"-window"] != nil)
