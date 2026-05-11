@@ -75,7 +75,8 @@ The stream directory is intentionally simple and tail-friendly:
 - `logs/open.log`: LaunchServices notes for macOS `open` mode.
 - `qge_agent_stream_icc_evidence.jsonl`: ICC-native evidence entries for the
   manifest, events file, Noesis input traces, latest video frame, raw audio,
-  audio metadata, and completion signal.
+  audio metadata, trace artifact, frame count, run outcome, trace status, and
+  completion signal.
 
 The harness also refreshes stable pointers in the diagnostics roots:
 

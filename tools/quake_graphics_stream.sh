@@ -330,6 +330,23 @@ EOF
 write_agent_icc_evidence() {
   local audio_raw_file=""
   local audio_meta_file=""
+  local icc_run_status="ok"
+  local icc_run_success=1
+  local icc_trace_file=""
+  local icc_trace_status="not_requested"
+  local icc_trace_bytes=0
+  if [[ -n "$startup_issue" ]]; then
+    icc_run_status="failed"
+    icc_run_success=0
+  fi
+  if [[ "$trace" == "1" ]]; then
+    icc_trace_file="$trace_file"
+    icc_trace_status="requested_missing"
+    if [[ -s "$trace_file" ]]; then
+      icc_trace_status="complete"
+      icc_trace_bytes="$(wc -c < "$trace_file" | tr -d ' ')"
+    fi
+  fi
   if [[ -s "$agent_audio_raw" ]]; then
     audio_raw_file="$agent_audio_raw"
   fi
@@ -339,8 +356,17 @@ write_agent_icc_evidence() {
   {
     printf '{"kind":"runtime_backend","name":"runtime_backend","value":"qge_agent_media_stream","path":%s}\n' "$(json_string "$agent_icc_file")"
     printf '{"kind":"completion_condition","name":"completion_reason","value":"qge_agent_media_stream_complete","path":%s}\n' "$(json_string "$agent_icc_file")"
+    printf '{"kind":"runtime_state","name":"agent_stream_run_status","value":%s,"path":%s}\n' "$(json_string "$icc_run_status")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"runtime_state","name":"agent_stream_run_success","value":%s,"path":%s}\n' "$(json_string "$icc_run_success")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"runtime_state","name":"agent_stream_startup_issue","value":%s,"path":%s}\n' "$(json_string "$startup_issue")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"runtime_state","name":"agent_stream_process_status","value":%s,"path":%s}\n' "$(json_string "$game_status")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"runtime_state","name":"agent_stream_timed_out","value":%s,"path":%s}\n' "$(json_string "$game_timed_out")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"runtime_state","name":"agent_stream_frames_captured","value":%s,"path":%s}\n' "$(json_string "$frame_index")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"runtime_state","name":"agent_stream_trace_status","value":%s,"path":%s}\n' "$(json_string "$icc_trace_status")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"runtime_state","name":"agent_stream_trace_bytes","value":%s,"path":%s}\n' "$(json_string "$icc_trace_bytes")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_stream_manifest_file","value":%s,"path":%s}\n' "$(json_string "$agent_manifest_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_events_file","value":%s,"path":%s}\n' "$(json_string "$agent_events_file")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"artifact","name":"agent_trace_file","value":%s,"path":%s}\n' "$(json_string "$icc_trace_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_input_actions_file","value":%s,"path":%s}\n' "$(json_string "$agent_input_actions_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_input_commands_file","value":%s,"path":%s}\n' "$(json_string "$agent_input_commands_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_video_frame_file","value":%s,"path":%s}\n' "$(json_string "$last_agent_frame")" "$(json_string "$agent_icc_file")"
