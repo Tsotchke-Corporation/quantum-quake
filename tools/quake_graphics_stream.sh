@@ -101,8 +101,10 @@ if [[ ! -x "$app_bin" ]]; then
 fi
 
 stamp="$(date +%Y%m%d-%H%M%S)"
-outdir="$repo_root/diagnostics/quake_stream/$stamp"
-agent_stream="${QGE_AGENT_STREAM_DIR:-$repo_root/diagnostics/agent_stream/$stamp}"
+quake_stream_root="$repo_root/diagnostics/quake_stream"
+agent_stream_root="$repo_root/diagnostics/agent_stream"
+outdir="$quake_stream_root/$stamp"
+agent_stream="${QGE_AGENT_STREAM_DIR:-$agent_stream_root/$stamp}"
 agent_video_dir="$agent_stream/video/frames"
 agent_audio_dir="$agent_stream/audio"
 agent_input_dir="$agent_stream/input"
@@ -110,6 +112,13 @@ agent_log_dir="$agent_stream/logs"
 agent_events_file="$agent_stream/events.ndjson"
 agent_manifest_file="$agent_stream/manifest.json"
 agent_icc_file="$agent_stream/qge_agent_stream_icc_evidence.jsonl"
+agent_latest_stream_file="$agent_stream_root/latest_stream.txt"
+agent_latest_manifest_file="$agent_stream_root/latest_manifest.txt"
+agent_latest_events_file="$agent_stream_root/latest_events.txt"
+agent_latest_icc_file="$agent_stream_root/latest_icc_evidence.txt"
+quake_latest_stream_file="$quake_stream_root/latest_stream.txt"
+quake_latest_trace_file="$quake_stream_root/latest_trace.txt"
+trace_file="$outdir/qge_trace.bin"
 agent_input_actions_file="$agent_input_dir/noesis_actions.txt"
 agent_input_commands_file="$agent_input_dir/noesis_commands.cfg"
 agent_audio_raw="$agent_audio_dir/quake_mix_s16le.raw"
@@ -118,7 +127,7 @@ agent_audio_bytes_file="$agent_audio_dir/bytes.txt"
 agent_frame_count_file="$agent_stream/video/frame_count.txt"
 agent_last_frame_file="$agent_stream/video/latest_frame.txt"
 last_agent_frame=""
-mkdir -p "$outdir" "$agent_video_dir" "$agent_audio_dir" "$agent_input_dir" "$agent_log_dir"
+mkdir -p "$quake_stream_root" "$agent_stream_root" "$outdir" "$agent_video_dir" "$agent_audio_dir" "$agent_input_dir" "$agent_log_dir"
 : > "$agent_events_file"
 : > "$agent_input_actions_file"
 : > "$agent_input_commands_file"
@@ -263,7 +272,21 @@ write_agent_icc_evidence() {
   } > "$agent_icc_file"
 }
 
+write_latest_stream_pointers() {
+  printf '%s\n' "$agent_stream" > "$agent_latest_stream_file"
+  printf '%s\n' "$agent_manifest_file" > "$agent_latest_manifest_file"
+  printf '%s\n' "$agent_events_file" > "$agent_latest_events_file"
+  printf '%s\n' "$agent_icc_file" > "$agent_latest_icc_file"
+  printf '%s\n' "$outdir" > "$quake_latest_stream_file"
+  if [[ "$trace" == "1" ]]; then
+    printf '%s\n' "$trace_file" > "$quake_latest_trace_file"
+  else
+    : > "$quake_latest_trace_file"
+  fi
+}
+
 write_agent_manifest "running"
+write_latest_stream_pointers
 agent_event "stream_start" "$agent_stream" "outdir=$outdir"
 
 emit_noesis_player_script() {
@@ -363,7 +386,6 @@ runtime_log_file="$log_file"
 open_log_file="$outdir/open.log"
 agent_open_log_file="$agent_log_dir/open.log"
 qconsole_file="$repo_root/qconsole.log"
-trace_file="$outdir/qge_trace.bin"
 watch_stop_file="$outdir/watch.stop"
 touch "$log_file"
 touch "$agent_log_file" "$agent_open_log_file"
@@ -742,5 +764,6 @@ poll_agent_audio
 agent_event "stream_done" "$outdir" "frames=$frame_index"
 write_agent_manifest "complete"
 write_agent_icc_evidence
+write_latest_stream_pointers
 echo "QGE_AGENT_STREAM_DONE $agent_stream"
 echo "QGE_STREAM_DONE $outdir frames=$frame_index"

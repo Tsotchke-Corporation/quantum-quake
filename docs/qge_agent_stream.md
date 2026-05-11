@@ -71,6 +71,15 @@ The stream directory is intentionally simple and tail-friendly:
   manifest, events file, Noesis input traces, latest video frame, raw audio,
   audio metadata, and completion signal.
 
+The harness also refreshes stable pointers in the diagnostics roots:
+
+- `diagnostics/agent_stream/latest_stream.txt`
+- `diagnostics/agent_stream/latest_manifest.txt`
+- `diagnostics/agent_stream/latest_events.txt`
+- `diagnostics/agent_stream/latest_icc_evidence.txt`
+- `diagnostics/quake_stream/latest_stream.txt`
+- `diagnostics/quake_stream/latest_trace.txt`
+
 Consumers should treat `events.ndjson` as append-only and `manifest.json`,
 `video/frame_count.txt`, `video/latest_frame.txt`, and `audio/bytes.txt` as
 current-state pointers that may be rewritten.

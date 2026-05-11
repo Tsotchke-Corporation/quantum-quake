@@ -9,6 +9,8 @@ grep -q 'stream_mouse="${QGE_STREAM_MOUSE:-0}"' "$repo_root/tools/quake_graphics
 grep -q 'stream_display="${QGE_STREAM_DISPLAY:-1}"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'run_args+=(-nomouse)' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'video_args+=(-display "$stream_display")' "$repo_root/tools/quake_graphics_stream.sh"
+grep -q 'latest_icc_evidence.txt' "$repo_root/tools/quake_graphics_stream.sh"
+grep -q 'write_latest_stream_pointers' "$repo_root/tools/quake_graphics_stream.sh"
 grep -q 'stream_mouse="${QGE_STREAM_MOUSE:-0}"' "$repo_root/tools/quake_crash_watch.sh"
 grep -q 'stream_display="${QGE_STREAM_DISPLAY:-1}"' "$repo_root/tools/quake_crash_watch.sh"
 grep -Fq 'run_args+=(-nomouse)' "$repo_root/tools/quake_crash_watch.sh"
@@ -17,6 +19,7 @@ grep -q 'stream_player="${QGE_STREAM_PLAYER:-noesis}"' "$repo_root/tools/quake_c
 grep -q 'emit_noesis_player_script' "$repo_root/tools/quake_crash_watch.sh"
 grep -q 'quantum_render_update_interval \$render_update_interval' "$repo_root/tools/quake_crash_watch.sh"
 grep -q 'input/noesis_actions.txt' "$repo_root/docs/qge_agent_stream.md"
+grep -q 'diagnostics/agent_stream/latest_stream.txt' "$repo_root/docs/qge_agent_stream.md"
 
 actions_file="$tmpdir/actions.txt"
 commands_file="$tmpdir/commands.cfg"
