@@ -63,6 +63,11 @@ width="$(normalize_positive_int "$width" 800)"
 height="$(normalize_positive_int "$height" 600)"
 sound="$(normalize_bool "$sound")"
 
+if ! python3 tools/qge_image_metrics.py --check-deps; then
+  echo "qge_image_metrics dependencies are unavailable; install numpy and Pillow for graphics harness metrics." >&2
+  exit 1
+fi
+
 if [[ ! -x "$app_bin" ]]; then
   echo "QuantumQuake.app is missing; building it first." >&2
   make quake

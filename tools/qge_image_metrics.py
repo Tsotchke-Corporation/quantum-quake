@@ -9,8 +9,46 @@ import math
 import sys
 from pathlib import Path
 
-import numpy as np
-from PIL import Image
+np = None
+Image = None
+
+
+def load_metric_dependencies() -> None:
+    global np
+    global Image
+    if np is not None and Image is not None:
+        return
+
+    missing = []
+    numpy_module = None
+    pillow_image = None
+    try:
+        import numpy as numpy_module
+    except ModuleNotFoundError as exc:
+        if exc.name != "numpy":
+            raise RuntimeError(
+                f"numpy import failed because module {exc.name!r} is missing"
+            ) from exc
+        missing.append("numpy")
+
+    try:
+        from PIL import Image as pillow_image
+    except ModuleNotFoundError as exc:
+        if exc.name != "PIL":
+            raise RuntimeError(
+                f"Pillow import failed because module {exc.name!r} is missing"
+            ) from exc
+        missing.append("Pillow")
+
+    if missing:
+        missing_text = ", ".join(missing)
+        raise RuntimeError(
+            "requires numpy and Pillow for image metrics; "
+            f"missing: {missing_text}. Install with: python3 -m pip install numpy Pillow"
+        )
+
+    np = numpy_module
+    Image = pillow_image
 
 
 def load_rgb(path: Path) -> np.ndarray:
@@ -147,6 +185,7 @@ def resize_to_reference(ref: np.ndarray, cand: np.ndarray) -> tuple[np.ndarray, 
 
 
 def compute_metrics(reference: Path, candidate: Path, block_sizes: list[int]) -> dict:
+    load_metric_dependencies()
     ref = load_rgb(reference)
     cand = load_rgb(candidate)
     cand, resize_note = resize_to_reference(ref, cand)
@@ -230,17 +269,26 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Compare QGE and classic Quake screenshots."
     )
-    parser.add_argument("--reference", required=True, type=Path)
-    parser.add_argument("--candidate", required=True, type=Path)
+    parser.add_argument("--reference", type=Path)
+    parser.add_argument("--candidate", type=Path)
     parser.add_argument("--json", type=Path)
     parser.add_argument("--markdown", type=Path)
+    parser.add_argument("--check-deps", action="store_true",
+                        help="Validate optional numpy/Pillow imports and exit.")
     parser.add_argument("--block", action="append", type=int, default=[16, 32, 64],
                         help="Block size for blockiness metric; repeatable.")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.check_deps and (args.reference is None or args.candidate is None):
+        parser.error("--reference and --candidate are required unless --check-deps is used")
+    return args
 
 
 def main() -> int:
     args = parse_args()
+    if args.check_deps:
+        load_metric_dependencies()
+        print("QGE_IMAGE_METRICS_DEPS_OK")
+        return 0
     metrics = compute_metrics(args.reference, args.candidate, args.block)
     if args.json:
         args.json.write_text(json.dumps(metrics, indent=2, allow_nan=False) + "\n")

@@ -213,7 +213,10 @@ visible entities.
 
 `tools/quake_graphics_harness.sh` runs paired classic/QGE captures through the
 stream harness and copies each run's Noesis action and command traces into the
-comparison artifact directory.
+comparison artifact directory. It probes `tools/qge_image_metrics.py
+--check-deps` before launching either capture because the comparison metrics
+require numpy and Pillow; if either dependency is unavailable, the harness exits
+before starting the app.
 
 `tools/quake_crash_watch.sh` uses the same Noesis player/provider contract for
 its scripted movement by default, stores `input/noesis_actions.txt` and
