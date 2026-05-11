@@ -216,7 +216,10 @@ its scripted movement by default, stores `input/noesis_actions.txt` and
 `-nomouse` unless `QGE_STREAM_MOUSE=1`, targets `QGE_STREAM_DISPLAY` like the
 stream harness, and pins the same high-resolution CPU render defaults: 1024
 internal render resolution, no bilinear/edge/display smoothing, and
-`QGE_RENDER_UPDATE_INTERVAL=8` unless overridden.
+`QGE_RENDER_UPDATE_INTERVAL=8` unless overridden. The crash watcher records
+process exit status in its final `QGE_CRASH_WATCH_EXIT`,
+`QGE_CRASH_WATCH_TIMEOUT`, or `QGE_CRASH_WATCH_DONE` line so direct app aborts
+and watchdog kills are not mistaken for clean runs.
 
 ## Audio
 

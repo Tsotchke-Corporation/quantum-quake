@@ -51,6 +51,12 @@ fi
 case "$noesis_start_wait" in
   ''|*[!0-9]*) noesis_start_wait=60 ;;
 esac
+case "$seconds" in
+  ''|*[!0-9]*) seconds=90 ;;
+esac
+case "$script_waits" in
+  ''|*[!0-9]*) script_waits=3600 ;;
+esac
 if [[ "$stream_player" == "noesis" && -z "$noesis_cmd" && -z "$noesis_actions_file" && -x "$default_noesis_cmd" ]]; then
   noesis_cmd="$default_noesis_cmd"
   noesis_cmd_default=1
@@ -209,24 +215,24 @@ run_args+=(-condebug)
 game_pid=$!
 elapsed=0
 exit_status=0
+timed_out=0
 
 while kill -0 "$game_pid" 2>/dev/null; do
   print_log_updates
   if (( elapsed >= seconds )); then
     echo "QGE_CRASH_WATCH_ALIVE killing process $game_pid after ${seconds}s"
+    timed_out=1
     kill "$game_pid" 2>/dev/null || true
-    wait "$game_pid" 2>/dev/null || true
-    exit_status=0
     break
   fi
   sleep 1
   elapsed=$((elapsed + 1))
 done
 
-if (( elapsed < seconds )); then
-  if ! wait "$game_pid" 2>/dev/null; then
-    exit_status=$?
-  fi
+if wait "$game_pid" 2>/dev/null; then
+  exit_status=0
+else
+  exit_status=$?
 fi
 
 print_log_updates
@@ -241,8 +247,10 @@ if [[ -s "$outdir/crash_reports.new" ]]; then
   cat "$outdir/crash_reports.new"
 fi
 
-if (( elapsed < seconds )); then
+if (( timed_out == 1 )); then
+  echo "QGE_CRASH_WATCH_TIMEOUT status=$exit_status elapsed=${elapsed}s log=$log_file"
+elif (( exit_status != 0 )); then
   echo "QGE_CRASH_WATCH_EXIT status=$exit_status elapsed=${elapsed}s log=$log_file"
 else
-  echo "QGE_CRASH_WATCH_DONE elapsed=${elapsed}s log=$log_file"
+  echo "QGE_CRASH_WATCH_DONE status=$exit_status elapsed=${elapsed}s log=$log_file"
 fi
