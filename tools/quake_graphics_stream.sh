@@ -51,6 +51,7 @@ sound="${QGE_STREAM_SOUND:-0}"
 trace="${QGE_STREAM_TRACE:-0}"
 engine_capture="${QGE_STREAM_ENGINE_CAPTURE:-1}"
 launch_mode="${QGE_STREAM_LAUNCH:-auto}"
+timeout_seconds="${QGE_STREAM_TIMEOUT_SECONDS:-}"
 
 if [[ "$launch_mode" == "auto" ]]; then
   case "$(uname -s)" in
@@ -88,6 +89,14 @@ case "$stream_activate_attempts" in
 esac
 if (( stream_activate_attempts < 1 )); then
   stream_activate_attempts=1
+fi
+case "$timeout_seconds" in
+  ''|*[!0-9]*) timeout_seconds=0 ;;
+esac
+if (( timeout_seconds > 0 )); then
+  max_seconds="$timeout_seconds"
+else
+  max_seconds=$((90 + frames * waits_per_frame / 10))
 fi
 
 if [[ ! -f "$gamedir/pak0.pak" ]]; then
@@ -202,6 +211,7 @@ write_agent_manifest() {
   },
   "sound_requested": $sound,
   "trace_requested": $trace,
+  "timeout_seconds": $max_seconds,
   "input": {
     "mouse_enabled": $stream_mouse,
     "player": $(json_string "$stream_player"),
@@ -403,7 +413,7 @@ echo "Streaming Quantum Quake graphics diagnostics"
 echo "  outdir=$outdir"
 echo "  agent_stream=$agent_stream"
 echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter update_interval=$render_update_interval sprite_test=$sprite_test quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_particles=$particles_value"
-echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame fullscreen=$fullscreen display=$stream_display sound=$sound trace=$trace fire_test=$fire_test scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan"
+echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound trace=$trace fire_test=$fire_test scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan"
 echo "QGE_AGENT_STREAM $agent_stream"
 
 print_log_updates() {
@@ -622,8 +632,6 @@ fi
 if [[ "$trace" == "1" ]]; then
   run_args+=(-qgetrace "$trace_file")
 fi
-max_seconds=$((60 + frames * waits_per_frame / 20))
-
 if [[ "$launch_mode" == "open" ]]; then
   run_args=(-nolauncher "${run_args[@]}")
   runtime_log_file="$qconsole_file"
@@ -741,6 +749,7 @@ Physics cvars: quantum_physics $physics_value, quantum_projectiles $projectiles_
 Fire test: $fire_test
 Launch mode: $launch_mode
 Trace: $trace_file
+Timeout seconds: $max_seconds
 Log: $log_file
 Agent stream: $agent_stream
 Agent manifest: $agent_manifest_file

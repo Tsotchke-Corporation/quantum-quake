@@ -186,6 +186,10 @@ For the default Noesis player, the implicit capture frame is never earlier than
 provider has started emitting actions. An explicit `QGE_STREAM_CAPTURE_WAIT`
 continues to mean exactly the frame requested.
 
+The launch watchdog defaults to `90 + QGE_STREAM_FRAMES *
+QGE_STREAM_WAIT_FRAMES / 10` seconds. Set `QGE_STREAM_TIMEOUT_SECONDS` for
+large map-load smokes or slow display launches that need a fixed budget.
+
 Set `QGE_STREAM_ENGINE_CAPTURE=0` to use scripted `screenshot png` commands
 instead of engine auto-capture. This mode still mirrors discovered `spasm*.png`
 files into the agent stream.
@@ -288,6 +292,7 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
 - `QGE_STREAM_FRAMES`: number of screenshots requested, default `12`.
 - `QGE_STREAM_WAIT_FRAMES`: default engine capture wait, default `20`.
 - `QGE_STREAM_CAPTURE_WAIT`: explicit engine capture frame.
+- `QGE_STREAM_TIMEOUT_SECONDS`: explicit launch/watchdog timeout.
 - `QGE_STREAM_TRACE`: write `qge_trace.bin` when set to `1`.
 - `QGE_STREAM_SOUND`: run with game sound enabled when set to `1`.
 - `QGE_STREAM_FIRE_TEST`: run the scripted weapon smoke when set to `1`.
