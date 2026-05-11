@@ -171,6 +171,26 @@ emit_actions_from_file() {
   done < "$path"
 }
 
+run_noesis_cmd() {
+  local workdir="$noesis_dir"
+  local -a cmd_argv
+
+  if [[ ! -d "$workdir" ]]; then
+    workdir="/"
+  fi
+
+  if [[ -x "$noesis_cmd" ]]; then
+    cmd_argv=("$noesis_cmd")
+  else
+    read -r -a cmd_argv <<< "$noesis_cmd"
+  fi
+  if (( ${#cmd_argv[@]} == 0 )); then
+    return 127
+  fi
+
+  (cd "$workdir" 2>/dev/null || cd /; "${cmd_argv[@]}")
+}
+
 noesis_status="missing"
 if [[ -d "$noesis_dir" ]]; then
   noesis_status="present"
@@ -184,7 +204,7 @@ if [[ -n "$noesis_cmd" ]]; then
   cmd_output="$(mktemp "${TMPDIR:-/tmp}/qge-noesis-actions.XXXXXX")"
   cmd_status=0
   set +e
-  (cd "$noesis_dir" 2>/dev/null || cd /; bash -lc "$noesis_cmd") > "$cmd_output"
+  run_noesis_cmd > "$cmd_output"
   cmd_status=$?
   set -e
   if (( cmd_status != 0 )); then

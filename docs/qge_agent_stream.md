@@ -269,7 +269,9 @@ console command for targeted probes.
 Action streams can come from either `QGE_NOESIS_ACTIONS_FILE` or
 `QGE_NOESIS_CMD`. The command provider runs from `QGE_NOESIS_DIR` and should
 print the same action lines to stdout; this is the hook for a Noesis policy
-runtime that writes actions instead of capturing the user's mouse.
+runtime that writes actions instead of capturing the user's mouse. The provider
+is executed directly, so use a small wrapper script for shell pipelines,
+redirection, or other compound commands.
 Every run also mirrors the selected action stream and translated Quake command
 stream into `input/noesis_actions.txt` and `input/noesis_commands.cfg`.
 
