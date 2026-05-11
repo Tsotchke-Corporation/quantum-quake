@@ -29,8 +29,7 @@
  * If retval >= siz, truncation occurred.
  */
 
-size_t
-q_strlcat (char *dst, const char *src, size_t siz)
+size_t q_strlcat (char *dst, const char *src, size_t siz)
 {
 	char *d = dst;
 	const char *s = src;
@@ -56,4 +55,3 @@ q_strlcat (char *dst, const char *src, size_t siz)
 
 	return(dlen + (s - src));	/* count does not include NUL */
 }
-

@@ -282,8 +282,7 @@ Spike -- just builds a list of entities within the area, rather than walking
 them and risking the list getting corrupt.
 ====================
 */
-static void
-SV_AreaTriggerEdicts ( edict_t *ent, areanode_t *node, edict_t **list, int *listcount, const int listspace )
+static void SV_AreaTriggerEdicts ( edict_t *ent, areanode_t *node, edict_t **list, int *listcount, const int listspace )
 {
 	link_t		*l, *next;
 	edict_t		*touch;
@@ -934,4 +933,3 @@ trace_t SV_Move (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, int type, e
 
 	return clip.trace;
 }
-

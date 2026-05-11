@@ -27,8 +27,7 @@
  * Returns strlen(src); if retval >= siz, truncation occurred.
  */
 
-size_t
-q_strlcpy (char *dst, const char *src, size_t siz)
+size_t q_strlcpy (char *dst, const char *src, size_t siz)
 {
 	char *d = dst;
 	const char *s = src;
@@ -52,4 +51,3 @@ q_strlcpy (char *dst, const char *src, size_t siz)
 
 	return(s - src - 1);	/* count does not include NUL */
 }
-

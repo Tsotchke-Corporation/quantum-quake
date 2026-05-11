@@ -686,7 +686,7 @@ static void S_UpdateAmbientSounds (void)
 
 /*
 ===================
-S_RawSamples		(from QuakeII)
+S_RawSamples streaming path, originally from QuakeII
 
 Streaming music support. Byte swapping
 of data must be handled by the codec.

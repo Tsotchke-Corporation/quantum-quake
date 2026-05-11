@@ -2993,8 +2993,7 @@ static void Mod_CalcAliasBounds (aliashdr_t *a)
 	loadmodel->ymaxs[2] = loadmodel->maxs[2];
 }
 
-static qboolean
-nameInList(const char *list, const char *name)
+static qboolean nameInList(const char *list, const char *name)
 {
 	const char *s;
 	char tmp[MAX_QPATH];

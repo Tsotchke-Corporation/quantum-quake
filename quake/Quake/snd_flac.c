@@ -132,8 +132,7 @@ flac_length_func (const FLAC__StreamDecoder *decoder,
 	return FLAC__STREAM_DECODER_LENGTH_STATUS_OK;
 }
 
-static FLAC__bool
-flac_eof_func (const FLAC__StreamDecoder *decoder, void *client_data)
+static FLAC__bool flac_eof_func (const FLAC__StreamDecoder *decoder, void *client_data)
 {
 	flacfile_t *ff = (flacfile_t *) client_data;
 	if (FS_feof (ff->file)) return true;
@@ -387,4 +386,3 @@ snd_codec_t flac_codec =
 };
 
 #endif	/* USE_CODEC_FLAC */
-

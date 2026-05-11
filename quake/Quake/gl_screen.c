@@ -53,10 +53,10 @@ xblited, but sync draw can just ignore it.
 sync
 draw
 
-CenterPrint ()
-SlowPrint ()
-Screen_Update ();
-Con_Printf ();
+CenterPrint path
+SlowPrint path
+Screen_Update path
+Con_Printf path
 
 net
 turn off messages option

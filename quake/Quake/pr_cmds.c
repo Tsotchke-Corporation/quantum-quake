@@ -108,7 +108,7 @@ PF_error
 This is a TERMINAL error, which will kill off the entire server.
 Dumps self.
 
-error(value)
+QuakeC builtin: error(value)
 =================
 */
 static void PF_error (void)
@@ -132,7 +132,7 @@ PF_objerror
 Dumps out self, then an error message.  The program is aborted and self is
 removed, but the level can continue.
 
-objerror(value)
+QuakeC builtin: objerror(value)
 =================
 */
 static void PF_objerror (void)
@@ -157,7 +157,7 @@ static void PF_objerror (void)
 PF_makevectors
 
 Writes new values for v_forward, v_up, and v_right based on angles
-makevectors(vector)
+QuakeC builtin: makevectors(vector)
 ==============
 */
 static void PF_makevectors (void)
@@ -176,7 +176,7 @@ will not set internal links correctly, so clipping would be messed up.
 This should be called when an object is spawned, and then only if it is
 teleported.
 
-setorigin (entity, origin)
+QuakeC builtin: setorigin(entity, origin)
 =================
 */
 static void PF_setorigin (void)
@@ -271,7 +271,7 @@ PF_setsize
 
 the size box is rotated by the current angle
 
-setsize (entity, minvector, maxvector)
+QuakeC builtin: setsize(entity, minvector, maxvector)
 =================
 */
 static void PF_setsize (void)
@@ -290,7 +290,7 @@ static void PF_setsize (void)
 =================
 PF_setmodel
 
-setmodel(entity, model)
+QuakeC builtin: setmodel(entity, model)
 =================
 */
 static void PF_setmodel (void)
@@ -338,7 +338,7 @@ PF_bprint
 
 broadcast print to everyone on server
 
-bprint(value)
+QuakeC builtin: bprint(value)
 =================
 */
 static void PF_bprint (void)
@@ -355,7 +355,7 @@ PF_sprint
 
 single print to a specific client
 
-sprint(clientent, value)
+QuakeC builtin: sprint(clientent, value)
 =================
 */
 static void PF_sprint (void)
@@ -386,7 +386,7 @@ PF_centerprint
 
 single print to a specific client
 
-centerprint(clientent, value)
+QuakeC builtin: centerprint(clientent, value)
 =================
 */
 static void PF_centerprint (void)
@@ -535,7 +535,7 @@ PF_Random
 
 Returns a number from 0 <= num < 1
 
-random()
+QuakeC builtin: random()
 =================
 */
 static void PF_random (void)
@@ -557,7 +557,7 @@ static void PF_random (void)
 =================
 PF_particle
 
-particle(origin, color, count)
+QuakeC builtin: particle(origin, color, count)
 =================
 */
 static void PF_particle (void)
@@ -678,7 +678,7 @@ static void PF_sound (void)
 =================
 PF_break
 
-break()
+QuakeC builtin: break()
 =================
 */
 static void PF_break (void)
@@ -696,7 +696,7 @@ Used for use tracing and shot targeting
 Traces are blocked by bbox and exact bsp entityes, and also slide box entities
 if the tryents flag is set.
 
-traceline (vector1, vector2, tryents)
+QuakeC builtin: traceline(vector1, vector2, tryents)
 =================
 */
 static void PF_traceline (void)
@@ -887,7 +887,7 @@ PF_stuffcmd
 
 Sends text over to the client's execution buffer
 
-stuffcmd (clientent, value)
+QuakeC builtin: stuffcmd(clientent, value)
 =================
 */
 static void PF_stuffcmd (void)
@@ -913,7 +913,7 @@ PF_localcmd
 
 Sends text over to the client's execution buffer
 
-localcmd (string)
+QuakeC builtin: localcmd(string)
 =================
 */
 static void PF_localcmd (void)
@@ -963,7 +963,7 @@ PF_findradius
 
 Returns a chain of entities that have origins within a spherical area
 
-findradius (origin, radius)
+QuakeC builtin: findradius(origin, radius)
 =================
 */
 static void PF_findradius (void)
