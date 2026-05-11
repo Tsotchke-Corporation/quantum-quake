@@ -56,6 +56,7 @@ cvar_t quantum_render_display_filter = {"quantum_render_display_filter", "0", CV
 cvar_t quantum_render_update_interval = {"quantum_render_update_interval", "8", CVAR_ARCHIVE};
 cvar_t quantum_render_gate_kernel = {"quantum_render_gate_kernel", "1", CVAR_ARCHIVE};
 cvar_t quantum_render_gate_shots = {"quantum_render_gate_shots", "64", CVAR_ARCHIVE};
+cvar_t quantum_debug_sprite_billboard = {"quantum_debug_sprite_billboard", "0", CVAR_NONE};
 
 /* ============================================================================
  * State
@@ -309,6 +310,7 @@ static char qge_registered_world_name[MAX_QPATH];
 static qge_world_stats_t qge_registry_stats;
 static qge_resource_id_t qge_precache_model_resource_ids[MAX_MODELS];
 static qge_resource_id_t qge_precache_sound_resource_ids[MAX_SOUNDS];
+static qge_resource_id_t qge_debug_sprite_logged_id = QGE_RESOURCE_ID_INVALID;
 
 #define QGE_MAX_TEXTURE_SIGNAL_CACHE MAX_MAP_TEXTURES
 typedef struct {
@@ -1523,6 +1525,7 @@ static void QGE_RegisterWorldIfNeeded(void)
 	qge_world_get_stats(world, &qge_registry_stats);
 	qge_registered_worldmodel = model;
 	strlcpy(qge_registered_world_name, model->name, sizeof(qge_registered_world_name));
+	qge_debug_sprite_logged_id = QGE_RESOURCE_ID_INVALID;
 	QGE_TraceWorldRegistryProbe(&qge_registry_stats);
 
 	Con_Printf("QGE: World registry map=%s models=%u planes=%u nodes=%u leafs=%u surfaces=%u textures=%u lightmaps=%u alias=%u sprites=%u sounds=%u hud=%u\n",
@@ -1719,6 +1722,86 @@ static void QGE_FrameSnapshotAddEntity(qge_frame_snapshot_t *snapshot,
 	qge_frame_snapshot_add_edict(snapshot, &item);
 }
 
+static qge_resource_id_t QGE_FirstRegisteredSpriteId(const qge_sprite_ref_t **out_ref)
+{
+	qge_world_t *world;
+
+	if (out_ref)
+		*out_ref = NULL;
+	if (!qge_ctx)
+		return QGE_RESOURCE_ID_INVALID;
+	world = qge_get_world(qge_ctx);
+	if (!world)
+		return QGE_RESOURCE_ID_INVALID;
+
+	for (int i = 1; i < MAX_MODELS && cl.model_precache[i]; i++) {
+		qge_resource_id_t id = qge_precache_model_resource_ids[i];
+		if (qge_resource_id_kind(id) != QGE_RESOURCE_SPRITE)
+			continue;
+		const qge_sprite_ref_t *ref = qge_world_get_sprite(world, id);
+		if (!ref || !ref->debug_cookie)
+			continue;
+		if (out_ref)
+			*out_ref = ref;
+		return id;
+	}
+	return QGE_RESOURCE_ID_INVALID;
+}
+
+static void QGE_FrameSnapshotAddDiagnosticSprite(qge_frame_snapshot_t *snapshot)
+{
+	const qge_sprite_ref_t *ref;
+	qge_resource_id_t sprite_id;
+	qmodel_t *model;
+	qge_snapshot_edict_t item;
+	vec3_t forward, right, up;
+	float distance;
+
+	if (!snapshot || snapshot->sealed || quantum_debug_sprite_billboard.value < 0.5f)
+		return;
+
+	sprite_id = QGE_FirstRegisteredSpriteId(&ref);
+	if (!qge_resource_id_is_valid(sprite_id) || !ref)
+		return;
+	model = (qmodel_t *)(uintptr_t)ref->debug_cookie;
+	if (!model || model->type != mod_sprite)
+		return;
+
+	distance = quantum_debug_sprite_billboard.value > 1.0f ?
+		quantum_debug_sprite_billboard.value : 96.0f;
+	if (distance < 32.0f)
+		distance = 32.0f;
+	if (distance > 512.0f)
+		distance = 512.0f;
+
+	AngleVectors(r_refdef.viewangles, forward, right, up);
+	memset(&item, 0, sizeof(item));
+	item.entity_id = qge_resource_id_make(QGE_RESOURCE_ENTITY, 0x30010u);
+	item.model_id = sprite_id;
+	item.origin.x = r_refdef.vieworg[0] + forward[0] * distance;
+	item.origin.y = r_refdef.vieworg[1] + forward[1] * distance;
+	item.origin.z = r_refdef.vieworg[2] + forward[2] * distance;
+	item.mins.x = item.origin.x + model->mins[0];
+	item.mins.y = item.origin.y + model->mins[1];
+	item.mins.z = item.origin.z + model->mins[2];
+	item.maxs.x = item.origin.x + model->maxs[0];
+	item.maxs.y = item.origin.y + model->maxs[1];
+	item.maxs.z = item.origin.z + model->maxs[2];
+	item.effects = EF_BRIGHTLIGHT;
+	item.frame = ref->frame_count ? (int32_t)(qge_frame_count % ref->frame_count) : 0;
+	item.alpha = 1.0f;
+	item.scale = 1.0f;
+	qge_frame_snapshot_add_edict(snapshot, &item);
+
+	if (qge_debug_sprite_logged_id != sprite_id) {
+		Con_Printf("QGE: Diagnostic sprite billboard model=%s id=0x%x distance=%.1f\n",
+				   ref->name, sprite_id, distance);
+		fprintf(stderr, "QGE diagnostic sprite model=%s id=0x%x distance=%.1f\n",
+				ref->name, sprite_id, distance);
+		qge_debug_sprite_logged_id = sprite_id;
+	}
+}
+
 static void QGE_FrameSnapshotCaptureEdicts(qge_frame_snapshot_t *snapshot)
 {
 	if (!snapshot || snapshot->edict_count > 0 || cls.signon != SIGNONS)
@@ -1726,6 +1809,7 @@ static void QGE_FrameSnapshotCaptureEdicts(qge_frame_snapshot_t *snapshot)
 	for (int i = 0; i < cl_numvisedicts; i++)
 		QGE_FrameSnapshotAddEntity(snapshot, cl_visedicts[i]);
 	QGE_FrameSnapshotAddEntity(snapshot, &cl.viewent);
+	QGE_FrameSnapshotAddDiagnosticSprite(snapshot);
 }
 
 static void QGE_FrameSnapshotCaptureLights(qge_frame_snapshot_t *snapshot)
@@ -2001,6 +2085,7 @@ void QGE_Init(void)
 	Cvar_RegisterVariable(&quantum_render_update_interval);
 	Cvar_RegisterVariable(&quantum_render_gate_kernel);
 	Cvar_RegisterVariable(&quantum_render_gate_shots);
+	Cvar_RegisterVariable(&quantum_debug_sprite_billboard);
 	QGE_ApplyEarlyRenderOverrides();
 
 	fprintf(stderr, "QGE: CVars registered, initializing core...\n");

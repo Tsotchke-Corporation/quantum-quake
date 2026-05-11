@@ -35,6 +35,13 @@ QGE_STREAM_MAP=e1m1 QGE_STREAM_FIRE_TEST=1 QGE_STREAM_CAPTURE_WAIT=20 \
   bash tools/quake_graphics_stream.sh
 ```
 
+To exercise the sprite billboard encoder without relying on a hand-played scene:
+
+```sh
+QGE_STREAM_SPRITE_TEST=1 QGE_STREAM_FRAMES=1 QGE_STREAM_TRACE=1 \
+  bash tools/quake_graphics_stream.sh
+```
+
 ## Stream Contract
 
 The stream directory is intentionally simple and tail-friendly:
@@ -157,6 +164,15 @@ Set `QGE_STREAM_ENGINE_CAPTURE=0` to use scripted `screenshot png` commands
 instead of engine auto-capture. This mode still mirrors discovered `spasm*.png`
 files into the agent stream.
 
+## Sprite Diagnostics
+
+`QGE_STREAM_SPRITE_TEST=1` enables the engine cvar
+`quantum_debug_sprite_billboard 1` for that run. The QGE snapshot then adds one
+diagnostic sprite entity from the first registered sprite asset directly in
+front of the camera. This is opt-in evidence for the sprite billboard encoder:
+normal gameplay captures leave the diagnostic disabled and report only actual
+visible entities.
+
 ## Related Harnesses
 
 `tools/quake_graphics_harness.sh` runs paired classic/QGE captures through the
@@ -249,6 +265,8 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
 - `QGE_STREAM_FIRE_TEST`: run the scripted weapon smoke when set to `1`.
   With the default Noesis player this selects the Noesis `fire` plan unless
   `QGE_NOESIS_PLAN` is set explicitly.
+- `QGE_STREAM_SPRITE_TEST`: inject one QGE diagnostic sprite billboard when set
+  to `1`, default `0`.
 - `QGE_STREAM_ENGINE_CAPTURE`: use engine auto-capture when set to `1`, default
   `1`.
 - `QGE_STREAM_LAUNCH`: `auto`, `open`, or `direct`.
