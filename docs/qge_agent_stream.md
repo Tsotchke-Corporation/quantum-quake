@@ -224,7 +224,10 @@ internal render resolution, no bilinear/edge/display smoothing, and
 `QGE_RENDER_UPDATE_INTERVAL=8` unless overridden. The crash watcher records
 process exit status in its final `QGE_CRASH_WATCH_EXIT`,
 `QGE_CRASH_WATCH_TIMEOUT`, or `QGE_CRASH_WATCH_DONE` line so direct app aborts
-and watchdog kills are not mistaken for clean runs.
+and watchdog kills are not mistaken for clean runs. Numeric crash-watch inputs
+are normalized as decimal values before shell arithmetic, so leading-zero
+overrides such as `QGE_CRASH_SECONDS=08` do not emit bash base-conversion
+errors into diagnostics.
 
 ## Audio
 

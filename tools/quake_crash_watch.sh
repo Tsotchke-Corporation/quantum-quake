@@ -44,27 +44,54 @@ default_noesis_cmd="$repo_root/tools/noesis_quake_policy.sh"
 noesis_cmd_default=0
 noesis_player_tool="$repo_root/tools/noesis_quake_player.sh"
 
-if [[ "$stream_mouse" == "1" ]]; then
-  stream_mouse=1
-else
-  stream_mouse=0
-fi
-case "$noesis_start_wait" in
-  ''|*[!0-9]*) noesis_start_wait=60 ;;
-esac
-case "$noesis_max_wait" in
-  ''|*[!0-9]*) noesis_max_wait=600 ;;
-esac
-noesis_max_wait="$((10#$noesis_max_wait))"
-if (( noesis_max_wait < 1 )); then
-  noesis_max_wait=600
-fi
-case "$seconds" in
-  ''|*[!0-9]*) seconds=90 ;;
-esac
-case "$script_waits" in
-  ''|*[!0-9]*) script_waits=3600 ;;
-esac
+normalize_bool() {
+  if [[ "${1:-}" == "1" ]]; then
+    printf '1\n'
+  else
+    printf '0\n'
+  fi
+}
+
+normalize_nonnegative_int() {
+  local value="${1:-}"
+  local default_value="$2"
+  case "$value" in
+    ''|*[!0-9]*) printf '%s\n' "$default_value"; return ;;
+  esac
+  printf '%s\n' "$((10#$value))"
+}
+
+normalize_positive_int() {
+  local value="${1:-}"
+  local default_value="$2"
+  value="$(normalize_nonnegative_int "$value" "$default_value")"
+  if (( value < 1 )); then
+    printf '%s\n' "$default_value"
+  else
+    printf '%s\n' "$value"
+  fi
+}
+
+stream_mouse="$(normalize_bool "$stream_mouse")"
+sound="$(normalize_bool "$sound")"
+render_value="$(normalize_nonnegative_int "$render_value" 1)"
+render_res="$(normalize_positive_int "$render_res" 1024)"
+render_bilinear_samples="$(normalize_nonnegative_int "$render_bilinear_samples" 0)"
+render_edge_samples="$(normalize_nonnegative_int "$render_edge_samples" 0)"
+render_display_filter="$(normalize_nonnegative_int "$render_display_filter" 0)"
+render_update_interval="$(normalize_positive_int "$render_update_interval" 8)"
+rng_value="$(normalize_bool "$rng_value")"
+ai_value="$(normalize_bool "$ai_value")"
+physics_value="$(normalize_bool "$physics_value")"
+projectiles_value="$(normalize_bool "$projectiles_value")"
+particles_value="$(normalize_bool "$particles_value")"
+scene_surface_budget="$(normalize_positive_int "$scene_surface_budget" 128)"
+width="$(normalize_positive_int "$width" 800)"
+height="$(normalize_positive_int "$height" 600)"
+noesis_start_wait="$(normalize_nonnegative_int "$noesis_start_wait" 60)"
+noesis_max_wait="$(normalize_positive_int "$noesis_max_wait" 600)"
+seconds="$(normalize_nonnegative_int "$seconds" 90)"
+script_waits="$(normalize_nonnegative_int "$script_waits" 3600)"
 if [[ "$stream_player" == "noesis" && -z "$noesis_cmd" && -z "$noesis_actions_file" && -x "$default_noesis_cmd" ]]; then
   noesis_cmd="$default_noesis_cmd"
   noesis_cmd_default=1
