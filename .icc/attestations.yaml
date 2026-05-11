@@ -1,0 +1,197 @@
+attestations:
+- finding_key: 1740d00add7ccc1b8fd907e6c768248909d78b51d641e6ad0c17d0cd947ee49f
+  path: quake/Quake/common.c
+  line: 314
+  pattern: c_no_const_in_signature
+  severity: low
+  reason: 'Reviewed 2026-05-11: q_vsnprintf''s first char* parameter is the destination
+    output buffer and is intentionally mutable; format is already const.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:14:38Z'
+  valid_until: null
+  evidence_link: audit:mutable-output-buffer-signatures-20260511
+  line_text: int q_vsnprintf(char *str, size_t size, const char *format, va_list args)
+- finding_key: de8c7bd905939739121b3066d819c3fed5084b1ea3b4e3b3a494cea331a87d1f
+  path: quake/Quake/common.c
+  line: 330
+  pattern: c_no_const_in_signature
+  severity: low
+  reason: 'Reviewed 2026-05-11: q_snprintf''s first char* parameter is the destination
+    output buffer and is intentionally mutable; format is already const.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:14:45Z'
+  valid_until: null
+  evidence_link: audit:mutable-output-buffer-signatures-20260511
+  line_text: int q_snprintf (char *str, size_t size, const char *format, ...)
+- finding_key: bf803756a5dfc3cbe633f00f3d21d43cd5afebe666abd030eba06b9a157c08bc
+  path: quake/Quake/common.c
+  line: 384
+  pattern: c_no_const_in_signature
+  severity: low
+  reason: 'Reviewed 2026-05-11: Q_strcpy''s char* dest parameter is the destination
+    output buffer and is intentionally mutable; src is already const.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:14:52Z'
+  valid_until: null
+  evidence_link: audit:mutable-output-buffer-signatures-20260511
+  line_text: void Q_strcpy (char *dest, const char *src)
+- finding_key: 38a2ae058a450a7548cac47a1350e4ae0c6ff39a46af34e7698ed6856db0a45e
+  path: quake/Quake/common.c
+  line: 393
+  pattern: c_no_const_in_signature
+  severity: low
+  reason: 'Reviewed 2026-05-11: Q_strncpy''s char* dest parameter is the destination
+    output buffer and is intentionally mutable; src is already const.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:15:00Z'
+  valid_until: null
+  evidence_link: audit:mutable-output-buffer-signatures-20260511
+  line_text: void Q_strncpy (char *dest, const char *src, int count)
+- finding_key: ba8494f5db585aee2490b27b16f5dd94c562974010bd883348f908939bdd2c30
+  path: quake/Quake/common.c
+  line: 426
+  pattern: c_no_const_in_signature
+  severity: low
+  reason: 'Reviewed 2026-05-11: Q_strcat''s char* dest parameter is the destination
+    output buffer and is intentionally mutable; src is already const.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:15:08Z'
+  valid_until: null
+  evidence_link: audit:mutable-output-buffer-signatures-20260511
+  line_text: void Q_strcat (char *dest, const char *src)
+- finding_key: 96297a265a0ec112acc0932cb5fe89057c375b41613b476d0aab0363ef0f57c9
+  path: quake/Quake/common.c
+  line: 1178
+  pattern: c_no_const_in_signature
+  severity: low
+  reason: 'COM_DefaultExtension mutates path in place by appending an extension; extension
+    is already const. This function is inside a disabled legacy #if 0 block but the
+    mutable path contract is intentional.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:21:11Z'
+  valid_until: null
+  evidence_link: audit:mutable-output-buffer-signatures-20260511
+  line_text: void COM_DefaultExtension (char *path, const char *extension, size_t
+    len)
+- finding_key: 7db584c3899eb0d03d6b653854d926c4e5d79550a8e69b7bb8d0380be8c0f3c9
+  path: quake/Quake/common.c
+  line: 1203
+  pattern: c_no_const_in_signature
+  severity: low
+  reason: COM_AddExtension mutates path in place by appending an extension; extension
+    is already const.
+  attested_by: tyr
+  attested_at: '2026-05-11T15:22:32Z'
+  valid_until: null
+  evidence_link: audit:mutable-output-buffer-signatures-20260511
+  line_text: void COM_AddExtension (char *path, const char *extension, size_t len)
+- finding_key: 17f1704aba1cd004b3127961ec170fa7e322afe39c83979d01dd10766e52783e
+  path: quake/Quake/common.c
+  line: 1638
+  pattern: c_no_const_in_signature
+  severity: low
+  reason: COM_CreatePath walks and temporarily edits the path buffer in place to create
+    parent directories; path is intentionally mutable.
+  attested_by: tyr
+  attested_at: '2026-05-11T15:22:43Z'
+  valid_until: null
+  evidence_link: audit:mutable-output-buffer-signatures-20260511
+  line_text: void COM_CreatePath (char *path)
+- finding_key: cf1e6ad527dacde40433ccf4145c723473b6e595de3192e9f5e4f37362745da1
+  path: quake/Quake/common.h
+  line: 210
+  pattern: c_no_const_in_signature
+  severity: low
+  reason: Q_strcpy mirrors strcpy semantics; the first argument is the mutable destination
+    buffer and the source is already const.
+  attested_by: tyr
+  attested_at: '2026-05-11T15:22:54Z'
+  valid_until: null
+  evidence_link: audit:mutable-output-buffer-signatures-20260511
+  line_text: void Q_strcpy (char *dest, const char *src);
+- finding_key: c8a47eddcbbb3fbbd6c91b3b6002ff608f59f8044634dda949fe90a8ef877cc3
+  path: quake/Quake/common.h
+  line: 211
+  pattern: c_no_const_in_signature
+  severity: low
+  reason: Q_strncpy mirrors strncpy semantics; the first argument is the mutable destination
+    buffer and the source is already const.
+  attested_by: tyr
+  attested_at: '2026-05-11T15:23:00Z'
+  valid_until: null
+  evidence_link: audit:mutable-output-buffer-signatures-20260511
+  line_text: void Q_strncpy (char *dest, const char *src, int count);
+- finding_key: 688d08cd68ccfb0857ef46a653a0a95d0da00f0e607e3f162acd5812a04d7a6b
+  path: quake/Quake/common.h
+  line: 214
+  pattern: c_no_const_in_signature
+  severity: low
+  reason: Q_strcat mirrors strcat semantics; the first argument is the mutable destination
+    buffer and the source is already const.
+  attested_by: tyr
+  attested_at: '2026-05-11T15:23:09Z'
+  valid_until: null
+  evidence_link: audit:mutable-output-buffer-signatures-20260511
+  line_text: void Q_strcat (char *dest, const char *src);
+- finding_key: b651ab1bd7b4b6e64eceaf915023c56b9c7766d01d76f72180c1c5fa52e870ad
+  path: quake/Quake/common.h
+  line: 275
+  pattern: c_no_const_in_signature
+  severity: low
+  reason: COM_AddExtension declaration matches the implementation's mutable in-place
+    path buffer; the extension is already const.
+  attested_by: tyr
+  attested_at: '2026-05-11T15:23:14Z'
+  valid_until: null
+  evidence_link: audit:mutable-output-buffer-signatures-20260511
+  line_text: void COM_AddExtension (char *path, const char *extension, size_t len);
+- finding_key: 221b4fddcbceee49a021a447f9f3fe15b881285c5302aaec53fb426058e7d644
+  path: quake/Quake/common.h
+  line: 277
+  pattern: c_no_const_in_signature
+  severity: low
+  reason: COM_DefaultExtension declaration matches the implementation's mutable in-place
+    path buffer; the extension is already const and this disabled dangerous legacy
+    declaration still documents that contract.
+  attested_by: tyr
+  attested_at: '2026-05-11T15:23:19Z'
+  valid_until: null
+  evidence_link: audit:mutable-output-buffer-signatures-20260511
+  line_text: void COM_DefaultExtension (char *path, const char *extension, size_t
+    len);
+- finding_key: 6c6442bd10d267c6d2d6415f194609d3c133e397550e9c859c8b27b239669e89
+  path: quake/Quake/common.h
+  line: 281
+  pattern: c_no_const_in_signature
+  severity: low
+  reason: COM_CreatePath declaration matches the implementation's mutable path buffer
+    contract; the function edits path separators temporarily while creating directories.
+  attested_by: tyr
+  attested_at: '2026-05-11T15:23:25Z'
+  valid_until: null
+  evidence_link: audit:mutable-output-buffer-signatures-20260511
+  line_text: void COM_CreatePath (char *path);
+- finding_key: c1ebcab8623905993e0eb4187c395dfbc2c5acbbeba019ead596df42ac6db772
+  path: quake/Quake/strlcat.c
+  line: 32
+  pattern: c_no_const_in_signature
+  severity: low
+  reason: q_strlcat follows OpenBSD strlcat semantics; dst is the mutable destination
+    buffer and src is already const.
+  attested_by: tyr
+  attested_at: '2026-05-11T15:23:30Z'
+  valid_until: null
+  evidence_link: audit:mutable-output-buffer-signatures-20260511
+  line_text: size_t q_strlcat (char *dst, const char *src, size_t siz)
+- finding_key: 9a4b90385b1f6866141e6c918e77511b7c4258bd2dd1c5d220cc95fa2ffc1c76
+  path: quake/Quake/strlcpy.c
+  line: 30
+  pattern: c_no_const_in_signature
+  severity: low
+  reason: q_strlcpy follows OpenBSD strlcpy semantics; dst is the mutable destination
+    buffer and src is already const.
+  attested_by: tyr
+  attested_at: '2026-05-11T15:23:36Z'
+  valid_until: null
+  evidence_link: audit:mutable-output-buffer-signatures-20260511
+  line_text: size_t q_strlcpy (char *dst, const char *src, size_t siz)
