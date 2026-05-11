@@ -44,6 +44,7 @@ noesis_cmd_default=0
 noesis_player_tool="$repo_root/tools/noesis_quake_player.sh"
 width="${QGE_STREAM_WIDTH:-800}"
 height="${QGE_STREAM_HEIGHT:-600}"
+stream_display="${QGE_STREAM_DISPLAY:-1}"
 fullscreen="${QGE_STREAM_FULLSCREEN:-0}"
 fire_test="${QGE_STREAM_FIRE_TEST:-0}"
 sound="${QGE_STREAM_SOUND:-0}"
@@ -182,7 +183,12 @@ write_agent_manifest() {
     "macos_activate": $([[ "$launch_mode" == "open" && "$stream_activate" == "1" ]] && printf '1' || printf '0'),
     "macos_activate_attempts": $stream_activate_attempts
   },
-  "window": {"width": $width, "height": $height, "fullscreen": $fullscreen},
+  "window": {
+    "width": $width,
+    "height": $height,
+    "fullscreen": $fullscreen,
+    "display": $(json_string "$stream_display")
+  },
   "sound_requested": $sound,
   "trace_requested": $trace,
   "input": {
@@ -373,7 +379,7 @@ echo "Streaming Quantum Quake graphics diagnostics"
 echo "  outdir=$outdir"
 echo "  agent_stream=$agent_stream"
 echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter update_interval=$render_update_interval sprite_test=$sprite_test quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_particles=$particles_value"
-echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame fullscreen=$fullscreen sound=$sound trace=$trace fire_test=$fire_test scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan"
+echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame fullscreen=$fullscreen display=$stream_display sound=$sound trace=$trace fire_test=$fire_test scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan"
 echo "QGE_AGENT_STREAM $agent_stream"
 
 print_log_updates() {
@@ -555,6 +561,9 @@ sync_agent_frame_state() {
 video_args=(-window -width "$width" -height "$height")
 if [[ "$fullscreen" == "1" ]]; then
   video_args=(-fullscreen)
+fi
+if [[ -n "$stream_display" ]]; then
+  video_args+=(-display "$stream_display")
 fi
 
 run_args=(-basedir "$basedir" "${video_args[@]}")

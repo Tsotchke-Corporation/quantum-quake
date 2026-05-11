@@ -6,9 +6,13 @@ tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/qge-noesis-contract.XXXXXX")"
 trap 'rm -rf "$tmpdir"' EXIT
 
 grep -q 'stream_mouse="${QGE_STREAM_MOUSE:-0}"' "$repo_root/tools/quake_graphics_stream.sh"
+grep -q 'stream_display="${QGE_STREAM_DISPLAY:-1}"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'run_args+=(-nomouse)' "$repo_root/tools/quake_graphics_stream.sh"
+grep -Fq 'video_args+=(-display "$stream_display")' "$repo_root/tools/quake_graphics_stream.sh"
 grep -q 'stream_mouse="${QGE_STREAM_MOUSE:-0}"' "$repo_root/tools/quake_crash_watch.sh"
+grep -q 'stream_display="${QGE_STREAM_DISPLAY:-1}"' "$repo_root/tools/quake_crash_watch.sh"
 grep -Fq 'run_args+=(-nomouse)' "$repo_root/tools/quake_crash_watch.sh"
+grep -Fq 'run_args+=(-display "$stream_display")' "$repo_root/tools/quake_crash_watch.sh"
 grep -q 'stream_player="${QGE_STREAM_PLAYER:-noesis}"' "$repo_root/tools/quake_crash_watch.sh"
 grep -q 'emit_noesis_player_script' "$repo_root/tools/quake_crash_watch.sh"
 grep -q 'quantum_render_update_interval \$render_update_interval' "$repo_root/tools/quake_crash_watch.sh"

@@ -30,6 +30,7 @@ overlay_alpha="${QGE_OVERLAY_ALPHA:-0.10}"
 scene_surface_budget="${QGE_SCENE_SURFACE_BUDGET:-128}"
 width="${QGE_STREAM_WIDTH:-800}"
 height="${QGE_STREAM_HEIGHT:-600}"
+stream_display="${QGE_STREAM_DISPLAY:-1}"
 sound="${QGE_CRASH_SOUND:-0}"
 stream_mouse="${QGE_STREAM_MOUSE:-0}"
 stream_player="${QGE_STREAM_PLAYER:-noesis}"
@@ -158,7 +159,7 @@ log_next_line=1
 
 echo "Watching Quantum Quake for crashes"
 echo "  outdir=$outdir"
-echo "  seconds=$seconds script_waits=$script_waits map=$map_name window=${width}x${height} sound=$sound mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan"
+echo "  seconds=$seconds script_waits=$script_waits map=$map_name window=${width}x${height} display=$stream_display sound=$sound mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan"
 if [[ "$stream_player" == "noesis" ]]; then
   echo "  noesis_cmd=$noesis_cmd noesis_cmd_default=$noesis_cmd_default actions=$input_actions_file commands=$input_commands_file"
 fi
@@ -192,6 +193,9 @@ print_log_updates() {
 }
 
 run_args=(-basedir "$basedir" -window -width "$width" -height "$height")
+if [[ -n "$stream_display" ]]; then
+  run_args+=(-display "$stream_display")
+fi
 if [[ "$stream_mouse" != "1" ]]; then
   run_args+=(-nomouse)
 fi

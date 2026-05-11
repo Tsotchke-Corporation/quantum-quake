@@ -145,6 +145,11 @@ by default so SDL does not enter relative mouse mode or warp/capture the user
 cursor. Set `QGE_STREAM_ACTIVATE=1` only if the local window manager requires a
 foreground app for capture. A side watcher tails `qconsole.log`, mirrors
 screenshots, and refreshes audio byte counts while the app is still running.
+The harness also passes `-display "$QGE_STREAM_DISPLAY"` when set. On the
+current capture workstation the default is SDL display `1`, which maps to the
+BenQ PD3200U; SDL display `0` is the LG. The engine logs the available display
+indexes and bounds at video startup so this can be adjusted when the monitor
+layout changes.
 
 Use `QGE_STREAM_LAUNCH=direct` when running the app binary directly is more
 reliable in the local environment. Direct mode redirects the runtime log through
@@ -189,10 +194,10 @@ comparison artifact directory.
 `tools/quake_crash_watch.sh` uses the same Noesis player/provider contract for
 its scripted movement by default, stores `input/noesis_actions.txt` and
 `input/noesis_commands.cfg` under its crash-watch output directory, passes
-`-nomouse` unless `QGE_STREAM_MOUSE=1`, and pins the same high-resolution CPU
-render defaults as the stream harness: 1024 internal render resolution, no
-bilinear/edge/display smoothing, and `QGE_RENDER_UPDATE_INTERVAL=8` unless
-overridden.
+`-nomouse` unless `QGE_STREAM_MOUSE=1`, targets `QGE_STREAM_DISPLAY` like the
+stream harness, and pins the same high-resolution CPU render defaults: 1024
+internal render resolution, no bilinear/edge/display smoothing, and
+`QGE_RENDER_UPDATE_INTERVAL=8` unless overridden.
 
 ## Audio
 
@@ -277,6 +282,9 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
 - `QGE_STREAM_ENGINE_CAPTURE`: use engine auto-capture when set to `1`, default
   `1`.
 - `QGE_STREAM_LAUNCH`: `auto`, `open`, or `direct`.
+- `QGE_STREAM_DISPLAY`: SDL display index or display-name substring, default
+  `1` for the BenQ PD3200U on this workstation. Use `0` for the LG, or a
+  display-name substring on SDL builds that expose monitor names.
 - `QGE_STREAM_MOUSE`: pass through SDL mouse input when set to `1`. The default
   is `0`, which launches Quake with `-nomouse` so the harness never captures
   the user's cursor.

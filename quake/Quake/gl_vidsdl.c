@@ -160,6 +160,10 @@ static cvar_t	vid_desktopfullscreen = {"vid_desktopfullscreen", "0", CVAR_ARCHIV
 static cvar_t	vid_borderless = {"vid_borderless", "0", CVAR_ARCHIVE}; // QuakeSpasm
 //johnfitz
 
+#if defined(USE_SDL2)
+static int vid_display_index = 0;
+#endif
+
 cvar_t		vid_gamma = {"gamma", "1", CVAR_ARCHIVE}; //johnfitz -- moved here from view.c
 cvar_t		vid_contrast = {"contrast", "1", CVAR_ARCHIVE}; //QuakeSpasm, MarkV
 
@@ -492,12 +496,103 @@ qboolean VID_IsMinimized (void)
 }
 
 #if defined(USE_SDL2)
+static qboolean VID_SDL2_IsIntegerString (const char *text)
+{
+	const char *c;
+
+	if (!text || !text[0])
+		return false;
+	for (c = text; *c; c++)
+		if (*c < '0' || *c > '9')
+			return false;
+	return true;
+}
+
+static const char *VID_SDL2_DisplayName (int display)
+{
+	const char *name;
+
+	if (display < 0 || display >= SDL_GetNumVideoDisplays())
+		return "unavailable";
+	name = SDL_GetDisplayName(display);
+	if (!name || !name[0])
+		return "unnamed";
+	return name;
+}
+
+static void VID_SDL2_PrintDisplayList (void)
+{
+	int displays, i;
+
+	displays = SDL_GetNumVideoDisplays();
+	for (i = 0; i < displays; i++)
+	{
+		SDL_Rect bounds;
+
+		if (SDL_GetDisplayBounds(i, &bounds) == 0)
+			Con_SafePrintf ("Video display available: %d (%s) bounds=%d,%d %dx%d\n",
+							i, VID_SDL2_DisplayName(i), bounds.x, bounds.y, bounds.w, bounds.h);
+		else
+			Con_SafePrintf ("Video display available: %d (%s)\n",
+							i, VID_SDL2_DisplayName(i));
+	}
+}
+
+static int VID_SDL2_ResolveDisplay (const char *requested)
+{
+	int displays, i;
+
+	displays = SDL_GetNumVideoDisplays();
+	if (displays <= 0)
+		return 0;
+	if (!requested || !requested[0])
+		return 0;
+	VID_SDL2_PrintDisplayList();
+
+	if (VID_SDL2_IsIntegerString(requested))
+	{
+		i = Q_atoi(requested);
+		if (i >= 0 && i < displays)
+		{
+			Con_SafePrintf ("Video display target: %d (%s)\n",
+							i, VID_SDL2_DisplayName(i));
+			return i;
+		}
+		Con_Warning ("requested display index %d is not available; using display 0 (%s)\n",
+					 i, VID_SDL2_DisplayName(0));
+		return 0;
+	}
+
+	for (i = 0; i < displays; i++)
+	{
+		const char *name = VID_SDL2_DisplayName(i);
+		if (!q_strcasecmp(name, requested))
+		{
+			Con_SafePrintf ("Video display target: %d (%s)\n", i, name);
+			return i;
+		}
+	}
+	for (i = 0; i < displays; i++)
+	{
+		const char *name = VID_SDL2_DisplayName(i);
+		if (q_strcasestr(name, requested))
+		{
+			Con_SafePrintf ("Video display target: %d (%s)\n", i, name);
+			return i;
+		}
+	}
+
+	Con_Warning ("requested display '%s' was not found; using display 0 (%s)\n",
+				 requested, VID_SDL2_DisplayName(0));
+	return 0;
+}
+
 /*
 ================
 VID_SDL2_GetDisplayMode
 
-Returns a pointer to a statically allocated SDL_DisplayMode structure
-if there is one with the requested params on the default display.
+Returns a pointer to a statically allocated SDL_DisplayMode structure if there
+is one with the requested params on the selected display.
 Otherwise returns NULL.
 
 This is passed to SDL_SetWindowDisplayMode to specify a pixel format
@@ -507,12 +602,12 @@ with the requested bpp. If we didn't care about bpp we could just pass NULL.
 static SDL_DisplayMode *VID_SDL2_GetDisplayMode(int width, int height, int refreshrate, int bpp)
 {
 	static SDL_DisplayMode mode;
-	const int sdlmodes = SDL_GetNumDisplayModes(0);
+	const int sdlmodes = SDL_GetNumDisplayModes(vid_display_index);
 	int i;
 
 	for (i = 0; i < sdlmodes; i++)
 	{
-		if (SDL_GetDisplayMode(0, i, &mode) != 0)
+		if (SDL_GetDisplayMode(vid_display_index, i, &mode) != 0)
 			continue;
 
 		if (mode.w == width && mode.h == height
@@ -583,6 +678,7 @@ static qboolean VID_SetMode (int width, int height, int refreshrate, int bpp, qb
 	int		fsaa_obtained;
 #if defined(USE_SDL2)
 	int		previous_display;
+	int		target_display;
 #endif
 
 	// so Con_Printfs don't mess us up by forcing vid and snd updates
@@ -621,28 +717,42 @@ static qboolean VID_SetMode (int width, int height, int refreshrate, int bpp, qb
 		if (vid_borderless.value)
 			flags |= SDL_WINDOW_BORDERLESS;
 
-		draw_context = SDL_CreateWindow (caption, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags);
+		draw_context = SDL_CreateWindow (caption,
+										 SDL_WINDOWPOS_UNDEFINED_DISPLAY(vid_display_index),
+										 SDL_WINDOWPOS_UNDEFINED_DISPLAY(vid_display_index),
+										 width, height, flags);
 		if (!draw_context) { // scale back fsaa
 			SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
 			SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
-			draw_context = SDL_CreateWindow (caption, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags);
+			draw_context = SDL_CreateWindow (caption,
+											 SDL_WINDOWPOS_UNDEFINED_DISPLAY(vid_display_index),
+											 SDL_WINDOWPOS_UNDEFINED_DISPLAY(vid_display_index),
+											 width, height, flags);
 		}
 		if (!draw_context) { // scale back SDL_GL_DEPTH_SIZE
 			SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
-			draw_context = SDL_CreateWindow (caption, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags);
+			draw_context = SDL_CreateWindow (caption,
+											 SDL_WINDOWPOS_UNDEFINED_DISPLAY(vid_display_index),
+											 SDL_WINDOWPOS_UNDEFINED_DISPLAY(vid_display_index),
+											 width, height, flags);
 		}
 		if (!draw_context) { // scale back SDL_GL_STENCIL_SIZE
 			SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 0);
-			draw_context = SDL_CreateWindow (caption, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags);
+			draw_context = SDL_CreateWindow (caption,
+											 SDL_WINDOWPOS_UNDEFINED_DISPLAY(vid_display_index),
+											 SDL_WINDOWPOS_UNDEFINED_DISPLAY(vid_display_index),
+											 width, height, flags);
 		}
 		if (!draw_context)
 			Sys_Error ("Couldn't create window");
 
-		previous_display = -1;
+		previous_display = vid_display_index;
 	}
 	else
 	{
 		previous_display = SDL_GetWindowDisplayIndex(draw_context);
+		if (previous_display < 0)
+			previous_display = vid_display_index;
 	}
 
 	/* Ensure the window is not fullscreen */
@@ -654,10 +764,10 @@ static qboolean VID_SetMode (int width, int height, int refreshrate, int bpp, qb
 
 	/* Set window size and display mode */
 	SDL_SetWindowSize (draw_context, width, height);
-	if (previous_display >= 0)
-		SDL_SetWindowPosition (draw_context, SDL_WINDOWPOS_CENTERED_DISPLAY(previous_display), SDL_WINDOWPOS_CENTERED_DISPLAY(previous_display));
-	else
-		SDL_SetWindowPosition(draw_context, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+	target_display = previous_display >= 0 ? previous_display : vid_display_index;
+	SDL_SetWindowPosition (draw_context,
+						   SDL_WINDOWPOS_CENTERED_DISPLAY(target_display),
+						   SDL_WINDOWPOS_CENTERED_DISPLAY(target_display));
 	SDL_SetWindowDisplayMode (draw_context, VID_SDL2_GetDisplayMode(width, height, refreshrate, bpp));
 	SDL_SetWindowBordered (draw_context, vid_borderless.value ? SDL_FALSE : SDL_TRUE);
 
@@ -752,6 +862,15 @@ static qboolean VID_SetMode (int width, int height, int refreshrate, int bpp, qb
 				VID_GetCurrentRefreshRate(),
 				depthbits,
 				fsaa_obtained);
+#if defined(USE_SDL2)
+	{
+		int selected_display = SDL_GetWindowDisplayIndex(draw_context);
+		if (selected_display < 0)
+			selected_display = vid_display_index;
+		Con_SafePrintf ("Video display %d (%s) selected\n",
+						selected_display, VID_SDL2_DisplayName(selected_display));
+	}
+#endif
 
 	vid.recalc_refdef = 1;
 
@@ -1572,7 +1691,7 @@ VID_InitModelist
 static void VID_InitModelist (void)
 {
 #if defined(USE_SDL2)
-	const int sdlmodes = SDL_GetNumDisplayModes(0);
+	const int sdlmodes = SDL_GetNumDisplayModes(vid_display_index);
 	int i;
 
 	nummodes = 0;
@@ -1582,7 +1701,7 @@ static void VID_InitModelist (void)
 
 		if (nummodes >= MAX_MODE_LIST)
 			break;
-		if (SDL_GetDisplayMode(0, i, &mode) == 0)
+		if (SDL_GetDisplayMode(vid_display_index, i, &mode) == 0)
 		{
 			modelist[nummodes].width = mode.w;
 			modelist[nummodes].height = mode.h;
@@ -1702,7 +1821,13 @@ void	VID_Init (void)
 #if defined(USE_SDL2)
 	{
 		SDL_DisplayMode mode;
-		if (SDL_GetDesktopDisplayMode(0, &mode) != 0)
+		p = COM_CheckParm("-display");
+		if (p && p < com_argc-1)
+			vid_display_index = VID_SDL2_ResolveDisplay(com_argv[p+1]);
+		else
+			vid_display_index = 0;
+
+		if (SDL_GetDesktopDisplayMode(vid_display_index, &mode) != 0)
 			Sys_Error("Could not get desktop display mode");
 
 		display_width = mode.w;
