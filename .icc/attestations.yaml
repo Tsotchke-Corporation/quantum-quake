@@ -195,3 +195,1117 @@ attestations:
   valid_until: null
   evidence_link: audit:mutable-output-buffer-signatures-20260511
   line_text: size_t q_strlcpy (char *dst, const char *src, size_t siz)
+- finding_key: 841c93676ee36cf95e3d97d486625b208a5cd60bff1d7490188e0f35366d7791
+  path: quake/Quake/cd_sdl.c
+  line: 375
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:28Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '/* FIXME: write proper code in here when SDL'
+- finding_key: cdeffb26d54062528aa4aed9d47eaa07ae51cfc3b3ec6d889ae96c95bfb8f905
+  path: quake/Quake/cd_sdl.c
+  line: 382
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:28Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '/* FIXME: write proper code in here when SDL'
+- finding_key: 515e4950579e45e6fd1ecb17a39644a8e2a64524508f4b6e770bdf2134b3de48
+  path: quake/Quake/cd_sdl.c
+  line: 405
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:28Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '/* FIXME: write proper code in here when SDL'
+- finding_key: fecc7fda766590b57397186b9fe83c31bbe38717dc99ada5a3d1c74c843d8e09
+  path: quake/Quake/cl_main.c
+  line: 55
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:29Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '// FIXME: put these on hunk?'
+- finding_key: 6a251bc57574b9f3afb471b225efac6fc4fd5822750bc87dc52db8e0b242efde
+  path: quake/Quake/cl_parse.c
+  line: 607
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:29Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t\t//HACK: if this bit is set, assume this is PROTOCOL_NEHAHRA"
+- finding_key: c0d42c144bb556cf7e8a66fadfbb25e9a8a1d6ffe90b2a7e9e31107eb03bf015
+  path: quake/Quake/client.h
+  line: 276
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:29Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: // FIXME, allocate dynamically
+- finding_key: 9b8a1801583fcdc698744f614a7defa7d90ab23e1ea3f4d355b595901f89f642
+  path: quake/Quake/common.c
+  line: 1961
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:30Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t// TODO: could handle in a way that allows loading CRLF savegames\
+    \ on mac/linux"
+- finding_key: 8e7205013b7aef1644f553ad8f8c7e9e572340c47c3d990cce32b2352a7ee5cf
+  path: quake/Quake/common.h
+  line: 145
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:30Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '// FIXME: remove this mess!'
+- finding_key: 21ad41a2daa39f5845ae057ab229ee7de96df8e3771fe0de55a4cb1a35390aeb
+  path: quake/Quake/filenames.h
+  line: 62
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:30Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '/* FIXME: What about C:FOO ? */'
+- finding_key: 69210fe7755c807d97afa40d6033ccf7f2a66c0235772c363d5a84fe3862b643
+  path: quake/Quake/filenames.h
+  line: 70
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:31Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '/* FIXME: What about C:FOO ? */'
+- finding_key: 0b09dca3ff8f2190daad357ee6b20946d3049158ad8e1b84250f1b43a6243705
+  path: quake/Quake/filenames.h
+  line: 78
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:31Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '/* FIXME: What about C:FOO ? */'
+- finding_key: afc0140601ce4ede103093958f942cfefba6035d5817f049640495eaeba8d126
+  path: quake/Quake/filenames.h
+  line: 86
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:31Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '/* FIXME: What about C:FOO ? */'
+- finding_key: 6f135b365127a48bcd3f09f271c9de92133440b3491ed3d5f0f8edf82cafd7a3
+  path: quake/Quake/filenames.h
+  line: 95
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:32Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '/* FIXME: What about C:FOO ? */'
+- finding_key: 585803e2d93ea1fc22cad832c0a76ced8e05f9d40607343f0b74133d96e85b9d
+  path: quake/Quake/filenames.h
+  line: 103
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:32Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '/* FIXME: What about C:FOO ? */'
+- finding_key: b08fddf74112e6d7916cb806d8dab214abef9683a30b0788463b1ba96907c50e
+  path: quake/Quake/gl_draw.c
+  line: 306
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:32Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t// HACK HACK HACK --- we need to keep the bytes for"
+- finding_key: c4d9fd2e6c247040c96c72f6ba2d3cae24f68d675512d066d05cc1a0e214bc30
+  path: quake/Quake/gl_model.h
+  line: 247
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:33Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '// FIXME: shorten these?'
+- finding_key: 9d62f19a03677ef5e23a50a37fc346d532bca45400d52dadc52f287fcf6fccf1
+  path: quake/Quake/gl_rmain.c
+  line: 465
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:33Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t\tfrustum[i].dist = DotProduct (r_origin, frustum[i].normal); //FIXME:\
+    \ shouldn't this always be zero?"
+- finding_key: 650e7ea4df017c3f48163b496e6198fecf4f3dacb88687c1c955a7494a5d6e67
+  path: quake/Quake/gl_rmisc.c
+  line: 253
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:34Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t//FIXME: if gl_nocolors is on, then turned off, the textures may be\
+    \ out of sync with the scoreboard colors."
+- finding_key: 41ab245d5ca8f3425a20daad573a331cbbb403b3ea42182ce9b83c579db88d10
+  path: quake/Quake/gl_rmisc.c
+  line: 285
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:34Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t//TODO: move these tests to the place where skinnum gets received\
+    \ from the server"
+- finding_key: c3f2b0575ca3ddb3fde2b24e9f7a600ae8ad0376f07c779a3b1b77373648ca76
+  path: quake/Quake/gl_rmisc.c
+  line: 386
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:34Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '// FIXME: is this one short?'
+- finding_key: 467fd8a88c393fea67b75c39c2287b04e531901e3100d1ced3fdcf0dcabdd4e7
+  path: quake/Quake/gl_screen.c
+  line: 1124
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:35Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t//FIXME: only call this when needed"
+- finding_key: 8db6ae2593ce4d3b181ee8cd9b08fa8bc6d2d3dc394e3bf3fd893863a924d422
+  path: quake/Quake/gl_sky.c
+  line: 315
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:35Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t\treturn; //FIXME: how could this possibly ever happen? -- if there's\
+    \ no"
+- finding_key: 9820939ff8951608753a03b7b2e6abe02ddebe07589ef4c7736f468a058430c6
+  path: quake/Quake/gl_sky.c
+  line: 722
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:35Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t\t\t\t\tp = (glpoly_t *) Hunk_Alloc (sizeof(*s->polys)); //FIXME:\
+    \ don't allocate for each poly"
+- finding_key: aa8e47124e62f4e6a9592501f88d6a4c85da5640f3e58ac4dcfe915afeb9c82a
+  path: quake/Quake/gl_sky.c
+  line: 813
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:36Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '#if 1 /* FIXME: this is to avoid tjunctions until i can do it the right
+    way */'
+- finding_key: 5265314fed0d5ad553801b6add325e1570ed5d812b8b6157c80465f46c5e64e8
+  path: quake/Quake/gl_texmgr.c
+  line: 138
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:36Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t\t\t\t//FIXME: warpimages need to be redrawn, too."
+- finding_key: 029f30cd5591a431342f93ba266db64add04dc87dacffa9b990b7a7f988d332f
+  path: quake/Quake/gl_texmgr.c
+  line: 1163
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:36Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t// HACK HACK HACK -- taken from tomazquake"
+- finding_key: 3af49c44e3a1cadfbec05c9b2d321b5cf0fdde585ee58920a911c2e97c478683
+  path: quake/Quake/gl_vidsdl.c
+  line: 1973
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:37Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t// TODO: Clear out the dead code, reinstate the fast path using SDL_SetWindowFullscreen"
+- finding_key: 8f01ce336ef8996f1130d1aaee6658229f5402ec5b75a12652250157e6bfc252
+  path: quake/Quake/gl_vidsdl.c
+  line: 2083
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:37Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '//TODO: replace these fixed-length arrays with hunk_allocated buffers'
+- finding_key: e9f4756a887f5394ec6be9d664d090fa311685258bcb142792fa90d96a0c35e7
+  path: quake/Quake/glquake.h
+  line: 309
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:38Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "#define LMBLOCK_WIDTH\t256\t//FIXME: make dynamic. if we have a decent\
+    \ card there's no real reason not to use 4k or 16k (assuming there's no lightstyles/dynamics\
+    \ that need uploading...)"
+- finding_key: f214186a3f1be2ab8d25ea7f68618c5ebdc724c3e37051bdf8c76337b122a215
+  path: quake/Quake/host.c
+  line: 101
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:38Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t//TODO: clamp it here?"
+- finding_key: 46d1e3be98de2c737430d196b5a6ee491a154054f0ef2c2ef70489f3c0b7c9a4
+  path: quake/Quake/host_cmd.c
+  line: 348
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:38Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '// TODO: Factor out to a general-purpose file searching function'
+- finding_key: 6b5368956313574a90f40d0e9fbb7ff985874cda2fd9075c0f82db79ee4481a7
+  path: quake/Quake/lodepng.c
+  line: 93
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:39Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '/* TODO: support giving additional void* payload to the custom allocators
+    */'
+- finding_key: b8b8d1f24252c0bb222afeea0ff7f536d2bc29f1538db9c7bf250cbb1f42685c
+  path: quake/Quake/lodepng.c
+  line: 427
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:39Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '/*TODO: this ignores potential out of memory errors*/'
+- finding_key: e0deac4dce560245180114673eb2cfbc554763ad25125bffff6015f9f9d86630
+  path: quake/Quake/lodepng.c
+  line: 443
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:39Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '    /* TODO: increase output size only once here rather than in each
+    WRITEBIT */'
+- finding_key: 528c8b84fa9e2f05358dd470e6b479a743a4e022b81c00b3ab18e2dd9c09f538
+  path: quake/Quake/lodepng.c
+  line: 455
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:40Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '    /* TODO: increase output size only once here rather than in each
+    WRITEBIT */'
+- finding_key: 937af8fe2d17ab117e25feb30e6f0313426467678d741fdb04e9f776cfcb04c3
+  path: quake/Quake/lodepng.c
+  line: 585
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:40Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '  /*TODO: implement faster lookup table based version when needed*/'
+- finding_key: f77a5f7d802133ab0b43b71db55c30d0ccab62f66f699c9712dcac799d0557ff
+  path: quake/Quake/lodepng.c
+  line: 1216
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:41Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '        /* TODO: revise error codes 10,11,50: the above comment is no
+    longer valid */'
+- finding_key: 9ba3e95576fad347332c14c73a8fce79870f79fecf0f85e84d9123a15a06acb6
+  path: quake/Quake/lodepng.c
+  line: 1335
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:41Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '      /* TODO: revise error codes 10,11,50: the above comment is no
+    longer valid */'
+- finding_key: f52410db21ca4ef574c13ab75979ee8a52a85308e98a0c2528a3c47ac193c65f
+  path: quake/Quake/lodepng.c
+  line: 1476
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:41Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '  /*TODO: return error when this fails (out of memory)*/'
+- finding_key: ee2f672bac8f9e733eda7e9fb51aed8cfe1893e314d7765880f86bdd8e25b0be
+  path: quake/Quake/lodepng.c
+  line: 1497
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:42Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '  /*TODO: do this not only for zeros but for any repeated byte. However
+    for PNG'
+- finding_key: ca187c2063f266ec1eb59cc7a7d505c71ebf2a80ac9efaf9e82642b9598d4f16
+  path: quake/Quake/lodepng.c
+  line: 2443
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:42Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '/* TODO: make this faster */'
+- finding_key: 8590ba45c2914a6fe23e59abfd4cf980aabf9705dc3d8fc46cad82c10bf4b1fd
+  path: quake/Quake/lodepng.c
+  line: 4052
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:43Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '  /* TODO: remove this. One should use a new LodePNGState for new sessions
+    */'
+- finding_key: e4450b7c10a2f35898be4a3f8083902e9c24b3d74bb68bb06d62c280fb77a1c6
+  path: quake/Quake/lodepng.c
+  line: 4070
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:43Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '  /*TODO: remove the undocumented feature that allows to give null pointers
+    to width or height*/'
+- finding_key: 748e05e91f3ba5a3c6e7f2f8db352a7c41d24f478a67576a4120c30d2e774c3b
+  path: quake/Quake/lodepng.c
+  line: 4369
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:43Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '      /*TODO: possible efficiency improvement: if in this reduced image
+    the bits fit nicely in 1 scanline,'
+- finding_key: ad1f0c328e90f48579f6c9497b262adeb5ae118370e4b37542c5e3bfab7167f7
+  path: quake/Quake/lodepng.c
+  line: 5052
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:44Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '    /*TODO: check if this works according to the statement in the documentation:
+    "The converter can convert'
+- finding_key: f479e5c21e9074355b8988ecc0ea9679911761eae81c74f5c504f80565a8df83
+  path: quake/Quake/lodepng.h
+  line: 734
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:44Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '  /* TODO: make a system involving warnings with levels and a strict
+    mode instead. Other potentially recoverable'
+- finding_key: 451062ea732ea8a6d37339508322f7fa57c78bfdc62b13fe70198f09b6778955
+  path: quake/Quake/mathlib.c
+  line: 185
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:44Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '//TODO: take right and up vectors to properly set yaw and roll'
+- finding_key: 427395648632368429ddabbc0e6543472c0d68f4e0a8f7ba63ba28446f7854b1
+  path: quake/Quake/miniz.c
+  line: 324
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:45Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '        code_len_hack = code_len; /* FIXME: workaround for miniz/#229
+    */ \'
+- finding_key: cb28562d685194624b6c43a3d36d0abbdf1cecf70d22a4f7a85e8be8069ea5ba
+  path: quake/Quake/miniz.c
+  line: 446
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:45Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '            mz_uint code_len_hack; /* FIXME: workaround for miniz/#229
+    */'
+- finding_key: aa2f44a2da7d05cfd4a968de724d0c533325e965293e72caa7888b110348bba8
+  path: quake/Quake/miniz.c
+  line: 582
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:46Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '                        /* FIXME: workaround for miniz/#229 */'
+- finding_key: 5f1e2471ed5623928b6eb4266ba05fbbf7ff73bcd673ad621a8df80876da09c0
+  path: quake/Quake/miniz.c
+  line: 622
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:46Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '                        /* FIXME: workaround for miniz/#229 */'
+- finding_key: 75741c21bad326616316bed77dfc629b97b5edf86223d04cb24acba657ee89b1
+  path: quake/Quake/miniz.c
+  line: 1590
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:46Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '    /* FIXME: Remove this check? Is it necessary - we already check
+    the filename. */'
+- finding_key: 90770790dc5b1e5d06083ec71b18a8fe825b5aa940e1f9a5c1d8484a5bcfb850
+  path: quake/Quake/miniz.h
+  line: 185
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: upstream vendored library maintenance marker retained
+    for source provenance; not a Quantum Quake production stub or release blocker.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:47Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '/* TODO: Work around "error: include file ''sys\utime.h'' when compiling
+    with tcc on Linux */'
+- finding_key: 709aa853169a2a174dc231eef1e8475371cb635615a08e735faf719dac39869b
+  path: quake/Quake/modelgen.h
+  line: 82
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:47Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '// TODO: could be shorts'
+- finding_key: 8c02949e5d073766b1a3f9ebb25581b8c51ae288f0383348163efb6ccded9a09
+  path: quake/Quake/net.h
+  line: 107
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:48Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '/* FIXME: driver related, but public:'
+- finding_key: a2d1e3101e35560987ef157abc2667897f0ba14b103dd41c5ff722c7d13bb771
+  path: quake/Quake/net_sys.h
+  line: 42
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:48Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '/* FIXME : GET RID OF THIS ABOMINATION !!! */'
+- finding_key: 6e0aefa0b1e9885016237ad40f7c803ce3b95b3eefbebe7bf1e2af98924a715b
+  path: quake/Quake/net_wipx.c
+  line: 378
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:48Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t\t/* FIXME: what action should be taken?... */"
+- finding_key: 70d65f212f8bf09fedf5468db5e10d9bad010518db3d23641b1f97a3e593d7d9
+  path: quake/Quake/pr_cmds.c
+  line: 208
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:49Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\trotate = false;\t\t// FIXME: implement rotation properly again"
+- finding_key: bbc4fa931a57bc4295a6c46e9008fdfb50b1d5187e4259da5c0818d6587504c8
+  path: quake/Quake/pr_cmds.c
+  line: 714
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:49Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t/* FIXME FIXME FIXME: Why do we hit this with certain progs.dat ??\
+    \ */"
+- finding_key: 9e6b55356b1df29c020bef98fcf05dfe6805b82cd1f708863e1c9c1c4e79ebcb
+  path: quake/Quake/pr_edict.c
+  line: 915
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:50Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t\t// FIXME: change light to _light to get rid of this hack"
+- finding_key: 8f4c4c760592d54970efd1b1b7374f6a39ad364976c7367654a6632b50ae19cc
+  path: quake/Quake/pr_edict.c
+  line: 930
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:50Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t\t// HACK: we allow truncation when reading the wad field,"
+- finding_key: 6d005c7e8bcd6d9e0c806b4d4f1102c0fe27d90bab89132a85a0ac73621060ca
+  path: quake/Quake/r_alias.c
+  line: 188
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:50Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t\t\"\tresult.a = gl_Color.a;\\n\" // FIXME: This will make almost\
+    \ transparent things cut holes though heavy fog"
+- finding_key: 84975c7212e2ef22eeb2fd24ff11a7265848b5b2c87cf3abe82bd521f016c920
+  path: quake/Quake/r_brush.c
+  line: 549
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:51Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\tgl_lightmap_format = GL_RGBA;//FIXME: hardcoded for now!"
+- finding_key: 258b619a2464a9fa495cf5c4f5064b8292c6929be485d09efd36ac8cdf4512ec
+  path: quake/Quake/r_world.c
+  line: 109
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:51Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t// TODO: loop through all water surfs and use distance to leaf cullbox"
+- finding_key: e59de70be7e8850453c9cf0820c4ca23dff3ba848497a100dc3a1f7efe07204b
+  path: quake/Quake/r_world.c
+  line: 694
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:52Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t\t\t\t\t\tt->update_warp = true; // FIXME: one frame too late!"
+- finding_key: 7042af2a937ff99f45cef9d26a60d021421b7c2677a52c83b1bcc39f56632f2f
+  path: quake/Quake/r_world.c
+  line: 750
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:52Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t\t\t\t\t\tt->update_warp = true; // FIXME: one frame too late!"
+- finding_key: 5ce44cd79aa7d099f97857f7860fc7d87dcee2c23a4222b864c246c035929140
+  path: quake/Quake/r_world.c
+  line: 891
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:53Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t\t\"\tresult.a = Alpha;\\n\" // FIXME: This will make almost transparent\
+    \ things cut holes though heavy fog"
+- finding_key: acb5028de30d4fbb250bb26a59e4fd91052f600ae4cb5c8f7e43708bc26a5bf3
+  path: quake/Quake/render.h
+  line: 75
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:53Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '// FIXME: could turn these into a union'
+- finding_key: 611f24f21041678a12cdc8c3ca49c028d8ade9ff5bc3c18bb767e6b39fa4777a
+  path: quake/Quake/render.h
+  line: 100
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:53Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t\t\t\t\t\t\t\t\t// FIXME: not need vrect next field here?"
+- finding_key: 5bcd34253cb5a78e714b86bc108cc500dfd1796cfb2908a5a9e5d99303228a95
+  path: quake/Quake/snd_dma.c
+  line: 943
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:54Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '/* FIXME: do we really need the blocking at the'
+- finding_key: a772968127b045286479788b60b99a7faec534aaa3af82008448b1df7457eef0
+  path: quake/Quake/snd_mikmod.c
+  line: 201
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:54Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\tPlayer_SetPosition (0); /* FIXME: WRONG: THIS IS NOT A TIME SEEK */"
+- finding_key: 86c9b55166a008a89ac680b881263ff519731df07ec662177ef43a763f886790
+  path: quake/Quake/snd_mp3tag.c
+  line: 256
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:55Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '            /* FIXME: handle possible double-ID3v1 tags? */'
+- finding_key: 3298a41538ca10341de946730697e4f1cb53a75e400c901e7832c11664a402ae
+  path: quake/Quake/snd_opus.c
+  line: 116
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:55Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t/* FIXME: handle section changes */"
+- finding_key: be859e282c02df217e191ced35c7486205c64527e406bb6fc216a2a2b05b47d7
+  path: quake/Quake/snd_opus.c
+  line: 151
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:56Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\tint\tsection;\t/* FIXME: handle section changes */"
+- finding_key: 0de8950cd6a8fd1f18eae05f52c2818e7a93e54fd09e91a96695eaca5299bbf8
+  path: quake/Quake/snd_vorbis.c
+  line: 106
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:56Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t/* FIXME: handle section changes */"
+- finding_key: ca6e888cf3f08bc0ddc52cc11bfae0714356f764d631f216e63ecae6df9454bb
+  path: quake/Quake/snd_vorbis.c
+  line: 137
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:56Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\tint\tsection;\t/* FIXME: handle section changes */"
+- finding_key: d4512570e2bd043493dd2c64655cef85d87145387f855ab313f5863e6f1c8ab8
+  path: quake/Quake/spritegn.h
+  line: 74
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:57Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: '// TODO: shorten these?'
+- finding_key: 42fd3673b81c4f5847f9676f7c1b297d429bdd6fe6d72a074bca8243515d084a
+  path: quake/Quake/sv_main.c
+  line: 652
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:57Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t\t// FIXME: Use tighter limit according to protocol flags and send\
+    \ bits."
+- finding_key: 06fcec049cece93f4c0f2eee6b01b78bc4f52254f6c437df8bc921fed1517c61
+  path: quake/Quake/sv_main.c
+  line: 705
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:58Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t\t\t// TODO: find a cleaner place to put this code"
+- finding_key: 5ded29a368a653b99a7121fc53324b628d5e70c3e66bf240c0011917f55fd944
+  path: quake/Quake/sv_phys.c
+  line: 875
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:58Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\tSV_PushEntity (ent, upmove);\t// FIXME: don't link?"
+- finding_key: 2f8c86d0015fdccb4b46913695ac2c59bdbd81ad6802233c32f026d5df21ec96
+  path: quake/Quake/sv_phys.c
+  line: 899
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:59Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\tdowntrace = SV_PushEntity (ent, downmove);\t// FIXME: don't link?"
+- finding_key: 21c1d9c530ca41b276b4ad19214531fd7f33ff635b414d4457123ac137d0eddb
+  path: quake/Quake/view.c
+  line: 187
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:59Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t//FIXME: noclip_anglehack is set on the server, so in a nonlocal game\
+    \ this won't work."
+- finding_key: 5af5094d412132f8a4cfbae12521ac9aa270c795d1f94f97e3b0aa76da334451
+  path: quake/Quake/view.c
+  line: 857
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:35:59Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t//FIXME: noclip_anglehack is set on the server, so in a nonlocal game\
+    \ this won't work."
+- finding_key: af98138f4663094308b70fad96f2c47ec0f23ac9954ac6654c8dde3fc692c7ef
+  path: quake/Quake/view.c
+  line: 863
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:36:00Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t\t\t//FIXME\tI_Error (\"steptime < 0\");"
+- finding_key: 29c1e1e577566c87cfc361938dbaf229f1f06774f9f8733b55bc3066f872f369
+  path: quake/Quake/wad.c
+  line: 77
+  pattern: c_todo_marker
+  severity: low
+  reason: 'Reviewed 2026-05-11: legacy Quake/QuakeSpasm maintenance marker documents
+    a known caveat or possible cleanup; no stubbed QGE production path or disabled
+    implementation is present.'
+  attested_by: tyr
+  attested_at: '2026-05-11T15:36:00Z'
+  valid_until: null
+  evidence_link: audit:todo-marker-classification-20260511
+  line_text: "\t//TODO: use cache_alloc"
