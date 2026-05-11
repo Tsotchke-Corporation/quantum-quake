@@ -206,6 +206,9 @@ write_agent_manifest() {
   local status="$1"
   local audio_status="disabled"
   local audio_bytes=0
+  local manifest_trace_file=""
+  local trace_status="not_requested"
+  local trace_bytes=0
   if [[ "$sound" == "1" ]]; then
     audio_status="requested_missing"
     if [[ -s "$agent_audio_raw" ]]; then
@@ -214,6 +217,14 @@ write_agent_manifest() {
       if [[ "$status" == "complete" ]]; then
         audio_status="complete"
       fi
+    fi
+  fi
+  if [[ "$trace" == "1" ]]; then
+    manifest_trace_file="$trace_file"
+    trace_status="requested_missing"
+    if [[ -s "$trace_file" ]]; then
+      trace_status="complete"
+      trace_bytes="$(wc -c < "$trace_file" | tr -d ' ')"
     fi
   fi
   cat > "$agent_manifest_file" <<EOF
@@ -290,7 +301,9 @@ write_agent_manifest() {
     "events": $(json_string "$agent_events_file")
   },
   "icc_evidence": $(json_string "$agent_icc_file"),
-  "trace": $(json_string "$outdir/qge_trace.bin")
+  "trace": $(json_string "$manifest_trace_file"),
+  "trace_status": $(json_string "$trace_status"),
+  "trace_bytes": $trace_bytes
 }
 EOF
 }

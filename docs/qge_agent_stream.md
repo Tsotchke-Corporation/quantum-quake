@@ -47,9 +47,11 @@ QGE_STREAM_SPRITE_TEST=1 QGE_STREAM_FRAMES=1 QGE_STREAM_TRACE=1 \
 The stream directory is intentionally simple and tail-friendly:
 
 - `manifest.json`: rewritten whenever stream state changes. It records the
-  capture path, map, render settings, trace path, and current audio/video/log
+  capture path, map, render settings, trace status, and current audio/video/log
   locations. The input block also records `noesis_max_wait`, the per-action
-  wait cap used by the Noesis command translator for that run.
+  wait cap used by the Noesis command translator for that run. When
+  `QGE_STREAM_TRACE=0`, `trace_status` is `not_requested`, `trace_bytes` is
+  `0`, and `trace` is an empty string rather than a nonexistent planned path.
 - `events.ndjson`: append-only runtime events. This is the safest file to tail
   for incremental progress.
 - `video/frames/frame_###.png`: screenshots copied into stable frame names as
