@@ -128,7 +128,9 @@ Texture/material setup emits `texture_signal_cache` and
 `lightmap_signal_cache` probes as well. These mark the surface texture and
 lightmap signal paths as intentional CPU-side metadata/sample caches and record
 cache entry, fullbright, warp, lit-surface, and contrast counts for the loaded
-map.
+map. During rendered frames, `world_surface_submission` records how many BSP
+surfaces were submitted into the QGE scene buffer, dropped by the fixed budget,
+and copied into the frame snapshot.
 
 ## Launch Modes
 

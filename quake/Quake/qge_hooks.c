@@ -2449,6 +2449,52 @@ void QGE_FrameBegin(void)
 	qge_phys_registry_purged = 0;
 }
 
+static void QGE_TraceWorldSurfaceSubmissionProbe(qge_quantum_runtime_t *rt)
+{
+	qge_state_probe_t probe;
+	uint64_t hash;
+	uint32_t flags = 0u;
+
+	if (!rt || (!qge_scene_world_surfaces && !qge_scene_surface_count &&
+				!qge_scene_surface_dropped))
+		return;
+
+	if (qge_render_collect_frame)
+		flags |= 0x1u;
+	if (qge_scene_surface_dropped > 0)
+		flags |= 0x2u;
+	if (qge_scene_snapshot_surfaces > 0)
+		flags |= 0x4u;
+
+	hash = QGE_RegistryHashStep((uint64_t)qge_frame_count,
+								(uint64_t)qge_scene_world_surfaces);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)qge_scene_surface_count);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)qge_scene_surface_dropped);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)qge_scene_snapshot_surfaces);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)qge_scene_snapshot_misses);
+
+	memset(&probe, 0, sizeof(probe));
+	probe.frame = qge_frame_count;
+	probe.server_time_msec = QGE_ServerTimeMsec();
+	probe.domain = QGE_DOMAIN_RENDER;
+	probe.representation = QGE_REP_CLASSICAL_ORACLE;
+	probe.subject_id = qge_scene_world_surfaces;
+	probe.flags = flags;
+	probe.state_hash = hash;
+	probe.entropy = qge_scene_world_surfaces > 0 ?
+		(double)qge_scene_surface_count / (double)qge_scene_world_surfaces : 0.0;
+	probe.coherence = qge_scene_surface_dropped > 0 ? 0.0 : 1.0;
+	probe.max_probability = (double)qge_scene_surface_dropped;
+	probe.total_probability = (double)qge_scene_world_surfaces;
+	probe.active_basis_count = qge_scene_surface_count;
+	probe.qubit_count =
+		qge_quantum_qubits_for_basis_count(qge_scene_surface_count);
+	probe.memory_bytes = (uint64_t)qge_scene_surface_count *
+						 (uint64_t)sizeof(qge_scene_surface_t);
+	strlcpy(probe.label, "world_surface_submission", sizeof(probe.label));
+	qge_quantum_record_probe(rt, &probe);
+}
+
 void QGE_FrameEnd(void)
 {
 	if (!qge_initialized) return;
@@ -2489,6 +2535,8 @@ void QGE_FrameEnd(void)
 		probe.total_probability = (double)stats.entropy_events;
 		strlcpy(probe.label, "rng_entropy", sizeof(probe.label));
 		qge_quantum_record_probe(rt, &probe);
+
+		QGE_TraceWorldSurfaceSubmissionProbe(rt);
 	}
 
 	if (quantum_debug.value >= 1.0f &&
