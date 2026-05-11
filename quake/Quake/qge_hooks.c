@@ -348,6 +348,9 @@ typedef struct {
 
 static qge_lightmap_signal_cache_t qge_lightmap_signal_cache[QGE_MAX_LIGHTMAP_SIGNAL_CACHE];
 static int qge_lightmap_signal_cache_entries = 0;
+static int qge_lightmap_signal_lit_entries = 0;
+static int qge_lightmap_signal_contrast_entries = 0;
+static uint64_t qge_lightmap_signal_cache_hash = 0;
 
 typedef struct {
 	float x;
@@ -1306,6 +1309,9 @@ static void QGE_ClearLightmapSignalCache(void)
 {
 	memset(qge_lightmap_signal_cache, 0, sizeof(qge_lightmap_signal_cache));
 	qge_lightmap_signal_cache_entries = 0;
+	qge_lightmap_signal_lit_entries = 0;
+	qge_lightmap_signal_contrast_entries = 0;
+	qge_lightmap_signal_cache_hash = 1469598103934665603ULL;
 }
 
 static void QGE_StoreLightmapSignalCache(int surface_index,
@@ -1318,12 +1324,73 @@ static void QGE_StoreLightmapSignalCache(int surface_index,
 	if (surface_index < 0 || surface_index >= QGE_MAX_LIGHTMAP_SIGNAL_CACHE)
 		return;
 	signal = &qge_lightmap_signal_cache[surface_index];
-	if (!signal->valid)
+	if (!signal->valid) {
 		qge_lightmap_signal_cache_entries++;
+		if (light_energy > 0.0f)
+			qge_lightmap_signal_lit_entries++;
+		if (light_contrast > 0.001f)
+			qge_lightmap_signal_contrast_entries++;
+	}
 	signal->valid = true;
 	signal->light_hash = light_hash;
 	signal->light_energy = light_energy;
 	signal->light_contrast = light_contrast;
+	qge_lightmap_signal_cache_hash =
+		QGE_RegistryHashStep(qge_lightmap_signal_cache_hash, light_hash);
+	qge_lightmap_signal_cache_hash =
+		QGE_RegistryHashStep(qge_lightmap_signal_cache_hash,
+							 (uint64_t)(light_energy * 100000.0f));
+	qge_lightmap_signal_cache_hash =
+		QGE_RegistryHashStep(qge_lightmap_signal_cache_hash,
+							 (uint64_t)(light_contrast * 100000.0f));
+}
+
+static void QGE_TraceLightmapSignalCacheProbe(const qmodel_t *model)
+{
+	qge_quantum_runtime_t *rt;
+	qge_state_probe_t probe;
+	uint32_t flags = 0x1u;
+	int surface_count = model && model->numsurfaces > 0 ? model->numsurfaces : 0;
+
+	if (qge_lightmap_signal_lit_entries > 0)
+		flags |= 0x2u;
+	if (qge_lightmap_signal_contrast_entries > 0)
+		flags |= 0x4u;
+
+	Con_Printf("QGE: Lightmap signal cache backend=cpu_lightmap_samples entries=%d lit=%d contrast=%d\n",
+			   qge_lightmap_signal_cache_entries,
+			   qge_lightmap_signal_lit_entries,
+			   qge_lightmap_signal_contrast_entries);
+	fprintf(stderr, "QGE lightmap signal cache backend=cpu_lightmap_samples entries=%d lit=%d contrast=%d hash=0x%llx\n",
+			qge_lightmap_signal_cache_entries,
+			qge_lightmap_signal_lit_entries,
+			qge_lightmap_signal_contrast_entries,
+			(unsigned long long)qge_lightmap_signal_cache_hash);
+
+	rt = QGE_Runtime();
+	if (!rt)
+		return;
+
+	memset(&probe, 0, sizeof(probe));
+	probe.frame = qge_frame_count;
+	probe.server_time_msec = QGE_ServerTimeMsec();
+	probe.domain = QGE_DOMAIN_MATERIAL;
+	probe.representation = QGE_REP_CLASSICAL_ORACLE;
+	probe.subject_id = surface_count;
+	probe.flags = flags;
+	probe.state_hash = qge_lightmap_signal_cache_hash;
+	probe.entropy = surface_count > 0 ?
+		(double)qge_lightmap_signal_cache_entries / (double)surface_count : 0.0;
+	probe.coherence = 1.0;
+	probe.max_probability = (double)qge_lightmap_signal_lit_entries;
+	probe.total_probability = (double)surface_count;
+	probe.active_basis_count = qge_lightmap_signal_cache_entries;
+	probe.qubit_count =
+		qge_quantum_qubits_for_basis_count(qge_lightmap_signal_cache_entries);
+	probe.memory_bytes = (uint64_t)qge_lightmap_signal_cache_entries *
+						 (uint64_t)sizeof(qge_lightmap_signal_cache_t);
+	strlcpy(probe.label, "lightmap_signal_cache", sizeof(probe.label));
+	qge_quantum_record_probe(rt, &probe);
 }
 
 static qge_resource_id_t QGE_RegisterHudImageIndex(qge_world_t *world, int index)
@@ -1589,11 +1656,12 @@ static void QGE_RegisterWorldIfNeeded(void)
 		memcpy(lightmap_ref.styles, surf->styles, sizeof(lightmap_ref.styles));
 		lightmap_ref.sample_hash = light_hash;
 		lightmap_ref.energy = energy;
-		lightmap_ref.contrast = contrast;
-		qge_world_register_lightmap(world, &lightmap_ref);
-	}
+			lightmap_ref.contrast = contrast;
+			qge_world_register_lightmap(world, &lightmap_ref);
+		}
+		QGE_TraceLightmapSignalCacheProbe(model);
 
-	QGE_RegisterPrecacheAssets(world, model_id);
+		QGE_RegisterPrecacheAssets(world, model_id);
 	QGE_RegisterPendingHudImages(world);
 
 	qge_world_get_stats(world, &qge_registry_stats);

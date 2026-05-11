@@ -387,6 +387,7 @@ print_log_updates() {
 	      -e '/QGE: World registry/p' \
 	      -e '/QGE: Diagnostic sprite/p' \
 	      -e '/QGE: Texture signal cache/p' \
+	      -e '/QGE: Lightmap signal cache/p' \
 	      -e '/QGE registry /p' \
 	      -e '/QGE snapshot /p' \
 	      -e '/QGE physics frame=/p' \
