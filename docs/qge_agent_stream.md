@@ -124,6 +124,10 @@ LaunchServices wrapper.
 Startup logs and traces also include a `backend_gate` probe. It reports the
 selected backend, whether acceleration is active for the live context, and the
 reason when a capable backend is intentionally running the sparse CPU path.
+Texture/material setup emits a `texture_signal_cache` probe as well. That probe
+marks the surface texture signal path as the intentional CPU-side
+`gltexture_t` metadata cache and records cache entry, fullbright, and warp
+counts for the loaded map.
 
 ## Launch Modes
 

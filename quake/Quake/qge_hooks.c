@@ -326,6 +326,10 @@ typedef struct {
 
 static qge_texture_signal_cache_t qge_texture_signal_cache[QGE_MAX_TEXTURE_SIGNAL_CACHE];
 static int qge_texture_signal_cache_entries = 0;
+static int qge_texture_signal_gltexture_entries = 0;
+static int qge_texture_signal_fullbright_entries = 0;
+static int qge_texture_signal_warp_entries = 0;
+static uint64_t qge_texture_signal_cache_hash = 0;
 
 static unsigned int QGE_TextureSignalBuild(const texture_t *tex,
 										   qge_texture_signal_cache_t *out);
@@ -1216,17 +1220,86 @@ static void QGE_RebuildTextureSignalCache(const qmodel_t *model)
 {
 	memset(qge_texture_signal_cache, 0, sizeof(qge_texture_signal_cache));
 	qge_texture_signal_cache_entries = 0;
+	qge_texture_signal_gltexture_entries = 0;
+	qge_texture_signal_fullbright_entries = 0;
+	qge_texture_signal_warp_entries = 0;
+	qge_texture_signal_cache_hash = 1469598103934665603ULL;
 
 	if (!model || !model->textures)
 		return;
 
 	for (int i = 0; i < model->numtextures && i < QGE_MAX_TEXTURE_SIGNAL_CACHE; i++) {
+		unsigned int signal_hash;
 		if (!model->textures[i])
 			continue;
-		QGE_TextureSignalBuild(model->textures[i], &qge_texture_signal_cache[i]);
-		if (qge_texture_signal_cache[i].valid)
+		signal_hash = QGE_TextureSignalBuild(model->textures[i],
+											 &qge_texture_signal_cache[i]);
+		qge_texture_signal_cache_hash =
+			QGE_RegistryHashStep(qge_texture_signal_cache_hash, signal_hash);
+		if (qge_texture_signal_cache[i].valid) {
 			qge_texture_signal_cache_entries++;
+			if (qge_texture_signal_cache[i].texture_crc ||
+				qge_texture_signal_cache[i].texture_width ||
+				qge_texture_signal_cache[i].texture_height)
+				qge_texture_signal_gltexture_entries++;
+			if (qge_texture_signal_cache[i].has_fullbright)
+				qge_texture_signal_fullbright_entries++;
+			if (qge_texture_signal_cache[i].has_warp)
+				qge_texture_signal_warp_entries++;
+		}
 	}
+}
+
+static void QGE_TraceTextureSignalCacheProbe(const qmodel_t *model)
+{
+	qge_quantum_runtime_t *rt;
+	qge_state_probe_t probe;
+	uint32_t flags = 0x1u;
+	int texture_count = model && model->numtextures > 0 ? model->numtextures : 0;
+
+	if (qge_texture_signal_gltexture_entries > 0)
+		flags |= 0x2u;
+	if (qge_texture_signal_fullbright_entries > 0)
+		flags |= 0x4u;
+	if (qge_texture_signal_warp_entries > 0)
+		flags |= 0x8u;
+
+	Con_Printf("QGE: Texture signal cache backend=cpu_gltexture_cache entries=%d gltexture=%d fullbright=%d warp=%d\n",
+			   qge_texture_signal_cache_entries,
+			   qge_texture_signal_gltexture_entries,
+			   qge_texture_signal_fullbright_entries,
+			   qge_texture_signal_warp_entries);
+	fprintf(stderr, "QGE texture signal cache backend=cpu_gltexture_cache entries=%d gltexture=%d fullbright=%d warp=%d hash=0x%llx\n",
+			qge_texture_signal_cache_entries,
+			qge_texture_signal_gltexture_entries,
+			qge_texture_signal_fullbright_entries,
+			qge_texture_signal_warp_entries,
+			(unsigned long long)qge_texture_signal_cache_hash);
+
+	rt = QGE_Runtime();
+	if (!rt)
+		return;
+
+	memset(&probe, 0, sizeof(probe));
+	probe.frame = qge_frame_count;
+	probe.server_time_msec = QGE_ServerTimeMsec();
+	probe.domain = QGE_DOMAIN_MATERIAL;
+	probe.representation = QGE_REP_CLASSICAL_ORACLE;
+	probe.subject_id = texture_count;
+	probe.flags = flags;
+	probe.state_hash = qge_texture_signal_cache_hash;
+	probe.entropy = texture_count > 0 ?
+		(double)qge_texture_signal_cache_entries / (double)texture_count : 0.0;
+	probe.coherence = 1.0;
+	probe.max_probability = (double)qge_texture_signal_gltexture_entries;
+	probe.total_probability = (double)texture_count;
+	probe.active_basis_count = qge_texture_signal_cache_entries;
+	probe.qubit_count =
+		qge_quantum_qubits_for_basis_count(qge_texture_signal_cache_entries);
+	probe.memory_bytes = (uint64_t)qge_texture_signal_cache_entries *
+						 (uint64_t)sizeof(qge_texture_signal_cache_t);
+	strlcpy(probe.label, "texture_signal_cache", sizeof(probe.label));
+	qge_quantum_record_probe(rt, &probe);
 }
 
 static void QGE_ClearLightmapSignalCache(void)
@@ -1470,6 +1543,7 @@ static void QGE_RegisterWorldIfNeeded(void)
 		qge_world_register_texture(world, &ref);
 	}
 	QGE_RebuildTextureSignalCache(model);
+	QGE_TraceTextureSignalCacheProbe(model);
 	QGE_ClearLightmapSignalCache();
 
 	for (int i = 0; model->surfaces && i < model->numsurfaces; i++) {
