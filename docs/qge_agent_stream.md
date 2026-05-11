@@ -165,9 +165,10 @@ BenQ PD3200U; SDL display `0` is the LG. The engine logs the available display
 indexes and bounds at video startup so this can be adjusted when the monitor
 layout changes.
 
-Use `QGE_STREAM_LAUNCH=direct` when running the app binary directly is more
-reliable in the local environment. Direct mode redirects the runtime log through
-the harness process instead of reading `qconsole.log`.
+Use `QGE_STREAM_LAUNCH=direct` only when running the app binary directly is
+more reliable in the local environment. Direct mode redirects the runtime log
+through the harness process instead of reading `qconsole.log`, and records the
+child process exit status if the app aborts before video/log initialization.
 
 ## Capture Timing
 

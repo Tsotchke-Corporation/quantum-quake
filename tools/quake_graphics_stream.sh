@@ -98,6 +98,8 @@ if (( timeout_seconds > 0 )); then
 else
   max_seconds=$((90 + frames * waits_per_frame / 10))
 fi
+game_status=0
+game_timed_out=0
 
 if [[ ! -f "$gamedir/pak0.pak" ]]; then
   echo "Missing $gamedir/pak0.pak" >&2
@@ -687,6 +689,7 @@ if [[ "$launch_mode" != "open" ]]; then
 
     if (( elapsed >= max_seconds )); then
       echo "QGE_STREAM_TIMEOUT killing process $game_pid" >&2
+      game_timed_out=1
       kill "$game_pid" 2>/dev/null || true
       break
     fi
@@ -695,7 +698,7 @@ if [[ "$launch_mode" != "open" ]]; then
     elapsed=$((elapsed + 1))
   done
 
-  wait "$game_pid" 2>/dev/null || true
+  wait "$game_pid" 2>/dev/null || game_status=$?
   print_log_updates
 fi
 
@@ -712,9 +715,17 @@ fi
 if [[ -f "$open_log_file" ]]; then
   cp "$open_log_file" "$agent_open_log_file"
 fi
+if [[ "$launch_mode" != "open" && "$game_status" != "0" ]]; then
+  agent_event "process_exit" "$runtime_log_file" "status=$game_status"
+  echo "QGE_PROCESS_EXIT status=$game_status $runtime_log_file" >&2
+fi
 
 startup_issue=""
-if [[ "$trace" == "1" && ! -s "$trace_file" ]]; then
+if [[ "$launch_mode" != "open" && "$game_timed_out" == "1" ]]; then
+  startup_issue="process_timeout"
+elif [[ "$launch_mode" != "open" && "$game_status" != "0" ]]; then
+  startup_issue="process_exit_$game_status"
+elif [[ "$trace" == "1" && ! -s "$trace_file" ]]; then
   if grep -q "Couldn't create GL context" "$log_file" 2>/dev/null; then
     startup_issue="gl_context_failed"
   elif ! grep -q "Video mode .* initialized" "$log_file" 2>/dev/null; then
