@@ -42,6 +42,9 @@ grep -q 'diagnostics/agent_stream/latest_stream.txt' "$repo_root/docs/qge_agent_
 grep -q 'QGE_STREAM_TIMEOUT_SECONDS' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'child process exit status' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'process exit status in its final' "$repo_root/docs/qge_agent_stream.md"
+grep -q 'QGE_NOESIS_MAX_WAIT' "$repo_root/tools/noesis_quake_player.sh"
+grep -q 'wait_clamped requested=' "$repo_root/tools/noesis_quake_player.sh"
+grep -q 'QGE_NOESIS_MAX_WAIT' "$repo_root/docs/qge_agent_stream.md"
 
 actions_file="$tmpdir/actions.txt"
 commands_file="$tmpdir/commands.cfg"
@@ -110,6 +113,29 @@ grep -q '^forward 1$' "$override_actions"
 grep -q '^+forward$' "$override_commands"
 if grep -q '^+attack$' "$override_commands"; then
   echo "QGE_NOESIS_ACTIONS_FILE unexpectedly overrode QGE_NOESIS_CMD" >&2
+  exit 1
+fi
+
+clamp_actions="$tmpdir/clamp-actions.txt"
+clamp_trace="$tmpdir/clamp-trace.txt"
+clamp_commands="$tmpdir/clamp-commands.cfg"
+clamp_stdout="$tmpdir/clamp-stdout.cfg"
+printf '%s\n' 'wait 0008' > "$clamp_actions"
+
+QGE_NOESIS_DIR="$repo_root" \
+QGE_NOESIS_ACTIONS_FILE="$clamp_actions" \
+QGE_NOESIS_START_WAIT=0 \
+QGE_NOESIS_MAX_WAIT=3 \
+QGE_NOESIS_ACTION_TRACE_FILE="$clamp_trace" \
+QGE_NOESIS_COMMAND_TRACE_FILE="$clamp_commands" \
+  "$repo_root/tools/noesis_quake_player.sh" > "$clamp_stdout"
+
+cmp -s "$clamp_stdout" "$clamp_commands"
+grep -q '^wait 0008$' "$clamp_trace"
+grep -q '^echo QGE_NOESIS_PLAYER wait_clamped requested=8 max=3$' "$clamp_commands"
+clamped_wait_count="$(grep -c '^wait$' "$clamp_commands" | tr -d ' ')"
+if [[ "$clamped_wait_count" != "3" ]]; then
+  echo "expected clamped wait count 3, got $clamped_wait_count" >&2
   exit 1
 fi
 

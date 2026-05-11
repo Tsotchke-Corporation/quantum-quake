@@ -263,6 +263,10 @@ audio pointer files remain present for consumers that expect a stable contract.
 into Quake console commands. Blank lines and `#` comments are ignored. Each
 action accepts an optional wait-count argument, so `forward 12` emits
 `+forward`, twelve `wait` commands, then `-forward`.
+Wait counts are normalized as decimal integers and clamped to
+`QGE_NOESIS_MAX_WAIT` waits per action, default `600`, so a malformed provider
+cannot accidentally expand the command buffer without a visible
+`QGE_NOESIS_PLAYER wait_clamped` marker.
 
 Example:
 
@@ -331,6 +335,8 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
 - `QGE_NOESIS_START_WAIT`: command-buffer waits emitted before Noesis actions,
   default `16`. Set to `0` when the action file already includes its own
   startup delay.
+- `QGE_NOESIS_MAX_WAIT`: maximum waits emitted by a single Noesis action,
+  default `600`; larger counts are clamped and traced.
 - `QGE_NOESIS_CMD`: optional Noesis action provider command. When set, the
   harness runs it from `QGE_NOESIS_DIR` and translates its stdout action lines;
   this takes precedence over `QGE_NOESIS_ACTIONS_FILE` and the default

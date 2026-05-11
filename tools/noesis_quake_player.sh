@@ -5,6 +5,7 @@ noesis_dir="${QGE_NOESIS_DIR:-$HOME/Desktop/noesis}"
 plan="${QGE_NOESIS_PLAN:-patrol}"
 actions_file="${QGE_NOESIS_ACTIONS_FILE:-}"
 start_wait="${QGE_NOESIS_START_WAIT:-16}"
+max_wait="${QGE_NOESIS_MAX_WAIT:-600}"
 noesis_cmd="${QGE_NOESIS_CMD:-}"
 action_trace_file="${QGE_NOESIS_ACTION_TRACE_FILE:-}"
 command_trace_file="${QGE_NOESIS_COMMAND_TRACE_FILE:-}"
@@ -29,8 +30,13 @@ emit_waits() {
   case "$count" in
     ''|*[!0-9]*) count=1 ;;
   esac
+  count="$((10#$count))"
   if (( count < 1 )); then
     count=1
+  fi
+  if (( count > max_wait )); then
+    emit_command "echo QGE_NOESIS_PLAYER wait_clamped requested=$count max=$max_wait"
+    count="$max_wait"
   fi
 
   while (( i < count )); do
@@ -198,6 +204,17 @@ fi
 case "$start_wait" in
   ''|*[!0-9]*) start_wait=16 ;;
 esac
+start_wait="$((10#$start_wait))"
+if (( start_wait < 0 )); then
+  start_wait=16
+fi
+case "$max_wait" in
+  ''|*[!0-9]*) max_wait=600 ;;
+esac
+max_wait="$((10#$max_wait))"
+if (( max_wait < 1 )); then
+  max_wait=600
+fi
 
 if [[ -n "$noesis_cmd" ]]; then
   emit_start "cmd" "provider=QGE_NOESIS_CMD"
