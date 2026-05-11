@@ -53,61 +53,74 @@ engine_capture="${QGE_STREAM_ENGINE_CAPTURE:-1}"
 launch_mode="${QGE_STREAM_LAUNCH:-auto}"
 timeout_seconds="${QGE_STREAM_TIMEOUT_SECONDS:-}"
 
+normalize_bool() {
+  if [[ "${1:-}" == "1" ]]; then
+    printf '1\n'
+  else
+    printf '0\n'
+  fi
+}
+
+normalize_nonnegative_int() {
+  local value="${1:-}"
+  local default_value="$2"
+  case "$value" in
+    ''|*[!0-9]*) printf '%s\n' "$default_value"; return ;;
+  esac
+  printf '%s\n' "$((10#$value))"
+}
+
+normalize_positive_int() {
+  local value="${1:-}"
+  local default_value="$2"
+  value="$(normalize_nonnegative_int "$value" "$default_value")"
+  if (( value < 1 )); then
+    printf '%s\n' "$default_value"
+  else
+    printf '%s\n' "$value"
+  fi
+}
+
 if [[ "$launch_mode" == "auto" ]]; then
   case "$(uname -s)" in
     Darwin) launch_mode="open" ;;
     *) launch_mode="direct" ;;
   esac
 fi
-if [[ "$engine_capture" == "1" ]]; then
-  engine_capture=1
-else
-  engine_capture=0
-fi
-if [[ "$stream_mouse" == "1" ]]; then
-  stream_mouse=1
-else
-  stream_mouse=0
-fi
-if [[ "$sprite_test" == "1" ]]; then
-  sprite_test=1
-else
-  sprite_test=0
-fi
-if [[ "$fire_test" == "1" && "$stream_player" == "noesis" && -z "${QGE_NOESIS_PLAN+x}" ]]; then
-  noesis_plan="fire"
-fi
-case "$noesis_start_wait" in
-  ''|*[!0-9]*) noesis_start_wait=16 ;;
-esac
-case "$frames" in
-  ''|*[!0-9]*) frames=12 ;;
-esac
-if (( frames < 1 )); then
-  frames=12
-fi
-case "$waits_per_frame" in
-  ''|*[!0-9]*) waits_per_frame=20 ;;
-esac
-if (( waits_per_frame < 1 )); then
-  waits_per_frame=20
-fi
+engine_capture="$(normalize_bool "$engine_capture")"
+stream_mouse="$(normalize_bool "$stream_mouse")"
+sprite_test="$(normalize_bool "$sprite_test")"
+fire_test="$(normalize_bool "$fire_test")"
+fullscreen="$(normalize_bool "$fullscreen")"
+sound="$(normalize_bool "$sound")"
+trace="$(normalize_bool "$trace")"
+render_value="$(normalize_nonnegative_int "$render_value" 1)"
+render_res="$(normalize_positive_int "$render_res" 1024)"
+render_bilinear_samples="$(normalize_nonnegative_int "$render_bilinear_samples" 0)"
+render_edge_samples="$(normalize_nonnegative_int "$render_edge_samples" 0)"
+render_display_filter="$(normalize_nonnegative_int "$render_display_filter" 0)"
+render_update_interval="$(normalize_positive_int "$render_update_interval" 8)"
+physics_value="$(normalize_nonnegative_int "$physics_value" 1)"
+projectiles_value="$(normalize_nonnegative_int "$projectiles_value" 1)"
+particles_value="$(normalize_nonnegative_int "$particles_value" 0)"
+scene_surface_budget="$(normalize_positive_int "$scene_surface_budget" 128)"
+width="$(normalize_positive_int "$width" 800)"
+height="$(normalize_positive_int "$height" 600)"
+noesis_start_wait="$(normalize_nonnegative_int "$noesis_start_wait" 16)"
+frames="$(normalize_positive_int "$frames" 12)"
+waits_per_frame="$(normalize_positive_int "$waits_per_frame" 20)"
 case "$capture_wait_override" in
   ''|*[!0-9]*) capture_wait_override="" ;;
 esac
+if [[ "$fire_test" == "1" && "$stream_player" == "noesis" && -z "${QGE_NOESIS_PLAN+x}" ]]; then
+  noesis_plan="fire"
+fi
 if [[ "$stream_player" == "noesis" && -z "$noesis_cmd" && -z "$noesis_actions_file" && -x "$default_noesis_cmd" ]]; then
   noesis_cmd="$default_noesis_cmd"
   noesis_cmd_default=1
 fi
-case "$stream_activate_attempts" in
-  ''|*[!0-9]*) stream_activate_attempts=8 ;;
-esac
-if (( stream_activate_attempts < 1 )); then
-  stream_activate_attempts=1
-fi
-case "$timeout_seconds" in
-  ''|*[!0-9]*) timeout_seconds=0 ;;
-esac
+stream_activate_attempts="$(normalize_positive_int "$stream_activate_attempts" 8)"
+timeout_seconds="$(normalize_nonnegative_int "$timeout_seconds" 0)"
 if (( timeout_seconds > 0 )); then
   max_seconds="$timeout_seconds"
 else

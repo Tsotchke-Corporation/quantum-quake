@@ -24,18 +24,44 @@ height="${QGE_STREAM_HEIGHT:-600}"
 launch_mode="${QGE_STREAM_LAUNCH:-auto}"
 sound="${QGE_HARNESS_SOUND:-0}"
 
-case "$frames" in
-  ''|*[!0-9]*) frames=1 ;;
-esac
-if (( frames < 1 )); then
-  frames=1
-fi
-case "$waits_per_frame" in
-  ''|*[!0-9]*) waits_per_frame=90 ;;
-esac
-if (( waits_per_frame < 1 )); then
-  waits_per_frame=90
-fi
+normalize_bool() {
+  if [[ "${1:-}" == "1" ]]; then
+    printf '1\n'
+  else
+    printf '0\n'
+  fi
+}
+
+normalize_nonnegative_int() {
+  local value="${1:-}"
+  local default_value="$2"
+  case "$value" in
+    ''|*[!0-9]*) printf '%s\n' "$default_value"; return ;;
+  esac
+  printf '%s\n' "$((10#$value))"
+}
+
+normalize_positive_int() {
+  local value="${1:-}"
+  local default_value="$2"
+  value="$(normalize_nonnegative_int "$value" "$default_value")"
+  if (( value < 1 )); then
+    printf '%s\n' "$default_value"
+  else
+    printf '%s\n' "$value"
+  fi
+}
+
+frames="$(normalize_positive_int "$frames" 1)"
+waits_per_frame="$(normalize_positive_int "$waits_per_frame" 90)"
+classic_render="$(normalize_nonnegative_int "$classic_render" 0)"
+quantum_render="$(normalize_nonnegative_int "$quantum_render" 2)"
+render_res="$(normalize_positive_int "$render_res" 1024)"
+render_edge_samples="$(normalize_nonnegative_int "$render_edge_samples" 0)"
+scene_surface_budget="$(normalize_positive_int "$scene_surface_budget" 128)"
+width="$(normalize_positive_int "$width" 800)"
+height="$(normalize_positive_int "$height" 600)"
+sound="$(normalize_bool "$sound")"
 
 if [[ ! -x "$app_bin" ]]; then
   echo "QuantumQuake.app is missing; building it first." >&2
