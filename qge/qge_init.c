@@ -143,17 +143,23 @@ static qge_backend_probe_t detect_backend(void) {
 #endif
 }
 
+static const char* const qge_backend_display_names[] = {
+    [QGE_BACKEND_METAL] = "Metal",
+    [QGE_BACKEND_VULKAN] = "Vulkan",
+    [QGE_BACKEND_OPENCL] = "OpenCL",
+    [QGE_BACKEND_AVX512] = "AVX-512",
+    [QGE_BACKEND_AVX2] = "AVX2",
+    [QGE_BACKEND_NEON] = "NEON",
+    [QGE_BACKEND_FALLBACK] = "Fallback",
+};
+
 const char* qge_backend_name(qge_backend_t backend) {
-    switch (backend) {
-        case QGE_BACKEND_METAL:    return "Metal";
-        case QGE_BACKEND_VULKAN:   return "Vulkan";
-        case QGE_BACKEND_OPENCL:   return "OpenCL";
-        case QGE_BACKEND_AVX512:   return "AVX-512";
-        case QGE_BACKEND_AVX2:     return "AVX2";
-        case QGE_BACKEND_NEON:     return "NEON";
-        case QGE_BACKEND_FALLBACK: return "Fallback";
-        default:                   return "Unknown";
+    unsigned int index = (unsigned int)backend;
+    if (index < sizeof(qge_backend_display_names) / sizeof(qge_backend_display_names[0]) &&
+        qge_backend_display_names[index]) {
+        return qge_backend_display_names[index];
     }
+    return "Unknown";
 }
 
 bool qge_backend_is_accelerated(qge_backend_t backend) {
