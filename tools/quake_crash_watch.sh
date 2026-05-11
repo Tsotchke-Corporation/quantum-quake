@@ -38,6 +38,7 @@ noesis_dir="${QGE_NOESIS_DIR:-$HOME/Desktop/noesis}"
 noesis_plan="${QGE_NOESIS_PLAN:-map-scout}"
 noesis_actions_file="${QGE_NOESIS_ACTIONS_FILE:-}"
 noesis_start_wait="${QGE_NOESIS_START_WAIT:-60}"
+noesis_max_wait="${QGE_NOESIS_MAX_WAIT:-600}"
 noesis_cmd="${QGE_NOESIS_CMD:-}"
 default_noesis_cmd="$repo_root/tools/noesis_quake_policy.sh"
 noesis_cmd_default=0
@@ -51,6 +52,13 @@ fi
 case "$noesis_start_wait" in
   ''|*[!0-9]*) noesis_start_wait=60 ;;
 esac
+case "$noesis_max_wait" in
+  ''|*[!0-9]*) noesis_max_wait=600 ;;
+esac
+noesis_max_wait="$((10#$noesis_max_wait))"
+if (( noesis_max_wait < 1 )); then
+  noesis_max_wait=600
+fi
 case "$seconds" in
   ''|*[!0-9]*) seconds=90 ;;
 esac
@@ -99,6 +107,7 @@ emit_noesis_player_script() {
     QGE_NOESIS_PLAN="$noesis_plan" \
     QGE_NOESIS_ACTIONS_FILE="$noesis_actions_file" \
     QGE_NOESIS_START_WAIT="$noesis_start_wait" \
+    QGE_NOESIS_MAX_WAIT="$noesis_max_wait" \
     QGE_NOESIS_CMD="$noesis_cmd" \
     QGE_NOESIS_ACTION_TRACE_FILE="$input_actions_file" \
     QGE_NOESIS_COMMAND_TRACE_FILE="$input_commands_file" \
@@ -167,7 +176,7 @@ echo "Watching Quantum Quake for crashes"
 echo "  outdir=$outdir"
 echo "  seconds=$seconds script_waits=$script_waits map=$map_name window=${width}x${height} display=$stream_display sound=$sound mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan"
 if [[ "$stream_player" == "noesis" ]]; then
-  echo "  noesis_cmd=$noesis_cmd noesis_cmd_default=$noesis_cmd_default actions=$input_actions_file commands=$input_commands_file"
+  echo "  noesis_cmd=$noesis_cmd noesis_cmd_default=$noesis_cmd_default max_wait=$noesis_max_wait actions=$input_actions_file commands=$input_commands_file"
 fi
 echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter update_interval=$render_update_interval quantum_rng=$rng_value quantum_ai=$ai_value"
 echo "  quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_particles=$particles_value"

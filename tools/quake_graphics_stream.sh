@@ -38,6 +38,7 @@ noesis_dir="${QGE_NOESIS_DIR:-$HOME/Desktop/noesis}"
 noesis_plan="${QGE_NOESIS_PLAN:-patrol}"
 noesis_actions_file="${QGE_NOESIS_ACTIONS_FILE:-}"
 noesis_start_wait="${QGE_NOESIS_START_WAIT:-16}"
+noesis_max_wait="${QGE_NOESIS_MAX_WAIT:-600}"
 noesis_cmd="${QGE_NOESIS_CMD:-}"
 default_noesis_cmd="$repo_root/tools/noesis_quake_policy.sh"
 noesis_cmd_default=0
@@ -107,6 +108,7 @@ scene_surface_budget="$(normalize_positive_int "$scene_surface_budget" 128)"
 width="$(normalize_positive_int "$width" 800)"
 height="$(normalize_positive_int "$height" 600)"
 noesis_start_wait="$(normalize_nonnegative_int "$noesis_start_wait" 16)"
+noesis_max_wait="$(normalize_positive_int "$noesis_max_wait" 600)"
 frames="$(normalize_positive_int "$frames" 12)"
 waits_per_frame="$(normalize_positive_int "$waits_per_frame" 20)"
 case "$capture_wait_override" in
@@ -249,6 +251,7 @@ write_agent_manifest() {
     "noesis_plan": $(json_string "$noesis_plan"),
     "noesis_actions_file": $(json_string "$noesis_actions_file"),
     "noesis_start_wait": $noesis_start_wait,
+    "noesis_max_wait": $noesis_max_wait,
     "noesis_cmd": $(json_string "$noesis_cmd"),
     "noesis_cmd_default": $noesis_cmd_default,
     "noesis_player_tool": $(json_string "$noesis_player_tool"),
@@ -336,6 +339,7 @@ emit_noesis_player_script() {
     QGE_NOESIS_PLAN="$noesis_plan" \
     QGE_NOESIS_ACTIONS_FILE="$noesis_actions_file" \
     QGE_NOESIS_START_WAIT="$noesis_start_wait" \
+    QGE_NOESIS_MAX_WAIT="$noesis_max_wait" \
     QGE_NOESIS_CMD="$noesis_cmd" \
     QGE_NOESIS_ACTION_TRACE_FILE="$agent_input_actions_file" \
     QGE_NOESIS_COMMAND_TRACE_FILE="$agent_input_commands_file" \
@@ -443,7 +447,7 @@ echo "Streaming Quantum Quake graphics diagnostics"
 echo "  outdir=$outdir"
 echo "  agent_stream=$agent_stream"
 echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter update_interval=$render_update_interval sprite_test=$sprite_test quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_particles=$particles_value"
-echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound trace=$trace fire_test=$fire_test scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan"
+echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound trace=$trace fire_test=$fire_test scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_max_wait=$noesis_max_wait"
 echo "QGE_AGENT_STREAM $agent_stream"
 
 print_log_updates() {

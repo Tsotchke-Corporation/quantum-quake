@@ -48,7 +48,8 @@ The stream directory is intentionally simple and tail-friendly:
 
 - `manifest.json`: rewritten whenever stream state changes. It records the
   capture path, map, render settings, trace path, and current audio/video/log
-  locations.
+  locations. The input block also records `noesis_max_wait`, the per-action
+  wait cap used by the Noesis command translator for that run.
 - `events.ndjson`: append-only runtime events. This is the safest file to tail
   for incremental progress.
 - `video/frames/frame_###.png`: screenshots copied into stable frame names as
@@ -336,7 +337,8 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   default `16`. Set to `0` when the action file already includes its own
   startup delay.
 - `QGE_NOESIS_MAX_WAIT`: maximum waits emitted by a single Noesis action,
-  default `600`; larger counts are clamped and traced.
+  default `600`; larger counts are clamped and traced. The stream manifest
+  records the normalized cap as `input.noesis_max_wait`.
 - `QGE_NOESIS_CMD`: optional Noesis action provider command. When set, the
   harness runs it from `QGE_NOESIS_DIR` and translates its stdout action lines;
   this takes precedence over `QGE_NOESIS_ACTIONS_FILE` and the default
