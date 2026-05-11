@@ -80,6 +80,21 @@ fi
 case "$noesis_start_wait" in
   ''|*[!0-9]*) noesis_start_wait=16 ;;
 esac
+case "$frames" in
+  ''|*[!0-9]*) frames=12 ;;
+esac
+if (( frames < 1 )); then
+  frames=12
+fi
+case "$waits_per_frame" in
+  ''|*[!0-9]*) waits_per_frame=20 ;;
+esac
+if (( waits_per_frame < 1 )); then
+  waits_per_frame=20
+fi
+case "$capture_wait_override" in
+  ''|*[!0-9]*) capture_wait_override="" ;;
+esac
 if [[ "$stream_player" == "noesis" && -z "$noesis_cmd" && -z "$noesis_actions_file" && -x "$default_noesis_cmd" ]]; then
   noesis_cmd="$default_noesis_cmd"
   noesis_cmd_default=1

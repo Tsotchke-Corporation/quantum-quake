@@ -24,6 +24,19 @@ height="${QGE_STREAM_HEIGHT:-600}"
 launch_mode="${QGE_STREAM_LAUNCH:-auto}"
 sound="${QGE_HARNESS_SOUND:-0}"
 
+case "$frames" in
+  ''|*[!0-9]*) frames=1 ;;
+esac
+if (( frames < 1 )); then
+  frames=1
+fi
+case "$waits_per_frame" in
+  ''|*[!0-9]*) waits_per_frame=90 ;;
+esac
+if (( waits_per_frame < 1 )); then
+  waits_per_frame=90
+fi
+
 if [[ ! -x "$app_bin" ]]; then
   echo "QuantumQuake.app is missing; building it first." >&2
   make quake

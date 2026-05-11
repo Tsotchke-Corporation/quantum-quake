@@ -190,6 +190,8 @@ continues to mean exactly the frame requested.
 The launch watchdog defaults to `90 + QGE_STREAM_FRAMES *
 QGE_STREAM_WAIT_FRAMES / 10` seconds. Set `QGE_STREAM_TIMEOUT_SECONDS` for
 large map-load smokes or slow display launches that need a fixed budget.
+Malformed or zero frame-count overrides fall back to the documented defaults
+before the watchdog budget, manifest, and engine capture arguments are written.
 
 Set `QGE_STREAM_ENGINE_CAPTURE=0` to use scripted `screenshot png` commands
 instead of engine auto-capture. This mode still mirrors discovered `spasm*.png`
