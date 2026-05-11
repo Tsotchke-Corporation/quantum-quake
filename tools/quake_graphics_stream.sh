@@ -317,6 +317,24 @@ write_agent_icc_evidence() {
   } > "$agent_icc_file"
 }
 
+recover_latest_trace_pointer() {
+  local current_trace_pointer=""
+  local recovered_trace=""
+
+  if [[ -s "$quake_latest_trace_file" ]]; then
+    current_trace_pointer="$(tail -n 1 "$quake_latest_trace_file")"
+    if [[ -n "$current_trace_pointer" && -s "$current_trace_pointer" ]]; then
+      return
+    fi
+  fi
+
+  recovered_trace="$(find "$quake_stream_root" -mindepth 2 -maxdepth 2 \
+    -name qge_trace.bin -type f -size +0c -print 2>/dev/null | sort | tail -n 1)"
+  if [[ -n "$recovered_trace" ]]; then
+    printf '%s\n' "$recovered_trace" > "$quake_latest_trace_file"
+  fi
+}
+
 write_latest_stream_pointers() {
   printf '%s\n' "$agent_stream" > "$agent_latest_stream_file"
   printf '%s\n' "$agent_manifest_file" > "$agent_latest_manifest_file"
@@ -325,6 +343,8 @@ write_latest_stream_pointers() {
   printf '%s\n' "$outdir" > "$quake_latest_stream_file"
   if [[ "$trace" == "1" && -s "$trace_file" ]]; then
     printf '%s\n' "$trace_file" > "$quake_latest_trace_file"
+  else
+    recover_latest_trace_pointer
   fi
 }
 

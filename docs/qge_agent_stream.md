@@ -81,7 +81,9 @@ The harness also refreshes stable pointers in the diagnostics roots:
 - `diagnostics/quake_stream/latest_stream.txt`
 - `diagnostics/quake_stream/latest_trace.txt`: latest non-empty trace file.
   Runs with `QGE_STREAM_TRACE=0`, or trace-requested runs that fail before
-  writing `qge_trace.bin`, do not overwrite this pointer.
+  writing `qge_trace.bin`, do not overwrite this pointer. If the pointer is
+  empty or stale, the harness repairs it from the newest existing non-empty
+  `diagnostics/quake_stream/*/qge_trace.bin`.
 
 Consumers should treat `events.ndjson` as append-only and `manifest.json`,
 `video/frame_count.txt`, `video/latest_frame.txt`, and `audio/bytes.txt` as
