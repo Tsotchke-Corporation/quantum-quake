@@ -3,7 +3,9 @@
  * @brief Quantum AI for Enemy Decision-Making
  *
  * Uses genuine quantum superposition and measurement for enemy AI decisions.
- * Each enemy maintains a quantum state representing their behavioral tendencies.
+ * Enemy metadata lives in a shared state; hot per-think action selection uses a
+ * reusable 3-qubit decision state so busy maps do not reset a 24-qubit state
+ * for every monster.
  *
  * Architecture:
  * - Each enemy gets 8 qubits for decision space
@@ -65,6 +67,7 @@ typedef struct {
 } enemy_quantum_info_t;
 
 static quantum_state_t* ai_state = NULL;
+static quantum_state_t* ai_decision_state = NULL;
 static quantum_entropy_ctx_t* ai_entropy = NULL;
 static entropy_ctx_t* hw_entropy = NULL;
 static enemy_quantum_info_t enemies[MAX_ENEMIES];
@@ -91,7 +94,7 @@ static int ai_entropy_callback(void *user_data, uint8_t *buffer, size_t size) {
 static void ensure_ai_initialized(void) {
     if (ai_initialized) return;
 
-    /* Allocate quantum state for up to 8 simultaneous enemies (64 qubits) */
+    /* Allocate shared bookkeeping/batch state for three simultaneous enemies. */
     ai_state = malloc(sizeof(quantum_state_t));
     if (!ai_state) {
         fprintf(stderr, "QGE AI: Failed to allocate state\n");
@@ -107,10 +110,33 @@ static void ensure_ai_initialized(void) {
         return;
     }
 
+    ai_decision_state = malloc(sizeof(quantum_state_t));
+    if (!ai_decision_state) {
+        fprintf(stderr, "QGE AI: Failed to allocate decision state\n");
+        quantum_state_free(ai_state);
+        free(ai_state);
+        ai_state = NULL;
+        return;
+    }
+
+    err = quantum_state_init(ai_decision_state, ACTION_QUBITS);
+    if (err != QS_SUCCESS) {
+        fprintf(stderr, "QGE AI: Failed to init decision state\n");
+        free(ai_decision_state);
+        ai_decision_state = NULL;
+        quantum_state_free(ai_state);
+        free(ai_state);
+        ai_state = NULL;
+        return;
+    }
+
     /* Initialize hardware entropy context */
     hw_entropy = malloc(sizeof(entropy_ctx_t));
     if (!hw_entropy) {
         fprintf(stderr, "QGE AI: Failed to allocate hardware entropy context\n");
+        quantum_state_free(ai_decision_state);
+        free(ai_decision_state);
+        ai_decision_state = NULL;
         quantum_state_free(ai_state);
         free(ai_state);
         ai_state = NULL;
@@ -119,9 +145,12 @@ static void ensure_ai_initialized(void) {
 
     if (entropy_init(hw_entropy) != ENTROPY_SUCCESS) {
         fprintf(stderr, "QGE AI: Failed to init hardware entropy\n");
+        quantum_state_free(ai_decision_state);
+        free(ai_decision_state);
         quantum_state_free(ai_state);
         free(ai_state);
         free(hw_entropy);
+        ai_decision_state = NULL;
         ai_state = NULL;
         hw_entropy = NULL;
         return;
@@ -133,8 +162,11 @@ static void ensure_ai_initialized(void) {
         fprintf(stderr, "QGE AI: Failed to allocate entropy context\n");
         entropy_free(hw_entropy);
         free(hw_entropy);
+        quantum_state_free(ai_decision_state);
+        free(ai_decision_state);
         quantum_state_free(ai_state);
         free(ai_state);
+        ai_decision_state = NULL;
         ai_state = NULL;
         hw_entropy = NULL;
         return;
@@ -173,7 +205,9 @@ static ai_action_t index_to_action(int index, float aggression, bool player_visi
 /**
  * @brief Apply situation-dependent phase rotations to bias decision
  */
-static void apply_situation_bias(int qubit_offset, float aggression,
+static void apply_situation_bias(quantum_state_t* state,
+                                  int qubit_offset,
+                                  float aggression,
                                   float distance, bool player_visible) {
     /* Bias the quantum state based on game situation */
 
@@ -186,15 +220,15 @@ static void apply_situation_bias(int qubit_offset, float aggression,
     /* Apply RY rotations to bias action selection */
     /* Qubit 0: bias toward action vs idle */
     double theta0 = (aggression * vis_factor * distance_factor) * M_PI / 4.0;
-    gate_ry(ai_state, qubit_offset + 0, theta0);
+    gate_ry(state, qubit_offset + 0, theta0);
 
     /* Qubit 1: bias toward aggressive actions */
     double theta1 = aggression * M_PI / 6.0;
-    gate_ry(ai_state, qubit_offset + 1, theta1);
+    gate_ry(state, qubit_offset + 1, theta1);
 
     /* Qubit 2: randomization/variety */
     if (distance_factor > 0.5f) {
-        gate_hadamard(ai_state, qubit_offset + 2);
+        gate_hadamard(state, qubit_offset + 2);
     }
 }
 
@@ -262,33 +296,35 @@ ai_action_t qge_ai_decide(int enemy_id,
     }
 
     enemy_quantum_info_t* info = &enemies[slot];
-    int offset = info->qubit_offset;
+    quantum_state_t* decision_state = ai_decision_state ? ai_decision_state : ai_state;
+    int offset = ai_decision_state ? 0 : info->qubit_offset;
 
-    /* Reset the quantum state to |0⟩ before creating new superposition.
-     * This is needed because quantum_measure_all_fast collapses the state. */
-    quantum_state_reset(ai_state);
+    /* Per-think decisions only need the 3 action qubits. Keep the wider
+     * 24-qubit state for enemy registration/entanglement bookkeeping. */
+    quantum_state_reset(decision_state);
 
     /* Create superposition in action qubits for this enemy */
     for (int q = 0; q < ACTION_QUBITS; q++) {
-        gate_hadamard(ai_state, offset + q);
+        gate_hadamard(decision_state, offset + q);
     }
 
     /* Combine base aggression with parameter */
     float effective_aggression = (info->base_aggression + aggression) / 2.0f;
 
     /* Apply situation-dependent bias using quantum gates */
-    apply_situation_bias(offset, effective_aggression, player_distance, player_visible);
+    apply_situation_bias(decision_state, offset, effective_aggression,
+                         player_distance, player_visible);
 
     /* Apply behavioral memory: past actions influence current */
     if (info->decision_count > 0) {
         /* If last action was aggressive, slightly bias toward continuing */
         if (info->last_action == AI_ATTACK || info->last_action == AI_CHASE) {
-            gate_rz(ai_state, offset + 1, M_PI / 8.0);
+            gate_rz(decision_state, offset + 1, M_PI / 8.0);
         }
     }
 
     /* Measure all qubits and extract just the action bits for this enemy */
-    uint64_t full_measurement = quantum_measure_all_fast(ai_state, ai_entropy);
+    uint64_t full_measurement = quantum_measure_all_fast(decision_state, ai_entropy);
 
     /* Extract the action bits at the enemy's qubit offset */
     uint64_t action_mask = (1ULL << ACTION_QUBITS) - 1;  /* 0x7 for 3 bits */
@@ -379,7 +415,8 @@ void qge_ai_decide_batch(int* enemy_ids, int count,
             }
 
             /* Apply situation bias */
-            apply_situation_bias(offset, aggressions[idx], distances[idx], visibilities[idx]);
+            apply_situation_bias(ai_state, offset, aggressions[idx],
+                                 distances[idx], visibilities[idx]);
         }
 
         /* Measure all qubits once and extract results for each enemy */
@@ -423,6 +460,20 @@ void qge_ai_get_stats(int enemy_id, int* decision_count, ai_action_t* last_actio
  * @brief Shutdown AI system
  */
 void qge_ai_shutdown(void) {
+    if (ai_entropy) {
+        free(ai_entropy);
+        ai_entropy = NULL;
+    }
+    if (hw_entropy) {
+        entropy_free(hw_entropy);
+        free(hw_entropy);
+        hw_entropy = NULL;
+    }
+    if (ai_decision_state) {
+        quantum_state_free(ai_decision_state);
+        free(ai_decision_state);
+        ai_decision_state = NULL;
+    }
     if (ai_state) {
         quantum_state_free(ai_state);
         free(ai_state);
