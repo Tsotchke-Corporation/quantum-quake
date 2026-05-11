@@ -323,10 +323,8 @@ write_latest_stream_pointers() {
   printf '%s\n' "$agent_events_file" > "$agent_latest_events_file"
   printf '%s\n' "$agent_icc_file" > "$agent_latest_icc_file"
   printf '%s\n' "$outdir" > "$quake_latest_stream_file"
-  if [[ "$trace" == "1" ]]; then
+  if [[ "$trace" == "1" && -s "$trace_file" ]]; then
     printf '%s\n' "$trace_file" > "$quake_latest_trace_file"
-  else
-    : > "$quake_latest_trace_file"
   fi
 }
 
@@ -791,7 +789,8 @@ Scene surface budget: $scene_surface_budget
 Physics cvars: quantum_physics $physics_value, quantum_projectiles $projectiles_value, quantum_particles $particles_value
 Fire test: $fire_test
 Launch mode: $launch_mode
-Trace: $trace_file
+Trace requested: $trace
+Trace file: $([[ "$trace" == "1" ]] && printf '%s' "$trace_file" || printf 'not requested')
 Timeout seconds: $max_seconds
 Log: $log_file
 Agent stream: $agent_stream
