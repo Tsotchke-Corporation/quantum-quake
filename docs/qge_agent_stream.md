@@ -227,6 +227,9 @@ comparison artifact directory. It probes `tools/qge_image_metrics.py
 --check-deps` before launching either capture because the comparison metrics
 require numpy and Pillow; if either dependency is unavailable, the harness exits
 before starting the app.
+The paired `tools/qge_vanilla_capture_matrix.py` sidecar copies each mode's
+agent-stream run and trace summary from `*.agent_stream.json`; an explicit
+agent-stream run failure blocks `ready_for_complete_claim`.
 
 `tools/quake_crash_watch.sh` uses the same Noesis player/provider contract for
 its scripted movement by default, stores `input/noesis_actions.txt` and

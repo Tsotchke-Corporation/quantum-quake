@@ -123,6 +123,52 @@ def read_readme_value(path: Path, label: str) -> str | None:
     return None
 
 
+def agent_manifest_summary(path: Path) -> dict[str, Any]:
+    summary: dict[str, Any] = {"exists": path.is_file()}
+    if not path.is_file():
+        return summary
+    try:
+        manifest = load_json(path)
+    except (OSError, ValueError) as exc:
+        summary["error"] = str(exc)
+        return summary
+
+    run = manifest.get("run", {})
+    if not isinstance(run, dict):
+        run = {}
+    summary.update({
+        "status": manifest.get("status"),
+        "frames_requested": manifest.get("frames_requested"),
+        "frames_captured": manifest.get("frames_captured"),
+        "trace_requested": manifest.get("trace_requested"),
+        "trace": manifest.get("trace"),
+        "trace_status": manifest.get("trace_status"),
+        "trace_bytes": manifest.get("trace_bytes"),
+        "run_status": run.get("status"),
+        "run_success": run.get("success"),
+        "startup_issue": run.get("startup_issue"),
+        "process_status": run.get("process_status"),
+        "timed_out": run.get("timed_out"),
+    })
+    return summary
+
+
+def false_like(value: Any) -> bool:
+    if value is False or value == 0:
+        return True
+    if isinstance(value, str) and value.lower() in {"0", "false", "no"}:
+        return True
+    return False
+
+
+def explicit_agent_run_failure(agent_run: dict[str, Any]) -> bool:
+    return (
+        agent_run.get("run_status") == "failed" or
+        false_like(agent_run.get("run_success")) or
+        bool(agent_run.get("startup_issue"))
+    )
+
+
 def mode_entry(capture_dir: Path,
                mode: str,
                render_value: int,
@@ -155,6 +201,7 @@ def mode_entry(capture_dir: Path,
         "agent_stream_manifest": file_info(agent_manifest),
         "agent_stream_events": file_info(agent_events),
         "agent_stream_icc_evidence": file_info(agent_icc),
+        "agent_stream_run": agent_manifest_summary(agent_manifest),
         "frames_captured": read_readme_value(readme, "Frames captured"),
         "map": read_readme_value(readme, "Map"),
         "runtime": {},
@@ -194,6 +241,12 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
     classic = mode_entry(capture_dir, args.classic_mode,
                          args.classic_render, "reference")
     qge = mode_entry(capture_dir, args.qge_mode, args.qge_render, "candidate")
+    classic_agent_run = classic.get("agent_stream_run", {})
+    qge_agent_run = qge.get("agent_stream_run", {})
+    agent_stream_runs_success = (
+        not explicit_agent_run_failure(classic_agent_run) and
+        not explicit_agent_run_failure(qge_agent_run)
+    )
     qge_render = qge.get("runtime", {}).get("qge_render", {})
     qge_render_max = qge.get("runtime", {}).get("qge_render_max", {})
     fallback_count = max(int(qge_render.get("fallback", 0) or 0),
@@ -216,6 +269,11 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
             "status": "evidence_only",
             "classic_frame_exists": classic["frame"]["exists"],
             "qge_frame_exists": qge["frame"]["exists"],
+            "classic_agent_run_status": classic_agent_run.get("run_status"),
+            "qge_agent_run_status": qge_agent_run.get("run_status"),
+            "classic_agent_startup_issue": classic_agent_run.get("startup_issue"),
+            "qge_agent_startup_issue": qge_agent_run.get("startup_issue"),
+            "agent_stream_runs_success": agent_stream_runs_success,
             "fallback_count": fallback_count,
             "classic3d_count": classic3d,
             "viewmodel_encoded": viewmodel,
@@ -243,6 +301,7 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
             "qge_edge_fills": qge_render.get("edgefills"),
             "ready_for_complete_claim": (
                 classic["frame"]["exists"] and qge["frame"]["exists"] and
+                agent_stream_runs_success and
                 fallback_count == 0 and surrogate_count == 0 and
                 classic3d == 0 and viewmodel > 0
             ),
@@ -286,6 +345,11 @@ def build_icc_evidence(matrix: dict[str, Any],
         "surrogate_count": summary["qge_surface_surrogates"],
         "culled_count": summary["qge_surface_culled"],
         "classic3d_count": summary["classic3d_count"],
+        "classic_agent_run_status": summary.get("classic_agent_run_status"),
+        "qge_agent_run_status": summary.get("qge_agent_run_status"),
+        "classic_agent_startup_issue": summary.get("classic_agent_startup_issue"),
+        "qge_agent_startup_issue": summary.get("qge_agent_startup_issue"),
+        "agent_stream_runs_success": summary.get("agent_stream_runs_success"),
         "viewmodel_encoded": summary["viewmodel_encoded"],
         "ready_for_complete_claim": ready,
         "status": "success" if ready else "blocked",
