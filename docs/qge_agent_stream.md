@@ -235,6 +235,10 @@ packed agent stream manifest's direct `run.status`, `run.success`,
 `run.startup_issue`, frame count, and trace status in its runtime summary and
 ICC evidence. A failed direct stream manifest makes the publication ICC result
 evidence-only instead of `qge_publication_artifact_pack_complete`.
+`tools/qge_perf_summary.py` reads a capture directory or `quantum_quake.log`
+and emits structured timing evidence for `QGE render frame=` component timings
+and `QGE: Average quantum render time` lines, with optional JSON and ICC
+sidecars plus threshold checks for performance regression smokes.
 
 `tools/quake_crash_watch.sh` uses the same Noesis player/provider contract for
 its scripted movement by default, stores `input/noesis_actions.txt` and
