@@ -108,6 +108,9 @@ def agent_manifest_summary(path: Path | None) -> dict[str, Any]:
         "startup_issue": None,
         "process_status": None,
         "timed_out": None,
+        "performance_status": None,
+        "performance_summary_file": None,
+        "performance_icc_evidence_file": None,
     }
     if path is None or not path.is_file():
         return summary
@@ -132,6 +135,14 @@ def agent_manifest_summary(path: Path | None) -> dict[str, Any]:
         "process_status": run.get("process_status"),
         "timed_out": run.get("timed_out"),
     })
+    performance = manifest.get("performance", {})
+    if isinstance(performance, dict):
+        summary.update({
+            "performance_status": performance.get("status"),
+            "performance_summary_file": performance.get("summary_file"),
+            "performance_icc_evidence_file": performance.get(
+                "icc_evidence_file"),
+        })
     return summary
 
 
@@ -144,6 +155,52 @@ def explicit_agent_run_failure(summary: dict[str, Any]) -> bool:
         return True
     startup_issue = summary.get("startup_issue")
     if isinstance(startup_issue, str) and startup_issue:
+        return True
+    return False
+
+
+def performance_summary(path: Path | None) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "path": str(path) if path else None,
+        "exists": bool(path and path.is_file()),
+        "status": None,
+        "engine_average_quantum_ms_max": None,
+        "render_time_ms_max": None,
+        "threshold_failures": [],
+        "metric_evidence_present": None,
+    }
+    if path is None or not path.is_file():
+        return summary
+    try:
+        data = load_json(path)
+    except (OSError, ValueError) as exc:
+        summary["error"] = str(exc)
+        return summary
+    aggregate = data.get("aggregate", {})
+    if not isinstance(aggregate, dict):
+        aggregate = {}
+    failures = aggregate.get("threshold_failures", [])
+    summary.update({
+        "status": data.get("status"),
+        "engine_average_quantum_ms_max": aggregate.get(
+            "engine_average_quantum_ms_max"),
+        "render_time_ms_max": aggregate.get("render_time_ms_max"),
+        "threshold_failures": failures if isinstance(failures, list) else [],
+        "metric_evidence_present": aggregate.get("metric_evidence_present"),
+    })
+    return summary
+
+
+def explicit_performance_failure(summary: dict[str, Any]) -> bool:
+    if not summary.get("exists"):
+        return False
+    if summary.get("error"):
+        return True
+    status = summary.get("status")
+    if isinstance(status, str) and status and status not in ("pass", "success"):
+        return True
+    failures = summary.get("threshold_failures")
+    if isinstance(failures, list) and failures:
         return True
     return False
 
@@ -320,6 +377,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         if agent_stream_dir is not None else None
     )
     agent_stream_summary = agent_manifest_summary(agent_manifest)
+    capture_perf_summary = performance_summary(
+        capture_dir / "qge_perf_summary.json")
     agent_icc = (
         agent_stream_dir / "qge_agent_stream_icc_evidence.jsonl"
         if agent_stream_dir is not None else None
@@ -345,6 +404,12 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                            "capture/frame_001.png"),
         "log": pack_file(capture_dir / "quantum_quake.log", args.outdir,
                          "capture/quantum_quake.log"),
+        "performance_summary": pack_file(
+            capture_dir / "qge_perf_summary.json", args.outdir,
+            "capture/qge_perf_summary.json"),
+        "performance_icc_evidence": pack_file(
+            capture_dir / "qge_perf_icc_evidence.json", args.outdir,
+            "capture/qge_perf_icc_evidence.json"),
         "readme": pack_file(capture_dir / "README.txt", args.outdir,
                             "capture/README.txt"),
     }
@@ -376,10 +441,12 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     metrics = advantage["metrics_data"]
     agent_stream_manifest_ok = not explicit_agent_run_failure(
         agent_stream_summary)
+    performance_ok = not explicit_performance_failure(capture_perf_summary)
     publication_ready = (
         bool(conformance.get("ready_for_complete_claim")) and
         conformance.get("agent_stream_runs_success") is not False and
-        agent_stream_manifest_ok
+        agent_stream_manifest_ok and
+        performance_ok
     )
     return {
         "schema": "qge.publication_pack.v0",
@@ -437,6 +504,19 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "agent_stream_trace_status": agent_stream_summary.get(
                 "trace_status"),
             "agent_stream_trace_bytes": agent_stream_summary.get("trace_bytes"),
+            "agent_stream_performance_status": agent_stream_summary.get(
+                "performance_status"),
+            "performance_summary": capture_perf_summary,
+            "performance_status": capture_perf_summary.get("status"),
+            "performance_engine_average_quantum_ms_max": (
+                capture_perf_summary.get("engine_average_quantum_ms_max")),
+            "performance_render_time_ms_max": capture_perf_summary.get(
+                "render_time_ms_max"),
+            "performance_threshold_failures": capture_perf_summary.get(
+                "threshold_failures"),
+            "performance_metric_evidence_present": capture_perf_summary.get(
+                "metric_evidence_present"),
+            "performance_ok": performance_ok,
             "agent_stream_manifest_ok": agent_stream_manifest_ok,
             "publication_ready_for_complete_claim": publication_ready,
         },
@@ -489,6 +569,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         "advantage_metrics_file": artifacts["advantage"]["metrics"]["path"],
         "scaling_summary_file": artifacts["advantage"]["scaling_summary"]["path"],
         "vanilla_capture_matrix_file": artifacts["vanilla"]["matrix"]["packed"]["path"],
+        "performance_summary_file": artifacts["capture"]["performance_summary"]["packed"]["path"],
+        "performance_icc_evidence_file": artifacts["capture"]["performance_icc_evidence"]["packed"]["path"],
         "agent_stream_manifest_file": artifacts["agent_stream"]["manifest"]["packed"]["path"],
         "agent_stream_events_file": artifacts["agent_stream"]["events"]["packed"]["path"],
         "agent_stream_file_count": artifacts["agent_stream"]["stream_directory"]["packed"]["file_count"],
@@ -518,6 +600,18 @@ def build_icc_evidence(manifest: dict[str, Any],
             "agent_stream_trace_status"),
         "agent_stream_trace_bytes": runtime.get(
             "agent_stream_trace_bytes"),
+        "agent_stream_performance_status": runtime.get(
+            "agent_stream_performance_status"),
+        "performance_status": runtime.get("performance_status"),
+        "performance_engine_average_quantum_ms_max": runtime.get(
+            "performance_engine_average_quantum_ms_max"),
+        "performance_render_time_ms_max": runtime.get(
+            "performance_render_time_ms_max"),
+        "performance_threshold_failures": runtime.get(
+            "performance_threshold_failures"),
+        "performance_metric_evidence_present": runtime.get(
+            "performance_metric_evidence_present"),
+        "performance_ok": runtime.get("performance_ok"),
         "agent_stream_manifest_ok": runtime.get("agent_stream_manifest_ok"),
         "publication_ready_for_complete_claim": ready,
         "status": "success" if ready else "blocked",
