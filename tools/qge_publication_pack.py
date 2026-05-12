@@ -93,6 +93,61 @@ def directory_info(path: Path | None) -> dict[str, Any]:
     }
 
 
+def agent_manifest_summary(path: Path | None) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "path": str(path) if path else None,
+        "exists": bool(path and path.is_file()),
+        "manifest_status": None,
+        "frames_requested": None,
+        "frames_captured": None,
+        "trace_requested": None,
+        "trace_status": None,
+        "trace_bytes": None,
+        "run_status": None,
+        "run_success": None,
+        "startup_issue": None,
+        "process_status": None,
+        "timed_out": None,
+    }
+    if path is None or not path.is_file():
+        return summary
+    try:
+        manifest = load_json(path)
+    except (OSError, ValueError) as exc:
+        summary["error"] = str(exc)
+        return summary
+    run = manifest.get("run", {})
+    if not isinstance(run, dict):
+        run = {}
+    summary.update({
+        "manifest_status": manifest.get("status"),
+        "frames_requested": manifest.get("frames_requested"),
+        "frames_captured": manifest.get("frames_captured"),
+        "trace_requested": manifest.get("trace_requested"),
+        "trace_status": manifest.get("trace_status"),
+        "trace_bytes": manifest.get("trace_bytes"),
+        "run_status": run.get("status"),
+        "run_success": run.get("success"),
+        "startup_issue": run.get("startup_issue"),
+        "process_status": run.get("process_status"),
+        "timed_out": run.get("timed_out"),
+    })
+    return summary
+
+
+def explicit_agent_run_failure(summary: dict[str, Any]) -> bool:
+    run_status = summary.get("run_status")
+    if isinstance(run_status, str) and run_status and run_status != "ok":
+        return True
+    run_success = summary.get("run_success")
+    if run_success is not None and not bool(run_success):
+        return True
+    startup_issue = summary.get("startup_issue")
+    if isinstance(startup_issue, str) and startup_issue:
+        return True
+    return False
+
+
 def latest_file(pattern: str) -> Path | None:
     matches = sorted(REPO_ROOT.glob(pattern),
                      key=lambda path: path.stat().st_mtime if path.exists() else 0)
@@ -264,6 +319,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         agent_stream_dir / "manifest.json"
         if agent_stream_dir is not None else None
     )
+    agent_stream_summary = agent_manifest_summary(agent_manifest)
     agent_icc = (
         agent_stream_dir / "qge_agent_stream_icc_evidence.jsonl"
         if agent_stream_dir is not None else None
@@ -318,6 +374,13 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                                   "agent_stream/qge_agent_stream_icc_evidence.jsonl"),
     }
     metrics = advantage["metrics_data"]
+    agent_stream_manifest_ok = not explicit_agent_run_failure(
+        agent_stream_summary)
+    publication_ready = (
+        bool(conformance.get("ready_for_complete_claim")) and
+        conformance.get("agent_stream_runs_success") is not False and
+        agent_stream_manifest_ok
+    )
     return {
         "schema": "qge.publication_pack.v0",
         "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -355,6 +418,27 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "surrogate_count": conformance.get("qge_surface_surrogates"),
             "classic3d_count": conformance.get("classic3d_count"),
             "viewmodel_encoded": conformance.get("viewmodel_encoded"),
+            "agent_stream_runs_success": conformance.get(
+                "agent_stream_runs_success"),
+            "classic_agent_run_status": conformance.get(
+                "classic_agent_run_status"),
+            "qge_agent_run_status": conformance.get("qge_agent_run_status"),
+            "classic_agent_startup_issue": conformance.get(
+                "classic_agent_startup_issue"),
+            "qge_agent_startup_issue": conformance.get(
+                "qge_agent_startup_issue"),
+            "agent_stream_manifest_run": agent_stream_summary,
+            "agent_stream_run_status": agent_stream_summary.get("run_status"),
+            "agent_stream_run_success": agent_stream_summary.get("run_success"),
+            "agent_stream_startup_issue": agent_stream_summary.get(
+                "startup_issue"),
+            "agent_stream_frames_captured": agent_stream_summary.get(
+                "frames_captured"),
+            "agent_stream_trace_status": agent_stream_summary.get(
+                "trace_status"),
+            "agent_stream_trace_bytes": agent_stream_summary.get("trace_bytes"),
+            "agent_stream_manifest_ok": agent_stream_manifest_ok,
+            "publication_ready_for_complete_claim": publication_ready,
         },
         "advantage_summary": {
             "advantage_problem_id": metrics.get("advantage_problem_id"),
@@ -388,10 +472,15 @@ def build_icc_evidence(manifest: dict[str, Any],
                        manifest_path: Path,
                        icc_path: Path) -> dict[str, Any]:
     artifacts = manifest["artifacts"]
+    runtime = manifest["runtime_summary"]
+    ready = bool(runtime.get("publication_ready_for_complete_claim"))
     return {
         "schema": "qge.icc_evidence.v0",
         "runtime_backend": "qge_publication_pack",
-        "completion_reason": "qge_publication_artifact_pack_complete",
+        "completion_reason": (
+            "qge_publication_artifact_pack_complete"
+            if ready else "qge_publication_artifact_pack_evidence_only"
+        ),
         "publication_manifest_file": str(manifest_path),
         "publication_icc_evidence_file": str(icc_path),
         "publication_pack_dir": manifest["pack_dir"],
@@ -403,11 +492,35 @@ def build_icc_evidence(manifest: dict[str, Any],
         "agent_stream_manifest_file": artifacts["agent_stream"]["manifest"]["packed"]["path"],
         "agent_stream_events_file": artifacts["agent_stream"]["events"]["packed"]["path"],
         "agent_stream_file_count": artifacts["agent_stream"]["stream_directory"]["packed"]["file_count"],
-        "fallback_count": manifest["runtime_summary"].get("fallback_count"),
-        "surrogate_count": manifest["runtime_summary"].get("surrogate_count"),
-        "vanilla_ready_for_complete_claim": manifest["runtime_summary"].get(
+        "fallback_count": runtime.get("fallback_count"),
+        "surrogate_count": runtime.get("surrogate_count"),
+        "vanilla_ready_for_complete_claim": runtime.get(
             "vanilla_ready_for_complete_claim"),
-        "status": "success",
+        "agent_stream_runs_success": runtime.get(
+            "agent_stream_runs_success"),
+        "classic_agent_run_status": runtime.get(
+            "classic_agent_run_status"),
+        "qge_agent_run_status": runtime.get(
+            "qge_agent_run_status"),
+        "classic_agent_startup_issue": runtime.get(
+            "classic_agent_startup_issue"),
+        "qge_agent_startup_issue": runtime.get(
+            "qge_agent_startup_issue"),
+        "agent_stream_run_status": runtime.get(
+            "agent_stream_run_status"),
+        "agent_stream_run_success": runtime.get(
+            "agent_stream_run_success"),
+        "agent_stream_startup_issue": runtime.get(
+            "agent_stream_startup_issue"),
+        "agent_stream_frames_captured": runtime.get(
+            "agent_stream_frames_captured"),
+        "agent_stream_trace_status": runtime.get(
+            "agent_stream_trace_status"),
+        "agent_stream_trace_bytes": runtime.get(
+            "agent_stream_trace_bytes"),
+        "agent_stream_manifest_ok": runtime.get("agent_stream_manifest_ok"),
+        "publication_ready_for_complete_claim": ready,
+        "status": "success" if ready else "blocked",
     }
 
 

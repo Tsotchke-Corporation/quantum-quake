@@ -229,7 +229,12 @@ require numpy and Pillow; if either dependency is unavailable, the harness exits
 before starting the app.
 The paired `tools/qge_vanilla_capture_matrix.py` sidecar copies each mode's
 agent-stream run and trace summary from `*.agent_stream.json`; an explicit
-agent-stream run failure blocks `ready_for_complete_claim`.
+agent-stream run failure blocks `ready_for_complete_claim`. The publication
+pack copies these run-status fields from the vanilla matrix and also records the
+packed agent stream manifest's direct `run.status`, `run.success`,
+`run.startup_issue`, frame count, and trace status in its runtime summary and
+ICC evidence. A failed direct stream manifest makes the publication ICC result
+evidence-only instead of `qge_publication_artifact_pack_complete`.
 
 `tools/quake_crash_watch.sh` uses the same Noesis player/provider contract for
 its scripted movement by default, stores `input/noesis_actions.txt` and
