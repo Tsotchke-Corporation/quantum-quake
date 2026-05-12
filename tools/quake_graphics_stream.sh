@@ -53,6 +53,8 @@ trace="${QGE_STREAM_TRACE:-0}"
 engine_capture="${QGE_STREAM_ENGINE_CAPTURE:-1}"
 launch_mode="${QGE_STREAM_LAUNCH:-auto}"
 timeout_seconds="${QGE_STREAM_TIMEOUT_SECONDS:-}"
+perf_max_average_ms="${QGE_PERF_MAX_AVERAGE_MS:-}"
+perf_max_render_ms="${QGE_PERF_MAX_RENDER_MS:-}"
 
 normalize_bool() {
   if [[ "${1:-}" == "1" ]]; then
@@ -151,6 +153,7 @@ agent_video_dir="$agent_stream/video/frames"
 agent_audio_dir="$agent_stream/audio"
 agent_input_dir="$agent_stream/input"
 agent_log_dir="$agent_stream/logs"
+agent_perf_dir="$agent_stream/performance"
 agent_events_file="$agent_stream/events.ndjson"
 agent_manifest_file="$agent_stream/manifest.json"
 agent_icc_file="$agent_stream/qge_agent_stream_icc_evidence.jsonl"
@@ -161,6 +164,12 @@ agent_latest_icc_file="$agent_stream_root/latest_icc_evidence.txt"
 quake_latest_stream_file="$quake_stream_root/latest_stream.txt"
 quake_latest_trace_file="$quake_stream_root/latest_trace.txt"
 trace_file="$outdir/qge_trace.bin"
+perf_summary_file="$outdir/qge_perf_summary.json"
+perf_icc_file="$outdir/qge_perf_icc_evidence.json"
+perf_stdout_file="$outdir/qge_perf_summary.txt"
+perf_stderr_file="$outdir/qge_perf_summary.err"
+agent_perf_summary_file="$agent_perf_dir/qge_perf_summary.json"
+agent_perf_icc_file="$agent_perf_dir/qge_perf_icc_evidence.json"
 agent_input_actions_file="$agent_input_dir/noesis_actions.txt"
 agent_input_commands_file="$agent_input_dir/noesis_commands.cfg"
 agent_audio_raw="$agent_audio_dir/quake_mix_s16le.raw"
@@ -169,7 +178,8 @@ agent_audio_bytes_file="$agent_audio_dir/bytes.txt"
 agent_frame_count_file="$agent_stream/video/frame_count.txt"
 agent_last_frame_file="$agent_stream/video/latest_frame.txt"
 last_agent_frame=""
-mkdir -p "$quake_stream_root" "$agent_stream_root" "$outdir" "$agent_video_dir" "$agent_audio_dir" "$agent_input_dir" "$agent_log_dir"
+perf_status="not_run"
+mkdir -p "$quake_stream_root" "$agent_stream_root" "$outdir" "$agent_video_dir" "$agent_audio_dir" "$agent_input_dir" "$agent_log_dir" "$agent_perf_dir"
 : > "$agent_events_file"
 : > "$agent_input_actions_file"
 : > "$agent_input_commands_file"
@@ -319,6 +329,15 @@ write_agent_manifest() {
     "open_log": $(json_string "$agent_log_dir/open.log"),
     "events": $(json_string "$agent_events_file")
   },
+  "performance": {
+    "status": $(json_string "$perf_status"),
+    "summary_file": $(json_string "$agent_perf_summary_file"),
+    "icc_evidence_file": $(json_string "$agent_perf_icc_file"),
+    "capture_summary_file": $(json_string "$perf_summary_file"),
+    "capture_icc_evidence_file": $(json_string "$perf_icc_file"),
+    "max_average_ms": $(json_string "$perf_max_average_ms"),
+    "max_render_ms": $(json_string "$perf_max_render_ms")
+  },
   "icc_evidence": $(json_string "$agent_icc_file"),
   "trace": $(json_string "$manifest_trace_file"),
   "trace_status": $(json_string "$trace_status"),
@@ -364,15 +383,45 @@ write_agent_icc_evidence() {
     printf '{"kind":"runtime_state","name":"agent_stream_frames_captured","value":%s,"path":%s}\n' "$(json_string "$frame_index")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"runtime_state","name":"agent_stream_trace_status","value":%s,"path":%s}\n' "$(json_string "$icc_trace_status")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"runtime_state","name":"agent_stream_trace_bytes","value":%s,"path":%s}\n' "$(json_string "$icc_trace_bytes")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"runtime_state","name":"agent_stream_perf_status","value":%s,"path":%s}\n' "$(json_string "$perf_status")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_stream_manifest_file","value":%s,"path":%s}\n' "$(json_string "$agent_manifest_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_events_file","value":%s,"path":%s}\n' "$(json_string "$agent_events_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_trace_file","value":%s,"path":%s}\n' "$(json_string "$icc_trace_file")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"artifact","name":"agent_perf_summary_file","value":%s,"path":%s}\n' "$(json_string "$agent_perf_summary_file")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"artifact","name":"agent_perf_icc_evidence_file","value":%s,"path":%s}\n' "$(json_string "$agent_perf_icc_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_input_actions_file","value":%s,"path":%s}\n' "$(json_string "$agent_input_actions_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_input_commands_file","value":%s,"path":%s}\n' "$(json_string "$agent_input_commands_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_video_frame_file","value":%s,"path":%s}\n' "$(json_string "$last_agent_frame")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_audio_raw_file","value":%s,"path":%s}\n' "$(json_string "$audio_raw_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_audio_metadata_file","value":%s,"path":%s}\n' "$(json_string "$audio_meta_file")" "$(json_string "$agent_icc_file")"
   } > "$agent_icc_file"
+}
+
+write_perf_summary() {
+  local perf_args=("$log_file" "--out" "$perf_summary_file" "--icc-out" "$perf_icc_file")
+
+  if [[ -n "$perf_max_average_ms" ]]; then
+    perf_args+=("--max-average-ms" "$perf_max_average_ms")
+  fi
+  if [[ -n "$perf_max_render_ms" ]]; then
+    perf_args+=("--max-render-ms" "$perf_max_render_ms")
+  fi
+
+  if python3 "$repo_root/tools/qge_perf_summary.py" "${perf_args[@]}" \
+    > "$perf_stdout_file" 2> "$perf_stderr_file"; then
+    perf_status="complete"
+  else
+    perf_status="blocked"
+  fi
+
+  if [[ -s "$perf_summary_file" ]]; then
+    cp "$perf_summary_file" "$agent_perf_summary_file"
+  fi
+  if [[ -s "$perf_icc_file" ]]; then
+    cp "$perf_icc_file" "$agent_perf_icc_file"
+  fi
+  agent_event "performance_summary" "$agent_perf_summary_file" "status=$perf_status"
+  echo "QGE_PERF_SUMMARY status=$perf_status $perf_summary_file"
 }
 
 recover_latest_trace_pointer() {
@@ -846,6 +895,7 @@ if [[ -n "$startup_issue" ]]; then
   echo "QGE_STARTUP_FAILED $startup_issue $log_file" >&2
 fi
 
+write_perf_summary
 sync_agent_frame_state
 collect_new_frames
 poll_agent_audio
@@ -870,6 +920,9 @@ Trace requested: $trace
 Trace file: $([[ "$trace" == "1" ]] && printf '%s' "$trace_file" || printf 'not requested')
 Timeout seconds: $max_seconds
 Log: $log_file
+Performance summary: $perf_summary_file
+Performance ICC evidence: $perf_icc_file
+Performance status: $perf_status
 Agent stream: $agent_stream
 Agent manifest: $agent_manifest_file
 Agent events: $agent_events_file

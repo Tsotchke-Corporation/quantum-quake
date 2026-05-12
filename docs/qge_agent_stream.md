@@ -238,7 +238,14 @@ evidence-only instead of `qge_publication_artifact_pack_complete`.
 `tools/qge_perf_summary.py` reads a capture directory or `quantum_quake.log`
 and emits structured timing evidence for `QGE render frame=` component timings
 and `QGE: Average quantum render time` lines, with optional JSON and ICC
-sidecars plus threshold checks for performance regression smokes.
+sidecars plus threshold checks for performance regression smokes. The stream
+harness runs this summarizer after the runtime log is finalized, writes
+`qge_perf_summary.json` and `qge_perf_icc_evidence.json` under the capture
+directory, mirrors both files into `agent_stream/performance/`, and records the
+status in `manifest.json` plus `agent_stream_perf_status` in the JSONL ICC
+sidecar. Set `QGE_PERF_MAX_AVERAGE_MS` or `QGE_PERF_MAX_RENDER_MS` to turn a
+capture into a thresholded performance smoke without failing the media stream
+itself; threshold failures mark the performance sidecar `blocked`.
 
 `tools/quake_crash_watch.sh` uses the same Noesis player/provider contract for
 its scripted movement by default, stores `input/noesis_actions.txt` and
