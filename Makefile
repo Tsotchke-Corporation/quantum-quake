@@ -102,7 +102,7 @@ QGE_OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(QGE_SRCS))
 QGE_OBJS += $(patsubst %.mm,$(BUILD_DIR)/%.o,$(QGE_OBJC_SRCS))
 
 # Targets
-.PHONY: all clean test moonlab qge dirs demo demo-sdl quake run-quake test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools
+.PHONY: all clean test moonlab qge dirs demo demo-sdl quake run-quake test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools test_qge_python_tools
 
 all: dirs moonlab qge test_qge
 
@@ -186,8 +186,12 @@ test_qge_publication_tools:
 	@echo "Running QGE publication tools contract test..."
 	@bash tests/test_qge_publication_tools.sh
 
+test_qge_python_tools:
+	@echo "Running QGE Python tools unit tests..."
+	@python3 tests/test_qge_python_tools.py
+
 # Run tests
-test: test_qge test_console_contract test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools
+test: test_qge test_console_contract test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools test_qge_python_tools
 	@echo "Running QGE tests..."
 	@./$(BIN_DIR)/test_qge
 	@echo "Running console artifact contract test..."
