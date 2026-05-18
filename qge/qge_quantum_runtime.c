@@ -18,12 +18,18 @@ struct qge_quantum_runtime_s {
     qge_entropy_source_t entropy_source;
     qge_quantum_entropy_source_func_t entropy_func;
     void *entropy_user_data;
-    uint64_t *replay_values;
+    qge_entropy_event_t *replay_events;
     size_t replay_count;
     size_t replay_capacity;
     size_t replay_index;
+    bool replay_strict;
     qge_trace_writer_t *trace;
     qge_quantum_runtime_stats_t stats;
+};
+
+enum {
+    QGE_REPLAY_FALLBACK_METADATA_MISMATCH = 1,
+    QGE_REPLAY_FALLBACK_EXHAUSTED = 2
 };
 
 static uint64_t splitmix64_next(uint64_t *state)
@@ -56,33 +62,87 @@ static void clear_replay_entropy(qge_quantum_runtime_t *rt)
     if (!rt) {
         return;
     }
-    free(rt->replay_values);
-    rt->replay_values = NULL;
+    free(rt->replay_events);
+    rt->replay_events = NULL;
     rt->replay_count = 0;
     rt->replay_capacity = 0;
     rt->replay_index = 0;
+    rt->stats.replay_events_loaded = 0;
+    rt->stats.replay_events_consumed = 0;
+    rt->stats.replay_mismatches = 0;
+    rt->stats.replay_exhaustions = 0;
 }
 
-static int append_replay_entropy(qge_quantum_runtime_t *rt, uint64_t value)
+static int append_replay_entropy(qge_quantum_runtime_t *rt,
+                                 const qge_entropy_event_t *event)
 {
-    uint64_t *values;
+    qge_entropy_event_t *events;
     size_t new_capacity;
 
-    if (!rt) {
+    if (!rt || !event) {
         return -1;
     }
     if (rt->replay_count == rt->replay_capacity) {
         new_capacity = rt->replay_capacity ? rt->replay_capacity * 2 : 256;
-        values = (uint64_t *)realloc(rt->replay_values,
-                                     new_capacity * sizeof(*values));
-        if (!values) {
+        events = (qge_entropy_event_t *)realloc(rt->replay_events,
+                                                new_capacity * sizeof(*events));
+        if (!events) {
             return -1;
         }
-        rt->replay_values = values;
+        rt->replay_events = events;
         rt->replay_capacity = new_capacity;
     }
-    rt->replay_values[rt->replay_count++] = value;
+    rt->replay_events[rt->replay_count++] = *event;
     return 0;
+}
+
+static bool replay_entropy_matches_request(const qge_quantum_runtime_t *rt,
+                                           const qge_entropy_event_t *event,
+                                           qge_quantum_domain_t domain,
+                                           int subject_id)
+{
+    if (!rt || !event) {
+        return false;
+    }
+    return event->frame == rt->frame &&
+           event->server_time_msec == rt->server_time_msec &&
+           event->domain == domain &&
+           event->subject_id == subject_id &&
+           event->request_id == rt->request_id &&
+           event->entropy_offset == rt->entropy_offset;
+}
+
+static uint64_t deterministic_fallback_entropy(qge_quantum_runtime_t *rt,
+                                               qge_quantum_domain_t domain,
+                                               int subject_id)
+{
+    rt->entropy_state ^= domain_salt(domain, subject_id);
+    return splitmix64_next(&rt->entropy_state);
+}
+
+static void record_replay_fallback(qge_quantum_runtime_t *rt,
+                                   qge_quantum_domain_t domain,
+                                   int subject_id,
+                                   int reason_code,
+                                   const char *message)
+{
+    qge_fallback_event_t fallback;
+
+    if (!rt) {
+        return;
+    }
+
+    memset(&fallback, 0, sizeof(fallback));
+    fallback.frame = rt->frame;
+    fallback.server_time_msec = rt->server_time_msec;
+    fallback.domain = domain;
+    fallback.representation = QGE_REP_NONE;
+    fallback.subject_id = subject_id;
+    fallback.reason_code = reason_code;
+    if (message) {
+        strncpy(fallback.message, message, sizeof(fallback.message) - 1);
+    }
+    qge_quantum_record_fallback(rt, &fallback);
 }
 
 qge_quantum_runtime_t *qge_quantum_runtime_create(void)
@@ -97,6 +157,7 @@ qge_quantum_runtime_t *qge_quantum_runtime_create(void)
     rt->run_id = 0x5151455f52554e31ULL;
     rt->entropy_state = rt->run_id ^ 0x6d6f6f6e6c616231ULL;
     rt->entropy_source = QGE_ENTROPY_SOURCE_DETERMINISTIC;
+    rt->replay_strict = true;
     return rt;
 }
 
@@ -197,7 +258,7 @@ int qge_quantum_runtime_load_replay_entropy(qge_quantum_runtime_t *rt,
         }
         if (record.kind == QGE_TRACE_RECORD_ENTROPY &&
             record.payload_size == sizeof(event) &&
-            append_replay_entropy(rt, event.value) != 0) {
+            append_replay_entropy(rt, &event) != 0) {
             qge_trace_reader_close(reader);
             clear_replay_entropy(rt);
             return -1;
@@ -215,7 +276,22 @@ int qge_quantum_runtime_load_replay_entropy(qge_quantum_runtime_t *rt,
     rt->replay_index = 0;
     rt->entropy_offset = 0;
     rt->request_id = 0;
+    rt->stats.replay_events_loaded = (uint64_t)rt->replay_count;
     return 0;
+}
+
+void qge_quantum_runtime_set_replay_strict(qge_quantum_runtime_t *rt,
+                                           bool strict)
+{
+    if (!rt) {
+        return;
+    }
+    rt->replay_strict = strict;
+}
+
+bool qge_quantum_runtime_get_replay_strict(const qge_quantum_runtime_t *rt)
+{
+    return rt ? rt->replay_strict : false;
 }
 
 void qge_quantum_runtime_get_stats(const qge_quantum_runtime_t *rt,
@@ -289,11 +365,27 @@ uint64_t qge_quantum_entropy_u64(qge_quantum_runtime_t *rt,
     source = rt->entropy_source;
     if (source == QGE_ENTROPY_SOURCE_REPLAY) {
         if (rt->replay_index < rt->replay_count) {
-            value = rt->replay_values[rt->replay_index++];
+            const qge_entropy_event_t *replay =
+                &rt->replay_events[rt->replay_index++];
+            rt->stats.replay_events_consumed++;
+            if (!rt->replay_strict ||
+                replay_entropy_matches_request(rt, replay, domain, subject_id)) {
+                value = replay->value;
+            } else {
+                source = QGE_ENTROPY_SOURCE_CLASSICAL_FALLBACK;
+                rt->stats.replay_mismatches++;
+                value = deterministic_fallback_entropy(rt, domain, subject_id);
+                record_replay_fallback(rt, domain, subject_id,
+                                       QGE_REPLAY_FALLBACK_METADATA_MISMATCH,
+                                       "replay entropy metadata mismatch");
+            }
         } else {
             source = QGE_ENTROPY_SOURCE_CLASSICAL_FALLBACK;
-            rt->entropy_state ^= domain_salt(domain, subject_id);
-            value = splitmix64_next(&rt->entropy_state);
+            rt->stats.replay_exhaustions++;
+            value = deterministic_fallback_entropy(rt, domain, subject_id);
+            record_replay_fallback(rt, domain, subject_id,
+                                   QGE_REPLAY_FALLBACK_EXHAUSTED,
+                                   "replay entropy exhausted");
         }
     } else if (source == QGE_ENTROPY_SOURCE_QRNG && rt->entropy_func) {
         value = rt->entropy_func(rt->entropy_user_data, domain, subject_id);
@@ -301,8 +393,7 @@ uint64_t qge_quantum_entropy_u64(qge_quantum_runtime_t *rt,
         if (source != QGE_ENTROPY_SOURCE_DETERMINISTIC) {
             source = QGE_ENTROPY_SOURCE_DETERMINISTIC;
         }
-        rt->entropy_state ^= domain_salt(domain, subject_id);
-        value = splitmix64_next(&rt->entropy_state);
+        value = deterministic_fallback_entropy(rt, domain, subject_id);
     }
 
     memset(&event, 0, sizeof(event));

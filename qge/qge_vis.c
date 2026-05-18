@@ -80,6 +80,14 @@ static float* visibility_probabilities = NULL;
 static int cached_visible_count = 0;
 static bool cache_valid = false;
 
+/* Shadow parity state: compares QGE visibility to the classic accepted set. */
+static unsigned char* shadow_classic_visible = NULL;
+static int shadow_classic_capacity = 0;
+static int shadow_surface_count = 0;
+static int shadow_overflow_count = 0;
+static float shadow_visibility_threshold = 0.0f;
+static bool shadow_active = false;
+
 /* ============================================================================
  * Entropy Callback
  * ============================================================================ */
@@ -189,6 +197,12 @@ static qge_vec3_t vec3_sub(qge_vec3_t a, qge_vec3_t b) {
 
 static float vec3_length(qge_vec3_t v) {
     return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
+static uint64_t vis_hash_step(uint64_t hash, uint64_t value) {
+    hash ^= value;
+    hash *= 1099511628211ULL;
+    return hash;
 }
 
 /**
@@ -752,6 +766,145 @@ void qge_vis_get_stats(int* total_surfaces, int* visible_count,
 }
 
 /* ============================================================================
+ * Shadow Parity Telemetry
+ * ============================================================================ */
+
+void qge_vis_shadow_begin(int total_surfaces, float visibility_threshold) {
+    unsigned char* new_classic;
+
+    ensure_vis_initialized();
+
+    shadow_active = false;
+    shadow_surface_count = 0;
+    shadow_overflow_count = 0;
+    shadow_visibility_threshold = visibility_threshold;
+
+    if (!vis_state || total_surfaces <= 0) {
+        return;
+    }
+
+    if (total_surfaces > shadow_classic_capacity) {
+        new_classic = realloc(shadow_classic_visible,
+                              (size_t)total_surfaces * sizeof(unsigned char));
+        if (!new_classic) {
+            fprintf(stderr, "QGE VIS: Failed to allocate shadow parity mask\n");
+            return;
+        }
+        shadow_classic_visible = new_classic;
+        shadow_classic_capacity = total_surfaces;
+    }
+
+    memset(shadow_classic_visible, 0,
+           (size_t)total_surfaces * sizeof(unsigned char));
+    shadow_surface_count = total_surfaces;
+    shadow_active = true;
+}
+
+void qge_vis_shadow_mark_classic_visible(int surface_id) {
+    if (!shadow_active || !shadow_classic_visible) {
+        return;
+    }
+    if (surface_id < 0 || surface_id >= shadow_surface_count) {
+        shadow_overflow_count++;
+        return;
+    }
+    shadow_classic_visible[surface_id] = 1;
+}
+
+bool qge_vis_shadow_finish(qge_vis_shadow_stats_t* stats) {
+    const uint64_t hash_basis = 1469598103934665603ULL;
+    uint64_t classic_hash = hash_basis;
+    uint64_t qge_hash = hash_basis;
+    uint64_t mismatch_hash = hash_basis;
+    float threshold;
+
+    if (!stats) {
+        return false;
+    }
+
+    memset(stats, 0, sizeof(*stats));
+    stats->first_false_positive = -1;
+    stats->first_false_negative = -1;
+
+    if (!shadow_active || !shadow_classic_visible || shadow_surface_count <= 0) {
+        return false;
+    }
+
+    threshold = shadow_visibility_threshold;
+    if (threshold <= 0.0f) {
+        if (vis_subspace_size > 0) {
+            threshold = 0.5f / (float)vis_subspace_size;
+        } else {
+            threshold = 0.001f;
+        }
+    }
+
+    for (int i = 0; i < shadow_surface_count; i++) {
+        bool classic_visible = shadow_classic_visible[i] != 0;
+        float probability = 0.0f;
+        bool qge_visible;
+
+        if (visibility_probabilities && i < surfaces_capacity) {
+            probability = visibility_probabilities[i];
+        } else if (cache_valid) {
+            probability = qge_vis_query_surface(i);
+        }
+
+        qge_visible = probability > 0.0f && probability >= threshold;
+
+        if (classic_visible) {
+            stats->classic_visible_count++;
+            classic_hash = vis_hash_step(classic_hash, (uint64_t)i + 1ULL);
+        }
+        if (qge_visible) {
+            stats->qge_visible_count++;
+            qge_hash = vis_hash_step(qge_hash, (uint64_t)i + 1ULL);
+        }
+
+        stats->qge_probability_sum += probability;
+        if (probability > stats->qge_probability_max) {
+            stats->qge_probability_max = probability;
+        }
+
+        if (classic_visible && qge_visible) {
+            stats->matched_visible_count++;
+        } else if (!classic_visible && !qge_visible) {
+            stats->matched_hidden_count++;
+        } else {
+            uint64_t quantized_probability =
+                (uint64_t)(probability * 1000000000.0f);
+
+            mismatch_hash = vis_hash_step(mismatch_hash, (uint64_t)i + 1ULL);
+            mismatch_hash = vis_hash_step(mismatch_hash,
+                                          classic_visible ? 1ULL : 2ULL);
+            mismatch_hash = vis_hash_step(mismatch_hash, quantized_probability);
+
+            if (qge_visible) {
+                stats->false_positive_count++;
+                if (stats->first_false_positive < 0) {
+                    stats->first_false_positive = i;
+                }
+            } else {
+                stats->false_negative_count++;
+                if (stats->first_false_negative < 0) {
+                    stats->first_false_negative = i;
+                }
+            }
+        }
+    }
+
+    stats->total_surfaces = shadow_surface_count;
+    stats->overflow_count = shadow_overflow_count;
+    stats->classic_fingerprint = classic_hash;
+    stats->qge_fingerprint = qge_hash;
+    stats->mismatch_fingerprint = mismatch_hash;
+    stats->threshold = threshold;
+
+    shadow_active = false;
+    return true;
+}
+
+/* ============================================================================
  * Shutdown
  * ============================================================================ */
 
@@ -776,13 +929,20 @@ void qge_vis_shutdown(void) {
     free(surfaces);
     free(visible_surface_cache);
     free(visibility_probabilities);
+    free(shadow_classic_visible);
 
     surfaces = NULL;
     visible_surface_cache = NULL;
     visibility_probabilities = NULL;
+    shadow_classic_visible = NULL;
     num_surfaces = 0;
     surfaces_capacity = 0;
     cached_visible_count = 0;
     cache_valid = false;
+    shadow_classic_capacity = 0;
+    shadow_surface_count = 0;
+    shadow_overflow_count = 0;
+    shadow_visibility_threshold = 0.0f;
+    shadow_active = false;
     vis_initialized = false;
 }

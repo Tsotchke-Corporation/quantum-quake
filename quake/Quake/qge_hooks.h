@@ -93,6 +93,12 @@ void QGE_VisRegisterSurface(int surface_id,
 void QGE_VisSetupViewpoint(float eye_x, float eye_y, float eye_z,
                             float fwd_x, float fwd_y, float fwd_z);
 
+/* Begin/end a shadow-only parity check against R_MarkSurfaces().
+ * Returns false when QGE visibility is disabled or unavailable. */
+qboolean QGE_VisShadowBegin(qmodel_t *model);
+void QGE_VisShadowMarkClassicSurface(qmodel_t *model, msurface_t *surf);
+void QGE_VisShadowEnd(qmodel_t *model);
+
 /* ============================================================================
  * Quantum Particles
  * ============================================================================ */

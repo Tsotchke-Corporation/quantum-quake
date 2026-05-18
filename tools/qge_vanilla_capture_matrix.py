@@ -19,6 +19,18 @@ from typing import Any
 
 KEY_VALUE_RE = re.compile(r"([A-Za-z0-9_]+)=([^ \n]+)")
 
+ASSET_OWNERSHIP_KEYS = [
+    "own_world",
+    "own_textures",
+    "own_lightmaps",
+    "own_entities",
+    "own_sprites",
+    "own_particles",
+    "own_viewmodel",
+    "own_hud",
+    "own_console",
+]
+
 
 def load_json(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as f:
@@ -110,6 +122,34 @@ def matching_key_value_max(path: Path,
                 except (TypeError, ValueError):
                     pass
     return out
+
+
+def counter_max(values: dict[str, Any], max_values: dict[str, Any],
+                key: str) -> int:
+    try:
+        return max(int(values.get(key, 0) or 0),
+                   int(max_values.get(key, 0) or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def asset_ownership_summary(render: dict[str, Any],
+                            render_max: dict[str, Any]) -> dict[str, Any]:
+    counters = {
+        key: counter_max(render, render_max, key)
+        for key in ASSET_OWNERSHIP_KEYS
+    }
+    present = [key for key in ASSET_OWNERSHIP_KEYS if key in render]
+    missing = [key for key in ASSET_OWNERSHIP_KEYS if key not in render]
+    incomplete = [key for key, value in counters.items() if value <= 0]
+    return {
+        "counters": counters,
+        "fields_present": len(missing) == 0,
+        "present_fields": present,
+        "missing_fields": missing,
+        "incomplete_fields": incomplete,
+        "complete": len(missing) == 0 and len(incomplete) == 0,
+    }
 
 
 def read_readme_value(path: Path, label: str) -> str | None:
@@ -247,7 +287,8 @@ def mode_entry(capture_dir: Path,
         log,
         "QGE render frame=",
         ["fallback", "surrogate", "micro", "clipped", "invalid",
-         "microfill", "culled", "classic3d", "viewmodel"],
+         "microfill", "culled", "classic3d", "classic2d",
+         "suppressed2d", "viewmodel", *ASSET_OWNERSHIP_KEYS],
     )
     scene_max = matching_key_value_max(
         log,
@@ -328,6 +369,14 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
                     int(qge_render_max.get("classic3d", 0) or 0))
     viewmodel = max(int(qge_render.get("viewmodel", 0) or 0),
                     int(qge_render_max.get("viewmodel", 0) or 0))
+    classic2d = counter_max(qge_render, qge_render_max, "classic2d")
+    suppressed3d = counter_max(qge_render, qge_render_max, "suppressed3d")
+    suppressed2d = counter_max(qge_render, qge_render_max, "suppressed2d")
+    ownership = asset_ownership_summary(qge_render, qge_render_max)
+    classic_output_hidden = (
+        classic3d == 0 and classic2d == 0 and
+        suppressed3d > 0 and suppressed2d > 0
+    )
 
     return {
         "schema": "qge.vanilla_capture_matrix.v0",
@@ -364,9 +413,20 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
             "performance_sidecars_success": performance_sidecars_success,
             "fallback_count": fallback_count,
             "classic3d_count": classic3d,
+            "classic2d_count": classic2d,
             "viewmodel_encoded": viewmodel,
             "qge_primary_owner": qge_render.get("owner"),
-            "qge_suppressed_classic3d": qge_render.get("suppressed3d"),
+            "qge_suppressed_classic3d": suppressed3d,
+            "qge_suppressed_classic2d": suppressed2d,
+            "qge_classic_output_hidden": classic_output_hidden,
+            "qge_asset_ownership": ownership["counters"],
+            "qge_asset_ownership_fields_present": (
+                ownership["fields_present"]),
+            "qge_asset_ownership_missing_fields": (
+                ownership["missing_fields"]),
+            "qge_asset_ownership_incomplete_fields": (
+                ownership["incomplete_fields"]),
+            "qge_asset_ownership_complete": ownership["complete"],
             "qge_surface_polygons": qge_render.get("poly"),
             "qge_surface_triangles": qge_render.get("tris"),
             "qge_surface_surrogates": surrogate_count,
@@ -392,7 +452,8 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
                 agent_stream_runs_success and
                 performance_sidecars_success and
                 fallback_count == 0 and surrogate_count == 0 and
-                classic3d == 0 and viewmodel > 0
+                classic_output_hidden and viewmodel > 0 and
+                ownership["complete"]
             ),
         },
         "claim_posture": {

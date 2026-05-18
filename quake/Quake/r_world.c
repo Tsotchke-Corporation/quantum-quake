@@ -100,6 +100,7 @@ void R_MarkSurfaces (void)
 	msurface_t	*surf, **mark;
 	int			i, j;
 	qboolean	nearwaterportal;
+	qboolean	qge_vis_shadow;
 
 	// clear lightmap chains
 	for (i=0 ; i<lightmap_count ; i++)
@@ -120,6 +121,7 @@ void R_MarkSurfaces (void)
 	else
 		vis = Mod_LeafPVS (r_viewleaf, cl.worldmodel);
 
+	qge_vis_shadow = QGE_VisShadowBegin(cl.worldmodel);
 	r_visframecount++;
 
 	// set all chains to null
@@ -147,6 +149,7 @@ void R_MarkSurfaces (void)
 						{
 							rs_brushpolys++; //count wpolys here
 							R_ChainSurface(surf, chain_world);
+							QGE_VisShadowMarkClassicSurface(cl.worldmodel, surf);
 							QGE_SceneSubmitWorldSurface(cl.worldmodel, surf);
 							R_RenderDynamicLightmaps(surf);
 							if (surf->texinfo->texture->warpimage)
@@ -160,6 +163,9 @@ void R_MarkSurfaces (void)
 				R_StoreEfrags (&leaf->efrags);
 		}
 	}
+
+	if (qge_vis_shadow)
+		QGE_VisShadowEnd(cl.worldmodel);
 }
 
 //==============================================================================

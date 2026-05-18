@@ -41,6 +41,13 @@ DOMAIN_NAMES = {
     9: "ui",
 }
 
+ENTROPY_SOURCE_NAMES = {
+    0: "qrng",
+    1: "replay",
+    2: "deterministic",
+    3: "classical_fallback",
+}
+
 REP_NAMES = {
     0: "none",
     1: "dense_state",
@@ -58,16 +65,39 @@ REP_NAMES = {
 
 HEADER = struct.Struct("<IHHIIQQQQ")
 RECORD = struct.Struct("<HHIQ")
+ENTROPY = struct.Struct("<iiIIiIQQ")
 STATE_PROBE = struct.Struct("<iiIIiIQddddiiQ32s")
+FALLBACK = struct.Struct("<iiIIiid96s")
 
 
 def clean_label(raw: bytes) -> str:
     return raw.split(b"\0", 1)[0].decode("utf-8", errors="replace")
 
 
+def increment_group(groups: dict[tuple, dict], key: tuple, initial: dict, frame: int) -> dict:
+    group = groups.get(key)
+    if group is None:
+        group = dict(initial)
+        group["count"] = 0
+        group["first_frame"] = frame
+        group["last_frame"] = frame
+        groups[key] = group
+    group["count"] += 1
+    group["first_frame"] = min(group["first_frame"], frame)
+    group["last_frame"] = max(group["last_frame"], frame)
+    return group
+
+
 def parse_trace(path: str) -> dict:
     record_counts: Counter[str] = Counter()
     probe_groups: dict[tuple[str, str, str], dict] = {}
+    entropy_groups: dict[tuple[str, str], dict] = {}
+    fallback_groups: dict[tuple[str, int, str], dict] = {}
+    replay_health = {
+        "entropy_replay_events": 0,
+        "replay_metadata_mismatches": 0,
+        "replay_exhaustions": 0,
+    }
 
     with open(path, "rb") as f:
         header_raw = f.read(HEADER.size)
@@ -102,6 +132,64 @@ def parse_trace(path: str) -> dict:
 
             record_name = RECORD_NAMES.get(kind, f"unknown_{kind}")
             record_counts[record_name] += 1
+
+            if kind == 3 and payload_size == ENTROPY.size:
+                unpacked = ENTROPY.unpack(payload)
+                frame, _server_time, domain, source, subject_id, request_id = unpacked[:6]
+                value, entropy_offset = unpacked[6:8]
+                domain_name = DOMAIN_NAMES.get(domain, f"domain_{domain}")
+                source_name = ENTROPY_SOURCE_NAMES.get(source, f"source_{source}")
+                group = increment_group(
+                    entropy_groups,
+                    (domain_name, source_name),
+                    {
+                        "domain": domain_name,
+                        "source": source_name,
+                        "first_request_id": request_id,
+                        "last_request_id": request_id,
+                        "first_entropy_offset": entropy_offset,
+                        "last_entropy_offset": entropy_offset,
+                        "last_subject_id": subject_id,
+                        "value_xor": 0,
+                    },
+                    frame,
+                )
+                group["last_request_id"] = request_id
+                group["last_entropy_offset"] = entropy_offset
+                group["last_subject_id"] = subject_id
+                group["value_xor"] ^= value
+                if source_name == "replay":
+                    replay_health["entropy_replay_events"] += 1
+                continue
+
+            if kind == 6 and payload_size == FALLBACK.size:
+                unpacked = FALLBACK.unpack(payload)
+                frame, _server_time, domain, rep, subject_id, reason_code = unpacked[:6]
+                metric_value = unpacked[6]
+                message = clean_label(unpacked[7])
+                domain_name = DOMAIN_NAMES.get(domain, f"domain_{domain}")
+                rep_name = REP_NAMES.get(rep, f"rep_{rep}")
+                group = increment_group(
+                    fallback_groups,
+                    (domain_name, reason_code, message),
+                    {
+                        "domain": domain_name,
+                        "representation": rep_name,
+                        "reason_code": reason_code,
+                        "message": message,
+                        "last_subject_id": subject_id,
+                        "metric_value_max": metric_value,
+                    },
+                    frame,
+                )
+                group["last_subject_id"] = subject_id
+                group["metric_value_max"] = max(group["metric_value_max"], metric_value)
+                if reason_code == 1 and message == "replay entropy metadata mismatch":
+                    replay_health["replay_metadata_mismatches"] += 1
+                elif reason_code == 2 and message == "replay entropy exhausted":
+                    replay_health["replay_exhaustions"] += 1
+                continue
+
             if kind != 5 or payload_size != STATE_PROBE.size:
                 continue
 
@@ -168,6 +256,9 @@ def parse_trace(path: str) -> dict:
         },
         "records": dict(sorted(record_counts.items())),
         "sequence_errors": sequence_errors,
+        "entropy_events": sorted(entropy_groups.values(), key=lambda item: (item["domain"], item["source"])),
+        "fallback_events": sorted(fallback_groups.values(), key=lambda item: (item["domain"], item["reason_code"], item["message"])),
+        "replay_health": replay_health,
         "state_probes": sorted(probe_groups.values(), key=lambda item: (item["domain"], item["label"])),
     }
 
@@ -177,6 +268,25 @@ def print_text(summary: dict) -> None:
     print(f"Run: 0x{summary['header']['run_id']:016x}")
     print(f"Records: {json.dumps(summary['records'], sort_keys=True)}")
     print(f"Sequence errors: {summary['sequence_errors']}")
+    if summary["replay_health"]["entropy_replay_events"] or summary["replay_health"]["replay_metadata_mismatches"] or summary["replay_health"]["replay_exhaustions"]:
+        print(f"Replay: {json.dumps(summary['replay_health'], sort_keys=True)}")
+    for entropy in summary["entropy_events"]:
+        print(
+            "Entropy "
+            f"domain={entropy['domain']} source={entropy['source']} "
+            f"count={entropy['count']} frames={entropy['first_frame']}..{entropy['last_frame']} "
+            f"requests={entropy['first_request_id']}..{entropy['last_request_id']} "
+            f"offsets={entropy['first_entropy_offset']}..{entropy['last_entropy_offset']} "
+            f"subject={entropy['last_subject_id']} value_xor=0x{entropy['value_xor']:x}"
+        )
+    for fallback in summary["fallback_events"]:
+        print(
+            "Fallback "
+            f"domain={fallback['domain']} rep={fallback['representation']} "
+            f"reason={fallback['reason_code']} count={fallback['count']} "
+            f"frames={fallback['first_frame']}..{fallback['last_frame']} "
+            f"subject={fallback['last_subject_id']} message={fallback['message']}"
+        )
     for probe in summary["state_probes"]:
         extra = f" subject={probe['last_subject_id']}"
         if probe["label"] == "render_gate_kernel":

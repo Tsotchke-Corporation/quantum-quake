@@ -373,6 +373,17 @@ class TraceSummaryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             trace_path = Path(tmp) / "qge_trace.bin"
             label = b"render_gate_kernel"
+            fallback_message = b"replay entropy metadata mismatch"
+            entropy_payload = trace_summary.ENTROPY.pack(
+                7,         # frame
+                125,       # server time msec
+                6,         # rng domain
+                1,         # replay source
+                0,         # subject id
+                11,        # request id
+                0x123456,  # value
+                3,         # entropy offset
+            )
             payload = trace_summary.STATE_PROBE.pack(
                 7,      # frame
                 125,    # server time msec
@@ -390,6 +401,16 @@ class TraceSummaryTests(unittest.TestCase):
                 4096,   # memory bytes
                 label + b"\0" * (32 - len(label)),
             )
+            fallback_payload = trace_summary.FALLBACK.pack(
+                8,      # frame
+                140,    # server time msec
+                6,      # rng domain
+                0,      # none representation
+                0,      # subject id
+                1,      # replay metadata mismatch
+                0.0,    # metric value
+                fallback_message + b"\0" * (96 - len(fallback_message)),
+            )
             trace_path.write_bytes(
                 trace_summary.HEADER.pack(
                     trace_summary.TRACE_MAGIC,
@@ -403,18 +424,47 @@ class TraceSummaryTests(unittest.TestCase):
                     0x4,
                 )
                 + trace_summary.RECORD.pack(
+                    3,
+                    trace_summary.TRACE_VERSION,
+                    len(entropy_payload),
+                    0,
+                )
+                + entropy_payload
+                + trace_summary.RECORD.pack(
                     5,
                     trace_summary.TRACE_VERSION,
                     len(payload),
-                    0,
+                    1,
                 )
                 + payload
+                + trace_summary.RECORD.pack(
+                    6,
+                    trace_summary.TRACE_VERSION,
+                    len(fallback_payload),
+                    2,
+                )
+                + fallback_payload
             )
 
             parsed = trace_summary.parse_trace(str(trace_path))
             self.assertEqual(parsed["header"]["run_id"], 0x5151455F52554E31)
+            self.assertEqual(parsed["records"]["entropy"], 1)
             self.assertEqual(parsed["records"]["state_probe"], 1)
+            self.assertEqual(parsed["records"]["fallback"], 1)
             self.assertEqual(parsed["sequence_errors"], 0)
+            self.assertEqual(parsed["replay_health"]["entropy_replay_events"], 1)
+            self.assertEqual(parsed["replay_health"]["replay_metadata_mismatches"], 1)
+            entropy = parsed["entropy_events"][0]
+            self.assertEqual(entropy["domain"], "rng")
+            self.assertEqual(entropy["source"], "replay")
+            self.assertEqual(entropy["last_request_id"], 11)
+            fallback = parsed["fallback_events"][0]
+            self.assertEqual(fallback["domain"], "rng")
+            self.assertEqual(fallback["reason_code"], 1)
+            self.assertEqual(
+                fallback["message"],
+                "replay entropy metadata mismatch",
+            )
             probe = parsed["state_probes"][0]
             self.assertEqual(probe["label"], "render_gate_kernel")
             self.assertEqual(probe["domain"], "render")
@@ -479,10 +529,17 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
                     performance,
                 )
                 owner = "qge_3d" if mode == "quantum" else "classic"
+                ownership = (
+                    "own_world=1 own_textures=1 own_lightmaps=1 "
+                    "own_entities=1 own_sprites=1 own_particles=1 "
+                    "own_viewmodel=1 own_hud=1 own_console=1 "
+                    if mode == "quantum" else ""
+                )
                 (capture_dir / f"{mode}.log").write_text(
                     f"QGE render frame=1 render={render_value} fallback=0 "
-                    f"surrogate=0 classic3d=0 viewmodel=1 owner={owner} "
-                    "suppressed3d=1 poly=3 tris=6 edgefills=2\n",
+                    f"surrogate=0 classic3d=0 classic2d=0 viewmodel=1 "
+                    f"owner={owner} suppressed3d=1 suppressed2d=1 "
+                    f"{ownership}poly=3 tris=6 edgefills=2\n",
                     encoding="utf-8",
                 )
 
@@ -502,6 +559,9 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
             self.assertTrue(summary["performance_sidecars_success"])
             self.assertTrue(summary["ready_for_complete_claim"])
             self.assertEqual(summary["qge_primary_owner"], "qge_3d")
+            self.assertTrue(summary["qge_classic_output_hidden"])
+            self.assertTrue(summary["qge_asset_ownership_complete"])
+            self.assertEqual(summary["qge_asset_ownership"]["own_world"], 1)
 
             icc = vanilla_matrix.build_icc_evidence(
                 matrix,
@@ -514,6 +574,80 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
                 "qge_vanilla_capture_matrix_complete",
             )
             self.assertEqual(icc["status"], "success")
+
+    def test_missing_asset_ownership_blocks_complete_claim(self) -> None:
+        metrics = {
+            "mae_rgb_normalized": 0.0,
+            "rmse_rgb": 0.0,
+            "psnr_db": None,
+            "luma_ssim_global": 1.0,
+            "histogram_intersection_rgb": 1.0,
+            "edge": {},
+        }
+        manifest = {
+            "status": "complete",
+            "frames_requested": 1,
+            "frames_captured": 1,
+            "trace_requested": 1,
+            "trace_status": "copied",
+            "trace_bytes": 128,
+            "run": {
+                "status": "ok",
+                "success": 1,
+                "startup_issue": "",
+                "process_status": 0,
+                "timed_out": 0,
+            },
+        }
+        performance = {
+            "status": "pass",
+            "aggregate": {
+                "engine_average_quantum_ms_max": 10.0,
+                "render_time_ms_max": 20.0,
+                "threshold_failures": [],
+                "metric_evidence_present": True,
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            capture_dir = Path(tmp)
+            vanilla_matrix.write_json(capture_dir / "metrics.json", metrics)
+            for mode, render_value in (("classic", 0), ("quantum", 2)):
+                (capture_dir / f"{mode}.png").write_bytes(b"png")
+                (capture_dir / f"{mode}.README.txt").write_text(
+                    "Frames captured: 1\nMap: e1m1\n",
+                    encoding="utf-8",
+                )
+                vanilla_matrix.write_json(
+                    capture_dir / f"{mode}.agent_stream.json", manifest
+                )
+                vanilla_matrix.write_json(
+                    capture_dir / f"{mode}.qge_perf_summary.json",
+                    performance,
+                )
+                owner = "qge_3d" if mode == "quantum" else "classic"
+                (capture_dir / f"{mode}.log").write_text(
+                    f"QGE render frame=1 render={render_value} fallback=0 "
+                    f"surrogate=0 classic3d=0 classic2d=0 viewmodel=1 "
+                    f"owner={owner} suppressed3d=1 suppressed2d=1 "
+                    "poly=3 tris=6 edgefills=2\n",
+                    encoding="utf-8",
+                )
+
+            args = SimpleNamespace(
+                capture_dir=capture_dir,
+                metrics=None,
+                classic_mode="classic",
+                qge_mode="quantum",
+                classic_render=0,
+                qge_render=2,
+            )
+            summary = vanilla_matrix.build_matrix(args)["conformance_summary"]
+            self.assertFalse(summary["ready_for_complete_claim"])
+            self.assertFalse(summary["qge_asset_ownership_complete"])
+            self.assertIn(
+                "own_world",
+                summary["qge_asset_ownership_missing_fields"],
+            )
 
 
 if __name__ == "__main__":

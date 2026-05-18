@@ -217,6 +217,7 @@ static int test_quantum_entropy_replay(void) {
     qge_quantum_runtime_t* rt_record = qge_quantum_runtime_create();
     qge_quantum_runtime_t* rt_replay;
     qge_quantum_runtime_stats_t stats;
+    int strict;
 
     if (!rt_record) return 0;
     qge_rng_set_runtime(rt_record);
@@ -259,11 +260,105 @@ static int test_quantum_entropy_replay(void) {
 
     memset(&stats, 0, sizeof(stats));
     qge_quantum_runtime_get_stats(rt_replay, &stats);
+    strict = qge_quantum_runtime_get_replay_strict(rt_replay);
     qge_rng_set_runtime(NULL);
     qge_quantum_runtime_free(rt_replay);
 
-    return stats.entropy_events == 12 && stats.frames_started == 1 &&
-           stats.frames_ended == 1;
+    return strict &&
+           stats.entropy_events == 12 && stats.frames_started == 1 &&
+           stats.frames_ended == 1 &&
+           stats.replay_events_loaded == 12 &&
+           stats.replay_events_consumed == 12 &&
+           stats.replay_mismatches == 0 &&
+           stats.replay_exhaustions == 0 &&
+           stats.fallback_events == 0;
+}
+
+static int test_quantum_entropy_replay_strict_mismatch(void) {
+    const char* path = "/tmp/qge_entropy_replay_mismatch.bin";
+    uint64_t recorded;
+    uint64_t replayed;
+    qge_quantum_runtime_t* rt_record = qge_quantum_runtime_create();
+    qge_quantum_runtime_t* rt_replay;
+    qge_quantum_runtime_stats_t stats;
+
+    if (!rt_record) return 0;
+    qge_quantum_runtime_set_seed(rt_record, 0xabcddcbaULL);
+    if (qge_quantum_trace_open(rt_record, path) != 0) {
+        qge_quantum_runtime_free(rt_record);
+        return 0;
+    }
+    qge_quantum_frame_begin(rt_record, 9, 144);
+    recorded = qge_quantum_entropy_u64(rt_record, QGE_DOMAIN_RNG, 7);
+    qge_quantum_frame_end(rt_record);
+    qge_quantum_runtime_free(rt_record);
+
+    rt_replay = qge_quantum_runtime_create();
+    if (!rt_replay) return 0;
+    if (qge_quantum_runtime_load_replay_entropy(rt_replay, path) != 0) {
+        qge_quantum_runtime_free(rt_replay);
+        return 0;
+    }
+
+    qge_quantum_frame_begin(rt_replay, 10, 144);
+    replayed = qge_quantum_entropy_u64(rt_replay, QGE_DOMAIN_RNG, 7);
+    qge_quantum_frame_end(rt_replay);
+
+    memset(&stats, 0, sizeof(stats));
+    qge_quantum_runtime_get_stats(rt_replay, &stats);
+    qge_quantum_runtime_free(rt_replay);
+
+    return replayed != recorded &&
+           stats.entropy_events == 1 &&
+           stats.replay_events_loaded == 1 &&
+           stats.replay_events_consumed == 1 &&
+           stats.replay_mismatches == 1 &&
+           stats.replay_exhaustions == 0 &&
+           stats.fallback_events == 1;
+}
+
+static int test_quantum_entropy_replay_exhaustion(void) {
+    const char* path = "/tmp/qge_entropy_replay_exhaustion.bin";
+    uint64_t recorded;
+    uint64_t first_replay;
+    qge_quantum_runtime_t* rt_record = qge_quantum_runtime_create();
+    qge_quantum_runtime_t* rt_replay;
+    qge_quantum_runtime_stats_t stats;
+
+    if (!rt_record) return 0;
+    qge_quantum_runtime_set_seed(rt_record, 0x5555aaaau);
+    if (qge_quantum_trace_open(rt_record, path) != 0) {
+        qge_quantum_runtime_free(rt_record);
+        return 0;
+    }
+    qge_quantum_frame_begin(rt_record, 11, 176);
+    recorded = qge_quantum_entropy_u64(rt_record, QGE_DOMAIN_AI, 3);
+    qge_quantum_frame_end(rt_record);
+    qge_quantum_runtime_free(rt_record);
+
+    rt_replay = qge_quantum_runtime_create();
+    if (!rt_replay) return 0;
+    if (qge_quantum_runtime_load_replay_entropy(rt_replay, path) != 0) {
+        qge_quantum_runtime_free(rt_replay);
+        return 0;
+    }
+
+    qge_quantum_frame_begin(rt_replay, 11, 176);
+    first_replay = qge_quantum_entropy_u64(rt_replay, QGE_DOMAIN_AI, 3);
+    (void)qge_quantum_entropy_u64(rt_replay, QGE_DOMAIN_AI, 3);
+    qge_quantum_frame_end(rt_replay);
+
+    memset(&stats, 0, sizeof(stats));
+    qge_quantum_runtime_get_stats(rt_replay, &stats);
+    qge_quantum_runtime_free(rt_replay);
+
+    return first_replay == recorded &&
+           stats.entropy_events == 2 &&
+           stats.replay_events_loaded == 1 &&
+           stats.replay_events_consumed == 1 &&
+           stats.replay_mismatches == 0 &&
+           stats.replay_exhaustions == 1 &&
+           stats.fallback_events == 1;
 }
 
 /* ============================================================================
@@ -325,8 +420,25 @@ static int test_context_backend_gate(void) {
 
     if (!ctx) return 0;
 
+    backend = qge_get_backend(ctx);
+    name = qge_backend_name(backend);
+    reason = qge_context_backend_reason(ctx);
+    probe_reason = qge_context_backend_probe_reason(ctx);
+    runtime_path = qge_context_backend_runtime_path(ctx);
+    flags = qge_context_backend_flags(ctx);
+
 #if defined(__APPLE__)
-    expected = QGE_BACKEND_METAL;
+    if (strcmp(probe_reason, "metal_system_device_available") == 0) {
+        expected = QGE_BACKEND_METAL;
+    }
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+    else if (strcmp(probe_reason, "metal_unavailable_using_neon_cpu") == 0) {
+        expected = QGE_BACKEND_NEON;
+    }
+#endif
+    else {
+        expected = QGE_BACKEND_FALLBACK;
+    }
 #elif defined(__linux__) && defined(__AVX512F__)
     expected = QGE_BACKEND_AVX512;
 #elif defined(__linux__) && defined(__AVX2__)
@@ -335,12 +447,6 @@ static int test_context_backend_gate(void) {
     expected = QGE_BACKEND_FALLBACK;
 #endif
 
-    backend = qge_get_backend(ctx);
-    name = qge_backend_name(backend);
-    reason = qge_context_backend_reason(ctx);
-    probe_reason = qge_context_backend_probe_reason(ctx);
-    runtime_path = qge_context_backend_runtime_path(ctx);
-    flags = qge_context_backend_flags(ctx);
     ok = backend == expected &&
          name != NULL &&
          strcmp(name, "Unknown") != 0 &&
@@ -374,7 +480,9 @@ static int test_context_backend_gate(void) {
         } else if (ok && qge_backend_is_accelerated(backend)) {
             ok = active != 0 &&
                  strcmp(status, "active acceleration") == 0 &&
-                 strcmp(reason, "cpu_simd_backend_active") == 0 &&
+                 strcmp(runtime_path, "accelerated_render_path") == 0 &&
+                 strcmp(reason, "accelerator_context_active") == 0 &&
+                 qge_context_backend_native_available(ctx) != 0 &&
                  (flags & QGE_BACKEND_FLAG_ACCELERATED_CAPABLE) != 0 &&
                  (flags & QGE_BACKEND_FLAG_ACTIVE_ACCELERATION) != 0;
         } else if (ok) {
@@ -995,6 +1103,51 @@ static int test_ai_visibility_effect(void) {
     return 1;  /* Pass as long as no crash - quantum outcomes are inherently random */
 }
 
+static int test_ai_decide_traced_protocol(void) {
+    qge_ai_decision_input_t input;
+    qge_ai_decision_trace_t trace;
+    uint64_t expected_hash;
+    ai_action_t action;
+
+    memset(&input, 0, sizeof(input));
+    memset(&trace, 0, sizeof(trace));
+
+    qge_ai_init_enemy(17, 2);
+    input.version = QGE_AI_TRACE_VERSION;
+    input.frame = 123;
+    input.server_time_msec = 4567;
+    input.enemy_id = 17;
+    input.enemy_type = 2;
+    input.health = 80.0f;
+    input.flags = 0x10u;
+    input.target_entnum = 1;
+    input.aggression = 0.75f;
+    input.player_distance = 320.0f;
+    input.player_visible = true;
+    input.legal_action_mask = QGE_AI_ACTION_PATROL_MASK;
+    input.authority = QGE_AI_AUTHORITY_ADVISORY;
+    expected_hash = qge_ai_decision_input_hash(&input);
+
+    action = qge_ai_decide_traced(&input, &trace);
+
+    return action == AI_PATROL &&
+           trace.input.version == QGE_AI_TRACE_VERSION &&
+           trace.input.frame == 123 &&
+           trace.input.enemy_id == 17 &&
+           trace.output.version == QGE_AI_TRACE_VERSION &&
+           trace.output.input_hash == expected_hash &&
+           trace.output.action == AI_PATROL &&
+           trace.output.legal_action_mask == QGE_AI_ACTION_PATROL_MASK &&
+           (trace.output.flags & QGE_AI_DECISION_FLAG_ADVISORY) != 0 &&
+           (trace.output.flags & QGE_AI_DECISION_FLAG_AUTHORITY) == 0 &&
+           (trace.output.flags & QGE_AI_DECISION_FLAG_PLAYER_VISIBLE) != 0 &&
+           trace.output.action_basis < 8 &&
+           trace.output.total_probability > 0.0 &&
+           trace.output.max_probability > 0.0 &&
+           trace.output.confidence >= 0.0 &&
+           trace.output.confidence <= 1.0;
+}
+
 static int test_ai_entanglement(void) {
     /* Test entanglement between two enemies */
     int enemy_a = 40;
@@ -1606,6 +1759,49 @@ static int test_vis_grover_amplification(void) {
     return total == 100 && visible > 0;
 }
 
+static int test_vis_shadow_parity_stats(void) {
+    qge_vis_shadow_stats_t stats;
+
+    qge_vis_clear_surfaces();
+
+    /* QGE frustum sees surfaces 0 and 1; surface 2 is behind the camera. */
+    qge_vis_register_surface(0, -10, -10, -50, 10, 10, -40);
+    qge_vis_register_surface(1, 20, -10, -50, 40, 10, -40);
+    qge_vis_register_surface(2, -10, -10, 40, 10, 10, 50);
+
+    qge_vec3_t eye = {0.0f, 0.0f, 0.0f};
+    qge_vec3_t forward = {0.0f, 0.0f, -1.0f};
+    qge_vis_setup_viewpoint(eye, forward);
+
+    qge_vis_shadow_begin(3, 0.0f);
+    qge_vis_shadow_mark_classic_visible(0);
+    qge_vis_shadow_mark_classic_visible(2);
+
+    if (!qge_vis_shadow_finish(&stats)) {
+        return 0;
+    }
+
+    printf("\n    Shadow parity: classic=%d qge=%d fp=%d fn=%d "
+           "classic_fp=0x%llx qge_fp=0x%llx mismatch_fp=0x%llx\n    ",
+           stats.classic_visible_count,
+           stats.qge_visible_count,
+           stats.false_positive_count,
+           stats.false_negative_count,
+           (unsigned long long)stats.classic_fingerprint,
+           (unsigned long long)stats.qge_fingerprint,
+           (unsigned long long)stats.mismatch_fingerprint);
+
+    return stats.total_surfaces == 3 &&
+           stats.classic_visible_count == 2 &&
+           stats.qge_visible_count == 2 &&
+           stats.false_positive_count == 1 &&
+           stats.false_negative_count == 1 &&
+           stats.first_false_positive == 1 &&
+           stats.first_false_negative == 2 &&
+           stats.classic_fingerprint != stats.qge_fingerprint &&
+           stats.mismatch_fingerprint != 0;
+}
+
 /* ============================================================================
  * Quantum Audio Tests
  * ============================================================================ */
@@ -2051,6 +2247,8 @@ int main(void) {
     TEST(quantum_runtime_events);
     TEST(quantum_trace_roundtrip);
     TEST(quantum_entropy_replay);
+    TEST(quantum_entropy_replay_strict_mismatch);
+    TEST(quantum_entropy_replay_exhaustion);
     printf("\n");
 
     printf("Hardware Detection Tests:\n");
@@ -2087,6 +2285,7 @@ int main(void) {
     TEST(ai_decide_basic);
     TEST(ai_decide_distribution);
     TEST(ai_visibility_effect);
+    TEST(ai_decide_traced_protocol);
     TEST(ai_entanglement);
     TEST(ai_destroy);
     printf("\n");
@@ -2110,6 +2309,7 @@ int main(void) {
     TEST(vis_get_visible_set);
     TEST(vis_frustum_culling);
     TEST(vis_grover_amplification);
+    TEST(vis_shadow_parity_stats);
     printf("\n");
 
     printf("Quantum Audio Tests:\n");

@@ -14,9 +14,21 @@ void S_QuantumInit(void);
 /* Shutdown quantum audio system */
 void S_QuantumShutdown(void);
 
-/* Apply quantum effects to paint buffer
- * Called from S_PaintChannels after mixing */
+/* Mode helpers */
+qboolean S_QuantumPostMixMode(void);
+qboolean S_QuantumSourceMode(void);
+
+/* Apply quantum effects to paint buffer.
+ * Called from S_PaintChannels after mixing for snd_quantum 1. */
 void S_QuantumProcess(portable_samplepair_t *paintbuffer, int count);
+
+/* Source-mode processing for snd_quantum 2. Dry source data is preserved on
+ * skipped or failed quantum blocks. */
+void S_QuantumSourceBeginFrame(void);
+void S_QuantumSourceNote(int entnum, int entchannel, const char *name);
+void S_QuantumProcessSource(portable_samplepair_t *sourcebuffer, int count,
+                            int entnum, int entchannel, const char *name);
+void S_QuantumSourceEndFrame(void);
 
 /* Console commands */
 void S_QuantumReverb_f(void);
@@ -24,7 +36,8 @@ void S_QuantumPhase_f(void);
 
 /* CVars - declared extern so they can be registered elsewhere */
 extern cvar_t snd_quantum_enable;
+extern cvar_t snd_quantum_mix;
+extern cvar_t snd_quantum_spread;
 extern cvar_t snd_quantum_reverb;
-extern cvar_t snd_quantum_phase;
 
 #endif /* SND_QUANTUM_H */

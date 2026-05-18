@@ -488,7 +488,19 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "fallback_count": conformance.get("fallback_count"),
             "surrogate_count": conformance.get("qge_surface_surrogates"),
             "classic3d_count": conformance.get("classic3d_count"),
+            "classic2d_count": conformance.get("classic2d_count"),
             "viewmodel_encoded": conformance.get("viewmodel_encoded"),
+            "qge_classic_output_hidden": conformance.get(
+                "qge_classic_output_hidden"),
+            "qge_asset_ownership": conformance.get("qge_asset_ownership"),
+            "qge_asset_ownership_fields_present": conformance.get(
+                "qge_asset_ownership_fields_present"),
+            "qge_asset_ownership_missing_fields": conformance.get(
+                "qge_asset_ownership_missing_fields"),
+            "qge_asset_ownership_incomplete_fields": conformance.get(
+                "qge_asset_ownership_incomplete_fields"),
+            "qge_asset_ownership_complete": conformance.get(
+                "qge_asset_ownership_complete"),
             "agent_stream_runs_success": conformance.get(
                 "agent_stream_runs_success"),
             "classic_agent_run_status": conformance.get(
@@ -601,6 +613,19 @@ def build_icc_evidence(manifest: dict[str, Any],
         "agent_stream_file_count": artifacts["agent_stream"]["stream_directory"]["packed"]["file_count"],
         "fallback_count": runtime.get("fallback_count"),
         "surrogate_count": runtime.get("surrogate_count"),
+        "classic3d_count": runtime.get("classic3d_count"),
+        "classic2d_count": runtime.get("classic2d_count"),
+        "qge_classic_output_hidden": runtime.get(
+            "qge_classic_output_hidden"),
+        "qge_asset_ownership": runtime.get("qge_asset_ownership"),
+        "qge_asset_ownership_fields_present": runtime.get(
+            "qge_asset_ownership_fields_present"),
+        "qge_asset_ownership_missing_fields": runtime.get(
+            "qge_asset_ownership_missing_fields"),
+        "qge_asset_ownership_incomplete_fields": runtime.get(
+            "qge_asset_ownership_incomplete_fields"),
+        "qge_asset_ownership_complete": runtime.get(
+            "qge_asset_ownership_complete"),
         "vanilla_ready_for_complete_claim": runtime.get(
             "vanilla_ready_for_complete_claim"),
         "agent_stream_runs_success": runtime.get(

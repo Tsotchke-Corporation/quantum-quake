@@ -14,6 +14,7 @@
 #include "quakedef.h"
 #include "snd_quantum.h"
 #include <math.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -66,11 +67,190 @@ static double quantum_time = 0.0;
 
 static qboolean quantum_initialized = false;
 
+#define QA_SOURCE_FLAG_DRY_FALLBACK 0x1u
+#define QA_SOURCE_FLAG_PROCESSED 0x2u
+#define QA_SOURCE_FLAG_CLIPPED 0x4u
+
+typedef struct {
+    int source_count;
+    int processed_sources;
+    int processed_blocks;
+    int processed_samples;
+    int skipped_blocks;
+    int dry_fallback_blocks;
+    int clipped_samples;
+    double transducer_ms;
+    int last_subject_id;
+    char last_source_name[QGE_PROBE_LABEL_MAX];
+} qa_source_stats_t;
+
+static qa_source_stats_t qa_source_stats;
+static qboolean qa_source_frame_active = false;
+
 static float qa_clamp01(float value)
 {
     if (value < 0.0f) return 0.0f;
     if (value > 1.0f) return 1.0f;
     return value;
+}
+
+qboolean S_QuantumPostMixMode(void)
+{
+    return snd_quantum_enable.value >= 0.5f &&
+           snd_quantum_enable.value < 1.5f;
+}
+
+qboolean S_QuantumSourceMode(void)
+{
+    return snd_quantum_enable.value >= 1.5f;
+}
+
+static int qa_block_count_for_samples(int count)
+{
+    if (count <= 0)
+        return 0;
+    return (count + QA_BLOCK_SIZE - 1) / QA_BLOCK_SIZE;
+}
+
+static int qa_source_subject_id(int entnum, int entchannel)
+{
+    uint32_t hash = 2166136261u;
+
+    hash = (hash ^ (uint32_t)entnum) * 16777619u;
+    hash = (hash ^ (uint32_t)entchannel) * 16777619u;
+    return (int)(hash & 0x7fffffffu);
+}
+
+static int qa_paint_sample_from_float(float value, int *clipped)
+{
+    double scaled = (double)value * QA_SAMPLE_SCALE;
+    const double min_sample = (double)(-32768 * 256);
+    const double max_sample = (double)(32767 * 256);
+
+    if (!isfinite(scaled)) {
+        if (clipped)
+            (*clipped)++;
+        return 0;
+    }
+    if (scaled > max_sample) {
+        if (clipped)
+            (*clipped)++;
+        scaled = max_sample;
+    } else if (scaled < min_sample) {
+        if (clipped)
+            (*clipped)++;
+        scaled = min_sample;
+    }
+    return (int)scaled;
+}
+
+static qge_quantum_runtime_t *qa_runtime(void)
+{
+    qge_context_t *ctx = qge_get_context();
+
+    if (!ctx)
+        return NULL;
+    return qge_get_quantum_runtime(ctx);
+}
+
+static void qa_runtime_stamp(qge_quantum_runtime_t *rt,
+                             int *frame, int *server_time_msec)
+{
+    if (!rt) {
+        *frame = 0;
+        *server_time_msec = 0;
+        return;
+    }
+
+    *frame = qge_quantum_runtime_get_frame(rt);
+    *server_time_msec = qge_quantum_runtime_get_server_time_msec(rt);
+}
+
+static void qa_record_source_probe(int subject_id, const char *label,
+                                   uint32_t flags, int basis_count,
+                                   int samples, int blocks,
+                                   int clipped_samples, double elapsed_ms)
+{
+    qge_quantum_runtime_t *rt = qa_runtime();
+    qge_state_probe_t probe;
+    uint64_t elapsed_ticks;
+    int frame, server_time_msec;
+
+    if (!rt)
+        return;
+
+    qa_runtime_stamp(rt, &frame, &server_time_msec);
+    memset(&probe, 0, sizeof(probe));
+    probe.frame = frame;
+    probe.server_time_msec = server_time_msec;
+    probe.domain = QGE_DOMAIN_AUDIO;
+    probe.representation = QGE_REP_DCT_TRANSDUCER;
+    probe.subject_id = subject_id;
+    probe.flags = flags;
+    elapsed_ticks = elapsed_ms > 0.0 ? (uint64_t)(elapsed_ms * 1000.0) : 0u;
+    probe.state_hash = ((uint64_t)(uint32_t)subject_id << 32) ^
+                       ((uint64_t)(uint32_t)samples << 8) ^
+                       ((uint64_t)(uint32_t)clipped_samples << 48) ^
+                       (uint64_t)(uint32_t)blocks ^
+                       elapsed_ticks;
+    probe.entropy = qa_clamp01(snd_quantum_spread.value);
+    probe.coherence = 1.0 - qa_clamp01(snd_quantum_mix.value);
+    probe.max_probability = qa_clamp01(snd_quantum_mix.value);
+    probe.total_probability = (double)samples;
+    probe.active_basis_count = basis_count;
+    probe.qubit_count = NUM_QUBITS * 2;
+    probe.memory_bytes = (uint64_t)QA_BLOCK_SIZE * sizeof(float) * 6u;
+    q_strlcpy(probe.label, label, sizeof(probe.label));
+    qge_quantum_record_probe(rt, &probe);
+}
+
+static void qa_record_source_measurement(int subject_id, int samples,
+                                         int blocks, uint32_t flags)
+{
+    qge_quantum_runtime_t *rt = qa_runtime();
+    qge_measurement_event_t measurement;
+    int frame, server_time_msec;
+
+    if (!rt)
+        return;
+
+    qa_runtime_stamp(rt, &frame, &server_time_msec);
+    memset(&measurement, 0, sizeof(measurement));
+    measurement.domain = QGE_DOMAIN_AUDIO;
+    measurement.kind = QGE_MEASURE_AUDIO_BLOCK;
+    measurement.boundary = QGE_OBSERVE_AUDIO_MIX;
+    measurement.frame = frame;
+    measurement.server_time_msec = server_time_msec;
+    measurement.subject_id = subject_id;
+    measurement.flags = flags;
+    measurement.basis_index = (uint64_t)blocks;
+    measurement.probability = qa_clamp01(snd_quantum_mix.value);
+    measurement.phase = quantum_time;
+    measurement.trace_id = (uint64_t)(uint32_t)samples;
+    qge_quantum_record_measurement(rt, &measurement);
+}
+
+static void qa_record_source_fallback(int subject_id, int reason_code,
+                                      int samples, const char *message)
+{
+    qge_quantum_runtime_t *rt = qa_runtime();
+    qge_fallback_event_t fallback;
+    int frame, server_time_msec;
+
+    if (!rt)
+        return;
+
+    qa_runtime_stamp(rt, &frame, &server_time_msec);
+    memset(&fallback, 0, sizeof(fallback));
+    fallback.frame = frame;
+    fallback.server_time_msec = server_time_msec;
+    fallback.domain = QGE_DOMAIN_AUDIO;
+    fallback.representation = QGE_REP_DCT_TRANSDUCER;
+    fallback.subject_id = subject_id;
+    fallback.reason_code = reason_code;
+    fallback.metric_value = (double)samples;
+    q_strlcpy(fallback.message, message, sizeof(fallback.message));
+    qge_quantum_record_fallback(rt, &fallback);
 }
 
 /*
@@ -249,7 +429,7 @@ void S_QuantumProcess(portable_samplepair_t *paintbuffer, int count)
     if (!quantum_initialized || !paintbuffer || count <= 0)
         return;
 
-    if (snd_quantum_enable.value < 0.5f)
+    if (!S_QuantumPostMixMode())
         return;
 
     float spread = qa_clamp01(snd_quantum_spread.value);
@@ -330,7 +510,7 @@ void S_QuantumProcess(portable_samplepair_t *paintbuffer, int count)
                 probe.entropy = spread;
                 probe.coherence = 1.0 - mix;
                 probe.total_probability = quantum_time;
-                strlcpy(probe.label, "audio_transducer", sizeof(probe.label));
+                q_strlcpy(probe.label, "audio_transducer", sizeof(probe.label));
                 qge_quantum_record_probe(rt, &probe);
             }
         }
@@ -341,6 +521,212 @@ void S_QuantumProcess(portable_samplepair_t *paintbuffer, int count)
     if (reverb_amount > 0.001f) {
         quantum_reverb(paintbuffer, count, reverb_amount);
     }
+}
+
+void S_QuantumSourceBeginFrame(void)
+{
+    if (!S_QuantumSourceMode())
+        return;
+
+    memset(&qa_source_stats, 0, sizeof(qa_source_stats));
+    q_strlcpy(qa_source_stats.last_source_name, "none",
+              sizeof(qa_source_stats.last_source_name));
+    qa_source_frame_active = true;
+}
+
+void S_QuantumSourceNote(int entnum, int entchannel, const char *name)
+{
+    if (!S_QuantumSourceMode())
+        return;
+    if (!qa_source_frame_active)
+        S_QuantumSourceBeginFrame();
+
+    qa_source_stats.source_count++;
+    qa_source_stats.last_subject_id = qa_source_subject_id(entnum, entchannel);
+    q_strlcpy(qa_source_stats.last_source_name,
+              (name && name[0]) ? name : "unknown",
+              sizeof(qa_source_stats.last_source_name));
+}
+
+void S_QuantumProcessSource(portable_samplepair_t *sourcebuffer, int count,
+                            int entnum, int entchannel, const char *name)
+{
+    const int subject_id = qa_source_subject_id(entnum, entchannel);
+    const float spread = qa_clamp01(snd_quantum_spread.value);
+    const float mix = qa_clamp01(snd_quantum_mix.value);
+    const int full_blocks = count / QA_BLOCK_SIZE;
+    const int remainder = count % QA_BLOCK_SIZE;
+    int processed_blocks = 0;
+    int processed_samples = 0;
+    int clipped_samples = 0;
+    uint32_t flags = 0;
+    double start_time;
+
+    if (!S_QuantumSourceMode() || !sourcebuffer || count <= 0)
+        return;
+    if (!qa_source_frame_active)
+        S_QuantumSourceBeginFrame();
+
+    qa_source_stats.last_subject_id = subject_id;
+    if (name && name[0]) {
+        q_strlcpy(qa_source_stats.last_source_name, name,
+                  sizeof(qa_source_stats.last_source_name));
+    }
+
+    if (!quantum_initialized || !transducer_l || !transducer_r ||
+        !dct_table || mix <= 0.0f) {
+        int blocks = qa_block_count_for_samples(count);
+        qa_source_stats.skipped_blocks += blocks;
+        qa_source_stats.dry_fallback_blocks += blocks;
+        qa_record_source_fallback(subject_id, 1, count,
+                                  "audio_source_dry_fallback");
+        return;
+    }
+
+    if (full_blocks <= 0) {
+        qa_source_stats.skipped_blocks++;
+        qa_source_stats.dry_fallback_blocks++;
+        qa_record_source_fallback(subject_id, 2, count,
+                                  "audio_source_short_block");
+        return;
+    }
+
+    start_time = Sys_DoubleTime();
+    for (int block = 0; block < full_blocks; block++) {
+        portable_samplepair_t dry[QA_BLOCK_SIZE];
+        portable_samplepair_t *out = sourcebuffer + block * QA_BLOCK_SIZE;
+        qboolean invalid_block = false;
+        int block_clipped = 0;
+
+        memcpy(dry, out, sizeof(dry));
+
+        for (int i = 0; i < QA_BLOCK_SIZE; i++) {
+            input_buffer_l[i] = (float)out[i].left / QA_SAMPLE_SCALE;
+            input_buffer_r[i] = (float)out[i].right / QA_SAMPLE_SCALE;
+        }
+
+        dct_forward(input_buffer_l, freq_l);
+        dct_forward(input_buffer_r, freq_r);
+        qge_transducer_process(transducer_l, freq_l, QA_NUM_BINS, spread,
+                               quantum_time);
+        qge_transducer_process(transducer_r, freq_r, QA_NUM_BINS, spread,
+                               quantum_time);
+        dct_inverse(freq_l, output_buffer_l);
+        dct_inverse(freq_r, output_buffer_r);
+
+        for (int i = 0; i < QA_BLOCK_SIZE; i++) {
+            float wet_l = output_buffer_l[i] * 0.7f;
+            float wet_r = output_buffer_r[i] * 0.7f;
+            const float threshold = 0.5f;
+            float dry_l = (float)dry[i].left / QA_SAMPLE_SCALE;
+            float dry_r = (float)dry[i].right / QA_SAMPLE_SCALE;
+
+            if (fabsf(wet_l) > threshold) {
+                float sign = (wet_l >= 0.0f) ? 1.0f : -1.0f;
+                float excess = fabsf(wet_l) - threshold;
+                wet_l = sign * (threshold + excess / (1.0f + excess * 2.0f));
+            }
+            if (fabsf(wet_r) > threshold) {
+                float sign = (wet_r >= 0.0f) ? 1.0f : -1.0f;
+                float excess = fabsf(wet_r) - threshold;
+                wet_r = sign * (threshold + excess / (1.0f + excess * 2.0f));
+            }
+
+            wet_l = dry_l * (1.0f - mix) + wet_l * mix;
+            wet_r = dry_r * (1.0f - mix) + wet_r * mix;
+
+            if (!isfinite(wet_l) || !isfinite(wet_r)) {
+                invalid_block = true;
+                break;
+            }
+
+            out[i].left = qa_paint_sample_from_float(wet_l, &block_clipped);
+            out[i].right = qa_paint_sample_from_float(wet_r, &block_clipped);
+        }
+
+        if (invalid_block) {
+            memcpy(out, dry, sizeof(dry));
+            qa_source_stats.dry_fallback_blocks++;
+            qa_record_source_fallback(subject_id, 3, QA_BLOCK_SIZE,
+                                      "audio_source_invalid_block");
+            continue;
+        }
+
+        processed_blocks++;
+        processed_samples += QA_BLOCK_SIZE;
+        clipped_samples += block_clipped;
+        quantum_time += (double)QA_BLOCK_SIZE / 11025.0;
+    }
+
+    qa_source_stats.transducer_ms += (Sys_DoubleTime() - start_time) * 1000.0;
+
+    if (remainder > 0) {
+        qa_source_stats.skipped_blocks++;
+        qa_source_stats.dry_fallback_blocks++;
+    }
+
+    if (processed_blocks > 0) {
+        flags |= QA_SOURCE_FLAG_PROCESSED;
+        if (clipped_samples > 0)
+            flags |= QA_SOURCE_FLAG_CLIPPED;
+        qa_source_stats.processed_sources++;
+        qa_source_stats.processed_blocks += processed_blocks;
+        qa_source_stats.processed_samples += processed_samples;
+        qa_source_stats.clipped_samples += clipped_samples;
+        qa_record_source_probe(subject_id, "audio_source", flags,
+                               QA_NUM_BINS * 2, processed_samples,
+                               processed_blocks, clipped_samples,
+                               qa_source_stats.transducer_ms);
+        qa_record_source_measurement(subject_id, processed_samples,
+                                     processed_blocks, flags);
+    }
+}
+
+void S_QuantumSourceEndFrame(void)
+{
+    uint32_t flags = 0;
+
+    if (!qa_source_frame_active)
+        return;
+
+    if (qa_source_stats.dry_fallback_blocks > 0)
+        flags |= QA_SOURCE_FLAG_DRY_FALLBACK;
+    if (qa_source_stats.processed_blocks > 0)
+        flags |= QA_SOURCE_FLAG_PROCESSED;
+    if (qa_source_stats.clipped_samples > 0)
+        flags |= QA_SOURCE_FLAG_CLIPPED;
+
+    if (qa_source_stats.source_count > 0 ||
+        qa_source_stats.processed_blocks > 0 ||
+        qa_source_stats.dry_fallback_blocks > 0) {
+        Con_DPrintf("QGE audio source owner=audio_source "
+                    "source_count=%d processed_sources=%d "
+                    "processed_blocks=%d processed_samples=%d "
+                    "skipped_blocks=%d dry_fallback_blocks=%d "
+                    "clipping=%d transducer_ms=%.3f last_subject=%d "
+                    "last_source=%s\n",
+                    qa_source_stats.source_count,
+                    qa_source_stats.processed_sources,
+                    qa_source_stats.processed_blocks,
+                    qa_source_stats.processed_samples,
+                    qa_source_stats.skipped_blocks,
+                    qa_source_stats.dry_fallback_blocks,
+                    qa_source_stats.clipped_samples,
+                    qa_source_stats.transducer_ms,
+                    qa_source_stats.last_subject_id,
+                    qa_source_stats.last_source_name);
+
+        qa_record_source_probe(qa_source_stats.source_count,
+                               "audio_source_frame", flags,
+                               qa_source_stats.processed_blocks > 0 ?
+                                   QA_NUM_BINS * 2 : 0,
+                               qa_source_stats.processed_samples,
+                               qa_source_stats.processed_blocks,
+                               qa_source_stats.clipped_samples,
+                               qa_source_stats.transducer_ms);
+    }
+
+    qa_source_frame_active = false;
 }
 
 /*

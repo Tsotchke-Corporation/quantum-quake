@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define	PAINTBUFFER_SIZE	2048
 portable_samplepair_t paintbuffer[PAINTBUFFER_SIZE];
+static portable_samplepair_t qge_sourcebuffer[PAINTBUFFER_SIZE];
 int		snd_scaletable[32][256];
 int		*snd_p, snd_linear_count;
 short		*snd_out;
@@ -131,8 +132,19 @@ static void QGE_AgentAudioWriteMetadata(void)
 		"  \"raw_file\": ",
 		shm->speed, qge_agent_audio_sample_pairs);
 	QGE_AgentAudioWriteJsonString(meta, qge_agent_audio_raw_path);
-	fprintf(meta, "\n"
-		"}\n");
+	fprintf(meta,
+		",\n"
+		"  \"quantum_mode\": %d,\n"
+		"  \"quantum_owner\": ",
+		(int)(snd_quantum_enable.value + 0.5f));
+	QGE_AgentAudioWriteJsonString(meta,
+		S_QuantumSourceMode() ? "audio_source" :
+		(S_QuantumPostMixMode() ? "post_mix" : "classic"));
+	fprintf(meta,
+		",\n"
+		"  \"source_ownership\": %s\n"
+		"}\n",
+		S_QuantumSourceMode() ? "true" : "false");
 	fclose(meta);
 }
 
@@ -508,11 +520,15 @@ CHANNEL MIXING
 
 static void SND_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int endtime, int paintbufferstart);
 static void SND_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int endtime, int paintbufferstart);
+static void SND_PaintChannelFrom8ToBuffer (portable_samplepair_t *buffer, channel_t *ch, sfxcache_t *sc, int count, int paintbufferstart);
+static void SND_PaintChannelFrom16ToBuffer (portable_samplepair_t *buffer, channel_t *ch, sfxcache_t *sc, int count, int paintbufferstart);
+static void SND_AddSourceBuffer (const portable_samplepair_t *buffer, int count, int paintbufferstart);
 
 void S_PaintChannels (int endtime)
 {
 	int		i;
 	int		end, ltime, count;
+	qboolean	quantum_source_mode;
 	channel_t	*ch;
 	sfxcache_t	*sc;
 
@@ -528,6 +544,10 @@ void S_PaintChannels (int endtime)
 	// clear the paint buffer
 		memset(paintbuffer, 0, (end - paintedtime) * sizeof(portable_samplepair_t));
 
+		quantum_source_mode = S_QuantumSourceMode();
+		if (quantum_source_mode)
+			S_QuantumSourceBeginFrame();
+
 	// paint in the channels.
 		ch = snd_channels;
 		for (i = 0; i < total_channels; i++, ch++)
@@ -539,6 +559,8 @@ void S_PaintChannels (int endtime)
 			sc = S_LoadSound (ch->sfx);
 			if (!sc)
 				continue;
+			if (quantum_source_mode)
+				S_QuantumSourceNote(ch->entnum, ch->entchannel, ch->sfx->name);
 
 			ltime = paintedtime;
 
@@ -553,7 +575,20 @@ void S_PaintChannels (int endtime)
 				{
 					// the last param to SND_PaintChannelFrom is the index
 					// to start painting to in the paintbuffer, usually 0.
-					if (sc->width == 1)
+					if (quantum_source_mode)
+					{
+						memset(qge_sourcebuffer, 0, count * sizeof(portable_samplepair_t));
+						if (sc->width == 1)
+							SND_PaintChannelFrom8ToBuffer(qge_sourcebuffer, ch, sc, count, 0);
+						else
+							SND_PaintChannelFrom16ToBuffer(qge_sourcebuffer, ch, sc, count, 0);
+						S_QuantumProcessSource(qge_sourcebuffer, count,
+											   ch->entnum, ch->entchannel,
+											   ch->sfx ? ch->sfx->name : NULL);
+						SND_AddSourceBuffer(qge_sourcebuffer, count,
+											ltime - paintedtime);
+					}
+					else if (sc->width == 1)
 						SND_PaintChannelFrom8(ch, sc, count, ltime - paintedtime);
 					else
 						SND_PaintChannelFrom16(ch, sc, count, ltime - paintedtime);
@@ -577,6 +612,8 @@ void S_PaintChannels (int endtime)
 				}
 			}
 		}
+		if (quantum_source_mode)
+			S_QuantumSourceEndFrame();
 
 	// clip each sample to 0dB, then reduce by 6dB (to leave some headroom for
 	// the lowpass filter and the music). the lowpass will smooth out the
@@ -617,7 +654,8 @@ void S_PaintChannels (int endtime)
 		}
 
 	// apply quantum audio effects
-		S_QuantumProcess(paintbuffer, end - paintedtime);
+		if (S_QuantumPostMixMode())
+			S_QuantumProcess(paintbuffer, end - paintedtime);
 
 	// stream the post-QGE mixed audio for agent-side inspection
 		QGE_AgentAudioDump(paintbuffer, end - paintedtime);
@@ -653,6 +691,11 @@ void SND_InitScaletable (void)
 
 static void SND_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int count, int paintbufferstart)
 {
+	SND_PaintChannelFrom8ToBuffer(paintbuffer, ch, sc, count, paintbufferstart);
+}
+
+static void SND_PaintChannelFrom8ToBuffer (portable_samplepair_t *buffer, channel_t *ch, sfxcache_t *sc, int count, int paintbufferstart)
+{
 	int	data;
 	int		*lscale, *rscale;
 	unsigned char	*sfx;
@@ -670,14 +713,19 @@ static void SND_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int count, int
 	for (i = 0; i < count; i++)
 	{
 		data = sfx[i];
-		paintbuffer[paintbufferstart + i].left += lscale[data];
-		paintbuffer[paintbufferstart + i].right += rscale[data];
+		buffer[paintbufferstart + i].left += lscale[data];
+		buffer[paintbufferstart + i].right += rscale[data];
 	}
 
 	ch->pos += count;
 }
 
 static void SND_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int count, int paintbufferstart)
+{
+	SND_PaintChannelFrom16ToBuffer(paintbuffer, ch, sc, count, paintbufferstart);
+}
+
+static void SND_PaintChannelFrom16ToBuffer (portable_samplepair_t *buffer, channel_t *ch, sfxcache_t *sc, int count, int paintbufferstart)
 {
 	int	data;
 	int	left, right;
@@ -700,9 +748,20 @@ static void SND_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int count, in
 	//	right = (data * rightvol) >> 8;
 		left = data * leftvol;
 		right = data * rightvol;
-		paintbuffer[paintbufferstart + i].left += left;
-		paintbuffer[paintbufferstart + i].right += right;
+		buffer[paintbufferstart + i].left += left;
+		buffer[paintbufferstart + i].right += right;
 	}
 
 	ch->pos += count;
+}
+
+static void SND_AddSourceBuffer (const portable_samplepair_t *buffer, int count, int paintbufferstart)
+{
+	int i;
+
+	for (i = 0; i < count; i++)
+	{
+		paintbuffer[paintbufferstart + i].left += buffer[i].left;
+		paintbuffer[paintbufferstart + i].right += buffer[i].right;
+	}
 }

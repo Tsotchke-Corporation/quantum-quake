@@ -72,6 +72,7 @@ static quantum_entropy_ctx_t* ai_entropy = NULL;
 static entropy_ctx_t* hw_entropy = NULL;
 static enemy_quantum_info_t enemies[MAX_ENEMIES];
 static int active_enemy_count = 0;
+static uint64_t ai_entropy_offset = 0;
 static bool ai_initialized = false;
 
 /**
@@ -178,6 +179,90 @@ static void ensure_ai_initialized(void) {
     ai_initialized = true;
 }
 
+static uint64_t hash_step(uint64_t hash, uint8_t byte) {
+    hash ^= byte;
+    hash *= 1099511628211ULL;
+    return hash;
+}
+
+static uint64_t hash_u32(uint64_t hash, uint32_t value) {
+    for (int i = 0; i < 4; i++) {
+        hash = hash_step(hash, (uint8_t)((value >> (i * 8)) & 0xffu));
+    }
+    return hash;
+}
+
+static uint64_t hash_i32(uint64_t hash, int32_t value) {
+    return hash_u32(hash, (uint32_t)value);
+}
+
+static uint64_t hash_float(uint64_t hash, float value) {
+    uint32_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    return hash_u32(hash, bits);
+}
+
+uint64_t qge_ai_decision_input_hash(const qge_ai_decision_input_t* input) {
+    uint64_t hash = 1469598103934665603ULL;
+
+    if (!input) {
+        return 0;
+    }
+
+    hash = hash_u32(hash, input->version);
+    hash = hash_i32(hash, input->frame);
+    hash = hash_i32(hash, input->server_time_msec);
+    hash = hash_i32(hash, input->enemy_id);
+    hash = hash_i32(hash, input->enemy_type);
+    hash = hash_float(hash, input->health);
+    hash = hash_u32(hash, input->flags);
+    hash = hash_i32(hash, input->target_entnum);
+    hash = hash_float(hash, input->aggression);
+    hash = hash_float(hash, input->player_distance);
+    hash = hash_u32(hash, input->player_visible ? 1u : 0u);
+    hash = hash_u32(hash, input->legal_action_mask);
+    hash = hash_u32(hash, (uint32_t)input->authority);
+
+    return hash;
+}
+
+static int normalize_enemy_type(int enemy_type) {
+    int type = enemy_type % 8;
+    if (type < 0) type += 8;
+    return type;
+}
+
+static uint32_t normalize_legal_mask(uint32_t legal_action_mask) {
+    return legal_action_mask ? legal_action_mask : QGE_AI_ACTION_LIVE_MASK;
+}
+
+static ai_action_t first_legal_action(uint32_t legal_action_mask) {
+    legal_action_mask = normalize_legal_mask(legal_action_mask);
+    if (legal_action_mask & QGE_AI_ACTION_IDLE_MASK) {
+        return AI_IDLE;
+    }
+    for (int action = AI_IDLE; action <= AI_DEAD; action++) {
+        if (legal_action_mask & QGE_AI_ACTION_MASK(action)) {
+            return (ai_action_t)action;
+        }
+    }
+    return AI_IDLE;
+}
+
+static ai_action_t clamp_legal_action(ai_action_t action,
+                                      uint32_t legal_action_mask,
+                                      uint32_t* flags) {
+    legal_action_mask = normalize_legal_mask(legal_action_mask);
+    if (action >= AI_IDLE && action <= AI_DEAD &&
+        (legal_action_mask & QGE_AI_ACTION_MASK(action))) {
+        return action;
+    }
+    if (flags) {
+        *flags |= QGE_AI_DECISION_FLAG_CLAMPED;
+    }
+    return first_legal_action(legal_action_mask);
+}
+
 /**
  * @brief Map action index to ai_action_t
  */
@@ -200,6 +285,77 @@ static ai_action_t index_to_action(int index, float aggression, bool player_visi
         case 7: return aggression > 0.7f ? AI_ATTACK : AI_IDLE;
         default: return AI_IDLE;
     }
+}
+
+static ai_action_t basis_to_action(uint64_t measurement,
+                                   float aggression,
+                                   bool player_visible) {
+    ai_action_t action = index_to_action((int)measurement, aggression,
+                                         player_visible);
+
+    if (!player_visible && action == AI_ATTACK) {
+        /* Can't attack what you can't see - switch to chase or patrol */
+        action = (measurement & 0x4) ? AI_CHASE : AI_PATROL;
+    }
+
+    return action;
+}
+
+static void collect_action_probabilities(const quantum_state_t* state,
+                                         int qubit_offset,
+                                         double probabilities[1 << ACTION_QUBITS],
+                                         double* total_probability,
+                                         double* max_probability) {
+    double total = 0.0;
+    double max_prob = 0.0;
+
+    memset(probabilities, 0, sizeof(double) * (1 << ACTION_QUBITS));
+
+    if (!state || !state->amplitudes || state->state_dim == 0 ||
+        state->state_dim > 4096) {
+        if (total_probability) *total_probability = 0.0;
+        if (max_probability) *max_probability = 0.0;
+        return;
+    }
+
+    for (size_t basis = 0; basis < state->state_dim; basis++) {
+        uint64_t action_basis =
+            ((uint64_t)basis >> qubit_offset) & ((1ULL << ACTION_QUBITS) - 1ULL);
+        complex_t amp = state->amplitudes[basis];
+        double prob = creal(amp) * creal(amp) + cimag(amp) * cimag(amp);
+        probabilities[action_basis] += prob;
+        total += prob;
+    }
+
+    for (int i = 0; i < (1 << ACTION_QUBITS); i++) {
+        if (probabilities[i] > max_prob) {
+            max_prob = probabilities[i];
+        }
+    }
+
+    if (total_probability) *total_probability = total;
+    if (max_probability) *max_probability = max_prob;
+}
+
+static double action_probability_from_basis(const double probabilities[1 << ACTION_QUBITS],
+                                            float aggression,
+                                            bool player_visible,
+                                            uint32_t legal_action_mask,
+                                            ai_action_t action) {
+    double probability = 0.0;
+
+    for (int basis = 0; basis < (1 << ACTION_QUBITS); basis++) {
+        uint32_t flags = 0;
+        ai_action_t mapped = basis_to_action((uint64_t)basis, aggression,
+                                             player_visible);
+        mapped = clamp_legal_action(mapped, legal_action_mask, &flags);
+        (void)flags;
+        if (mapped == action) {
+            probability += probabilities[basis];
+        }
+    }
+
+    return probability;
 }
 
 /**
@@ -249,6 +405,8 @@ void qge_ai_init_enemy(int enemy_id, int enemy_type) {
     ensure_ai_initialized();
     if (!ai_state) return;
 
+    enemy_type = normalize_enemy_type(enemy_type);
+
     int slot = find_enemy_slot(enemy_id);
     if (slot < 0) {
         slot = enemy_id % MAX_ENEMIES;
@@ -259,7 +417,7 @@ void qge_ai_init_enemy(int enemy_id, int enemy_type) {
     enemies[slot].active = true;
     enemies[slot].enemy_type = enemy_type;
     enemies[slot].qubit_offset = (slot % 3) * QUBITS_PER_ENEMY;  /* 3 simultaneous */
-    enemies[slot].base_aggression = BASE_AGGRESSION[enemy_type % 8];
+    enemies[slot].base_aggression = BASE_AGGRESSION[enemy_type];
     enemies[slot].decision_count = 0;
     enemies[slot].last_action = AI_IDLE;
 
@@ -281,18 +439,64 @@ void qge_ai_destroy_enemy(int enemy_id) {
     }
 }
 
-ai_action_t qge_ai_decide(int enemy_id,
-                          float aggression,
-                          float player_distance,
-                          bool player_visible) {
-    ensure_ai_initialized();
-    if (!ai_state) return AI_IDLE;
+ai_action_t qge_ai_decide_traced(const qge_ai_decision_input_t* input,
+                                 qge_ai_decision_trace_t* trace) {
+    qge_ai_decision_input_t in;
+    qge_ai_decision_output_t out;
+    double probabilities[1 << ACTION_QUBITS];
+    double total_probability = 0.0;
+    double max_probability = 0.0;
 
-    int slot = enemy_id % MAX_ENEMIES;
+    if (trace) {
+        memset(trace, 0, sizeof(*trace));
+    }
+
+    memset(&out, 0, sizeof(out));
+    memset(probabilities, 0, sizeof(probabilities));
+    out.version = QGE_AI_TRACE_VERSION;
+    out.action = AI_IDLE;
+    out.mapped_action = AI_IDLE;
+
+    if (!input) {
+        if (trace) {
+            trace->output = out;
+        }
+        return AI_IDLE;
+    }
+
+    in = *input;
+    in.version = QGE_AI_TRACE_VERSION;
+    in.legal_action_mask = normalize_legal_mask(in.legal_action_mask);
+    in.enemy_type = normalize_enemy_type(in.enemy_type);
+
+    out.legal_action_mask = in.legal_action_mask;
+    out.input_hash = qge_ai_decision_input_hash(&in);
+    if (in.authority >= QGE_AI_AUTHORITY_EXPLICIT) {
+        out.flags |= QGE_AI_DECISION_FLAG_AUTHORITY;
+    } else if (in.authority == QGE_AI_AUTHORITY_ADVISORY) {
+        out.flags |= QGE_AI_DECISION_FLAG_ADVISORY;
+    }
+    if (in.player_visible) {
+        out.flags |= QGE_AI_DECISION_FLAG_PLAYER_VISIBLE;
+    }
+
+    ensure_ai_initialized();
+    if (!ai_state) {
+        out.action = clamp_legal_action(AI_IDLE, in.legal_action_mask,
+                                        &out.flags);
+        if (trace) {
+            trace->input = in;
+            trace->output = out;
+        }
+        return out.action;
+    }
+
+    int slot = in.enemy_id % MAX_ENEMIES;
+    if (slot < 0) slot += MAX_ENEMIES;
 
     /* Auto-initialize if not done */
     if (!enemies[slot].active) {
-        qge_ai_init_enemy(enemy_id, 0);
+        qge_ai_init_enemy(in.enemy_id, in.enemy_type);
     }
 
     enemy_quantum_info_t* info = &enemies[slot];
@@ -309,11 +513,11 @@ ai_action_t qge_ai_decide(int enemy_id,
     }
 
     /* Combine base aggression with parameter */
-    float effective_aggression = (info->base_aggression + aggression) / 2.0f;
+    float effective_aggression = (info->base_aggression + in.aggression) / 2.0f;
 
     /* Apply situation-dependent bias using quantum gates */
     apply_situation_bias(decision_state, offset, effective_aggression,
-                         player_distance, player_visible);
+                         in.player_distance, in.player_visible);
 
     /* Apply behavioral memory: past actions influence current */
     if (info->decision_count > 0) {
@@ -323,6 +527,10 @@ ai_action_t qge_ai_decide(int enemy_id,
         }
     }
 
+    collect_action_probabilities(decision_state, offset, probabilities,
+                                 &total_probability, &max_probability);
+    out.entropy_offset = ai_entropy_offset++;
+
     /* Measure all qubits and extract just the action bits for this enemy */
     uint64_t full_measurement = quantum_measure_all_fast(decision_state, ai_entropy);
 
@@ -330,20 +538,58 @@ ai_action_t qge_ai_decide(int enemy_id,
     uint64_t action_mask = (1ULL << ACTION_QUBITS) - 1;  /* 0x7 for 3 bits */
     uint64_t measurement = (full_measurement >> offset) & action_mask;
 
-    /* Map measurement to action, considering game state */
-    ai_action_t action = index_to_action((int)measurement, effective_aggression, player_visible);
+    /* Map measurement to action, considering game state and legal mask. */
+    ai_action_t mapped_action = basis_to_action(measurement, effective_aggression,
+                                                in.player_visible);
+    ai_action_t action = clamp_legal_action(mapped_action, in.legal_action_mask,
+                                            &out.flags);
 
-    /* Additional logic: override impossible actions */
-    if (!player_visible && action == AI_ATTACK) {
-        /* Can't attack what you can't see - switch to chase or patrol */
-        action = (measurement & 0x4) ? AI_CHASE : AI_PATROL;
+    out.raw_basis = full_measurement;
+    out.action_basis = measurement;
+    out.mapped_action = mapped_action;
+    out.action = action;
+    out.selected_probability = probabilities[measurement];
+    out.action_probability =
+        action_probability_from_basis(probabilities, effective_aggression,
+                                      in.player_visible, in.legal_action_mask,
+                                      action);
+    out.max_probability = max_probability;
+    out.total_probability = total_probability;
+    out.confidence = max_probability > 0.0 ?
+        out.selected_probability / max_probability : 0.0;
+    if (out.confidence > 1.0) {
+        out.confidence = 1.0;
     }
 
     /* Update behavioral state */
     info->last_action = action;
     info->decision_count++;
 
+    if (trace) {
+        trace->input = in;
+        trace->output = out;
+    }
+
     return action;
+}
+
+ai_action_t qge_ai_decide(int enemy_id,
+                          float aggression,
+                          float player_distance,
+                          bool player_visible) {
+    qge_ai_decision_input_t input;
+
+    memset(&input, 0, sizeof(input));
+    input.version = QGE_AI_TRACE_VERSION;
+    input.enemy_id = enemy_id;
+    input.health = aggression * 100.0f;
+    input.aggression = aggression;
+    input.player_distance = player_distance;
+    input.player_visible = player_visible;
+    input.legal_action_mask = QGE_AI_ACTION_LIVE_MASK;
+    input.authority = QGE_AI_AUTHORITY_ADVISORY;
+
+    return qge_ai_decide_traced(&input, NULL);
 }
 
 void qge_ai_entangle(int enemy_a, int enemy_b) {
@@ -481,5 +727,6 @@ void qge_ai_shutdown(void) {
     }
     memset(enemies, 0, sizeof(enemies));
     active_enemy_count = 0;
+    ai_entropy_offset = 0;
     ai_initialized = false;
 }

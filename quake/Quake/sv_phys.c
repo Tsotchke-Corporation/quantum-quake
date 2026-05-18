@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "quakedef.h"
 #include "qge_hooks.h"
+#include "../../qge/qge_ai.h"
 
 /*
 
@@ -53,6 +54,82 @@ cvar_t	sv_freezenonclients = {"sv_freezenonclients","0",CVAR_NONE};
 #define	MOVE_EPSILON	0.01
 
 void SV_Physics_Toss (edict_t *ent);
+
+static uint32_t SV_QGEAILegalActionMask (edict_t *ent)
+{
+	if (ent->v.health <= 0)
+		return QGE_AI_ACTION_DEAD_MASK;
+	return QGE_AI_ACTION_LIVE_MASK;
+}
+
+static void SV_QGEAIThinkTrace (edict_t *ent)
+{
+	qge_ai_decision_input_t input;
+	qge_ai_decision_trace_t trace;
+	edict_t	*player;
+	edict_t	*target;
+	int	ent_id;
+	int	visible;
+	float	dist;
+
+	memset (&input, 0, sizeof(input));
+	memset (&trace, 0, sizeof(trace));
+
+	ent_id = NUM_FOR_EDICT(ent);
+	visible = 0;
+	dist = 0;
+
+	player = EDICT_NUM(1);
+	if (player && !player->free)
+	{
+		vec3_t diff;
+		VectorSubtract(ent->v.origin, player->v.origin, diff);
+		dist = VectorLength(diff);
+		visible = (ent->v.enemy == EDICT_TO_PROG(player)) ? 1 : 0;
+	}
+
+	input.version = QGE_AI_TRACE_VERSION;
+	input.frame = host_framecount;
+	input.server_time_msec = (int)(sv.time * 1000.0);
+	input.enemy_id = ent_id;
+	input.health = ent->v.health;
+	input.flags = (uint32_t)(int)ent->v.flags;
+	input.target_entnum = 0;
+	if (ent->v.enemy)
+	{
+		target = PROG_TO_EDICT(ent->v.enemy);
+		if (target && target != sv.edicts && !target->free)
+			input.target_entnum = NUM_FOR_EDICT(target);
+	}
+	input.aggression = ent->v.health / 100.0f;
+	input.player_distance = dist;
+	input.player_visible = visible ? true : false;
+	input.legal_action_mask = SV_QGEAILegalActionMask(ent);
+	input.authority = quantum_ai.value >= 2.0f ?
+		QGE_AI_AUTHORITY_EXPLICIT : QGE_AI_AUTHORITY_ADVISORY;
+
+	(void)qge_ai_decide_traced(&input, &trace);
+
+	if (quantum_debug.value >= 1.0f)
+	{
+		Con_DPrintf("QGE AI trace: mode=%d ent=%d frame=%d target=%d "
+					"mask=0x%x hash=0x%llx basis=%llu action=%d "
+					"p=%.3f entropy=%llu\n",
+					(int)input.authority,
+					ent_id,
+					input.frame,
+					input.target_entnum,
+					(unsigned int)trace.output.legal_action_mask,
+					(unsigned long long)trace.output.input_hash,
+					(unsigned long long)trace.output.action_basis,
+					(int)trace.output.action,
+					trace.output.action_probability,
+					(unsigned long long)trace.output.entropy_offset);
+	}
+
+	if (input.authority == QGE_AI_AUTHORITY_EXPLICIT)
+		ent->v.impulse = (float)trace.output.action;
+}
 
 /*
 ================
@@ -142,29 +219,12 @@ qboolean SV_RunThink (edict_t *ent)
 	pr_global_struct->self = EDICT_TO_PROG(ent);
 	pr_global_struct->other = EDICT_TO_PROG(sv.edicts);
 
-	/* Quantum AI: influence monster decisions via entangled quantum state.
-	 * Modifies entity state (e.g. health-based aggression) before QuakeC
-	 * think function runs, so quantum decisions propagate into AI behavior. */
+	/* Quantum AI advisory trace.  quantum_ai 1 computes/logs suggestions
+	 * without changing QuakeC control fields; quantum_ai 2 is the explicit
+	 * authority mode that may apply the suggested action. */
 	if (quantum_ai.value >= 0.5f && (int)ent->v.flags & FL_MONSTER)
 	{
-		int ent_id = NUM_FOR_EDICT(ent);
-		float aggression = ent->v.health / 100.0f;
-		float dist = 0;
-		int visible = 0;
-
-		/* Estimate distance and visibility to player */
-		edict_t *player = EDICT_NUM(1);
-		if (player && !player->free) {
-			vec3_t diff;
-			VectorSubtract(ent->v.origin, player->v.origin, diff);
-			dist = VectorLength(diff);
-			visible = (ent->v.enemy == EDICT_TO_PROG(player)) ? 1 : 0;
-		}
-
-		int action = QGE_AIDecide(ent_id, aggression, dist, visible);
-		/* Store quantum AI decision in entity for QuakeC to read.
-		 * 0=IDLE, 1=PATROL, 2=CHASE, 3=ATTACK, 4=FLEE */
-		ent->v.impulse = (float)action;
+		SV_QGEAIThinkTrace(ent);
 	}
 
 	PR_ExecuteProgram (ent->v.think);

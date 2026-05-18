@@ -257,45 +257,7 @@ void qge_rng_set_runtime(qge_quantum_runtime_t* runtime);
  * Quantum AI (qge_ai.h)
  * ============================================================================ */
 
-typedef enum {
-    AI_IDLE,
-    AI_PATROL,
-    AI_CHASE,
-    AI_ATTACK,
-    AI_FLEE,
-    AI_PAIN,
-    AI_DEAD
-} ai_action_t;
-
-/**
- * Make a quantum AI decision for an enemy.
- *
- * @param enemy_id Unique enemy identifier
- * @param aggression Enemy aggression factor (0.0-1.0)
- * @param player_distance Distance to player
- * @param player_visible Whether player is in line of sight
- * @return Chosen action via measurement collapse
- */
-ai_action_t qge_ai_decide(int enemy_id,
-                          float aggression,
-                          float player_distance,
-                          bool player_visible);
-
-/**
- * Entangle two enemies for coordinated behavior.
- * When one enemy makes a decision, it influences the other.
- */
-void qge_ai_entangle(int enemy_a, int enemy_b);
-
-/**
- * Initialize quantum state for a new enemy.
- */
-void qge_ai_init_enemy(int enemy_id, int enemy_type);
-
-/**
- * Free quantum state for a destroyed enemy.
- */
-void qge_ai_destroy_enemy(int enemy_id);
+#include "qge_ai.h"
 
 /* ============================================================================
  * Quantum Rendering (qge_render.h)
@@ -430,6 +392,25 @@ float qge_dwt_get_sparsity(dwt_framebuffer_t* fb);
  * Quantum Visibility (qge_vis.h)
  * ============================================================================ */
 
+typedef struct {
+    int total_surfaces;
+    int classic_visible_count;
+    int qge_visible_count;
+    int matched_visible_count;
+    int matched_hidden_count;
+    int false_positive_count;
+    int false_negative_count;
+    int overflow_count;
+    int first_false_positive;
+    int first_false_negative;
+    uint64_t classic_fingerprint;
+    uint64_t qge_fingerprint;
+    uint64_t mismatch_fingerprint;
+    float threshold;
+    float qge_probability_sum;
+    float qge_probability_max;
+} qge_vis_shadow_stats_t;
+
 /**
  * Set up viewpoint for visibility queries.
  */
@@ -469,6 +450,22 @@ void qge_vis_clear_surfaces(void);
  */
 void qge_vis_get_stats(int* total_surfaces, int* visible_count,
                         float* avg_probability);
+
+/**
+ * Begin shadow comparison against a classic visible surface set.
+ * A threshold of 0.0 selects an adaptive per-frame probability threshold.
+ */
+void qge_vis_shadow_begin(int total_surfaces, float visibility_threshold);
+
+/**
+ * Mark one surface as visible according to the classic renderer.
+ */
+void qge_vis_shadow_mark_classic_visible(int surface_id);
+
+/**
+ * Finish shadow comparison and fill parity telemetry.
+ */
+bool qge_vis_shadow_finish(qge_vis_shadow_stats_t* stats);
 
 /**
  * Shutdown visibility module.

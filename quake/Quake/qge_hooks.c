@@ -101,6 +101,11 @@ static int qge_render_qge_primary_owned = 0;
 static int qge_render_last_update_frame = -1;
 static int qge_render_reused_frames = 0;
 static qboolean qge_render_collect_frame = true;
+static qboolean qge_vis_shadow_active = false;
+static const qmodel_t *qge_vis_shadow_model = NULL;
+static int qge_vis_shadow_registered_surfaces = 0;
+
+#define QGE_CLASSIC_2D_VISIBLE 1
 
 static qboolean qge_initialized = false;
 
@@ -239,12 +244,29 @@ typedef struct {
 	qboolean active;
 	int entnum;
 	int movetype;
+	int solid;
+	int flags;
+	int owner_entnum;
+	int groundentity_entnum;
+	int waterlevel;
+	int watertype;
 	int last_seen_frame;
 	int seen_count;
 	int impacts;
+	int last_impact_frame;
+	int last_impact_entnum;
+	float last_impact_fraction;
+	qboolean last_impact_inopen;
+	qboolean last_impact_inwater;
 	vec3_t origin;
 	vec3_t velocity;
+	vec3_t mins;
+	vec3_t maxs;
+	vec3_t absmin;
+	vec3_t absmax;
 	vec3_t predicted_origin;
+	vec3_t last_impact_origin;
+	vec3_t last_impact_normal;
 	float shadow_error;
 	float max_shadow_error;
 } qge_phys_object_t;
@@ -295,6 +317,10 @@ static qge_phys_object_t qge_phys_objects[QGE_MAX_PHYS_OBJECTS];
 static int qge_phys_active_objects = 0;
 static int qge_phys_active_projectiles = 0;
 static int qge_phys_registry_purged = 0;
+static int qge_phys_mirrored_bounds = 0;
+static int qge_phys_mirrored_owner = 0;
+static int qge_phys_mirrored_water = 0;
+static int qge_phys_mirrored_impacts = 0;
 static float qge_phys_avg_shadow_error = 0.0f;
 static float qge_phys_max_shadow_error = 0.0f;
 
@@ -2456,6 +2482,10 @@ void QGE_FrameBegin(void)
 	qge_phys_impact_count = 0;
 	qge_phys_particle_spawns = 0;
 	qge_phys_registry_purged = 0;
+	qge_phys_mirrored_bounds = 0;
+	qge_phys_mirrored_owner = 0;
+	qge_phys_mirrored_water = 0;
+	qge_phys_mirrored_impacts = 0;
 }
 
 static void QGE_TraceWorldSurfaceSubmissionProbe(qge_quantum_runtime_t *rt)
@@ -2552,11 +2582,15 @@ void QGE_FrameEnd(void)
 		(qge_phys_toss_count || qge_phys_projectile_count || qge_phys_impact_count)) {
 		int active_particles = qge_particles ? qge_particle_system_active_count(qge_particles) : 0;
 		fprintf(stderr, "QGE physics frame=%d toss=%d projectiles=%d impacts=%d "
-				"tracked=%d active_projectiles=%d purged=%d shadow_avg=%.2f shadow_max=%.2f "
+				"tracked=%d active_projectiles=%d purged=%d "
+				"mirrored_bounds=%d mirrored_owner=%d mirrored_water=%d mirrored_impacts=%d "
+				"shadow_avg=%.2f shadow_max=%.2f "
 				"qparticle_spawns=%d active_qparticles=%d frame_ms=%.2f\n",
 				qge_frame_count, qge_phys_toss_count, qge_phys_projectile_count,
 				qge_phys_impact_count, qge_phys_active_objects,
 				qge_phys_active_projectiles, qge_phys_registry_purged,
+				qge_phys_mirrored_bounds, qge_phys_mirrored_owner,
+				qge_phys_mirrored_water, qge_phys_mirrored_impacts,
 				qge_phys_avg_shadow_error, qge_phys_max_shadow_error,
 				qge_phys_particle_spawns,
 				active_particles, elapsed);
@@ -6706,6 +6740,28 @@ static qboolean QGE_RenderShouldUpdateFrame(void)
 	return qge_frame_count - qge_render_last_update_frame >= interval;
 }
 
+static const char *QGE_RenderOwnershipFallbackReason(void)
+{
+	if (!QGE_RenderIsPrimary())
+		return "overlay_not_primary";
+	if (qge_render_classic_3d_passes > 0)
+		return "classic3d_visible";
+	if (qge_scene_polygon_fallback > 0)
+		return "polygon_fallback";
+	if (qge_scene_polygon_surrogate > 0)
+		return "polygon_surrogate";
+	if (qge_scene_entity_misses > 0)
+		return "entity_miss";
+	if (qge_scene_snapshot_misses > 0)
+		return "surface_snapshot_miss";
+	if (qge_scene_encoded_surfaces <= 0 &&
+		(qge_scene_surface_count > 0 || qge_scene_world_surfaces > 0))
+		return "world_unowned";
+	if (QGE_CLASSIC_2D_VISIBLE > 0)
+		return "classic2d_unowned";
+	return "none";
+}
+
 void QGE_RenderScene(void)
 {
 	int active = 0;
@@ -6714,6 +6770,16 @@ void QGE_RenderScene(void)
 	double after_encode, after_dwt, after_convert, after_blit;
 	double encode_ms, dwt_ms, convert_ms, blit_ms;
 	int update_interval;
+	int primary_fb;
+	int classic2d;
+	int suppressed2d;
+	int own_world;
+	int own_textures;
+	int own_lightmaps;
+	int own_entities;
+	int own_sprites;
+	int own_particles;
+	int own_viewmodel;
 
 	if (!qge_initialized ||
 		!qge_dwt_fb[QGE_DWT_R] || !qge_dwt_fb[QGE_DWT_G] ||
@@ -6774,6 +6840,30 @@ void QGE_RenderScene(void)
 	if (total_coefficients > 0)
 		sparsity = (float)active / (float)total_coefficients;
 
+	primary_fb = QGE_RenderIsPrimary() ? 1 : 0;
+	classic2d = QGE_CLASSIC_2D_VISIBLE;
+	suppressed2d = 0;
+	own_world =
+		qge_scene_encoded_surfaces > 0 &&
+		qge_scene_polygon_fallback == 0 &&
+		qge_scene_polygon_surrogate == 0 &&
+		qge_scene_snapshot_misses == 0;
+	own_textures =
+		qge_scene_material_encoded > 0 &&
+		qge_scene_texture_cache_misses == 0;
+	own_lightmaps =
+		qge_scene_lightmapped_surfaces > 0 &&
+		qge_scene_lightmap_cache_misses == 0;
+	own_entities =
+		qge_scene_snapshot_edicts == qge_scene_encoded_edicts &&
+		qge_scene_entity_misses == 0;
+	own_sprites =
+		(qge_scene_sprite_encoded > 0) ||
+		(own_entities && qge_scene_snapshot_edicts == 0);
+	own_particles =
+		qge_scene_snapshot_particles == qge_scene_encoded_particles;
+	own_viewmodel = qge_scene_viewmodel_encoded > 0;
+
 	qge_quantum_runtime_t *rt = QGE_Runtime();
 	if (rt) {
 		qge_state_probe_t probe;
@@ -6812,7 +6902,10 @@ void QGE_RenderScene(void)
 						   "encoded=%d material=%d edicts=%d alias=%d sprites=%d sbill=%d emesh=%d ecoeff=%d "
 						   "viewmodel=%d entity_miss=%d particles=%d pcoeff=%d gates=%d shots=%d "
 						   "readout=%.3f edgeq=%.3f ggain=%.3f egain=%.3f "
-						   "nonzero=%d/%d\n",
+						   "nonzero=%d/%d primary_fb=%d classic2d=%d suppressed2d=%d "
+						   "own_world=%d own_textures=%d own_lightmaps=%d own_entities=%d own_sprites=%d own_particles=%d own_viewmodel=%d "
+						   "own_hud=0 own_console=0 "
+						   "fallback_reason=%s\n",
 						   qge_frame_count, QGE_RenderIsPrimary() ? "primary" : "overlay",
 						   qge_render_qge_primary_owned ? "qge_3d" : "mixed",
 						   qge_render_classic_3d_passes,
@@ -6846,7 +6939,12 @@ void QGE_RenderScene(void)
 						   qge_render_gate_probability,
 						   qge_render_gate_edge_observable,
 						   qge_render_gate_gain, qge_render_gate_edge_gain,
-						   nonzero_pixels, total_pixels);
+						   nonzero_pixels, total_pixels,
+						   primary_fb, classic2d, suppressed2d,
+						   own_world, own_textures, own_lightmaps,
+						   own_entities, own_sprites, own_particles,
+						   own_viewmodel,
+						   QGE_RenderOwnershipFallbackReason());
 			}
 			fprintf(stderr, "QGE render frame=%d mode=%s owner=%s classic3d=%d suppressed3d=%d "
 					"res=%d time=%.1fms encode=%.1fms setup=%.1fms raster=%.1fms fdwt=%.1fms dwt=%.1fms convert=%.1fms blit=%.1fms reuse=%d interval=%d "
@@ -6861,7 +6959,11 @@ void QGE_RenderScene(void)
 					"shots=%d readout_ones=%d edge_ones=%d majority=0x%llx "
 					"gate_p=%.6f gate_edge=%.6f gate_gain=%.6f edge_gain=%.6f material_gain=%.6f "
 					"gate_rgb=%.4f/%.4f/%.4f gate_entropy=%.3f gate_coh=%.3f "
-					"tone_floor=%.6f tone_white=%.6f tone_clip=%d levels=%d gl_upload=0x%x gl_draw=0x%x\n",
+					"tone_floor=%.6f tone_white=%.6f tone_clip=%d levels=%d gl_upload=0x%x gl_draw=0x%x "
+					"primary_fb=%d classic2d=%d suppressed2d=%d "
+					"own_world=%d own_textures=%d own_lightmaps=%d own_entities=%d own_sprites=%d own_particles=%d own_viewmodel=%d "
+					"own_hud=0 own_console=0 "
+					"fallback_reason=%s\n",
 					qge_frame_count, QGE_RenderIsPrimary() ? "primary" : "overlay",
 					qge_render_qge_primary_owned ? "qge_3d" : "mixed",
 					qge_render_classic_3d_passes,
@@ -6912,7 +7014,12 @@ void QGE_RenderScene(void)
 					qge_last_tone_floor, qge_last_tone_white,
 					qge_last_tone_clipped, qge_dwt_levels,
 					(unsigned)qge_last_gl_upload_error,
-					(unsigned)qge_last_gl_draw_error);
+					(unsigned)qge_last_gl_draw_error,
+					primary_fb, classic2d, suppressed2d,
+					own_world, own_textures, own_lightmaps,
+					own_entities, own_sprites, own_particles,
+					own_viewmodel,
+					QGE_RenderOwnershipFallbackReason());
 		} else {
 			Con_DPrintf("QGE render: %.1f ms | %d coeffs (%.1f%% sparse) | %d DWT levels\n",
 					   elapsed, active, sparsity * 100.0f,
@@ -6943,6 +7050,168 @@ void QGE_RenderSetOwnershipTelemetry(int classic_3d_passes,
 /* ============================================================================
  * Quantum Visibility
  * ============================================================================ */
+
+qboolean QGE_VisShadowBegin(qmodel_t *model)
+{
+	int i;
+
+	qge_vis_shadow_active = false;
+	qge_vis_shadow_model = NULL;
+	qge_vis_shadow_registered_surfaces = 0;
+
+	if (!qge_initialized || quantum_vis.value < 0.5f ||
+		!model || !model->surfaces || model->numsurfaces <= 0)
+		return false;
+
+	qge_vis_clear_surfaces();
+	for (i = 0; i < model->numsurfaces; i++) {
+		msurface_t *surf = &model->surfaces[i];
+		qge_vis_register_surface(i,
+								 surf->mins[0], surf->mins[1], surf->mins[2],
+								 surf->maxs[0], surf->maxs[1], surf->maxs[2]);
+	}
+
+	qge_vis_setup_viewpoint((qge_vec3_t){
+							r_refdef.vieworg[0],
+							r_refdef.vieworg[1],
+							r_refdef.vieworg[2]
+						},
+						(qge_vec3_t){vpn[0], vpn[1], vpn[2]});
+	qge_vis_shadow_begin(model->numsurfaces, 0.0f);
+
+	qge_vis_shadow_active = true;
+	qge_vis_shadow_model = model;
+	qge_vis_shadow_registered_surfaces = model->numsurfaces;
+	return true;
+}
+
+void QGE_VisShadowMarkClassicSurface(qmodel_t *model, msurface_t *surf)
+{
+	int surface_id;
+
+	if (!qge_vis_shadow_active || model != qge_vis_shadow_model ||
+		!model || !surf)
+		return;
+	if (surf < model->surfaces || surf >= model->surfaces + model->numsurfaces)
+		return;
+
+	surface_id = (int)(surf - model->surfaces);
+	qge_vis_shadow_mark_classic_visible(surface_id);
+}
+
+static void QGE_TraceVisShadowParity(const qge_vis_shadow_stats_t *stats)
+{
+	qge_quantum_runtime_t *rt;
+	qge_state_probe_t probe;
+	int mismatch_count;
+	uint64_t hash;
+	uint32_t flags = 0u;
+
+	if (!stats)
+		return;
+
+	mismatch_count = stats->false_positive_count + stats->false_negative_count;
+	if (qge_vis_shadow_registered_surfaces > 0)
+		flags |= 0x1u;
+	if (mismatch_count > 0)
+		flags |= 0x2u;
+	if (stats->false_positive_count > 0)
+		flags |= 0x4u;
+	if (stats->false_negative_count > 0)
+		flags |= 0x8u;
+	if (stats->overflow_count > 0)
+		flags |= 0x10u;
+
+	hash = QGE_RegistryHashStep(stats->classic_fingerprint,
+								stats->qge_fingerprint);
+	hash = QGE_RegistryHashStep(hash, stats->mismatch_fingerprint);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)mismatch_count);
+
+	rt = QGE_Runtime();
+	if (rt) {
+		memset(&probe, 0, sizeof(probe));
+		probe.frame = qge_frame_count;
+		probe.server_time_msec = QGE_ServerTimeMsec();
+		probe.domain = QGE_DOMAIN_VISIBILITY;
+		probe.representation = QGE_REP_GROVER_SEARCH;
+		probe.subject_id = stats->total_surfaces;
+		probe.flags = flags;
+		probe.state_hash = hash;
+		probe.entropy = stats->total_surfaces > 0 ?
+			(double)stats->classic_visible_count /
+			(double)stats->total_surfaces : 0.0;
+		probe.coherence = stats->total_surfaces > 0 ?
+			1.0 - ((double)mismatch_count / (double)stats->total_surfaces) : 1.0;
+		if (probe.coherence < 0.0)
+			probe.coherence = 0.0;
+		probe.max_probability = (double)stats->false_positive_count;
+		probe.total_probability = (double)stats->false_negative_count;
+		probe.active_basis_count = stats->qge_visible_count;
+		probe.qubit_count =
+			qge_quantum_qubits_for_basis_count((uint64_t)stats->total_surfaces);
+		probe.memory_bytes = (uint64_t)stats->total_surfaces * 2u;
+		strlcpy(probe.label, "vis_shadow_parity", sizeof(probe.label));
+		qge_quantum_record_probe(rt, &probe);
+
+		if (mismatch_count > 0) {
+			qge_fallback_event_t event;
+
+			memset(&event, 0, sizeof(event));
+			event.frame = qge_frame_count;
+			event.server_time_msec = QGE_ServerTimeMsec();
+			event.domain = QGE_DOMAIN_VISIBILITY;
+			event.representation = QGE_REP_GROVER_SEARCH;
+			event.subject_id = stats->total_surfaces;
+			event.reason_code =
+				(stats->false_positive_count > 0 ? 1 : 0) |
+				(stats->false_negative_count > 0 ? 2 : 0);
+			event.metric_value = (double)mismatch_count;
+			q_snprintf(event.message, sizeof(event.message),
+					   "fp=%d fn=%d c=%llx q=%llx m=%llx",
+					   stats->false_positive_count,
+					   stats->false_negative_count,
+					   (unsigned long long)stats->classic_fingerprint,
+					   (unsigned long long)stats->qge_fingerprint,
+					   (unsigned long long)stats->mismatch_fingerprint);
+			qge_quantum_record_fallback(rt, &event);
+		}
+	}
+
+	if (quantum_debug.value >= 1.0f ||
+		qge_frame_count < 5 || (qge_frame_count % 60) == 0) {
+		fprintf(stderr, "QGE vis shadow frame=%d total=%d classic=%d qge=%d "
+				"match=%d hidden=%d fp=%d fn=%d overflow=%d "
+				"first_fp=%d first_fn=%d threshold=%.8f prob_sum=%.6f "
+				"prob_max=%.6f classic_fp=0x%llx qge_fp=0x%llx "
+				"mismatch_fp=0x%llx\n",
+				qge_frame_count, stats->total_surfaces,
+				stats->classic_visible_count, stats->qge_visible_count,
+				stats->matched_visible_count, stats->matched_hidden_count,
+				stats->false_positive_count, stats->false_negative_count,
+				stats->overflow_count,
+				stats->first_false_positive, stats->first_false_negative,
+				stats->threshold, stats->qge_probability_sum,
+				stats->qge_probability_max,
+				(unsigned long long)stats->classic_fingerprint,
+				(unsigned long long)stats->qge_fingerprint,
+				(unsigned long long)stats->mismatch_fingerprint);
+	}
+}
+
+void QGE_VisShadowEnd(qmodel_t *model)
+{
+	qge_vis_shadow_stats_t stats;
+
+	if (!qge_vis_shadow_active || model != qge_vis_shadow_model)
+		return;
+
+	if (qge_vis_shadow_finish(&stats))
+		QGE_TraceVisShadowParity(&stats);
+
+	qge_vis_shadow_active = false;
+	qge_vis_shadow_model = NULL;
+	qge_vis_shadow_registered_surfaces = 0;
+}
 
 float QGE_VisQuerySurface(int surface_id)
 {
@@ -7066,6 +7335,53 @@ static qge_vec3_t QGE_VecFromQuake(const vec3_t v)
 	return out;
 }
 
+static int QGE_PhysicsEdictNumFromProg(int prog)
+{
+	int entnum;
+	edict_t *ed;
+
+	if (!prog || !sv.edicts || pr_edict_size <= 0)
+		return 0;
+	if (prog < 0 || (prog % pr_edict_size) != 0)
+		return 0;
+
+	entnum = prog / pr_edict_size;
+	if (entnum < 0 || entnum >= sv.num_edicts)
+		return 0;
+
+	ed = EDICT_NUM(entnum);
+	if (!ed || ed->free)
+		return 0;
+	return entnum;
+}
+
+static void QGE_PhysicsMirrorEdictState(qge_phys_object_t *obj,
+										edict_t *ent)
+{
+	if (!obj || !ent)
+		return;
+
+	obj->movetype = (int)ent->v.movetype;
+	obj->solid = (int)ent->v.solid;
+	obj->flags = (int)ent->v.flags;
+	obj->owner_entnum = QGE_PhysicsEdictNumFromProg(ent->v.owner);
+	obj->groundentity_entnum = QGE_PhysicsEdictNumFromProg(ent->v.groundentity);
+	obj->waterlevel = (int)ent->v.waterlevel;
+	obj->watertype = (int)ent->v.watertype;
+	VectorCopy(ent->v.origin, obj->origin);
+	VectorCopy(ent->v.velocity, obj->velocity);
+	VectorCopy(ent->v.mins, obj->mins);
+	VectorCopy(ent->v.maxs, obj->maxs);
+	VectorCopy(ent->v.absmin, obj->absmin);
+	VectorCopy(ent->v.absmax, obj->absmax);
+
+	qge_phys_mirrored_bounds++;
+	if (obj->owner_entnum)
+		qge_phys_mirrored_owner++;
+	if (obj->waterlevel > 0 || obj->watertype <= CONTENTS_WATER)
+		qge_phys_mirrored_water++;
+}
+
 void QGE_PhysicsTrackToss(edict_t *ent, float dt)
 {
 	int movetype;
@@ -7088,11 +7404,9 @@ void QGE_PhysicsTrackToss(edict_t *ent, float dt)
 				obj->max_shadow_error = obj->shadow_error;
 		}
 
-		obj->movetype = movetype;
 		obj->last_seen_frame = qge_frame_count;
 		obj->seen_count++;
-		VectorCopy(ent->v.origin, obj->origin);
-		VectorCopy(ent->v.velocity, obj->velocity);
+		QGE_PhysicsMirrorEdictState(obj, ent);
 		VectorMA(ent->v.origin, dt, ent->v.velocity, obj->predicted_origin);
 	}
 
@@ -7127,7 +7441,16 @@ void QGE_PhysicsTrackImpact(edict_t *ent, const trace_t *trace)
 	if (obj) {
 		obj->impacts++;
 		obj->last_seen_frame = qge_frame_count;
+		obj->last_impact_frame = qge_frame_count;
+		obj->last_impact_entnum = trace->ent ? NUM_FOR_EDICT(trace->ent) : 0;
+		obj->last_impact_fraction = trace->fraction;
+		obj->last_impact_inopen = trace->inopen;
+		obj->last_impact_inwater = trace->inwater;
+		QGE_PhysicsMirrorEdictState(obj, ent);
 		VectorCopy(trace->endpos, obj->origin);
+		VectorCopy(trace->endpos, obj->last_impact_origin);
+		VectorCopy(trace->plane.normal, obj->last_impact_normal);
+		qge_phys_mirrored_impacts++;
 	}
 
 	if (qge_particles && quantum_particles.value >= 0.5f) {
