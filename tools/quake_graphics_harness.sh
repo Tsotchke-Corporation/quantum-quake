@@ -135,6 +135,8 @@ capture_mode() {
     cp "$agent_stream/input/noesis_actions.txt" "$outdir/${mode}.noesis_actions.txt" 2>/dev/null || true
     cp "$agent_stream/input/noesis_commands.cfg" "$outdir/${mode}.noesis_commands.cfg" 2>/dev/null || true
     cp "$agent_stream/qge_agent_stream_icc_evidence.jsonl" "$outdir/${mode}.agent_icc_evidence.jsonl" 2>/dev/null || true
+    cp "$agent_stream/performance/qge_perf_summary.json" "$outdir/${mode}.qge_perf_summary.json" 2>/dev/null || true
+    cp "$agent_stream/performance/qge_perf_icc_evidence.json" "$outdir/${mode}.qge_perf_icc_evidence.json" 2>/dev/null || true
   fi
   echo "$outdir/${mode}.png"
 }
@@ -174,6 +176,8 @@ Classic reference:
   Noesis actions: $outdir/classic.noesis_actions.txt
   Noesis commands: $outdir/classic.noesis_commands.cfg
   agent stream ICC: $outdir/classic.agent_icc_evidence.jsonl
+  performance summary: $outdir/classic.qge_perf_summary.json
+  performance ICC: $outdir/classic.qge_perf_icc_evidence.json
 
 QGE candidate:
   quantum_render $quantum_render
@@ -190,6 +194,8 @@ QGE candidate:
   Noesis actions: $outdir/quantum.noesis_actions.txt
   Noesis commands: $outdir/quantum.noesis_commands.cfg
   agent stream ICC: $outdir/quantum.agent_icc_evidence.jsonl
+  performance summary: $outdir/quantum.qge_perf_summary.json
+  performance ICC: $outdir/quantum.qge_perf_icc_evidence.json
 
 Metrics:
   JSON: $outdir/metrics.json

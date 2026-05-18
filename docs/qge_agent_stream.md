@@ -229,7 +229,10 @@ require numpy and Pillow; if either dependency is unavailable, the harness exits
 before starting the app.
 The paired `tools/qge_vanilla_capture_matrix.py` sidecar copies each mode's
 agent-stream run and trace summary from `*.agent_stream.json`; an explicit
-agent-stream run failure blocks `ready_for_complete_claim`. The publication
+agent-stream run failure blocks `ready_for_complete_claim`. It also preserves
+each mode's copied `*.qge_perf_summary.json` sidecar, records per-mode
+performance status and max timing fields, and treats an explicit blocked
+performance sidecar as not ready for the complete vanilla claim. The publication
 pack copies these run-status fields from the vanilla matrix and also records the
 packed agent stream manifest's direct `run.status`, `run.success`,
 `run.startup_issue`, frame count, and trace status in its runtime summary and

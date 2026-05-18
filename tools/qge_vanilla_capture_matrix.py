@@ -150,6 +150,14 @@ def agent_manifest_summary(path: Path) -> dict[str, Any]:
         "process_status": run.get("process_status"),
         "timed_out": run.get("timed_out"),
     })
+    performance = manifest.get("performance", {})
+    if isinstance(performance, dict):
+        summary.update({
+            "performance_status": performance.get("status"),
+            "performance_summary_file": performance.get("summary_file"),
+            "performance_icc_evidence_file": performance.get(
+                "icc_evidence_file"),
+        })
     return summary
 
 
@@ -169,6 +177,58 @@ def explicit_agent_run_failure(agent_run: dict[str, Any]) -> bool:
     )
 
 
+def performance_summary(path: Path) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "exists": path.is_file(),
+        "status": None,
+        "engine_average_quantum_ms_max": None,
+        "render_time_ms_max": None,
+        "threshold_failures": [],
+        "metric_evidence_present": None,
+    }
+    if not path.is_file():
+        return summary
+    try:
+        data = load_json(path)
+    except (OSError, ValueError) as exc:
+        summary["error"] = str(exc)
+        return summary
+    aggregate = data.get("aggregate", {})
+    if not isinstance(aggregate, dict):
+        aggregate = {}
+    failures = aggregate.get("threshold_failures", [])
+    summary.update({
+        "status": data.get("status"),
+        "engine_average_quantum_ms_max": aggregate.get(
+            "engine_average_quantum_ms_max"),
+        "render_time_ms_max": aggregate.get("render_time_ms_max"),
+        "threshold_failures": failures if isinstance(failures, list) else [],
+        "metric_evidence_present": aggregate.get("metric_evidence_present"),
+    })
+    return summary
+
+
+def performance_status(performance: dict[str, Any],
+                       agent_run: dict[str, Any]) -> Any:
+    if performance.get("status") is not None:
+        return performance.get("status")
+    return agent_run.get("performance_status")
+
+
+def explicit_performance_failure(performance: dict[str, Any],
+                                 agent_run: dict[str, Any]) -> bool:
+    if performance.get("error"):
+        return True
+    status = performance_status(performance, agent_run)
+    if isinstance(status, str) and status and status not in (
+            "pass", "success", "complete"):
+        return True
+    failures = performance.get("threshold_failures")
+    if isinstance(failures, list) and failures:
+        return True
+    return False
+
+
 def mode_entry(capture_dir: Path,
                mode: str,
                render_value: int,
@@ -179,6 +239,8 @@ def mode_entry(capture_dir: Path,
     agent_manifest = capture_dir / f"{mode}.agent_stream.json"
     agent_events = capture_dir / f"{mode}.agent_events.ndjson"
     agent_icc = capture_dir / f"{mode}.agent_icc_evidence.jsonl"
+    perf_summary = capture_dir / f"{mode}.qge_perf_summary.json"
+    perf_icc = capture_dir / f"{mode}.qge_perf_icc_evidence.json"
     render_line = latest_matching_line(log, "QGE render frame=")
     scene_line = latest_matching_line(log, "QGE scene frame=")
     render_max = matching_key_value_max(
@@ -202,6 +264,9 @@ def mode_entry(capture_dir: Path,
         "agent_stream_events": file_info(agent_events),
         "agent_stream_icc_evidence": file_info(agent_icc),
         "agent_stream_run": agent_manifest_summary(agent_manifest),
+        "performance_summary": file_info(perf_summary),
+        "performance_icc_evidence": file_info(perf_icc),
+        "performance": performance_summary(perf_summary),
         "frames_captured": read_readme_value(readme, "Frames captured"),
         "map": read_readme_value(readme, "Map"),
         "runtime": {},
@@ -243,9 +308,15 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
     qge = mode_entry(capture_dir, args.qge_mode, args.qge_render, "candidate")
     classic_agent_run = classic.get("agent_stream_run", {})
     qge_agent_run = qge.get("agent_stream_run", {})
+    classic_perf = classic.get("performance", {})
+    qge_perf = qge.get("performance", {})
     agent_stream_runs_success = (
         not explicit_agent_run_failure(classic_agent_run) and
         not explicit_agent_run_failure(qge_agent_run)
+    )
+    performance_sidecars_success = (
+        not explicit_performance_failure(classic_perf, classic_agent_run) and
+        not explicit_performance_failure(qge_perf, qge_agent_run)
     )
     qge_render = qge.get("runtime", {}).get("qge_render", {})
     qge_render_max = qge.get("runtime", {}).get("qge_render_max", {})
@@ -274,6 +345,23 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
             "classic_agent_startup_issue": classic_agent_run.get("startup_issue"),
             "qge_agent_startup_issue": qge_agent_run.get("startup_issue"),
             "agent_stream_runs_success": agent_stream_runs_success,
+            "classic_performance_status": performance_status(
+                classic_perf, classic_agent_run),
+            "qge_performance_status": performance_status(
+                qge_perf, qge_agent_run),
+            "classic_performance_engine_average_quantum_ms_max": (
+                classic_perf.get("engine_average_quantum_ms_max")),
+            "qge_performance_engine_average_quantum_ms_max": (
+                qge_perf.get("engine_average_quantum_ms_max")),
+            "classic_performance_render_time_ms_max": classic_perf.get(
+                "render_time_ms_max"),
+            "qge_performance_render_time_ms_max": qge_perf.get(
+                "render_time_ms_max"),
+            "classic_performance_threshold_failures": classic_perf.get(
+                "threshold_failures"),
+            "qge_performance_threshold_failures": qge_perf.get(
+                "threshold_failures"),
+            "performance_sidecars_success": performance_sidecars_success,
             "fallback_count": fallback_count,
             "classic3d_count": classic3d,
             "viewmodel_encoded": viewmodel,
@@ -302,6 +390,7 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
             "ready_for_complete_claim": (
                 classic["frame"]["exists"] and qge["frame"]["exists"] and
                 agent_stream_runs_success and
+                performance_sidecars_success and
                 fallback_count == 0 and surrogate_count == 0 and
                 classic3d == 0 and viewmodel > 0
             ),
@@ -350,6 +439,22 @@ def build_icc_evidence(matrix: dict[str, Any],
         "classic_agent_startup_issue": summary.get("classic_agent_startup_issue"),
         "qge_agent_startup_issue": summary.get("qge_agent_startup_issue"),
         "agent_stream_runs_success": summary.get("agent_stream_runs_success"),
+        "classic_performance_status": summary.get("classic_performance_status"),
+        "qge_performance_status": summary.get("qge_performance_status"),
+        "classic_performance_engine_average_quantum_ms_max": summary.get(
+            "classic_performance_engine_average_quantum_ms_max"),
+        "qge_performance_engine_average_quantum_ms_max": summary.get(
+            "qge_performance_engine_average_quantum_ms_max"),
+        "classic_performance_render_time_ms_max": summary.get(
+            "classic_performance_render_time_ms_max"),
+        "qge_performance_render_time_ms_max": summary.get(
+            "qge_performance_render_time_ms_max"),
+        "classic_performance_threshold_failures": summary.get(
+            "classic_performance_threshold_failures"),
+        "qge_performance_threshold_failures": summary.get(
+            "qge_performance_threshold_failures"),
+        "performance_sidecars_success": summary.get(
+            "performance_sidecars_success"),
         "viewmodel_encoded": summary["viewmodel_encoded"],
         "ready_for_complete_claim": ready,
         "status": "success" if ready else "blocked",
