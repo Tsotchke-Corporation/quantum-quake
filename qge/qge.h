@@ -433,7 +433,37 @@ typedef struct {
     qge_vis_gate_reason_t fallback_reason;
 } qge_vis_shadow_stats_t;
 
+typedef enum {
+    QGE_VIS_WRITEBACK_SOURCE_CLASSIC = 0,
+    QGE_VIS_WRITEBACK_SOURCE_QGE
+} qge_vis_writeback_source_t;
+
+typedef struct {
+    bool authority_requested;
+    bool shadow_observed;
+    bool authority_ready;
+    bool writeback_allowed;
+    bool fallback_selected;
+    bool false_negative_forced_classic;
+    qge_vis_writeback_source_t source;
+    qge_vis_gate_reason_t authority_reason;
+    qge_vis_gate_reason_t fallback_reason;
+    int last_mismatch_count;
+    int last_false_negative_count;
+    int consecutive_clean_frames;
+    int clean_frames_required;
+    unsigned int flags;
+} qge_vis_writeback_decision_t;
+
 const char* qge_vis_gate_reason_name(qge_vis_gate_reason_t reason);
+
+/**
+ * Get the sandboxed visibility authority writeback decision. Classic
+ * visibility remains authoritative unless authority is explicitly requested and
+ * the shadow-parity gate is clean and ready.
+ */
+bool qge_vis_get_writeback_decision(bool authority_requested,
+                                    qge_vis_writeback_decision_t* decision);
 
 /**
  * Set up viewpoint for visibility queries.
@@ -702,6 +732,38 @@ typedef struct {
     float max_shadow_error_margin;
 } qge_projectile_authority_state_t;
 
+typedef enum {
+    QGE_PROJECTILE_WRITEBACK_CLASSIC = 0,
+    QGE_PROJECTILE_WRITEBACK_QGE
+} qge_projectile_writeback_source_t;
+
+typedef struct {
+    int entity_id;
+    qge_projectile_authority_telemetry_t telemetry;
+    qge_vec3_t classic_origin;
+    qge_vec3_t classic_velocity;
+    qge_vec3_t qge_origin;
+    qge_vec3_t qge_velocity;
+} qge_projectile_writeback_request_t;
+
+typedef struct {
+    int entity_id;
+    bool authority_requested;
+    bool authority_ready;
+    bool writeback_allowed;
+    bool fallback_selected;
+    bool rollback_required;
+    qge_projectile_writeback_source_t source;
+    qge_projectile_authority_off_reason_t off_reason;
+    qge_projectile_authority_off_reason_t fallback_reason;
+    qge_projectile_authority_off_reason_t rollback_reason;
+    qge_projectile_authority_state_t gate_state;
+    qge_vec3_t origin_delta;
+    qge_vec3_t velocity_delta;
+    float origin_delta_length;
+    float velocity_delta_length;
+} qge_projectile_writeback_decision_t;
+
 /**
  * Default conservative projectile authority gate. This only reports readiness;
  * callers must still decide whether to apply any authority.
@@ -715,6 +777,16 @@ qge_projectile_authority_gate_t qge_projectile_authority_default_gate(void);
 qge_projectile_authority_state_t qge_projectile_authority_evaluate(
     const qge_projectile_authority_gate_t* gate,
     const qge_projectile_authority_telemetry_t* telemetry);
+
+/**
+ * Evaluate a sandboxed projectile writeback choice. This is a pure helper:
+ * it reports whether classic or QGE state would be selected and never mutates
+ * Quake entities. QGE writeback is selected only when authority is explicitly
+ * requested and the projectile authority gate is ready.
+ */
+qge_projectile_writeback_decision_t qge_projectile_writeback_evaluate(
+    const qge_projectile_authority_gate_t* gate,
+    const qge_projectile_writeback_request_t* request);
 
 /**
  * Stable string for a projectile authority-off reason.

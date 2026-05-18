@@ -483,6 +483,7 @@ class TraceSummaryTests(unittest.TestCase):
             self.assertEqual(parsed["sequence_errors"], 0)
             self.assertEqual(parsed["replay_health"]["entropy_replay_events"], 1)
             self.assertEqual(parsed["replay_health"]["replay_metadata_mismatches"], 1)
+            self.assertEqual(parsed["replay_health"]["ai_decision_events"], 1)
             entropy = parsed["entropy_events"][0]
             self.assertEqual(entropy["domain"], "rng")
             self.assertEqual(entropy["source"], "replay")

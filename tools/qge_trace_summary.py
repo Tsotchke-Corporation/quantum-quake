@@ -110,6 +110,9 @@ def parse_trace(path: str) -> dict:
         "entropy_replay_events": 0,
         "replay_metadata_mismatches": 0,
         "replay_exhaustions": 0,
+        "ai_decision_events": 0,
+        "ai_decision_replay_metadata_mismatches": 0,
+        "ai_decision_replay_exhaustions": 0,
     }
 
     with open(path, "rb") as f:
@@ -201,9 +204,14 @@ def parse_trace(path: str) -> dict:
                     replay_health["replay_metadata_mismatches"] += 1
                 elif reason_code == 2 and message == "replay entropy exhausted":
                     replay_health["replay_exhaustions"] += 1
+                elif reason_code == 3 and message == "replay ai decision metadata mismatch":
+                    replay_health["ai_decision_replay_metadata_mismatches"] += 1
+                elif reason_code == 4 and message == "replay ai decision exhausted":
+                    replay_health["ai_decision_replay_exhaustions"] += 1
                 continue
 
             if kind == 8 and payload_size == AI_DECISION.size:
+                replay_health["ai_decision_events"] += 1
                 unpacked = AI_DECISION.unpack(payload)
                 frame, _server_time, enemy_id, enemy_type, target_entnum = unpacked[:5]
                 input_flags, output_flags, legal_action_mask = unpacked[5:8]
@@ -337,7 +345,7 @@ def print_text(summary: dict) -> None:
     print(f"Run: 0x{summary['header']['run_id']:016x}")
     print(f"Records: {json.dumps(summary['records'], sort_keys=True)}")
     print(f"Sequence errors: {summary['sequence_errors']}")
-    if summary["replay_health"]["entropy_replay_events"] or summary["replay_health"]["replay_metadata_mismatches"] or summary["replay_health"]["replay_exhaustions"]:
+    if any(summary["replay_health"].values()):
         print(f"Replay: {json.dumps(summary['replay_health'], sort_keys=True)}")
     for entropy in summary["entropy_events"]:
         print(

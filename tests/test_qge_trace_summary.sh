@@ -152,6 +152,7 @@ assert summary["records"] == {"ai_decision": 1, "fallback": 1, "state_probe": 3}
 assert summary["sequence_errors"] == 1
 
 decision = summary["ai_decisions"][0]
+assert summary["replay_health"]["ai_decision_events"] == 1
 assert decision["enemy_id"] == 17
 assert decision["enemy_type"] == 2
 assert decision["action"] == "patrol"

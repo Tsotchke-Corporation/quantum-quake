@@ -26,6 +26,7 @@ cvar_t snd_quantum_enable = {"snd_quantum", "1", CVAR_ARCHIVE};
 cvar_t snd_quantum_mix = {"snd_quantum_mix", "0.35", CVAR_ARCHIVE};
 cvar_t snd_quantum_spread = {"snd_quantum_spread", "0.5", CVAR_ARCHIVE};
 cvar_t snd_quantum_reverb = {"snd_quantum_reverb", "0.08", CVAR_ARCHIVE};
+cvar_t snd_quantum_source_authority = {"snd_quantum_source_authority", "0", CVAR_ARCHIVE};
 
 /* DCT block size */
 #define QA_BLOCK_SIZE 256
@@ -77,10 +78,22 @@ static qboolean quantum_initialized = false;
 #define QA_SOURCE_FALLBACK_SHORT_BLOCK 2
 #define QA_SOURCE_FALLBACK_INVALID_BLOCK 3
 #define QA_SOURCE_FALLBACK_REMAINDER 4
+#define QA_SOURCE_FALLBACK_ATTENUATION_PAN 100
+
+#define QGE_AUDIO_ATTEN_OFF_NONE 0
+#define QGE_AUDIO_ATTEN_OFF_NOT_REQUESTED 1
+#define QGE_AUDIO_ATTEN_OFF_SPATIAL_INVALID 2
+#define QGE_AUDIO_ATTEN_OFF_PARITY_ERROR 3
+#define QGE_AUDIO_ATTEN_OFF_VOLUME_RANGE 4
 
 typedef struct {
     int source_count;
     int spatial_sources;
+    int attenuation_pan_sources;
+    int attenuation_pan_ready_sources;
+    int attenuation_pan_requested_sources;
+    int attenuation_pan_selected_sources;
+    int attenuation_pan_fallback_sources;
     int processed_sources;
     int processed_blocks;
     int processed_samples;
@@ -95,10 +108,19 @@ typedef struct {
     double spatial_distance_sum;
     double spatial_abs_pan_sum;
     double spatial_attenuation_sum;
+    double attenuation_pan_abs_error_sum;
+    int attenuation_pan_max_error;
+    int last_attenuation_pan_leftvol;
+    int last_attenuation_pan_rightvol;
+    int last_attenuation_pan_left_error;
+    int last_attenuation_pan_right_error;
+    int last_attenuation_pan_max_error;
+    int last_attenuation_pan_off_reason_code;
     int last_subject_id;
     int last_fallback_reason_code;
     char last_source_name[QGE_PROBE_LABEL_MAX];
     char last_fallback_reason[QGE_TRACE_MESSAGE_MAX];
+    char last_attenuation_pan_off_reason[QGE_TRACE_MESSAGE_MAX];
     snd_quantum_source_spatial_t last_spatial;
 } qa_source_stats_t;
 
@@ -124,6 +146,33 @@ static float qa_clamp11(float value)
 static qboolean qa_source_spatial_valid(const snd_quantum_source_spatial_t *spatial)
 {
     return spatial && spatial->valid;
+}
+
+static const char *qa_attenuation_pan_off_reason_name(int reason)
+{
+    switch (reason) {
+    case QGE_AUDIO_ATTEN_OFF_NONE:
+        return "authority_ready";
+    case QGE_AUDIO_ATTEN_OFF_NOT_REQUESTED:
+        return "authority_not_requested";
+    case QGE_AUDIO_ATTEN_OFF_SPATIAL_INVALID:
+        return "spatial_invalid";
+    case QGE_AUDIO_ATTEN_OFF_PARITY_ERROR:
+        return "parity_error";
+    case QGE_AUDIO_ATTEN_OFF_VOLUME_RANGE:
+        return "volume_range";
+    default:
+        return "unknown";
+    }
+}
+
+static const char *qa_attenuation_pan_readiness_reason(const snd_quantum_source_spatial_t *spatial)
+{
+    if (!qa_source_spatial_valid(spatial) || !spatial->attenuation_pan_valid)
+        return "spatial_invalid";
+    if (spatial->attenuation_pan_ready)
+        return "ready";
+    return qa_attenuation_pan_off_reason_name(spatial->attenuation_pan_off_reason);
 }
 
 static uint32_t qa_source_spatial_flags(const snd_quantum_source_spatial_t *spatial)
@@ -186,6 +235,15 @@ static uint64_t qa_source_spatial_hash(const snd_quantum_source_spatial_t *spati
     hash = qa_hash_step64(hash, (uint32_t)spatial->leftvol);
     hash = qa_hash_step64(hash, (uint32_t)spatial->rightvol);
     hash = qa_hash_step64(hash, (uint32_t)spatial->output_channels);
+    hash = qa_hash_step64(hash, (uint32_t)spatial->attenuation_pan_leftvol);
+    hash = qa_hash_step64(hash, (uint32_t)spatial->attenuation_pan_rightvol);
+    hash = qa_hash_step64(hash, (uint32_t)spatial->attenuation_pan_left_error);
+    hash = qa_hash_step64(hash, (uint32_t)spatial->attenuation_pan_right_error);
+    hash = qa_hash_step64(hash, (uint32_t)spatial->attenuation_pan_max_error);
+    hash = qa_hash_step64(hash, (uint32_t)spatial->attenuation_pan_off_reason);
+    hash = qa_hash_step64(hash, spatial->attenuation_pan_ready ? 1u : 0u);
+    hash = qa_hash_step64(hash, spatial->attenuation_pan_requested ? 1u : 0u);
+    hash = qa_hash_step64(hash, spatial->attenuation_pan_selected ? 1u : 0u);
     hash = qa_hash_step64(hash, spatial->view_entity ? 1u : 0u);
     return hash;
 }
@@ -206,6 +264,49 @@ static void qa_source_note_spatial(const snd_quantum_source_spatial_t *spatial)
     qa_source_stats.spatial_abs_pan_sum += fabsf(qa_clamp11(spatial->pan_dot));
     qa_source_stats.spatial_attenuation_sum += qa_clamp01(spatial->distance_attenuation);
     qa_source_update_last_spatial(spatial);
+}
+
+static void qa_source_note_attenuation_pan(const snd_quantum_source_spatial_t *spatial)
+{
+    const char *reason;
+
+    if (!qa_source_spatial_valid(spatial))
+        return;
+
+    qa_source_stats.attenuation_pan_sources++;
+    if (spatial->attenuation_pan_ready)
+        qa_source_stats.attenuation_pan_ready_sources++;
+    if (spatial->attenuation_pan_requested)
+        qa_source_stats.attenuation_pan_requested_sources++;
+    if (spatial->attenuation_pan_selected)
+        qa_source_stats.attenuation_pan_selected_sources++;
+    else
+        qa_source_stats.attenuation_pan_fallback_sources++;
+    qa_source_stats.attenuation_pan_abs_error_sum +=
+        spatial->attenuation_pan_left_error +
+        spatial->attenuation_pan_right_error;
+    if (spatial->attenuation_pan_max_error >
+        qa_source_stats.attenuation_pan_max_error) {
+        qa_source_stats.attenuation_pan_max_error =
+            spatial->attenuation_pan_max_error;
+    }
+    qa_source_stats.last_attenuation_pan_leftvol =
+        spatial->attenuation_pan_leftvol;
+    qa_source_stats.last_attenuation_pan_rightvol =
+        spatial->attenuation_pan_rightvol;
+    qa_source_stats.last_attenuation_pan_left_error =
+        spatial->attenuation_pan_left_error;
+    qa_source_stats.last_attenuation_pan_right_error =
+        spatial->attenuation_pan_right_error;
+    qa_source_stats.last_attenuation_pan_max_error =
+        spatial->attenuation_pan_max_error;
+    qa_source_stats.last_attenuation_pan_off_reason_code =
+        spatial->attenuation_pan_off_reason;
+    reason = spatial->attenuation_pan_selected ?
+        "authority_selected" :
+        qa_attenuation_pan_off_reason_name(spatial->attenuation_pan_off_reason);
+    q_strlcpy(qa_source_stats.last_attenuation_pan_off_reason,
+              reason, sizeof(qa_source_stats.last_attenuation_pan_off_reason));
 }
 
 static void qa_source_note_fallback(int reason_code, int blocks,
@@ -396,6 +497,50 @@ static void qa_record_source_spatial_probe(int subject_id,
     qge_quantum_record_probe(rt, &probe);
 }
 
+static void qa_record_source_attenuation_pan_probe(int subject_id,
+                                                   const snd_quantum_source_spatial_t *spatial)
+{
+    qge_quantum_runtime_t *rt = qa_runtime();
+    qge_state_probe_t probe;
+    uint64_t spatial_hash;
+    int frame, server_time_msec;
+
+    if (!rt || !qa_source_spatial_valid(spatial))
+        return;
+
+    spatial_hash = qa_source_spatial_hash(spatial);
+    qa_runtime_stamp(rt, &frame, &server_time_msec);
+    memset(&probe, 0, sizeof(probe));
+    probe.frame = frame;
+    probe.server_time_msec = server_time_msec;
+    probe.domain = QGE_DOMAIN_AUDIO;
+    probe.representation = QGE_REP_DCT_TRANSDUCER;
+    probe.subject_id = subject_id;
+    probe.flags = qa_source_spatial_flags(spatial);
+    if (spatial->attenuation_pan_ready)
+        probe.flags |= QA_SOURCE_FLAG_PROCESSED;
+    if (!spatial->attenuation_pan_selected)
+        probe.flags |= QA_SOURCE_FLAG_DRY_FALLBACK;
+    probe.state_hash = spatial_hash ^
+                       ((uint64_t)(uint32_t)spatial->attenuation_pan_leftvol << 8) ^
+                       ((uint64_t)(uint32_t)spatial->attenuation_pan_rightvol << 24) ^
+                       ((uint64_t)(uint32_t)spatial->attenuation_pan_max_error << 40) ^
+                       ((uint64_t)(uint32_t)spatial->attenuation_pan_off_reason << 56);
+    probe.entropy = qa_clamp01((float)spatial->attenuation_pan_max_error / 255.0f);
+    probe.coherence = spatial->attenuation_pan_ready ? 1.0 : 0.0;
+    probe.max_probability = spatial->attenuation_pan_selected ? 1.0 : 0.0;
+    probe.total_probability =
+        (double)(spatial->attenuation_pan_left_error +
+                 spatial->attenuation_pan_right_error);
+    probe.active_basis_count = spatial->attenuation_pan_leftvol +
+                               spatial->attenuation_pan_rightvol;
+    probe.qubit_count = spatial->output_channels;
+    probe.memory_bytes = sizeof(*spatial);
+    q_strlcpy(probe.label, "audio_attenuation_pan_authority",
+              sizeof(probe.label));
+    qge_quantum_record_probe(rt, &probe);
+}
+
 static void qa_record_source_measurement(int subject_id, int samples,
                                          int blocks, uint32_t flags,
                                          const snd_quantum_source_spatial_t *spatial)
@@ -458,6 +603,48 @@ static void qa_record_source_fallback(int subject_id, int reason_code,
     fallback.subject_id = subject_id;
     fallback.reason_code = reason_code;
     fallback.metric_value = (double)samples;
+    q_strlcpy(fallback.message, message, sizeof(fallback.message));
+    qge_quantum_record_fallback(rt, &fallback);
+}
+
+static void qa_record_source_attenuation_pan_fallback(int subject_id,
+                                                      const snd_quantum_source_spatial_t *spatial)
+{
+    qge_quantum_runtime_t *rt = qa_runtime();
+    qge_fallback_event_t fallback;
+    char message[QGE_TRACE_MESSAGE_MAX];
+    int frame, server_time_msec;
+
+    if (!rt || !qa_source_spatial_valid(spatial) ||
+        spatial->attenuation_pan_selected)
+        return;
+
+    q_snprintf(message, sizeof(message),
+               "audio_attenuation_pan_fallback reason=%s readiness=%s "
+               "classic=%d/%d qge=%d/%d abs_error=%d/%d max_error=%d "
+               "requested=%d ready=%d",
+               qa_attenuation_pan_off_reason_name(
+                   spatial->attenuation_pan_off_reason),
+               qa_attenuation_pan_readiness_reason(spatial),
+               spatial->leftvol, spatial->rightvol,
+               spatial->attenuation_pan_leftvol,
+               spatial->attenuation_pan_rightvol,
+               spatial->attenuation_pan_left_error,
+               spatial->attenuation_pan_right_error,
+               spatial->attenuation_pan_max_error,
+               spatial->attenuation_pan_requested ? 1 : 0,
+               spatial->attenuation_pan_ready ? 1 : 0);
+
+    qa_runtime_stamp(rt, &frame, &server_time_msec);
+    memset(&fallback, 0, sizeof(fallback));
+    fallback.frame = frame;
+    fallback.server_time_msec = server_time_msec;
+    fallback.domain = QGE_DOMAIN_AUDIO;
+    fallback.representation = QGE_REP_DCT_TRANSDUCER;
+    fallback.subject_id = subject_id;
+    fallback.reason_code = QA_SOURCE_FALLBACK_ATTENUATION_PAN +
+                           spatial->attenuation_pan_off_reason;
+    fallback.metric_value = (double)spatial->attenuation_pan_max_error;
     q_strlcpy(fallback.message, message, sizeof(fallback.message));
     qge_quantum_record_fallback(rt, &fallback);
 }
@@ -601,6 +788,7 @@ void S_QuantumInit(void)
     Cvar_RegisterVariable(&snd_quantum_mix);
     Cvar_RegisterVariable(&snd_quantum_spread);
     Cvar_RegisterVariable(&snd_quantum_reverb);
+    Cvar_RegisterVariable(&snd_quantum_source_authority);
 
     quantum_initialized = true;
     Con_Printf("QGE quantum audio: %d qubits, %d entangled states, %d-point DCT\n",
@@ -742,6 +930,8 @@ void S_QuantumSourceBeginFrame(void)
               sizeof(qa_source_stats.last_source_name));
     q_strlcpy(qa_source_stats.last_fallback_reason, "none",
               sizeof(qa_source_stats.last_fallback_reason));
+    q_strlcpy(qa_source_stats.last_attenuation_pan_off_reason, "none",
+              sizeof(qa_source_stats.last_attenuation_pan_off_reason));
     qa_source_frame_active = true;
 }
 
@@ -759,7 +949,12 @@ void S_QuantumSourceNote(int entnum, int entchannel, const char *name,
               (name && name[0]) ? name : "unknown",
               sizeof(qa_source_stats.last_source_name));
     qa_source_note_spatial(spatial);
+    qa_source_note_attenuation_pan(spatial);
     qa_record_source_spatial_probe(qa_source_stats.last_subject_id, spatial);
+    qa_record_source_attenuation_pan_probe(qa_source_stats.last_subject_id,
+                                           spatial);
+    qa_record_source_attenuation_pan_fallback(
+        qa_source_stats.last_subject_id, spatial);
 }
 
 void S_QuantumProcessSource(portable_samplepair_t *sourcebuffer, int count,
@@ -918,6 +1113,7 @@ void S_QuantumSourceEndFrame(void)
     double avg_distance = 0.0;
     double avg_abs_pan = 0.0;
     double avg_attenuation = 0.0;
+    double avg_attenuation_pan_abs_error = 0.0;
     uint32_t flags = 0;
 
     if (!qa_source_frame_active)
@@ -933,6 +1129,11 @@ void S_QuantumSourceEndFrame(void)
                       qa_source_stats.spatial_sources;
         avg_attenuation = qa_source_stats.spatial_attenuation_sum /
                           qa_source_stats.spatial_sources;
+    }
+    if (qa_source_stats.attenuation_pan_sources > 0) {
+        avg_attenuation_pan_abs_error =
+            qa_source_stats.attenuation_pan_abs_error_sum /
+            (qa_source_stats.attenuation_pan_sources * 2.0);
     }
 
     if (qa_source_stats.dry_fallback_blocks > 0)
@@ -956,6 +1157,19 @@ void S_QuantumSourceEndFrame(void)
                     "fallback_remainder=%d last_fallback=%s "
                     "spatial_sources=%d avg_distance=%.1f "
                     "avg_abs_pan=%.3f avg_atten=%.3f "
+                    "attenuation_pan_sources=%d "
+                    "attenuation_pan_ready=%d "
+                    "attenuation_pan_requested=%d "
+                    "attenuation_pan_selected=%d "
+                    "attenuation_pan_fallback=%d "
+                    "attenuation_pan_avg_abs_error=%.3f "
+                    "attenuation_pan_max_error=%d "
+                    "attenuation_pan_last_classic=%d/%d "
+                    "attenuation_pan_last_qge=%d/%d "
+                    "attenuation_pan_last_abs_error=%d/%d "
+                    "attenuation_pan_last_max_error=%d "
+                    "attenuation_pan_readiness=%s "
+                    "attenuation_pan_off_reason=%s "
                     "source_origin=(%.1f,%.1f,%.1f) "
                     "listener_origin=(%.1f,%.1f,%.1f) "
                     "listener_forward=(%.2f,%.2f,%.2f) "
@@ -982,6 +1196,22 @@ void S_QuantumSourceEndFrame(void)
                     avg_distance,
                     avg_abs_pan,
                     avg_attenuation,
+                    qa_source_stats.attenuation_pan_sources,
+                    qa_source_stats.attenuation_pan_ready_sources,
+                    qa_source_stats.attenuation_pan_requested_sources,
+                    qa_source_stats.attenuation_pan_selected_sources,
+                    qa_source_stats.attenuation_pan_fallback_sources,
+                    avg_attenuation_pan_abs_error,
+                    qa_source_stats.attenuation_pan_max_error,
+                    last_spatial->leftvol,
+                    last_spatial->rightvol,
+                    qa_source_stats.last_attenuation_pan_leftvol,
+                    qa_source_stats.last_attenuation_pan_rightvol,
+                    qa_source_stats.last_attenuation_pan_left_error,
+                    qa_source_stats.last_attenuation_pan_right_error,
+                    qa_source_stats.last_attenuation_pan_max_error,
+                    qa_attenuation_pan_readiness_reason(last_spatial),
+                    qa_source_stats.last_attenuation_pan_off_reason,
                     last_spatial->source_origin[0],
                     last_spatial->source_origin[1],
                     last_spatial->source_origin[2],

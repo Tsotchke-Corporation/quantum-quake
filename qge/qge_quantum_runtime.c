@@ -22,6 +22,10 @@ struct qge_quantum_runtime_s {
     size_t replay_count;
     size_t replay_capacity;
     size_t replay_index;
+    qge_ai_decision_event_t *replay_ai_decisions;
+    size_t replay_ai_decision_count;
+    size_t replay_ai_decision_capacity;
+    size_t replay_ai_decision_index;
     bool replay_strict;
     qge_trace_writer_t *trace;
     qge_quantum_runtime_stats_t stats;
@@ -29,7 +33,9 @@ struct qge_quantum_runtime_s {
 
 enum {
     QGE_REPLAY_FALLBACK_METADATA_MISMATCH = 1,
-    QGE_REPLAY_FALLBACK_EXHAUSTED = 2
+    QGE_REPLAY_FALLBACK_EXHAUSTED = 2,
+    QGE_REPLAY_FALLBACK_AI_DECISION_MISMATCH = 3,
+    QGE_REPLAY_FALLBACK_AI_DECISION_EXHAUSTED = 4
 };
 
 static uint64_t splitmix64_next(uint64_t *state)
@@ -73,6 +79,22 @@ static void clear_replay_entropy(qge_quantum_runtime_t *rt)
     rt->stats.replay_exhaustions = 0;
 }
 
+static void clear_replay_ai_decisions(qge_quantum_runtime_t *rt)
+{
+    if (!rt) {
+        return;
+    }
+    free(rt->replay_ai_decisions);
+    rt->replay_ai_decisions = NULL;
+    rt->replay_ai_decision_count = 0;
+    rt->replay_ai_decision_capacity = 0;
+    rt->replay_ai_decision_index = 0;
+    rt->stats.replay_ai_decisions_loaded = 0;
+    rt->stats.replay_ai_decisions_consumed = 0;
+    rt->stats.replay_ai_decision_mismatches = 0;
+    rt->stats.replay_ai_decision_exhaustions = 0;
+}
+
 static int append_replay_entropy(qge_quantum_runtime_t *rt,
                                  const qge_entropy_event_t *event)
 {
@@ -96,6 +118,30 @@ static int append_replay_entropy(qge_quantum_runtime_t *rt,
     return 0;
 }
 
+static int append_replay_ai_decision(qge_quantum_runtime_t *rt,
+                                     const qge_ai_decision_event_t *event)
+{
+    qge_ai_decision_event_t *events;
+    size_t new_capacity;
+
+    if (!rt || !event) {
+        return -1;
+    }
+    if (rt->replay_ai_decision_count == rt->replay_ai_decision_capacity) {
+        new_capacity = rt->replay_ai_decision_capacity ?
+            rt->replay_ai_decision_capacity * 2 : 64;
+        events = (qge_ai_decision_event_t *)realloc(
+            rt->replay_ai_decisions, new_capacity * sizeof(*events));
+        if (!events) {
+            return -1;
+        }
+        rt->replay_ai_decisions = events;
+        rt->replay_ai_decision_capacity = new_capacity;
+    }
+    rt->replay_ai_decisions[rt->replay_ai_decision_count++] = *event;
+    return 0;
+}
+
 static bool replay_entropy_matches_request(const qge_quantum_runtime_t *rt,
                                            const qge_entropy_event_t *event,
                                            qge_quantum_domain_t domain,
@@ -110,6 +156,24 @@ static bool replay_entropy_matches_request(const qge_quantum_runtime_t *rt,
            event->subject_id == subject_id &&
            event->request_id == rt->request_id &&
            event->entropy_offset == rt->entropy_offset;
+}
+
+static bool replay_ai_decision_matches_request(
+    const qge_ai_decision_event_t *event,
+    const qge_ai_decision_event_t *request)
+{
+    if (!event || !request) {
+        return false;
+    }
+    return event->frame == request->frame &&
+           event->server_time_msec == request->server_time_msec &&
+           event->enemy_id == request->enemy_id &&
+           event->enemy_type == request->enemy_type &&
+           event->target_entnum == request->target_entnum &&
+           event->input_flags == request->input_flags &&
+           event->legal_action_mask == request->legal_action_mask &&
+           event->input_hash == request->input_hash &&
+           event->entropy_offset == request->entropy_offset;
 }
 
 static uint64_t deterministic_fallback_entropy(qge_quantum_runtime_t *rt,
@@ -168,6 +232,7 @@ void qge_quantum_runtime_free(qge_quantum_runtime_t *rt)
     }
     qge_quantum_trace_close(rt);
     clear_replay_entropy(rt);
+    clear_replay_ai_decisions(rt);
     free(rt);
 }
 
@@ -181,6 +246,7 @@ void qge_quantum_runtime_set_seed(qge_quantum_runtime_t *rt, uint64_t seed)
     rt->entropy_offset = 0;
     rt->request_id = 0;
     rt->replay_index = 0;
+    rt->replay_ai_decision_index = 0;
     if (rt->entropy_source != QGE_ENTROPY_SOURCE_REPLAY) {
         rt->entropy_source = QGE_ENTROPY_SOURCE_DETERMINISTIC;
     }
@@ -202,6 +268,7 @@ void qge_quantum_runtime_set_entropy_source(qge_quantum_runtime_t *rt,
     rt->entropy_user_data = user_data;
     if (source != QGE_ENTROPY_SOURCE_REPLAY) {
         rt->replay_index = 0;
+        rt->replay_ai_decision_index = 0;
     }
 }
 
@@ -227,9 +294,23 @@ int qge_quantum_runtime_get_server_time_msec(const qge_quantum_runtime_t *rt)
 int qge_quantum_runtime_load_replay_entropy(qge_quantum_runtime_t *rt,
                                             const char *trace_path)
 {
+    if (qge_quantum_runtime_load_replay_trace(rt, trace_path) != 0 || !rt) {
+        return -1;
+    }
+    if (rt->replay_count == 0) {
+        clear_replay_entropy(rt);
+        clear_replay_ai_decisions(rt);
+        return -1;
+    }
+    return 0;
+}
+
+int qge_quantum_runtime_load_replay_trace(qge_quantum_runtime_t *rt,
+                                          const char *trace_path)
+{
     qge_trace_reader_t *reader;
     qge_trace_record_header_t record;
-    qge_entropy_event_t event;
+    unsigned char payload[256];
     int result;
 
     if (!rt || !trace_path) {
@@ -242,9 +323,11 @@ int qge_quantum_runtime_load_replay_entropy(qge_quantum_runtime_t *rt,
     }
 
     clear_replay_entropy(rt);
+    clear_replay_ai_decisions(rt);
     for (;;) {
-        memset(&event, 0, sizeof(event));
-        result = qge_trace_reader_next(reader, &record, &event, sizeof(event));
+        memset(payload, 0, sizeof(payload));
+        result = qge_trace_reader_next(reader, &record, payload,
+                                       sizeof(payload));
         if (result == 0) {
             break;
         }
@@ -254,29 +337,49 @@ int qge_quantum_runtime_load_replay_entropy(qge_quantum_runtime_t *rt,
         if (result < 0) {
             qge_trace_reader_close(reader);
             clear_replay_entropy(rt);
+            clear_replay_ai_decisions(rt);
             return -1;
         }
         if (record.kind == QGE_TRACE_RECORD_ENTROPY &&
-            record.payload_size == sizeof(event) &&
-            append_replay_entropy(rt, &event) != 0) {
-            qge_trace_reader_close(reader);
-            clear_replay_entropy(rt);
-            return -1;
+            record.payload_size == sizeof(qge_entropy_event_t)) {
+            qge_entropy_event_t event;
+            memcpy(&event, payload, sizeof(event));
+            if (append_replay_entropy(rt, &event) != 0) {
+                qge_trace_reader_close(reader);
+                clear_replay_entropy(rt);
+                clear_replay_ai_decisions(rt);
+                return -1;
+            }
+        } else if (record.kind == QGE_TRACE_RECORD_AI_DECISION &&
+                   record.payload_size == sizeof(qge_ai_decision_event_t)) {
+            qge_ai_decision_event_t event;
+            memcpy(&event, payload, sizeof(event));
+            if (append_replay_ai_decision(rt, &event) != 0) {
+                qge_trace_reader_close(reader);
+                clear_replay_entropy(rt);
+                clear_replay_ai_decisions(rt);
+                return -1;
+            }
         }
     }
 
     qge_trace_reader_close(reader);
-    if (rt->replay_count == 0) {
+    if (rt->replay_count == 0 && rt->replay_ai_decision_count == 0) {
         return -1;
     }
 
-    rt->entropy_source = QGE_ENTROPY_SOURCE_REPLAY;
-    rt->entropy_func = NULL;
-    rt->entropy_user_data = NULL;
+    if (rt->replay_count > 0) {
+        rt->entropy_source = QGE_ENTROPY_SOURCE_REPLAY;
+        rt->entropy_func = NULL;
+        rt->entropy_user_data = NULL;
+    }
     rt->replay_index = 0;
+    rt->replay_ai_decision_index = 0;
     rt->entropy_offset = 0;
     rt->request_id = 0;
     rt->stats.replay_events_loaded = (uint64_t)rt->replay_count;
+    rt->stats.replay_ai_decisions_loaded =
+        (uint64_t)rt->replay_ai_decision_count;
     return 0;
 }
 
@@ -472,6 +575,38 @@ void qge_quantum_record_ai_decision(qge_quantum_runtime_t *rt,
     if (rt->trace) {
         note_trace_result(rt, qge_trace_write_ai_decision(rt->trace, event));
     }
+}
+
+int qge_quantum_replay_ai_decision(qge_quantum_runtime_t *rt,
+                                   const qge_ai_decision_event_t *request,
+                                   qge_ai_decision_event_t *replay)
+{
+    const qge_ai_decision_event_t *event;
+
+    if (!rt || !request || !replay || rt->replay_ai_decision_count == 0) {
+        return 0;
+    }
+    if (rt->replay_ai_decision_index >= rt->replay_ai_decision_count) {
+        rt->stats.replay_ai_decision_exhaustions++;
+        record_replay_fallback(rt, QGE_DOMAIN_AI, request->enemy_id,
+                               QGE_REPLAY_FALLBACK_AI_DECISION_EXHAUSTED,
+                               "replay ai decision exhausted");
+        return -1;
+    }
+
+    event = &rt->replay_ai_decisions[rt->replay_ai_decision_index++];
+    rt->stats.replay_ai_decisions_consumed++;
+    if (!rt->replay_strict ||
+        replay_ai_decision_matches_request(event, request)) {
+        *replay = *event;
+        return 1;
+    }
+
+    rt->stats.replay_ai_decision_mismatches++;
+    record_replay_fallback(rt, QGE_DOMAIN_AI, request->enemy_id,
+                           QGE_REPLAY_FALLBACK_AI_DECISION_MISMATCH,
+                           "replay ai decision metadata mismatch");
+    return -1;
 }
 
 int qge_quantum_trace_open(qge_quantum_runtime_t *rt, const char *path)

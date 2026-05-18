@@ -1247,6 +1247,146 @@ static int test_ai_decide_traced_protocol(void) {
     return ok;
 }
 
+static qge_ai_decision_input_t make_ai_replay_input(int frame,
+                                                    int server_time_msec) {
+    qge_ai_decision_input_t input;
+
+    memset(&input, 0, sizeof(input));
+    input.version = QGE_AI_TRACE_VERSION;
+    input.frame = frame;
+    input.server_time_msec = server_time_msec;
+    input.enemy_id = 23;
+    input.enemy_type = 2;
+    input.health = 88.0f;
+    input.flags = 0x21u;
+    input.target_entnum = 1;
+    input.aggression = 0.7f;
+    input.player_distance = 256.0f;
+    input.player_visible = true;
+    input.legal_action_mask = QGE_AI_ACTION_LIVE_MASK;
+    input.authority = QGE_AI_AUTHORITY_ADVISORY;
+    return input;
+}
+
+static int test_ai_decision_replay_exact(void) {
+    const char* path = "/tmp/qge_ai_decision_replay_exact.bin";
+    qge_quantum_runtime_t* rt_record = qge_quantum_runtime_create();
+    qge_quantum_runtime_t* rt_replay;
+    qge_quantum_runtime_stats_t stats;
+    qge_ai_decision_input_t input = make_ai_replay_input(180, 9000);
+    qge_ai_decision_trace_t recorded;
+    qge_ai_decision_trace_t replayed;
+    ai_action_t recorded_action;
+    ai_action_t replay_action;
+    int ok = 0;
+
+    if (!rt_record) return 0;
+    qge_ai_shutdown();
+    qge_ai_set_runtime(rt_record);
+    if (qge_quantum_trace_open(rt_record, path) != 0) {
+        qge_ai_set_runtime(NULL);
+        qge_quantum_runtime_free(rt_record);
+        return 0;
+    }
+    qge_quantum_frame_begin(rt_record, input.frame, input.server_time_msec);
+    recorded_action = qge_ai_decide_traced(&input, &recorded);
+    qge_quantum_frame_end(rt_record);
+    qge_ai_set_runtime(NULL);
+    qge_quantum_runtime_free(rt_record);
+
+    qge_ai_shutdown();
+    rt_replay = qge_quantum_runtime_create();
+    if (!rt_replay) return 0;
+    if (qge_quantum_runtime_load_replay_trace(rt_replay, path) != 0) {
+        qge_quantum_runtime_free(rt_replay);
+        return 0;
+    }
+    qge_ai_set_runtime(rt_replay);
+    qge_quantum_frame_begin(rt_replay, input.frame, input.server_time_msec);
+    replay_action = qge_ai_decide_traced(&input, &replayed);
+    qge_quantum_frame_end(rt_replay);
+    memset(&stats, 0, sizeof(stats));
+    qge_quantum_runtime_get_stats(rt_replay, &stats);
+    qge_ai_set_runtime(NULL);
+    qge_quantum_runtime_free(rt_replay);
+    qge_ai_shutdown();
+
+    ok = recorded_action == replay_action &&
+         replayed.output.action == recorded.output.action &&
+         replayed.output.mapped_action == recorded.output.mapped_action &&
+         replayed.output.input_hash == recorded.output.input_hash &&
+         replayed.output.action_basis == recorded.output.action_basis &&
+         replayed.output.raw_basis == recorded.output.raw_basis &&
+         replayed.output.entropy_offset == recorded.output.entropy_offset &&
+         replayed.output.confidence == recorded.output.confidence &&
+         stats.replay_ai_decisions_loaded == 1 &&
+         stats.replay_ai_decisions_consumed == 1 &&
+         stats.replay_ai_decision_mismatches == 0 &&
+         stats.replay_ai_decision_exhaustions == 0 &&
+         stats.ai_decision_events == 1 &&
+         stats.fallback_events == 0;
+    return ok;
+}
+
+static int test_ai_decision_replay_strict_mismatch_exhaustion(void) {
+    const char* path = "/tmp/qge_ai_decision_replay_mismatch.bin";
+    qge_quantum_runtime_t* rt_record = qge_quantum_runtime_create();
+    qge_quantum_runtime_t* rt_replay;
+    qge_quantum_runtime_stats_t stats;
+    qge_ai_decision_input_t input = make_ai_replay_input(190, 9500);
+    qge_ai_decision_input_t mismatch_input = input;
+    qge_ai_decision_trace_t trace;
+    int ok = 0;
+
+    if (!rt_record) return 0;
+    qge_ai_shutdown();
+    qge_ai_set_runtime(rt_record);
+    if (qge_quantum_trace_open(rt_record, path) != 0) {
+        qge_ai_set_runtime(NULL);
+        qge_quantum_runtime_free(rt_record);
+        return 0;
+    }
+    qge_quantum_frame_begin(rt_record, input.frame, input.server_time_msec);
+    (void)qge_ai_decide_traced(&input, &trace);
+    qge_quantum_frame_end(rt_record);
+    qge_ai_set_runtime(NULL);
+    qge_quantum_runtime_free(rt_record);
+
+    qge_ai_shutdown();
+    rt_replay = qge_quantum_runtime_create();
+    if (!rt_replay) return 0;
+    if (qge_quantum_runtime_load_replay_trace(rt_replay, path) != 0) {
+        qge_quantum_runtime_free(rt_replay);
+        return 0;
+    }
+
+    mismatch_input.frame = input.frame + 1;
+    mismatch_input.server_time_msec = input.server_time_msec + 16;
+    qge_ai_set_runtime(rt_replay);
+    qge_quantum_frame_begin(rt_replay, mismatch_input.frame,
+                            mismatch_input.server_time_msec);
+    (void)qge_ai_decide_traced(&mismatch_input, &trace);
+    qge_quantum_frame_end(rt_replay);
+
+    qge_quantum_frame_begin(rt_replay, input.frame, input.server_time_msec);
+    (void)qge_ai_decide_traced(&input, &trace);
+    qge_quantum_frame_end(rt_replay);
+
+    memset(&stats, 0, sizeof(stats));
+    qge_quantum_runtime_get_stats(rt_replay, &stats);
+    qge_ai_set_runtime(NULL);
+    qge_quantum_runtime_free(rt_replay);
+    qge_ai_shutdown();
+
+    ok = stats.replay_ai_decisions_loaded == 1 &&
+         stats.replay_ai_decisions_consumed == 1 &&
+         stats.replay_ai_decision_mismatches == 1 &&
+         stats.replay_ai_decision_exhaustions == 1 &&
+         stats.ai_decision_events == 2 &&
+         stats.fallback_events == 2;
+    return ok;
+}
+
 static int test_ai_entanglement(void) {
     /* Test entanglement between two enemies */
     int enemy_a = 40;
@@ -1980,6 +2120,94 @@ static int test_vis_shadow_authority_gate_warmup(void) {
                   "false_negative_fallback") == 0;
 }
 
+static int test_vis_writeback_decision_disabled(void) {
+    qge_vis_writeback_decision_t decision;
+
+    qge_vis_shutdown();
+    if (!qge_vis_get_writeback_decision(false, &decision)) {
+        return 0;
+    }
+
+    return !decision.authority_requested &&
+           !decision.writeback_allowed &&
+           decision.fallback_selected &&
+           decision.source == QGE_VIS_WRITEBACK_SOURCE_CLASSIC &&
+           decision.authority_reason ==
+               QGE_VIS_GATE_REASON_AUTHORITY_NOT_REQUESTED &&
+           decision.fallback_reason ==
+               QGE_VIS_GATE_REASON_AUTHORITY_NOT_REQUESTED;
+}
+
+static int test_vis_writeback_decision_warmup(void) {
+    qge_vis_shadow_stats_t stats;
+    qge_vis_writeback_decision_t decision;
+
+    qge_vis_shutdown();
+    if (!finish_vis_authority_gate_frame(0, &stats) ||
+        !qge_vis_get_writeback_decision(true, &decision)) {
+        return 0;
+    }
+
+    return decision.authority_requested &&
+           decision.shadow_observed &&
+           !decision.authority_ready &&
+           !decision.writeback_allowed &&
+           decision.fallback_selected &&
+           decision.source == QGE_VIS_WRITEBACK_SOURCE_CLASSIC &&
+           decision.fallback_reason == QGE_VIS_GATE_REASON_WARMUP_PENDING &&
+           decision.clean_frames_required == stats.clean_frames_required;
+}
+
+static int test_vis_writeback_decision_false_negative(void) {
+    qge_vis_shadow_stats_t stats;
+    qge_vis_writeback_decision_t decision;
+
+    qge_vis_shutdown();
+    if (!finish_vis_authority_gate_frame(1, &stats) ||
+        !qge_vis_get_writeback_decision(true, &decision)) {
+        return 0;
+    }
+
+    return decision.authority_requested &&
+           decision.shadow_observed &&
+           !decision.writeback_allowed &&
+           decision.fallback_selected &&
+           decision.false_negative_forced_classic &&
+           decision.source == QGE_VIS_WRITEBACK_SOURCE_CLASSIC &&
+           decision.last_false_negative_count == 1 &&
+           decision.fallback_reason == QGE_VIS_GATE_REASON_FALSE_NEGATIVE;
+}
+
+static int test_vis_writeback_decision_ready(void) {
+    qge_vis_shadow_stats_t stats;
+    qge_vis_writeback_decision_t decision;
+    int required;
+
+    qge_vis_shutdown();
+    if (!finish_vis_authority_gate_frame(0, &stats)) {
+        return 0;
+    }
+    required = stats.clean_frames_required;
+    for (int i = 1; i < required; i++) {
+        if (!finish_vis_authority_gate_frame(0, &stats)) {
+            return 0;
+        }
+    }
+    if (!qge_vis_get_writeback_decision(true, &decision)) {
+        return 0;
+    }
+
+    return decision.authority_requested &&
+           decision.shadow_observed &&
+           decision.authority_ready &&
+           decision.writeback_allowed &&
+           !decision.fallback_selected &&
+           !decision.false_negative_forced_classic &&
+           decision.source == QGE_VIS_WRITEBACK_SOURCE_QGE &&
+           decision.fallback_reason == QGE_VIS_GATE_REASON_NONE &&
+           decision.consecutive_clean_frames == required;
+}
+
 /* ============================================================================
  * Quantum Audio Tests
  * ============================================================================ */
@@ -2506,6 +2734,148 @@ static int test_physics_projectile_authority_gate_thresholds(void) {
                   "shadow_avg") == 0;
 }
 
+static qge_projectile_writeback_request_t
+make_projectile_writeback_request(bool requested) {
+    qge_projectile_writeback_request_t request;
+
+    memset(&request, 0, sizeof(request));
+    request.entity_id = 313;
+    request.telemetry.requested = requested;
+    request.telemetry.active_projectiles = 1;
+    request.telemetry.frame_projectiles = 1;
+    request.telemetry.warmup_frames = 2;
+    request.telemetry.shadow_samples = 2;
+    request.telemetry.avg_shadow_error = 0.25f;
+    request.telemetry.max_shadow_error = 1.5f;
+    request.classic_origin.x = 10.0f;
+    request.classic_origin.y = 20.0f;
+    request.classic_origin.z = 30.0f;
+    request.classic_velocity.x = 100.0f;
+    request.classic_velocity.y = 0.0f;
+    request.classic_velocity.z = -10.0f;
+    request.qge_origin.x = 11.0f;
+    request.qge_origin.y = 18.0f;
+    request.qge_origin.z = 33.0f;
+    request.qge_velocity.x = 98.0f;
+    request.qge_velocity.y = 4.0f;
+    request.qge_velocity.z = -9.0f;
+    return request;
+}
+
+static qge_projectile_authority_gate_t make_projectile_writeback_gate(void) {
+    qge_projectile_authority_gate_t gate;
+
+    gate.warmup_frames_required = 2;
+    gate.min_shadow_samples = 2;
+    gate.avg_shadow_error_max = 1.0f;
+    gate.max_shadow_error_max = 4.0f;
+    return gate;
+}
+
+static int test_physics_projectile_writeback_disabled(void) {
+    qge_projectile_authority_gate_t gate = make_projectile_writeback_gate();
+    qge_projectile_writeback_request_t request =
+        make_projectile_writeback_request(false);
+    qge_projectile_writeback_decision_t decision =
+        qge_projectile_writeback_evaluate(&gate, &request);
+
+    printf("\n    Projectile writeback disabled: ent=%d source=%d reason=%s\n    ",
+           decision.entity_id,
+           (int)decision.source,
+           qge_projectile_authority_off_reason_name(decision.off_reason));
+
+    return decision.entity_id == 313 &&
+           !decision.authority_requested &&
+           !decision.authority_ready &&
+           !decision.writeback_allowed &&
+           decision.fallback_selected &&
+           !decision.rollback_required &&
+           decision.source == QGE_PROJECTILE_WRITEBACK_CLASSIC &&
+           decision.off_reason == QGE_PROJECTILE_AUTHORITY_OFF_DISABLED &&
+           decision.fallback_reason == QGE_PROJECTILE_AUTHORITY_OFF_DISABLED &&
+           fabsf(decision.origin_delta.x - 1.0f) < 0.001f &&
+           fabsf(decision.origin_delta.y + 2.0f) < 0.001f &&
+           fabsf(decision.origin_delta.z - 3.0f) < 0.001f &&
+           fabsf(decision.velocity_delta.y - 4.0f) < 0.001f;
+}
+
+static int test_physics_projectile_writeback_warmup(void) {
+    qge_projectile_authority_gate_t gate = make_projectile_writeback_gate();
+    qge_projectile_writeback_request_t request =
+        make_projectile_writeback_request(true);
+    qge_projectile_writeback_decision_t decision;
+
+    request.telemetry.warmup_frames = 1;
+    request.telemetry.shadow_samples = 2;
+    decision = qge_projectile_writeback_evaluate(&gate, &request);
+
+    return decision.authority_requested &&
+           !decision.authority_ready &&
+           !decision.writeback_allowed &&
+           decision.fallback_selected &&
+           !decision.rollback_required &&
+           decision.source == QGE_PROJECTILE_WRITEBACK_CLASSIC &&
+           decision.off_reason == QGE_PROJECTILE_AUTHORITY_OFF_WARMUP &&
+           decision.fallback_reason == QGE_PROJECTILE_AUTHORITY_OFF_WARMUP &&
+           decision.gate_state.warmup_frames_remaining == 1 &&
+           decision.gate_state.shadow_samples_remaining == 0;
+}
+
+static int test_physics_projectile_writeback_threshold_failure(void) {
+    qge_projectile_authority_gate_t gate = make_projectile_writeback_gate();
+    qge_projectile_writeback_request_t request =
+        make_projectile_writeback_request(true);
+    qge_projectile_writeback_decision_t decision;
+
+    request.telemetry.max_shadow_error = 5.0f;
+    decision = qge_projectile_writeback_evaluate(&gate, &request);
+
+    printf("\n    Projectile writeback threshold: rollback=%d reason=%s\n    ",
+           decision.rollback_required ? 1 : 0,
+           qge_projectile_authority_off_reason_name(decision.rollback_reason));
+
+    return decision.authority_requested &&
+           !decision.authority_ready &&
+           !decision.writeback_allowed &&
+           decision.fallback_selected &&
+           decision.rollback_required &&
+           decision.source == QGE_PROJECTILE_WRITEBACK_CLASSIC &&
+           decision.off_reason == QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_MAX &&
+           decision.fallback_reason ==
+               QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_MAX &&
+           decision.rollback_reason ==
+               QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_MAX &&
+           decision.gate_state.max_shadow_error_margin < 0.0f;
+}
+
+static int test_physics_projectile_writeback_ready(void) {
+    qge_projectile_authority_gate_t gate = make_projectile_writeback_gate();
+    qge_projectile_writeback_request_t request =
+        make_projectile_writeback_request(true);
+    qge_projectile_writeback_decision_t decision =
+        qge_projectile_writeback_evaluate(&gate, &request);
+
+    printf("\n    Projectile writeback ready: ent=%d source=%d "
+           "origin_delta=%.2f velocity_delta=%.2f\n    ",
+           decision.entity_id,
+           (int)decision.source,
+           decision.origin_delta_length,
+           decision.velocity_delta_length);
+
+    return decision.entity_id == 313 &&
+           decision.authority_requested &&
+           decision.authority_ready &&
+           decision.writeback_allowed &&
+           !decision.fallback_selected &&
+           !decision.rollback_required &&
+           decision.source == QGE_PROJECTILE_WRITEBACK_QGE &&
+           decision.off_reason == QGE_PROJECTILE_AUTHORITY_OFF_NONE &&
+           decision.fallback_reason == QGE_PROJECTILE_AUTHORITY_OFF_NONE &&
+           decision.rollback_reason == QGE_PROJECTILE_AUTHORITY_OFF_NONE &&
+           fabsf(decision.origin_delta_length - sqrtf(14.0f)) < 0.001f &&
+           fabsf(decision.velocity_delta_length - sqrtf(21.0f)) < 0.001f;
+}
+
 /* ============================================================================
  * Main
  * ============================================================================ */
@@ -2562,6 +2932,8 @@ int main(void) {
     TEST(ai_decide_distribution);
     TEST(ai_visibility_effect);
     TEST(ai_decide_traced_protocol);
+    TEST(ai_decision_replay_exact);
+    TEST(ai_decision_replay_strict_mismatch_exhaustion);
     TEST(ai_entanglement);
     TEST(ai_destroy);
     printf("\n");
@@ -2587,6 +2959,10 @@ int main(void) {
     TEST(vis_grover_amplification);
     TEST(vis_shadow_parity_stats);
     TEST(vis_shadow_authority_gate_warmup);
+    TEST(vis_writeback_decision_disabled);
+    TEST(vis_writeback_decision_warmup);
+    TEST(vis_writeback_decision_false_negative);
+    TEST(vis_writeback_decision_ready);
     printf("\n");
 
     printf("Quantum Audio Tests:\n");
@@ -2610,6 +2986,10 @@ int main(void) {
     TEST(physics_particle_lifetime);
     TEST(physics_projectile_authority_gate_warmup);
     TEST(physics_projectile_authority_gate_thresholds);
+    TEST(physics_projectile_writeback_disabled);
+    TEST(physics_projectile_writeback_warmup);
+    TEST(physics_projectile_writeback_threshold_failure);
+    TEST(physics_projectile_writeback_ready);
     printf("\n");
 
     /* Cleanup modules */

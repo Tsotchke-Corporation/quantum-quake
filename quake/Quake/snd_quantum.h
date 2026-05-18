@@ -33,6 +33,16 @@ typedef struct {
     int leftvol;
     int rightvol;
     int output_channels;
+    qboolean attenuation_pan_valid;
+    qboolean attenuation_pan_ready;
+    qboolean attenuation_pan_requested;
+    qboolean attenuation_pan_selected;
+    int attenuation_pan_leftvol;
+    int attenuation_pan_rightvol;
+    int attenuation_pan_left_error;
+    int attenuation_pan_right_error;
+    int attenuation_pan_max_error;
+    int attenuation_pan_off_reason;
 } snd_quantum_source_spatial_t;
 
 /* Apply quantum effects to paint buffer.
@@ -58,5 +68,6 @@ extern cvar_t snd_quantum_enable;
 extern cvar_t snd_quantum_mix;
 extern cvar_t snd_quantum_spread;
 extern cvar_t snd_quantum_reverb;
+extern cvar_t snd_quantum_source_authority;
 
 #endif /* SND_QUANTUM_H */

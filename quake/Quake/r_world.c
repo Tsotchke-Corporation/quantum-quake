@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 extern cvar_t gl_fullbrights, r_drawflat, gl_overbright, r_oldwater, r_oldskyleaf, r_showtris; //johnfitz
 
 byte *SV_FatPVS (vec3_t org, qmodel_t *worldmodel);
+extern unsigned int qge_vis_authority_writeback_flags(int authority_requested);
 
 //==============================================================================
 //
@@ -101,6 +102,7 @@ void R_MarkSurfaces (void)
 	int			i, j;
 	qboolean	nearwaterportal;
 	qboolean	qge_vis_shadow;
+	unsigned int qge_vis_writeback_flags;
 
 	// clear lightmap chains
 	for (i=0 ; i<lightmap_count ; i++)
@@ -122,6 +124,8 @@ void R_MarkSurfaces (void)
 		vis = Mod_LeafPVS (r_viewleaf, cl.worldmodel);
 
 	qge_vis_shadow = QGE_VisShadowBegin(cl.worldmodel);
+	qge_vis_writeback_flags =
+		qge_vis_authority_writeback_flags(quantum_vis.value >= 1.5f);
 	r_visframecount++;
 
 	// set all chains to null
@@ -165,7 +169,18 @@ void R_MarkSurfaces (void)
 	}
 
 	if (qge_vis_shadow)
+	{
 		QGE_VisShadowEnd(cl.worldmodel);
+		qge_vis_writeback_flags =
+			qge_vis_authority_writeback_flags(quantum_vis.value >= 1.5f);
+	}
+
+	/* Visibility Authority Writeback V2 is deliberately sandboxed here:
+	 * R_MarkSurfaces keeps classic PVS/cull output authoritative. Hook-level
+	 * consumers of quantum_vis 2 must query qge_vis_authority_writeback_flags()
+	 * after a clean shadow gate; false negatives keep source=CLASSIC.
+	 */
+	(void)qge_vis_writeback_flags;
 }
 
 //==============================================================================

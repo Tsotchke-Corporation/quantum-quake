@@ -100,6 +100,8 @@ static qge_vis_gate_reason_t shadow_authority_reason =
     QGE_VIS_GATE_REASON_SHADOW_UNAVAILABLE;
 static qge_vis_gate_reason_t shadow_fallback_reason =
     QGE_VIS_GATE_REASON_SHADOW_UNAVAILABLE;
+static int shadow_last_mismatch_count = 0;
+static int shadow_last_false_negative_count = 0;
 
 /* ============================================================================
  * Entropy Callback
@@ -249,9 +251,90 @@ static void vis_shadow_reset_authority_gate(int surface_count) {
     shadow_consecutive_clean_frames = 0;
     shadow_cumulative_mismatch_count = 0;
     shadow_cumulative_false_negative_count = 0;
+    shadow_last_mismatch_count = 0;
+    shadow_last_false_negative_count = 0;
     shadow_authority_ready = false;
     shadow_authority_reason = QGE_VIS_GATE_REASON_WARMUP_PENDING;
     shadow_fallback_reason = QGE_VIS_GATE_REASON_WARMUP_PENDING;
+}
+
+#define QGE_VIS_WRITEBACK_FLAG_AUTHORITY_REQUESTED       (1u << 0)
+#define QGE_VIS_WRITEBACK_FLAG_SHADOW_OBSERVED           (1u << 1)
+#define QGE_VIS_WRITEBACK_FLAG_AUTHORITY_READY           (1u << 2)
+#define QGE_VIS_WRITEBACK_FLAG_WRITEBACK_QGE             (1u << 3)
+#define QGE_VIS_WRITEBACK_FLAG_FALLBACK_CLASSIC          (1u << 4)
+#define QGE_VIS_WRITEBACK_FLAG_FALSE_NEGATIVE_CLASSIC    (1u << 5)
+
+unsigned int qge_vis_authority_writeback_flags(int authority_requested) {
+    unsigned int flags = QGE_VIS_WRITEBACK_FLAG_FALLBACK_CLASSIC;
+    bool shadow_observed = shadow_frames_observed > 0;
+    bool false_negative_forced_classic =
+        shadow_last_false_negative_count > 0 ||
+        shadow_fallback_reason == QGE_VIS_GATE_REASON_FALSE_NEGATIVE;
+
+    if (authority_requested) {
+        flags |= QGE_VIS_WRITEBACK_FLAG_AUTHORITY_REQUESTED;
+    }
+    if (shadow_observed) {
+        flags |= QGE_VIS_WRITEBACK_FLAG_SHADOW_OBSERVED;
+    }
+    if (shadow_authority_ready) {
+        flags |= QGE_VIS_WRITEBACK_FLAG_AUTHORITY_READY;
+    }
+    if (false_negative_forced_classic) {
+        flags |= QGE_VIS_WRITEBACK_FLAG_FALSE_NEGATIVE_CLASSIC;
+    }
+
+    if (authority_requested &&
+        shadow_observed &&
+        shadow_authority_ready &&
+        shadow_fallback_reason == QGE_VIS_GATE_REASON_NONE &&
+        !false_negative_forced_classic) {
+        flags &= ~QGE_VIS_WRITEBACK_FLAG_FALLBACK_CLASSIC;
+        flags |= QGE_VIS_WRITEBACK_FLAG_WRITEBACK_QGE;
+    }
+
+    return flags;
+}
+
+bool qge_vis_get_writeback_decision(bool authority_requested,
+                                    qge_vis_writeback_decision_t* decision) {
+    unsigned int flags;
+
+    if (!decision) {
+        return false;
+    }
+    memset(decision, 0, sizeof(*decision));
+    flags = qge_vis_authority_writeback_flags(authority_requested ? 1 : 0);
+    decision->flags = flags;
+    decision->authority_requested = authority_requested;
+    decision->shadow_observed =
+        (flags & QGE_VIS_WRITEBACK_FLAG_SHADOW_OBSERVED) != 0;
+    decision->authority_ready =
+        (flags & QGE_VIS_WRITEBACK_FLAG_AUTHORITY_READY) != 0;
+    decision->writeback_allowed =
+        (flags & QGE_VIS_WRITEBACK_FLAG_WRITEBACK_QGE) != 0;
+    decision->fallback_selected =
+        (flags & QGE_VIS_WRITEBACK_FLAG_FALLBACK_CLASSIC) != 0;
+    decision->false_negative_forced_classic =
+        (flags & QGE_VIS_WRITEBACK_FLAG_FALSE_NEGATIVE_CLASSIC) != 0;
+    decision->source = decision->writeback_allowed ?
+        QGE_VIS_WRITEBACK_SOURCE_QGE : QGE_VIS_WRITEBACK_SOURCE_CLASSIC;
+    decision->authority_reason = shadow_authority_reason;
+    decision->fallback_reason = shadow_fallback_reason;
+    if (!authority_requested) {
+        decision->authority_reason =
+            QGE_VIS_GATE_REASON_AUTHORITY_NOT_REQUESTED;
+        decision->fallback_reason =
+            QGE_VIS_GATE_REASON_AUTHORITY_NOT_REQUESTED;
+    } else if (decision->writeback_allowed) {
+        decision->fallback_reason = QGE_VIS_GATE_REASON_NONE;
+    }
+    decision->last_mismatch_count = shadow_last_mismatch_count;
+    decision->last_false_negative_count = shadow_last_false_negative_count;
+    decision->consecutive_clean_frames = shadow_consecutive_clean_frames;
+    decision->clean_frames_required = VIS_AUTHORITY_CLEAN_FRAMES_REQUIRED;
+    return true;
 }
 
 /**
@@ -960,6 +1043,8 @@ bool qge_vis_shadow_finish(qge_vis_shadow_stats_t* stats) {
     }
 
     mismatch_count = stats->mismatch_count + stats->overflow_count;
+    shadow_last_mismatch_count = mismatch_count;
+    shadow_last_false_negative_count = stats->false_negative_count;
     shadow_frames_observed++;
     shadow_cumulative_mismatch_count += mismatch_count;
     shadow_cumulative_false_negative_count += stats->false_negative_count;
@@ -1054,6 +1139,8 @@ void qge_vis_shutdown(void) {
     shadow_consecutive_clean_frames = 0;
     shadow_cumulative_mismatch_count = 0;
     shadow_cumulative_false_negative_count = 0;
+    shadow_last_mismatch_count = 0;
+    shadow_last_false_negative_count = 0;
     shadow_authority_ready = false;
     shadow_authority_reason = QGE_VIS_GATE_REASON_SHADOW_UNAVAILABLE;
     shadow_fallback_reason = QGE_VIS_GATE_REASON_SHADOW_UNAVAILABLE;

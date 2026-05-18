@@ -27,6 +27,16 @@ for needle in [
     "vec3_t listener_right;",
     "float distance_attenuation;",
     "float pan_dot;",
+    "qboolean attenuation_pan_valid;",
+    "qboolean attenuation_pan_ready;",
+    "qboolean attenuation_pan_requested;",
+    "qboolean attenuation_pan_selected;",
+    "int attenuation_pan_leftvol;",
+    "int attenuation_pan_rightvol;",
+    "int attenuation_pan_left_error;",
+    "int attenuation_pan_right_error;",
+    "int attenuation_pan_max_error;",
+    "int attenuation_pan_off_reason;",
     "} snd_quantum_source_spatial_t;",
     "qboolean S_QuantumPostMixMode(void);",
     "qboolean S_QuantumSourceMode(void);",
@@ -35,6 +45,7 @@ for needle in [
     "void S_QuantumSourceNote(int entnum, int entchannel, const char *name,",
     "void S_QuantumProcessSource(portable_samplepair_t *sourcebuffer, int count,",
     "void S_QuantumSourceEndFrame(void);",
+    "extern cvar_t snd_quantum_source_authority;",
 ]:
     require(header, needle, "source-mode header contract")
 
@@ -42,6 +53,9 @@ for needle in [
     "quantum_source_mode = S_QuantumSourceMode();",
     "S_QuantumSourceBeginFrame();",
     "SND_BuildQuantumSourceSpatial(ch, &qge_spatial);",
+    "snd_quantum_source_authority.value >= 0.5f",
+    "attenuation_pan_selected",
+    "SND_PaintQuantumSourceToBuffer(qge_sourcebuffer, ch, sc, count, 0,",
     "S_QuantumSourceNote(ch->entnum, ch->entchannel,",
     "ch->sfx->name, &qge_spatial);",
     "S_QuantumProcessSource(qge_sourcebuffer, count,",
@@ -51,6 +65,7 @@ for needle in [
     "if (S_QuantumPostMixMode())",
     "\\\"quantum_owner\\\": ",
     "\\\"source_ownership\\\": %s",
+    "\\\"source_attenuation_pan_authority\\\": %s",
 ]:
     require(mix, needle, "mixer source path")
 
@@ -63,6 +78,11 @@ for needle in [
     "audio_source_invalid_block",
     "audio_source_remainder_block",
     "audio_source_spatial",
+    "snd_quantum_source_authority",
+    "audio_attenuation_pan_authority",
+    "audio_attenuation_pan_fallback",
+    "qa_attenuation_pan_off_reason_name",
+    "qa_attenuation_pan_readiness_reason",
     "qa_source_spatial_hash",
     "qa_record_source_spatial_probe",
     "QGE audio source owner=audio_source",
@@ -76,6 +96,19 @@ for needle in [
     "fallback_invalid=%d",
     "fallback_remainder=%d",
     "last_fallback=%s",
+    "attenuation_pan_sources=%d",
+    "attenuation_pan_ready=%d",
+    "attenuation_pan_requested=%d",
+    "attenuation_pan_selected=%d",
+    "attenuation_pan_fallback=%d",
+    "attenuation_pan_avg_abs_error=%.3f",
+    "attenuation_pan_max_error=%d",
+    "attenuation_pan_last_classic=%d/%d",
+    "attenuation_pan_last_qge=%d/%d",
+    "attenuation_pan_last_abs_error=%d/%d",
+    "attenuation_pan_last_max_error=%d",
+    "attenuation_pan_readiness=%s",
+    "attenuation_pan_off_reason=%s",
     "spatial_sources=%d",
     "source_origin=(%.1f,%.1f,%.1f)",
     "listener_origin=(%.1f,%.1f,%.1f)",
@@ -95,12 +128,18 @@ for needle in [
 
 for needle in [
     "sound_quantum_mode=\"${QGE_STREAM_SND_QUANTUM:-1}\"",
+    "sound_source_authority=\"${QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY:-0}\"",
     "sound_quantum_mode=\"$(normalize_nonnegative_int \"$sound_quantum_mode\" 1)\"",
+    "sound_source_authority=\"$(normalize_bool \"$sound_source_authority\")\"",
     "\"snd_quantum\": $sound_quantum_mode",
+    "\"snd_quantum_source_authority\": $sound_source_authority",
     "echo \"snd_quantum $sound_quantum_mode\"",
+    "echo \"snd_quantum_source_authority $sound_source_authority\"",
     "-e '/QGE audio source/p'",
     "snd_quantum=$sound_quantum_mode",
+    "snd_quantum_source_authority=$sound_source_authority",
     "Sound quantum mode: $sound_quantum_mode",
+    "Sound source authority: $sound_source_authority",
 ]:
     require(stream, needle, "stream source-mode audio contract")
 

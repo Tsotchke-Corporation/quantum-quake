@@ -142,9 +142,12 @@ static void QGE_AgentAudioWriteMetadata(void)
 		(S_QuantumPostMixMode() ? "post_mix" : "classic"));
 	fprintf(meta,
 		",\n"
-		"  \"source_ownership\": %s\n"
+		"  \"source_ownership\": %s,\n"
+		"  \"source_attenuation_pan_authority\": %s\n"
 		"}\n",
-		S_QuantumSourceMode() ? "true" : "false");
+		S_QuantumSourceMode() ? "true" : "false",
+		(S_QuantumSourceMode() &&
+		 snd_quantum_source_authority.value >= 0.5f) ? "true" : "false");
 	fclose(meta);
 }
 
@@ -522,8 +525,32 @@ static void SND_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int endtime, i
 static void SND_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int endtime, int paintbufferstart);
 static void SND_PaintChannelFrom8ToBuffer (portable_samplepair_t *buffer, channel_t *ch, sfxcache_t *sc, int count, int paintbufferstart);
 static void SND_PaintChannelFrom16ToBuffer (portable_samplepair_t *buffer, channel_t *ch, sfxcache_t *sc, int count, int paintbufferstart);
+static void SND_PaintQuantumSourceToBuffer (portable_samplepair_t *buffer, channel_t *ch, sfxcache_t *sc, int count, int paintbufferstart, const snd_quantum_source_spatial_t *spatial);
 static void SND_AddSourceBuffer (const portable_samplepair_t *buffer, int count, int paintbufferstart);
 static void SND_BuildQuantumSourceSpatial (channel_t *ch, snd_quantum_source_spatial_t *spatial);
+
+#define QGE_AUDIO_ATTEN_OFF_NONE 0
+#define QGE_AUDIO_ATTEN_OFF_NOT_REQUESTED 1
+#define QGE_AUDIO_ATTEN_OFF_SPATIAL_INVALID 2
+#define QGE_AUDIO_ATTEN_OFF_PARITY_ERROR 3
+#define QGE_AUDIO_ATTEN_OFF_VOLUME_RANGE 4
+
+static int SND_QuantumAbsInt (int value)
+{
+	return value < 0 ? -value : value;
+}
+
+static int SND_QuantumAttenuationPanVolume (int master_vol, float attenuation, float pan_scale)
+{
+	float scale;
+	int volume;
+
+	scale = attenuation * pan_scale;
+	volume = (int)(master_vol * scale);
+	if (volume < 0)
+		volume = 0;
+	return volume;
+}
 
 static void SND_BuildQuantumSourceSpatial (channel_t *ch, snd_quantum_source_spatial_t *spatial)
 {
@@ -547,23 +574,87 @@ static void SND_BuildQuantumSourceSpatial (channel_t *ch, snd_quantum_source_spa
 	spatial->leftvol = ch->leftvol;
 	spatial->rightvol = ch->rightvol;
 	spatial->output_channels = shm ? shm->channels : 0;
+	spatial->attenuation_pan_requested =
+		(snd_quantum_source_authority.value >= 0.5f);
 
 	if (spatial->view_entity)
 	{
+		spatial->distance = 0.0f;
+		spatial->pan_dot = 0.0f;
 		spatial->distance_attenuation = 1.0f;
-		return;
+	}
+	else
+	{
+		VectorSubtract(ch->origin, listener_origin, source_vec);
+		distance = VectorNormalize(source_vec);
+		spatial->distance = distance;
+		spatial->distance_attenuation = 1.0f - distance * ch->dist_mult;
+		if (spatial->distance_attenuation < 0.0f)
+			spatial->distance_attenuation = 0.0f;
+		else if (spatial->distance_attenuation > 1.0f)
+			spatial->distance_attenuation = 1.0f;
+		if (spatial->output_channels != 1)
+			spatial->pan_dot = DotProduct(listener_right, source_vec);
 	}
 
-	VectorSubtract(ch->origin, listener_origin, source_vec);
-	distance = VectorNormalize(source_vec);
-	spatial->distance = distance;
-	spatial->distance_attenuation = 1.0f - distance * ch->dist_mult;
-	if (spatial->distance_attenuation < 0.0f)
-		spatial->distance_attenuation = 0.0f;
-	else if (spatial->distance_attenuation > 1.0f)
-		spatial->distance_attenuation = 1.0f;
-	if (spatial->output_channels != 1)
-		spatial->pan_dot = DotProduct(listener_right, source_vec);
+	if (spatial->view_entity)
+	{
+		spatial->attenuation_pan_leftvol = spatial->master_vol;
+		spatial->attenuation_pan_rightvol = spatial->master_vol;
+	}
+	else if (spatial->output_channels == 1)
+	{
+		spatial->attenuation_pan_leftvol =
+			SND_QuantumAttenuationPanVolume(spatial->master_vol,
+											spatial->distance_attenuation,
+											1.0f);
+		spatial->attenuation_pan_rightvol = spatial->attenuation_pan_leftvol;
+	}
+	else
+	{
+		spatial->attenuation_pan_leftvol =
+			SND_QuantumAttenuationPanVolume(spatial->master_vol,
+											spatial->distance_attenuation,
+											1.0f - spatial->pan_dot);
+		spatial->attenuation_pan_rightvol =
+			SND_QuantumAttenuationPanVolume(spatial->master_vol,
+											spatial->distance_attenuation,
+											1.0f + spatial->pan_dot);
+	}
+
+	spatial->attenuation_pan_valid = true;
+	spatial->attenuation_pan_left_error =
+		SND_QuantumAbsInt(spatial->leftvol - spatial->attenuation_pan_leftvol);
+	spatial->attenuation_pan_right_error =
+		SND_QuantumAbsInt(spatial->rightvol - spatial->attenuation_pan_rightvol);
+	spatial->attenuation_pan_max_error =
+		q_max(spatial->attenuation_pan_left_error,
+			  spatial->attenuation_pan_right_error);
+	spatial->attenuation_pan_ready =
+		(spatial->attenuation_pan_max_error == 0 &&
+		 spatial->leftvol >= 0 && spatial->leftvol <= 255 &&
+		 spatial->rightvol >= 0 && spatial->rightvol <= 255 &&
+		 spatial->attenuation_pan_leftvol >= 0 &&
+		 spatial->attenuation_pan_leftvol <= 255 &&
+		 spatial->attenuation_pan_rightvol >= 0 &&
+		 spatial->attenuation_pan_rightvol <= 255);
+	if (!spatial->attenuation_pan_valid)
+		spatial->attenuation_pan_off_reason =
+			QGE_AUDIO_ATTEN_OFF_SPATIAL_INVALID;
+	else if (spatial->attenuation_pan_max_error != 0)
+		spatial->attenuation_pan_off_reason =
+			QGE_AUDIO_ATTEN_OFF_PARITY_ERROR;
+	else if (!spatial->attenuation_pan_ready)
+		spatial->attenuation_pan_off_reason =
+			QGE_AUDIO_ATTEN_OFF_VOLUME_RANGE;
+	else if (!spatial->attenuation_pan_requested)
+		spatial->attenuation_pan_off_reason =
+			QGE_AUDIO_ATTEN_OFF_NOT_REQUESTED;
+	else
+		spatial->attenuation_pan_off_reason = QGE_AUDIO_ATTEN_OFF_NONE;
+	spatial->attenuation_pan_selected =
+		(spatial->attenuation_pan_requested &&
+		 spatial->attenuation_pan_ready);
 }
 
 void S_PaintChannels (int endtime)
@@ -625,10 +716,8 @@ void S_PaintChannels (int endtime)
 					if (quantum_source_mode)
 					{
 						memset(qge_sourcebuffer, 0, count * sizeof(portable_samplepair_t));
-						if (sc->width == 1)
-							SND_PaintChannelFrom8ToBuffer(qge_sourcebuffer, ch, sc, count, 0);
-						else
-							SND_PaintChannelFrom16ToBuffer(qge_sourcebuffer, ch, sc, count, 0);
+						SND_PaintQuantumSourceToBuffer(qge_sourcebuffer, ch, sc, count, 0,
+													   &qge_spatial);
 						S_QuantumProcessSource(qge_sourcebuffer, count,
 											   ch->entnum, ch->entchannel,
 											   ch->sfx ? ch->sfx->name : NULL,
@@ -801,6 +890,32 @@ static void SND_PaintChannelFrom16ToBuffer (portable_samplepair_t *buffer, chann
 	}
 
 	ch->pos += count;
+}
+
+static void SND_PaintQuantumSourceToBuffer (portable_samplepair_t *buffer, channel_t *ch, sfxcache_t *sc, int count, int paintbufferstart, const snd_quantum_source_spatial_t *spatial)
+{
+	int classic_leftvol;
+	int classic_rightvol;
+
+	if (!spatial || !spatial->attenuation_pan_selected)
+	{
+		if (sc->width == 1)
+			SND_PaintChannelFrom8ToBuffer(buffer, ch, sc, count, paintbufferstart);
+		else
+			SND_PaintChannelFrom16ToBuffer(buffer, ch, sc, count, paintbufferstart);
+		return;
+	}
+
+	classic_leftvol = ch->leftvol;
+	classic_rightvol = ch->rightvol;
+	ch->leftvol = spatial->attenuation_pan_leftvol;
+	ch->rightvol = spatial->attenuation_pan_rightvol;
+	if (sc->width == 1)
+		SND_PaintChannelFrom8ToBuffer(buffer, ch, sc, count, paintbufferstart);
+	else
+		SND_PaintChannelFrom16ToBuffer(buffer, ch, sc, count, paintbufferstart);
+	ch->leftvol = classic_leftvol;
+	ch->rightvol = classic_rightvol;
 }
 
 static void SND_AddSourceBuffer (const portable_samplepair_t *buffer, int count, int paintbufferstart)

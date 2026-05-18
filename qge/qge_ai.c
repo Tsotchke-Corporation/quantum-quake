@@ -373,6 +373,75 @@ static qge_quantum_runtime_t* qge_ai_get_runtime(void) {
     return ctx ? qge_get_quantum_runtime(ctx) : NULL;
 }
 
+static void fill_ai_decision_event(const qge_ai_decision_input_t* input,
+                                   const qge_ai_decision_output_t* output,
+                                   qge_ai_decision_event_t* event) {
+    if (!input || !output || !event) {
+        return;
+    }
+    memset(event, 0, sizeof(*event));
+    event->frame = input->frame;
+    event->server_time_msec = input->server_time_msec;
+    event->enemy_id = input->enemy_id;
+    event->enemy_type = input->enemy_type;
+    event->target_entnum = input->target_entnum;
+    event->input_flags = input->flags;
+    event->output_flags = output->flags;
+    event->legal_action_mask = output->legal_action_mask;
+    event->input_hash = output->input_hash;
+    event->raw_basis = output->raw_basis;
+    event->action_basis = output->action_basis;
+    event->entropy_offset = output->entropy_offset;
+    event->mapped_action = (int32_t)output->mapped_action;
+    event->action = (int32_t)output->action;
+    event->selected_probability = output->selected_probability;
+    event->action_probability = output->action_probability;
+    event->max_probability = output->max_probability;
+    event->total_probability = output->total_probability;
+    event->confidence = output->confidence;
+}
+
+static void apply_replay_ai_decision(qge_ai_decision_output_t* output,
+                                     const qge_ai_decision_event_t* event) {
+    if (!output || !event) {
+        return;
+    }
+    output->flags = event->output_flags;
+    output->legal_action_mask = event->legal_action_mask;
+    output->input_hash = event->input_hash;
+    output->raw_basis = event->raw_basis;
+    output->action_basis = event->action_basis;
+    output->entropy_offset = event->entropy_offset;
+    output->mapped_action = (ai_action_t)event->mapped_action;
+    output->action = (ai_action_t)event->action;
+    output->selected_probability = event->selected_probability;
+    output->action_probability = event->action_probability;
+    output->max_probability = event->max_probability;
+    output->total_probability = event->total_probability;
+    output->confidence = event->confidence;
+}
+
+static bool replay_ai_decision_if_available(const qge_ai_decision_input_t* input,
+                                            qge_ai_decision_output_t* output) {
+    qge_quantum_runtime_t* rt;
+    qge_ai_decision_event_t request;
+    qge_ai_decision_event_t replay;
+    int result;
+
+    rt = qge_ai_get_runtime();
+    if (!rt || !input || !output) {
+        return false;
+    }
+    fill_ai_decision_event(input, output, &request);
+    memset(&replay, 0, sizeof(replay));
+    result = qge_quantum_replay_ai_decision(rt, &request, &replay);
+    if (result != 1) {
+        return false;
+    }
+    apply_replay_ai_decision(output, &replay);
+    return true;
+}
+
 static void record_ai_decision(const qge_ai_decision_input_t* input,
                                const qge_ai_decision_output_t* output) {
     qge_quantum_runtime_t* rt;
@@ -385,27 +454,7 @@ static void record_ai_decision(const qge_ai_decision_input_t* input,
     if (!rt) {
         return;
     }
-
-    memset(&event, 0, sizeof(event));
-    event.frame = input->frame;
-    event.server_time_msec = input->server_time_msec;
-    event.enemy_id = input->enemy_id;
-    event.enemy_type = input->enemy_type;
-    event.target_entnum = input->target_entnum;
-    event.input_flags = input->flags;
-    event.output_flags = output->flags;
-    event.legal_action_mask = output->legal_action_mask;
-    event.input_hash = output->input_hash;
-    event.raw_basis = output->raw_basis;
-    event.action_basis = output->action_basis;
-    event.entropy_offset = output->entropy_offset;
-    event.mapped_action = (int32_t)output->mapped_action;
-    event.action = (int32_t)output->action;
-    event.selected_probability = output->selected_probability;
-    event.action_probability = output->action_probability;
-    event.max_probability = output->max_probability;
-    event.total_probability = output->total_probability;
-    event.confidence = output->confidence;
+    fill_ai_decision_event(input, output, &event);
     qge_quantum_record_ai_decision(rt, &event);
 }
 
@@ -497,6 +546,10 @@ ai_action_t qge_ai_decide_traced(const qge_ai_decision_input_t* input,
     double probabilities[1 << ACTION_QUBITS];
     double total_probability = 0.0;
     double max_probability = 0.0;
+    enemy_quantum_info_t* info = NULL;
+    quantum_state_t* decision_state = NULL;
+    int offset = 0;
+    int slot;
 
     if (trace) {
         memset(trace, 0, sizeof(*trace));
@@ -530,8 +583,32 @@ ai_action_t qge_ai_decide_traced(const qge_ai_decision_input_t* input,
     if (in.player_visible) {
         out.flags |= QGE_AI_DECISION_FLAG_PLAYER_VISIBLE;
     }
+    out.entropy_offset = ai_entropy_offset++;
 
     ensure_ai_initialized();
+    slot = in.enemy_id % MAX_ENEMIES;
+    if (slot < 0) slot += MAX_ENEMIES;
+    if (ai_state) {
+        /* Auto-initialize if not done */
+        if (!enemies[slot].active) {
+            qge_ai_init_enemy(in.enemy_id, in.enemy_type);
+        }
+        info = &enemies[slot];
+    }
+
+    if (replay_ai_decision_if_available(&in, &out)) {
+        if (info) {
+            info->last_action = out.action;
+            info->decision_count++;
+        }
+        if (trace) {
+            trace->input = in;
+            trace->output = out;
+        }
+        record_ai_decision(&in, &out);
+        return out.action;
+    }
+
     if (!ai_state) {
         out.action = clamp_legal_action(AI_IDLE, in.legal_action_mask,
                                         &out.flags);
@@ -543,17 +620,8 @@ ai_action_t qge_ai_decide_traced(const qge_ai_decision_input_t* input,
         return out.action;
     }
 
-    int slot = in.enemy_id % MAX_ENEMIES;
-    if (slot < 0) slot += MAX_ENEMIES;
-
-    /* Auto-initialize if not done */
-    if (!enemies[slot].active) {
-        qge_ai_init_enemy(in.enemy_id, in.enemy_type);
-    }
-
-    enemy_quantum_info_t* info = &enemies[slot];
-    quantum_state_t* decision_state = ai_decision_state ? ai_decision_state : ai_state;
-    int offset = ai_decision_state ? 0 : info->qubit_offset;
+    decision_state = ai_decision_state ? ai_decision_state : ai_state;
+    offset = ai_decision_state ? 0 : info->qubit_offset;
 
     /* Per-think decisions only need the 3 action qubits. Keep the wider
      * 24-qubit state for enemy registration/entanglement bookkeeping. */
@@ -581,7 +649,6 @@ ai_action_t qge_ai_decide_traced(const qge_ai_decision_input_t* input,
 
     collect_action_probabilities(decision_state, offset, probabilities,
                                  &total_probability, &max_probability);
-    out.entropy_offset = ai_entropy_offset++;
 
     /* Measure all qubits and extract just the action bits for this enemy */
     uint64_t full_measurement = quantum_measure_all_fast(decision_state, ai_entropy);

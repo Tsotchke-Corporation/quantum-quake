@@ -211,6 +211,77 @@ qge_projectile_authority_state_t qge_projectile_authority_evaluate(
     return state;
 }
 
+static qge_vec3_t qge_vec3_delta(qge_vec3_t to, qge_vec3_t from) {
+    qge_vec3_t delta;
+
+    delta.x = to.x - from.x;
+    delta.y = to.y - from.y;
+    delta.z = to.z - from.z;
+    return delta;
+}
+
+static float qge_vec3_length(qge_vec3_t v) {
+    return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
+qge_projectile_writeback_decision_t qge_projectile_writeback_evaluate(
+    const qge_projectile_authority_gate_t* gate,
+    const qge_projectile_writeback_request_t* request) {
+    qge_projectile_writeback_decision_t decision;
+    qge_projectile_authority_telemetry_t telemetry;
+
+    memset(&decision, 0, sizeof(decision));
+    decision.source = QGE_PROJECTILE_WRITEBACK_CLASSIC;
+    decision.off_reason = QGE_PROJECTILE_AUTHORITY_OFF_DISABLED;
+    decision.fallback_reason = QGE_PROJECTILE_AUTHORITY_OFF_DISABLED;
+    decision.rollback_reason = QGE_PROJECTILE_AUTHORITY_OFF_NONE;
+
+    memset(&telemetry, 0, sizeof(telemetry));
+    if (request) {
+        telemetry = request->telemetry;
+        decision.entity_id = request->entity_id;
+        decision.authority_requested = telemetry.requested;
+        decision.origin_delta =
+            qge_vec3_delta(request->qge_origin, request->classic_origin);
+        decision.velocity_delta =
+            qge_vec3_delta(request->qge_velocity, request->classic_velocity);
+        decision.origin_delta_length =
+            qge_vec3_length(decision.origin_delta);
+        decision.velocity_delta_length =
+            qge_vec3_length(decision.velocity_delta);
+    }
+
+    decision.gate_state =
+        qge_projectile_authority_evaluate(gate, request ? &telemetry : NULL);
+    decision.authority_ready = decision.gate_state.ready;
+    decision.off_reason = decision.gate_state.off_reason;
+
+    if (decision.gate_state.ready) {
+        decision.writeback_allowed = true;
+        decision.fallback_selected = false;
+        decision.rollback_required = false;
+        decision.source = QGE_PROJECTILE_WRITEBACK_QGE;
+        decision.fallback_reason = QGE_PROJECTILE_AUTHORITY_OFF_NONE;
+        decision.rollback_reason = QGE_PROJECTILE_AUTHORITY_OFF_NONE;
+        return decision;
+    }
+
+    decision.writeback_allowed = false;
+    decision.fallback_selected = true;
+    decision.source = QGE_PROJECTILE_WRITEBACK_CLASSIC;
+    decision.fallback_reason = decision.gate_state.off_reason;
+    if (decision.authority_requested &&
+        (decision.gate_state.off_reason ==
+             QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_MAX ||
+         decision.gate_state.off_reason ==
+             QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_AVG)) {
+        decision.rollback_required = true;
+        decision.rollback_reason = decision.gate_state.off_reason;
+    }
+
+    return decision;
+}
+
 /* ============================================================================
  * Entropy Callback
  * ============================================================================ */

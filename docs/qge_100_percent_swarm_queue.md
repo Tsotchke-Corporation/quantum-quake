@@ -90,33 +90,71 @@ Verified with:
 - `make test`
 - `make -C quake/Quake -f Makefile.darwin USE_SDL2=1`
 
+## Wave 4 Checkpoint
+
+- Strict AI decision replay: replay traces now load `ai_decision` records, and
+  strict mode validates frame, server time, enemy metadata, input hash,
+  legal-action mask, and entropy offset before accepting a recorded gameplay
+  decision. Metadata mismatch and exhaustion paths emit replay fallback
+  telemetry instead of silently diverging.
+- Visibility writeback sandbox: visibility authority now has an explicit
+  decision contract and `R_MarkSurfaces()` queries the decision flags after
+  shadow parity. Classic visibility remains authoritative unless a future
+  writeback path explicitly sees a clean, ready gate; false negatives force
+  classic.
+- Audio attenuation/pan parity gate: source-mode audio now computes QGE
+  proposed left/right source volumes from spatial metadata, compares them to
+  classic Quake attenuation/panning, and only substitutes volumes when
+  `snd_quantum_source_authority` is explicitly requested and parity is ready.
+- Projectile writeback sandbox: a pure helper now evaluates classic vs QGE
+  projectile state selection, reports entity ID, origin/velocity deltas,
+  fallback/rollback/off reasons, and only allows QGE source selection when the
+  existing warmup gate is ready and authority is explicitly requested.
+
+Verified with:
+
+- `python3 -m py_compile tools/qge_trace_summary.py tests/test_qge_python_tools.py`
+- `python3 tests/test_qge_python_tools.py`
+- `bash tests/test_qge_trace_summary.sh`
+- `bash tests/test_snd_quantum_source_contract.sh`
+- `bash -n tools/quake_graphics_stream.sh`
+- `make -B build/qge/qge_ai.o build/qge/qge_quantum_runtime.o build/qge/qge_trace.o`
+- `make test_qge`
+- `./bin/test_qge`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B snd_quantum.o`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B snd_mix.o`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B r_world.o`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B qge_hooks.o`
+- `make test`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1`
+
 ## Next Worker Tasks
 
-### Strict AI Decision Replay V2
+### Runtime Evidence Capture V4
 
 Owned files:
 
-- `qge/qge_ai.c`
-- `qge/qge_quantum_runtime.c`
-- `qge/qge_quantum_runtime.h`
+- `tools/quake_graphics_stream.sh`
 - `tools/qge_trace_summary.py`
-- `tests/test_qge.c`
+- `tools/qge_vanilla_capture_matrix.py`
+- `tests/test_qge_python_tools.py`
 
 Goal:
 
-Extend entropy replay strictness to gameplay decisions. AI replay should load
-recorded decision metadata, verify input hash/legal mask/entropy offset/action,
-and report deterministic mismatch or exhaustion instead of silently accepting a
-different live decision.
+Run or harden a live compact capture that produces one trace containing
+entropy replay data, AI decisions, visibility decisions, source audio spatial
+parity, and projectile authority telemetry. This is the evidence slice that
+turns the remaining ICC runtime-evidence action into concrete artifacts.
 
 Gate:
 
-- A fixed replay input reproduces the same traced AI decision sequence.
-- Mismatch between replay decision metadata and live request produces a strict
-  replay fallback/event.
-- Trace summary exposes decision replay consumed/mismatch/exhaustion counts.
+- Trace summary reports nonzero AI decision, audio spatial, visibility, and
+  projectile groups from a single run.
+- Capture matrix links the trace and marks authority/fallback state explicitly.
+- ICC `qge_domain_ownership_swarm` reaches score 100 or the remaining missing
+  evidence is named precisely.
 
-### Visibility Authority Writeback Sandbox V2
+### Visibility Authority Apply V3
 
 Owned files:
 
@@ -127,9 +165,9 @@ Owned files:
 
 Goal:
 
-Add a sandboxed `quantum_vis 2` writeback path that can apply the QGE visible
-set only after the readiness gate passes. The default remains classic
-visibility unless the authority gate is explicitly requested and clean.
+Turn the sandbox decision into an opt-in application path that can use the QGE
+visible set only after the writeback decision allows it. The default remains
+classic visibility.
 
 Gate:
 
@@ -138,7 +176,7 @@ Gate:
 - Capture/trace artifacts prove whether the frame used classic or QGE
   visibility authority.
 
-### Audio Attenuation/Pan Authority V2
+### Audio Authority Runtime Smoke V3
 
 Owned files:
 
@@ -150,18 +188,18 @@ Owned files:
 
 Goal:
 
-Compare QGE spatial attenuation/pan decisions against classic Quake source
-volumes and gate any future source-volume replacement behind parity thresholds.
+Exercise `snd_quantum 2` plus `snd_quantum_source_authority 1` in a compact live
+run and prove that parity gates either keep classic audio or explicitly select
+QGE source volumes without silent dry loss.
 
 Gate:
 
-- Per-source telemetry includes classic left/right volume, QGE proposed volume,
-  absolute error, and fallback reason.
-- Dry fallback remains exact and audible.
-- `snd_quantum 2` still does not replace classic attenuation unless the gate is
-  explicitly ready.
+- Agent stream manifest records source authority mode and nonzero audio.
+- Runtime log includes classic/QGE source volume error and selected/fallback
+  counts.
+- Trace contains matching audio source probes/measurements.
 
-### Projectile Authority Writeback Sandbox V1
+### Projectile Hook Writeback V2
 
 Owned files:
 
@@ -172,9 +210,9 @@ Owned files:
 
 Goal:
 
-Add an opt-in projectile authority sandbox that can write back QGE projectile
-position/velocity only when the warmup gate is ready and explicit authority is
-requested.
+Connect the pure projectile writeback decision to Quake hook telemetry and an
+opt-in writeback path. Classic physics must remain authoritative unless the
+gate is ready and explicit authority is requested.
 
 Gate:
 

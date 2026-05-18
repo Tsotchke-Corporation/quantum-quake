@@ -50,6 +50,7 @@ fullscreen="${QGE_STREAM_FULLSCREEN:-0}"
 fire_test="${QGE_STREAM_FIRE_TEST:-0}"
 sound="${QGE_STREAM_SOUND:-0}"
 sound_quantum_mode="${QGE_STREAM_SND_QUANTUM:-1}"
+sound_source_authority="${QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY:-0}"
 trace="${QGE_STREAM_TRACE:-0}"
 engine_capture="${QGE_STREAM_ENGINE_CAPTURE:-1}"
 launch_mode="${QGE_STREAM_LAUNCH:-auto}"
@@ -98,6 +99,7 @@ fire_test="$(normalize_bool "$fire_test")"
 fullscreen="$(normalize_bool "$fullscreen")"
 sound="$(normalize_bool "$sound")"
 sound_quantum_mode="$(normalize_nonnegative_int "$sound_quantum_mode" 1)"
+sound_source_authority="$(normalize_bool "$sound_source_authority")"
 trace="$(normalize_bool "$trace")"
 render_value="$(normalize_nonnegative_int "$render_value" 1)"
 render_res="$(normalize_positive_int "$render_res" 1024)"
@@ -324,6 +326,7 @@ write_agent_manifest() {
     "metadata_file": $(json_string "$agent_audio_meta"),
     "bytes_file": $(json_string "$agent_audio_bytes_file"),
     "snd_quantum": $sound_quantum_mode,
+    "snd_quantum_source_authority": $sound_source_authority,
     "format": "s16le",
     "bytes": $audio_bytes
   },
@@ -513,6 +516,7 @@ trap restore_autoexec EXIT
   echo "quantum_particles $particles_value"
   if [[ "$sound" == "1" ]]; then
     echo "snd_quantum $sound_quantum_mode"
+    echo "snd_quantum_source_authority $sound_source_authority"
   fi
   echo "map $map_name"
   if [[ "$stream_player" == "noesis" ]]; then
@@ -578,7 +582,7 @@ echo "Streaming Quantum Quake graphics diagnostics"
 echo "  outdir=$outdir"
 echo "  agent_stream=$agent_stream"
 echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter update_interval=$render_update_interval sprite_test=$sprite_test quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_particles=$particles_value"
-echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound snd_quantum=$sound_quantum_mode trace=$trace fire_test=$fire_test scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_max_wait=$noesis_max_wait"
+echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound snd_quantum=$sound_quantum_mode snd_quantum_source_authority=$sound_source_authority trace=$trace fire_test=$fire_test scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_max_wait=$noesis_max_wait"
 echo "QGE_AGENT_STREAM $agent_stream"
 
 print_log_updates() {
@@ -926,6 +930,7 @@ Scene surface budget: $scene_surface_budget
 Physics cvars: quantum_physics $physics_value, quantum_projectiles $projectiles_value, quantum_particles $particles_value
 Fire test: $fire_test
 Sound quantum mode: $sound_quantum_mode
+Sound source authority: $sound_source_authority
 Launch mode: $launch_mode
 Trace requested: $trace
 Trace file: $([[ "$trace" == "1" ]] && printf '%s' "$trace_file" || printf 'not requested')

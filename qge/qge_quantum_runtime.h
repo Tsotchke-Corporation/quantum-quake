@@ -188,6 +188,10 @@ typedef struct {
     uint64_t replay_events_consumed;
     uint64_t replay_mismatches;
     uint64_t replay_exhaustions;
+    uint64_t replay_ai_decisions_loaded;
+    uint64_t replay_ai_decisions_consumed;
+    uint64_t replay_ai_decision_mismatches;
+    uint64_t replay_ai_decision_exhaustions;
     uint64_t measurement_events;
     uint64_t probe_events;
     uint64_t fallback_events;
@@ -216,6 +220,8 @@ int qge_quantum_runtime_get_frame(const qge_quantum_runtime_t *rt);
 int qge_quantum_runtime_get_server_time_msec(const qge_quantum_runtime_t *rt);
 int qge_quantum_runtime_load_replay_entropy(qge_quantum_runtime_t *rt,
                                             const char *trace_path);
+int qge_quantum_runtime_load_replay_trace(qge_quantum_runtime_t *rt,
+                                          const char *trace_path);
 void qge_quantum_runtime_set_replay_strict(qge_quantum_runtime_t *rt,
                                            bool strict);
 bool qge_quantum_runtime_get_replay_strict(const qge_quantum_runtime_t *rt);
@@ -242,6 +248,9 @@ void qge_quantum_record_entanglement(qge_quantum_runtime_t *rt,
                                      const qge_entanglement_edge_t *edge);
 void qge_quantum_record_ai_decision(qge_quantum_runtime_t *rt,
                                     const qge_ai_decision_event_t *event);
+int qge_quantum_replay_ai_decision(qge_quantum_runtime_t *rt,
+                                   const qge_ai_decision_event_t *request,
+                                   qge_ai_decision_event_t *replay);
 
 int qge_quantum_trace_open(qge_quantum_runtime_t *rt, const char *path);
 void qge_quantum_trace_close(qge_quantum_runtime_t *rt);
