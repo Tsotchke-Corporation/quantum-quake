@@ -249,10 +249,11 @@ status in `manifest.json` plus `agent_stream_perf_status` in the JSONL ICC
 sidecar. Set `QGE_PERF_MAX_AVERAGE_MS` or `QGE_PERF_MAX_RENDER_MS` to turn a
 capture into a thresholded performance smoke without failing the media stream
 itself; threshold failures mark the performance sidecar `blocked`.
-Publication packs copy capture performance sidecars into `capture/`, expose the
-max average/render timing fields in the publication runtime summary and ICC
-evidence, and treat an explicit blocked performance sidecar as evidence-only
-rather than `qge_publication_artifact_pack_complete`.
+Publication packs copy capture and vanilla-matrix performance sidecars into the
+pack, expose direct and per-mode max average/render timing fields in the
+publication runtime summary and ICC evidence, and treat an explicit blocked
+performance sidecar as evidence-only rather than
+`qge_publication_artifact_pack_complete`.
 
 `tools/quake_crash_watch.sh` uses the same Noesis player/provider contract for
 its scripted movement by default, stores `input/noesis_actions.txt` and

@@ -442,10 +442,14 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     agent_stream_manifest_ok = not explicit_agent_run_failure(
         agent_stream_summary)
     performance_ok = not explicit_performance_failure(capture_perf_summary)
+    vanilla_performance_ok = (
+        conformance.get("performance_sidecars_success") is not False
+    )
     publication_ready = (
         bool(conformance.get("ready_for_complete_claim")) and
         conformance.get("agent_stream_runs_success") is not False and
         agent_stream_manifest_ok and
+        vanilla_performance_ok and
         performance_ok
     )
     return {
@@ -494,6 +498,27 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "classic_agent_startup_issue"),
             "qge_agent_startup_issue": conformance.get(
                 "qge_agent_startup_issue"),
+            "vanilla_performance_sidecars_success": conformance.get(
+                "performance_sidecars_success"),
+            "classic_performance_status": conformance.get(
+                "classic_performance_status"),
+            "qge_performance_status": conformance.get(
+                "qge_performance_status"),
+            "classic_performance_engine_average_quantum_ms_max": (
+                conformance.get(
+                    "classic_performance_engine_average_quantum_ms_max")),
+            "qge_performance_engine_average_quantum_ms_max": (
+                conformance.get(
+                    "qge_performance_engine_average_quantum_ms_max")),
+            "classic_performance_render_time_ms_max": conformance.get(
+                "classic_performance_render_time_ms_max"),
+            "qge_performance_render_time_ms_max": conformance.get(
+                "qge_performance_render_time_ms_max"),
+            "classic_performance_threshold_failures": conformance.get(
+                "classic_performance_threshold_failures"),
+            "qge_performance_threshold_failures": conformance.get(
+                "qge_performance_threshold_failures"),
+            "vanilla_performance_ok": vanilla_performance_ok,
             "agent_stream_manifest_run": agent_stream_summary,
             "agent_stream_run_status": agent_stream_summary.get("run_status"),
             "agent_stream_run_success": agent_stream_summary.get("run_success"),
@@ -588,6 +613,25 @@ def build_icc_evidence(manifest: dict[str, Any],
             "classic_agent_startup_issue"),
         "qge_agent_startup_issue": runtime.get(
             "qge_agent_startup_issue"),
+        "vanilla_performance_sidecars_success": runtime.get(
+            "vanilla_performance_sidecars_success"),
+        "classic_performance_status": runtime.get(
+            "classic_performance_status"),
+        "qge_performance_status": runtime.get(
+            "qge_performance_status"),
+        "classic_performance_engine_average_quantum_ms_max": runtime.get(
+            "classic_performance_engine_average_quantum_ms_max"),
+        "qge_performance_engine_average_quantum_ms_max": runtime.get(
+            "qge_performance_engine_average_quantum_ms_max"),
+        "classic_performance_render_time_ms_max": runtime.get(
+            "classic_performance_render_time_ms_max"),
+        "qge_performance_render_time_ms_max": runtime.get(
+            "qge_performance_render_time_ms_max"),
+        "classic_performance_threshold_failures": runtime.get(
+            "classic_performance_threshold_failures"),
+        "qge_performance_threshold_failures": runtime.get(
+            "qge_performance_threshold_failures"),
+        "vanilla_performance_ok": runtime.get("vanilla_performance_ok"),
         "agent_stream_run_status": runtime.get(
             "agent_stream_run_status"),
         "agent_stream_run_success": runtime.get(
