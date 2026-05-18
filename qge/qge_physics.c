@@ -76,6 +76,142 @@ static quantum_entropy_ctx_t* physics_entropy = NULL;
 static entropy_ctx_t* physics_hw_entropy = NULL;
 
 /* ============================================================================
+ * Projectile Authority Gate
+ * ============================================================================ */
+
+qge_projectile_authority_gate_t qge_projectile_authority_default_gate(void) {
+    qge_projectile_authority_gate_t gate;
+
+    gate.warmup_frames_required =
+        QGE_PROJECTILE_AUTHORITY_DEFAULT_WARMUP_FRAMES;
+    gate.min_shadow_samples =
+        QGE_PROJECTILE_AUTHORITY_DEFAULT_MIN_SHADOW_SAMPLES;
+    gate.avg_shadow_error_max =
+        QGE_PROJECTILE_AUTHORITY_DEFAULT_AVG_SHADOW_ERROR_MAX;
+    gate.max_shadow_error_max =
+        QGE_PROJECTILE_AUTHORITY_DEFAULT_MAX_SHADOW_ERROR_MAX;
+    return gate;
+}
+
+static qge_projectile_authority_gate_t normalize_projectile_authority_gate(
+    const qge_projectile_authority_gate_t* gate) {
+    qge_projectile_authority_gate_t out =
+        qge_projectile_authority_default_gate();
+
+    if (!gate) {
+        return out;
+    }
+
+    out = *gate;
+    if (out.warmup_frames_required < 0) {
+        out.warmup_frames_required =
+            QGE_PROJECTILE_AUTHORITY_DEFAULT_WARMUP_FRAMES;
+    }
+    if (out.min_shadow_samples < 0) {
+        out.min_shadow_samples =
+            QGE_PROJECTILE_AUTHORITY_DEFAULT_MIN_SHADOW_SAMPLES;
+    }
+    if (!isfinite(out.avg_shadow_error_max) ||
+        out.avg_shadow_error_max < 0.0f) {
+        out.avg_shadow_error_max =
+            QGE_PROJECTILE_AUTHORITY_DEFAULT_AVG_SHADOW_ERROR_MAX;
+    }
+    if (!isfinite(out.max_shadow_error_max) ||
+        out.max_shadow_error_max < 0.0f) {
+        out.max_shadow_error_max =
+            QGE_PROJECTILE_AUTHORITY_DEFAULT_MAX_SHADOW_ERROR_MAX;
+    }
+    return out;
+}
+
+const char* qge_projectile_authority_off_reason_name(
+    qge_projectile_authority_off_reason_t reason) {
+    switch (reason) {
+    case QGE_PROJECTILE_AUTHORITY_OFF_NONE:
+        return "none";
+    case QGE_PROJECTILE_AUTHORITY_OFF_DISABLED:
+        return "disabled";
+    case QGE_PROJECTILE_AUTHORITY_OFF_NO_PROJECTILES:
+        return "no_projectiles";
+    case QGE_PROJECTILE_AUTHORITY_OFF_WARMUP:
+        return "warmup";
+    case QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_MAX:
+        return "shadow_max";
+    case QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_AVG:
+        return "shadow_avg";
+    default:
+        return "unknown";
+    }
+}
+
+qge_projectile_authority_state_t qge_projectile_authority_evaluate(
+    const qge_projectile_authority_gate_t* gate,
+    const qge_projectile_authority_telemetry_t* telemetry) {
+    qge_projectile_authority_gate_t g =
+        normalize_projectile_authority_gate(gate);
+    qge_projectile_authority_state_t state;
+    float avg_error;
+    float max_error;
+
+    memset(&state, 0, sizeof(state));
+    state.off_reason = QGE_PROJECTILE_AUTHORITY_OFF_DISABLED;
+    state.warmup_frames_remaining = g.warmup_frames_required;
+    state.shadow_samples_remaining = g.min_shadow_samples;
+    state.avg_shadow_error_margin = g.avg_shadow_error_max;
+    state.max_shadow_error_margin = g.max_shadow_error_max;
+
+    if (!telemetry || !telemetry->requested) {
+        return state;
+    }
+
+    state.off_reason = QGE_PROJECTILE_AUTHORITY_OFF_NO_PROJECTILES;
+    if (telemetry->active_projectiles <= 0 &&
+        telemetry->frame_projectiles <= 0) {
+        return state;
+    }
+
+    state.off_reason = QGE_PROJECTILE_AUTHORITY_OFF_WARMUP;
+    state.warmup_frames_remaining =
+        g.warmup_frames_required - telemetry->warmup_frames;
+    state.shadow_samples_remaining =
+        g.min_shadow_samples - telemetry->shadow_samples;
+    if (state.warmup_frames_remaining < 0) {
+        state.warmup_frames_remaining = 0;
+    }
+    if (state.shadow_samples_remaining < 0) {
+        state.shadow_samples_remaining = 0;
+    }
+    if (telemetry->warmup_frames < g.warmup_frames_required ||
+        telemetry->shadow_samples < g.min_shadow_samples) {
+        return state;
+    }
+
+    avg_error = telemetry->avg_shadow_error;
+    max_error = telemetry->max_shadow_error;
+    if (!isfinite(avg_error) || avg_error < 0.0f) {
+        avg_error = g.avg_shadow_error_max + 1.0f;
+    }
+    if (!isfinite(max_error) || max_error < 0.0f) {
+        max_error = g.max_shadow_error_max + 1.0f;
+    }
+    state.avg_shadow_error_margin = g.avg_shadow_error_max - avg_error;
+    state.max_shadow_error_margin = g.max_shadow_error_max - max_error;
+
+    if (max_error > g.max_shadow_error_max) {
+        state.off_reason = QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_MAX;
+        return state;
+    }
+    if (avg_error > g.avg_shadow_error_max) {
+        state.off_reason = QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_AVG;
+        return state;
+    }
+
+    state.ready = true;
+    state.off_reason = QGE_PROJECTILE_AUTHORITY_OFF_NONE;
+    return state;
+}
+
+/* ============================================================================
  * Entropy Callback
  * ============================================================================ */
 

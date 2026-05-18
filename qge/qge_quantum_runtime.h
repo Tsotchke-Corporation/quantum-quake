@@ -159,6 +159,28 @@ typedef struct {
 } qge_entropy_event_t;
 
 typedef struct {
+    int32_t frame;
+    int32_t server_time_msec;
+    int32_t enemy_id;
+    int32_t enemy_type;
+    int32_t target_entnum;
+    uint32_t input_flags;
+    uint32_t output_flags;
+    uint32_t legal_action_mask;
+    uint64_t input_hash;
+    uint64_t raw_basis;
+    uint64_t action_basis;
+    uint64_t entropy_offset;
+    int32_t mapped_action;
+    int32_t action;
+    double selected_probability;
+    double action_probability;
+    double max_probability;
+    double total_probability;
+    double confidence;
+} qge_ai_decision_event_t;
+
+typedef struct {
     uint64_t frames_started;
     uint64_t frames_ended;
     uint64_t entropy_events;
@@ -170,6 +192,7 @@ typedef struct {
     uint64_t probe_events;
     uint64_t fallback_events;
     uint64_t entanglement_edges;
+    uint64_t ai_decision_events;
     uint64_t trace_write_errors;
 } qge_quantum_runtime_stats_t;
 
@@ -217,6 +240,8 @@ void qge_quantum_record_fallback(qge_quantum_runtime_t *rt,
                                  const qge_fallback_event_t *event);
 void qge_quantum_record_entanglement(qge_quantum_runtime_t *rt,
                                      const qge_entanglement_edge_t *edge);
+void qge_quantum_record_ai_decision(qge_quantum_runtime_t *rt,
+                                    const qge_ai_decision_event_t *event);
 
 int qge_quantum_trace_open(qge_quantum_runtime_t *rt, const char *path);
 void qge_quantum_trace_close(qge_quantum_runtime_t *rt);

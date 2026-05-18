@@ -462,6 +462,18 @@ void qge_quantum_record_entanglement(qge_quantum_runtime_t *rt,
     }
 }
 
+void qge_quantum_record_ai_decision(qge_quantum_runtime_t *rt,
+                                    const qge_ai_decision_event_t *event)
+{
+    if (!rt || !event) {
+        return;
+    }
+    rt->stats.ai_decision_events++;
+    if (rt->trace) {
+        note_trace_result(rt, qge_trace_write_ai_decision(rt->trace, event));
+    }
+}
+
 int qge_quantum_trace_open(qge_quantum_runtime_t *rt, const char *path)
 {
     if (!rt || !path) {

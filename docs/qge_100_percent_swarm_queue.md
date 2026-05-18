@@ -56,57 +56,89 @@ Verified with:
 - `make test`
 - `make -C quake/Quake -f Makefile.darwin USE_SDL2=1`
 
+## Wave 3 Checkpoint
+
+- Replayable AI decision artifacts: typed AI decisions now enter the shared
+  binary trace as `ai_decision` records carrying input hash, legal-action mask,
+  raw/action basis, mapped/final action, probabilities, confidence, and entropy
+  offset. The trace summary groups these records for replay evidence.
+- Visibility authority gate: the shadow visibility path now tracks clean
+  warmup windows, cumulative mismatches, false negatives, readiness, and
+  fallback/authority reasons. `quantum_vis 1` remains shadow-only; requested
+  authority is gated by parity readiness.
+- Audio spatial source telemetry: source-mode quantum audio now receives source
+  and listener vectors, distance attenuation, pan, volumes, and channel count.
+  Per-source probes/fallbacks include spatial hashes and exact dry fallback
+  reasons.
+- Projectile authority warmup: projectile shadow telemetry now evaluates a
+  conservative readiness gate with warmup frames, minimum samples, max/average
+  shadow-error thresholds, and explicit off reasons. No entity writeback is
+  introduced in this slice.
+
+Verified with:
+
+- `python3 -m py_compile tools/qge_trace_summary.py tests/test_qge_python_tools.py`
+- `python3 tests/test_qge_python_tools.py`
+- `bash tests/test_qge_trace_summary.sh`
+- `make -B build/qge/qge_ai.o build/qge/qge_quantum_runtime.o build/qge/qge_trace.o`
+- `make test_qge`
+- `./bin/test_qge`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B snd_quantum.o`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B snd_mix.o`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B qge_hooks.o`
+- `bash tests/test_snd_quantum_source_contract.sh`
+- `make test`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1`
+
 ## Next Worker Tasks
 
-### Replay Decision Artifact V1
+### Strict AI Decision Replay V2
 
 Owned files:
 
 - `qge/qge_ai.c`
-- `quake/Quake/qge_hooks.c`
 - `qge/qge_quantum_runtime.c`
+- `qge/qge_quantum_runtime.h`
 - `tools/qge_trace_summary.py`
 - `tests/test_qge.c`
 
 Goal:
 
-Connect typed AI decisions to the shared runtime trace so replay artifacts can
-reconstruct complete gameplay-affecting decisions, not only entropy pulls.
-Decision records should carry input hash, legal-action mask, raw/mapped action,
-probability/confidence, and the entropy offset used by the decision.
+Extend entropy replay strictness to gameplay decisions. AI replay should load
+recorded decision metadata, verify input hash/legal mask/entropy offset/action,
+and report deterministic mismatch or exhaustion instead of silently accepting a
+different live decision.
 
 Gate:
 
-- Trace summary reports AI decision groups and replay decision counts.
 - A fixed replay input reproduces the same traced AI decision sequence.
-- Mismatch between replay decision metadata and live request is reported as a
-  strict replay failure.
+- Mismatch between replay decision metadata and live request produces a strict
+  replay fallback/event.
+- Trace summary exposes decision replay consumed/mismatch/exhaustion counts.
 
-### Visibility Authority Gate V1
+### Visibility Authority Writeback Sandbox V2
 
 Owned files:
 
 - `qge/qge_vis.c`
-- `qge/qge_world.c`
-- `qge/qge_world.h`
 - `quake/Quake/r_world.c`
-- `quake/Quake/gl_rmain.c`
 - `quake/Quake/qge_hooks.c`
 - `tests/test_qge.c`
 
 Goal:
 
-Turn shadow parity into an authority-readiness gate. False negatives must force
-classic visibility for the frame. Only a clean warmup window may allow any
-future `quantum_vis 2` authority path.
+Add a sandboxed `quantum_vis 2` writeback path that can apply the QGE visible
+set only after the readiness gate passes. The default remains classic
+visibility unless the authority gate is explicitly requested and clean.
 
 Gate:
 
-- Warmup counters track consecutive clean frames and total mismatches.
-- `quantum_vis 2` remains disabled unless parity thresholds are met.
-- Logs and trace expose the selected authority/fallback reason.
+- False negatives always force classic visibility for the frame.
+- Authority writeback has an explicit trace event and fallback reason.
+- Capture/trace artifacts prove whether the frame used classic or QGE
+  visibility authority.
 
-### Audio Spatial Authority V1
+### Audio Attenuation/Pan Authority V2
 
 Owned files:
 
@@ -118,19 +150,18 @@ Owned files:
 
 Goal:
 
-Extend source ownership from per-source transduction to spatial authority:
-QGE should consume source origin/listener vectors, expose per-source spatial
-metadata, and prove parity/fallback behavior before replacing classic
-attenuation/panning.
+Compare QGE spatial attenuation/pan decisions against classic Quake source
+volumes and gate any future source-volume replacement behind parity thresholds.
 
 Gate:
 
-- Source telemetry includes entnum, channel, position/listener hash, attenuation,
-  and panning decision.
-- Dry fallback records the exact reason per source.
-- Agent stream manifest records nonzero source-mode audio plus spatial metadata.
+- Per-source telemetry includes classic left/right volume, QGE proposed volume,
+  absolute error, and fallback reason.
+- Dry fallback remains exact and audible.
+- `snd_quantum 2` still does not replace classic attenuation unless the gate is
+  explicitly ready.
 
-### Projectile Authority Warmup V0
+### Projectile Authority Writeback Sandbox V1
 
 Owned files:
 
@@ -141,13 +172,12 @@ Owned files:
 
 Goal:
 
-Extend physics shadow telemetry into an authority-readiness gate. Mirror
-post-move/post-water-transition state, record a warmup window, and define
-thresholds for projectile `shadow_error` before any
-`quantum_physics_authoritative` writeback path can be enabled.
+Add an opt-in projectile authority sandbox that can write back QGE projectile
+position/velocity only when the warmup gate is ready and explicit authority is
+requested.
 
 Gate:
 
-- Warmup counters and max/average shadow-error thresholds are logged.
-- Authority remains off unless the warmup gate passes.
-- No Quake entity writeback is introduced in this slice.
+- Gate failure leaves classic Quake physics authoritative.
+- Writeback records entity, origin/velocity delta, and rollback/fallback reason.
+- Tests cover disabled, warmup, threshold failure, and ready authority paths.

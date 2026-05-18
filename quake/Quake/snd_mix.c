@@ -523,6 +523,48 @@ static void SND_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int endtime, 
 static void SND_PaintChannelFrom8ToBuffer (portable_samplepair_t *buffer, channel_t *ch, sfxcache_t *sc, int count, int paintbufferstart);
 static void SND_PaintChannelFrom16ToBuffer (portable_samplepair_t *buffer, channel_t *ch, sfxcache_t *sc, int count, int paintbufferstart);
 static void SND_AddSourceBuffer (const portable_samplepair_t *buffer, int count, int paintbufferstart);
+static void SND_BuildQuantumSourceSpatial (channel_t *ch, snd_quantum_source_spatial_t *spatial);
+
+static void SND_BuildQuantumSourceSpatial (channel_t *ch, snd_quantum_source_spatial_t *spatial)
+{
+	vec3_t	source_vec;
+	vec_t	distance;
+
+	if (!spatial)
+		return;
+	memset(spatial, 0, sizeof(*spatial));
+	if (!ch)
+		return;
+
+	spatial->valid = true;
+	spatial->view_entity = (ch->entnum == cl.viewentity);
+	VectorCopy(ch->origin, spatial->source_origin);
+	VectorCopy(listener_origin, spatial->listener_origin);
+	VectorCopy(listener_forward, spatial->listener_forward);
+	VectorCopy(listener_right, spatial->listener_right);
+	spatial->dist_mult = ch->dist_mult;
+	spatial->master_vol = ch->master_vol;
+	spatial->leftvol = ch->leftvol;
+	spatial->rightvol = ch->rightvol;
+	spatial->output_channels = shm ? shm->channels : 0;
+
+	if (spatial->view_entity)
+	{
+		spatial->distance_attenuation = 1.0f;
+		return;
+	}
+
+	VectorSubtract(ch->origin, listener_origin, source_vec);
+	distance = VectorNormalize(source_vec);
+	spatial->distance = distance;
+	spatial->distance_attenuation = 1.0f - distance * ch->dist_mult;
+	if (spatial->distance_attenuation < 0.0f)
+		spatial->distance_attenuation = 0.0f;
+	else if (spatial->distance_attenuation > 1.0f)
+		spatial->distance_attenuation = 1.0f;
+	if (spatial->output_channels != 1)
+		spatial->pan_dot = DotProduct(listener_right, source_vec);
+}
 
 void S_PaintChannels (int endtime)
 {
@@ -531,6 +573,7 @@ void S_PaintChannels (int endtime)
 	qboolean	quantum_source_mode;
 	channel_t	*ch;
 	sfxcache_t	*sc;
+	snd_quantum_source_spatial_t qge_spatial;
 
 	snd_vol = sfxvolume.value * 256;
 
@@ -560,7 +603,11 @@ void S_PaintChannels (int endtime)
 			if (!sc)
 				continue;
 			if (quantum_source_mode)
-				S_QuantumSourceNote(ch->entnum, ch->entchannel, ch->sfx->name);
+			{
+				SND_BuildQuantumSourceSpatial(ch, &qge_spatial);
+				S_QuantumSourceNote(ch->entnum, ch->entchannel,
+									ch->sfx->name, &qge_spatial);
+			}
 
 			ltime = paintedtime;
 
@@ -584,7 +631,8 @@ void S_PaintChannels (int endtime)
 							SND_PaintChannelFrom16ToBuffer(qge_sourcebuffer, ch, sc, count, 0);
 						S_QuantumProcessSource(qge_sourcebuffer, count,
 											   ch->entnum, ch->entchannel,
-											   ch->sfx ? ch->sfx->name : NULL);
+											   ch->sfx ? ch->sfx->name : NULL,
+											   &qge_spatial);
 						SND_AddSourceBuffer(qge_sourcebuffer, count,
 											ltime - paintedtime);
 					}

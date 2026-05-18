@@ -88,6 +88,19 @@ static int shadow_overflow_count = 0;
 static float shadow_visibility_threshold = 0.0f;
 static bool shadow_active = false;
 
+#define VIS_AUTHORITY_CLEAN_FRAMES_REQUIRED 8
+
+static int shadow_gate_surface_count = 0;
+static int shadow_frames_observed = 0;
+static int shadow_consecutive_clean_frames = 0;
+static int shadow_cumulative_mismatch_count = 0;
+static int shadow_cumulative_false_negative_count = 0;
+static bool shadow_authority_ready = false;
+static qge_vis_gate_reason_t shadow_authority_reason =
+    QGE_VIS_GATE_REASON_SHADOW_UNAVAILABLE;
+static qge_vis_gate_reason_t shadow_fallback_reason =
+    QGE_VIS_GATE_REASON_SHADOW_UNAVAILABLE;
+
 /* ============================================================================
  * Entropy Callback
  * ============================================================================ */
@@ -203,6 +216,42 @@ static uint64_t vis_hash_step(uint64_t hash, uint64_t value) {
     hash ^= value;
     hash *= 1099511628211ULL;
     return hash;
+}
+
+const char* qge_vis_gate_reason_name(qge_vis_gate_reason_t reason) {
+    switch (reason) {
+        case QGE_VIS_GATE_REASON_NONE:
+            return "none";
+        case QGE_VIS_GATE_REASON_AUTHORITY_NOT_REQUESTED:
+            return "authority_not_requested";
+        case QGE_VIS_GATE_REASON_AUTHORITY_READY:
+            return "authority_ready";
+        case QGE_VIS_GATE_REASON_WARMUP_PENDING:
+            return "warmup_pending";
+        case QGE_VIS_GATE_REASON_FALSE_NEGATIVE:
+            return "false_negative_fallback";
+        case QGE_VIS_GATE_REASON_PARITY_MISMATCH:
+            return "parity_mismatch_fallback";
+        case QGE_VIS_GATE_REASON_SHADOW_OVERFLOW:
+            return "shadow_overflow_fallback";
+        case QGE_VIS_GATE_REASON_SURFACE_COUNT_CHANGED:
+            return "surface_count_changed_warmup";
+        case QGE_VIS_GATE_REASON_SHADOW_UNAVAILABLE:
+            return "shadow_unavailable_fallback";
+        default:
+            return "unknown";
+    }
+}
+
+static void vis_shadow_reset_authority_gate(int surface_count) {
+    shadow_gate_surface_count = surface_count;
+    shadow_frames_observed = 0;
+    shadow_consecutive_clean_frames = 0;
+    shadow_cumulative_mismatch_count = 0;
+    shadow_cumulative_false_negative_count = 0;
+    shadow_authority_ready = false;
+    shadow_authority_reason = QGE_VIS_GATE_REASON_WARMUP_PENDING;
+    shadow_fallback_reason = QGE_VIS_GATE_REASON_WARMUP_PENDING;
 }
 
 /**
@@ -817,6 +866,8 @@ bool qge_vis_shadow_finish(qge_vis_shadow_stats_t* stats) {
     uint64_t qge_hash = hash_basis;
     uint64_t mismatch_hash = hash_basis;
     float threshold;
+    bool surface_count_changed;
+    int mismatch_count;
 
     if (!stats) {
         return false;
@@ -899,6 +950,60 @@ bool qge_vis_shadow_finish(qge_vis_shadow_stats_t* stats) {
     stats->qge_fingerprint = qge_hash;
     stats->mismatch_fingerprint = mismatch_hash;
     stats->threshold = threshold;
+    stats->mismatch_count =
+        stats->false_positive_count + stats->false_negative_count;
+
+    surface_count_changed = shadow_gate_surface_count != 0 &&
+                            shadow_gate_surface_count != shadow_surface_count;
+    if (shadow_gate_surface_count != shadow_surface_count) {
+        vis_shadow_reset_authority_gate(shadow_surface_count);
+    }
+
+    mismatch_count = stats->mismatch_count + stats->overflow_count;
+    shadow_frames_observed++;
+    shadow_cumulative_mismatch_count += mismatch_count;
+    shadow_cumulative_false_negative_count += stats->false_negative_count;
+
+    if (mismatch_count == 0) {
+        shadow_consecutive_clean_frames++;
+    } else {
+        shadow_consecutive_clean_frames = 0;
+    }
+
+    shadow_authority_ready =
+        shadow_consecutive_clean_frames >= VIS_AUTHORITY_CLEAN_FRAMES_REQUIRED;
+
+    if (stats->overflow_count > 0) {
+        shadow_fallback_reason = QGE_VIS_GATE_REASON_SHADOW_OVERFLOW;
+    } else if (stats->false_negative_count > 0) {
+        shadow_fallback_reason = QGE_VIS_GATE_REASON_FALSE_NEGATIVE;
+    } else if (stats->false_positive_count > 0) {
+        shadow_fallback_reason = QGE_VIS_GATE_REASON_PARITY_MISMATCH;
+    } else if (surface_count_changed && !shadow_authority_ready) {
+        shadow_fallback_reason = QGE_VIS_GATE_REASON_SURFACE_COUNT_CHANGED;
+    } else if (!shadow_authority_ready) {
+        shadow_fallback_reason = QGE_VIS_GATE_REASON_WARMUP_PENDING;
+    } else {
+        shadow_fallback_reason = QGE_VIS_GATE_REASON_NONE;
+    }
+
+    if (shadow_fallback_reason == QGE_VIS_GATE_REASON_NONE) {
+        shadow_authority_reason = QGE_VIS_GATE_REASON_AUTHORITY_READY;
+    } else {
+        shadow_authority_reason = shadow_fallback_reason;
+    }
+
+    stats->frames_observed = shadow_frames_observed;
+    stats->consecutive_clean_frames = shadow_consecutive_clean_frames;
+    stats->clean_frames_required = VIS_AUTHORITY_CLEAN_FRAMES_REQUIRED;
+    stats->cumulative_mismatch_count = shadow_cumulative_mismatch_count;
+    stats->cumulative_false_negative_count =
+        shadow_cumulative_false_negative_count;
+    stats->authority_ready = shadow_authority_ready;
+    stats->fallback_required =
+        shadow_fallback_reason != QGE_VIS_GATE_REASON_NONE;
+    stats->authority_reason = shadow_authority_reason;
+    stats->fallback_reason = shadow_fallback_reason;
 
     shadow_active = false;
     return true;
@@ -944,5 +1049,13 @@ void qge_vis_shutdown(void) {
     shadow_overflow_count = 0;
     shadow_visibility_threshold = 0.0f;
     shadow_active = false;
+    shadow_gate_surface_count = 0;
+    shadow_frames_observed = 0;
+    shadow_consecutive_clean_frames = 0;
+    shadow_cumulative_mismatch_count = 0;
+    shadow_cumulative_false_negative_count = 0;
+    shadow_authority_ready = false;
+    shadow_authority_reason = QGE_VIS_GATE_REASON_SHADOW_UNAVAILABLE;
+    shadow_fallback_reason = QGE_VIS_GATE_REASON_SHADOW_UNAVAILABLE;
     vis_initialized = false;
 }

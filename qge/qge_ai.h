@@ -8,6 +8,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "qge_quantum_runtime.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -116,6 +117,12 @@ uint64_t qge_ai_decision_input_hash(const qge_ai_decision_input_t* input);
  */
 ai_action_t qge_ai_decide_traced(const qge_ai_decision_input_t* input,
                                  qge_ai_decision_trace_t* trace);
+
+/**
+ * Route traced AI decisions through a shared runtime. When unset, the AI system
+ * uses the process-global QGE context if one exists.
+ */
+void qge_ai_set_runtime(qge_quantum_runtime_t* runtime);
 
 /**
  * Make a quantum AI decision for an enemy.

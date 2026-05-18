@@ -392,6 +392,18 @@ float qge_dwt_get_sparsity(dwt_framebuffer_t* fb);
  * Quantum Visibility (qge_vis.h)
  * ============================================================================ */
 
+typedef enum {
+    QGE_VIS_GATE_REASON_NONE = 0,
+    QGE_VIS_GATE_REASON_AUTHORITY_NOT_REQUESTED,
+    QGE_VIS_GATE_REASON_AUTHORITY_READY,
+    QGE_VIS_GATE_REASON_WARMUP_PENDING,
+    QGE_VIS_GATE_REASON_FALSE_NEGATIVE,
+    QGE_VIS_GATE_REASON_PARITY_MISMATCH,
+    QGE_VIS_GATE_REASON_SHADOW_OVERFLOW,
+    QGE_VIS_GATE_REASON_SURFACE_COUNT_CHANGED,
+    QGE_VIS_GATE_REASON_SHADOW_UNAVAILABLE
+} qge_vis_gate_reason_t;
+
 typedef struct {
     int total_surfaces;
     int classic_visible_count;
@@ -409,7 +421,19 @@ typedef struct {
     float threshold;
     float qge_probability_sum;
     float qge_probability_max;
+    int mismatch_count;
+    int frames_observed;
+    int consecutive_clean_frames;
+    int clean_frames_required;
+    int cumulative_mismatch_count;
+    int cumulative_false_negative_count;
+    bool authority_ready;
+    bool fallback_required;
+    qge_vis_gate_reason_t authority_reason;
+    qge_vis_gate_reason_t fallback_reason;
 } qge_vis_shadow_stats_t;
+
+const char* qge_vis_gate_reason_name(qge_vis_gate_reason_t reason);
 
 /**
  * Set up viewpoint for visibility queries.
@@ -637,6 +661,66 @@ void qge_transducer_free(qge_transducer_t* trans);
 /* ============================================================================
  * Quantum Physics (qge_physics.h)
  * ============================================================================ */
+
+#define QGE_PROJECTILE_AUTHORITY_DEFAULT_WARMUP_FRAMES 4
+#define QGE_PROJECTILE_AUTHORITY_DEFAULT_MIN_SHADOW_SAMPLES 3
+#define QGE_PROJECTILE_AUTHORITY_DEFAULT_AVG_SHADOW_ERROR_MAX 1.0f
+#define QGE_PROJECTILE_AUTHORITY_DEFAULT_MAX_SHADOW_ERROR_MAX 4.0f
+
+typedef enum {
+    QGE_PROJECTILE_AUTHORITY_OFF_NONE = 0,
+    QGE_PROJECTILE_AUTHORITY_OFF_DISABLED,
+    QGE_PROJECTILE_AUTHORITY_OFF_NO_PROJECTILES,
+    QGE_PROJECTILE_AUTHORITY_OFF_WARMUP,
+    QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_MAX,
+    QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_AVG
+} qge_projectile_authority_off_reason_t;
+
+typedef struct {
+    int warmup_frames_required;
+    int min_shadow_samples;
+    float avg_shadow_error_max;
+    float max_shadow_error_max;
+} qge_projectile_authority_gate_t;
+
+typedef struct {
+    bool requested;
+    int active_projectiles;
+    int frame_projectiles;
+    int warmup_frames;
+    int shadow_samples;
+    float avg_shadow_error;
+    float max_shadow_error;
+} qge_projectile_authority_telemetry_t;
+
+typedef struct {
+    bool ready;
+    qge_projectile_authority_off_reason_t off_reason;
+    int warmup_frames_remaining;
+    int shadow_samples_remaining;
+    float avg_shadow_error_margin;
+    float max_shadow_error_margin;
+} qge_projectile_authority_state_t;
+
+/**
+ * Default conservative projectile authority gate. This only reports readiness;
+ * callers must still decide whether to apply any authority.
+ */
+qge_projectile_authority_gate_t qge_projectile_authority_default_gate(void);
+
+/**
+ * Evaluate projectile authority readiness from mirrored classic shadow
+ * telemetry. This does not mutate game/entity state.
+ */
+qge_projectile_authority_state_t qge_projectile_authority_evaluate(
+    const qge_projectile_authority_gate_t* gate,
+    const qge_projectile_authority_telemetry_t* telemetry);
+
+/**
+ * Stable string for a projectile authority-off reason.
+ */
+const char* qge_projectile_authority_off_reason_name(
+    qge_projectile_authority_off_reason_t reason);
 
 typedef struct qge_particle_system_s qge_particle_system_t;
 

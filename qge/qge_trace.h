@@ -22,7 +22,8 @@ typedef enum {
     QGE_TRACE_RECORD_MEASUREMENT,
     QGE_TRACE_RECORD_STATE_PROBE,
     QGE_TRACE_RECORD_FALLBACK,
-    QGE_TRACE_RECORD_ENTANGLEMENT
+    QGE_TRACE_RECORD_ENTANGLEMENT,
+    QGE_TRACE_RECORD_AI_DECISION
 } qge_trace_record_kind_t;
 
 typedef struct {
@@ -73,6 +74,8 @@ int qge_trace_write_fallback(qge_trace_writer_t *writer,
                              const qge_fallback_event_t *event);
 int qge_trace_write_entanglement(qge_trace_writer_t *writer,
                                  const qge_entanglement_edge_t *edge);
+int qge_trace_write_ai_decision(qge_trace_writer_t *writer,
+                                const qge_ai_decision_event_t *event);
 
 qge_trace_reader_t *qge_trace_reader_open(const char *path);
 void qge_trace_reader_close(qge_trace_reader_t *reader);

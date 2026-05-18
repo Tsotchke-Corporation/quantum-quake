@@ -26,6 +26,7 @@ RECORD_NAMES = {
     5: "state_probe",
     6: "fallback",
     7: "entanglement",
+    8: "ai_decision",
 }
 
 DOMAIN_NAMES = {
@@ -63,11 +64,22 @@ REP_NAMES = {
     11: "hybrid",
 }
 
+AI_ACTION_NAMES = {
+    0: "idle",
+    1: "patrol",
+    2: "chase",
+    3: "attack",
+    4: "flee",
+    5: "pain",
+    6: "dead",
+}
+
 HEADER = struct.Struct("<IHHIIQQQQ")
 RECORD = struct.Struct("<HHIQ")
 ENTROPY = struct.Struct("<iiIIiIQQ")
 STATE_PROBE = struct.Struct("<iiIIiIQddddiiQ32s")
 FALLBACK = struct.Struct("<iiIIiid96s")
+AI_DECISION = struct.Struct("<iiiiiIIIQQQQiiddddd")
 
 
 def clean_label(raw: bytes) -> str:
@@ -93,6 +105,7 @@ def parse_trace(path: str) -> dict:
     probe_groups: dict[tuple[str, str, str], dict] = {}
     entropy_groups: dict[tuple[str, str], dict] = {}
     fallback_groups: dict[tuple[str, int, str], dict] = {}
+    ai_decision_groups: dict[tuple[int, str], dict] = {}
     replay_health = {
         "entropy_replay_events": 0,
         "replay_metadata_mismatches": 0,
@@ -190,6 +203,61 @@ def parse_trace(path: str) -> dict:
                     replay_health["replay_exhaustions"] += 1
                 continue
 
+            if kind == 8 and payload_size == AI_DECISION.size:
+                unpacked = AI_DECISION.unpack(payload)
+                frame, _server_time, enemy_id, enemy_type, target_entnum = unpacked[:5]
+                input_flags, output_flags, legal_action_mask = unpacked[5:8]
+                input_hash, raw_basis, action_basis, entropy_offset = unpacked[8:12]
+                mapped_action, action = unpacked[12:14]
+                selected_probability, action_probability, max_probability, total_probability, confidence = unpacked[14:19]
+                action_name = AI_ACTION_NAMES.get(action, f"action_{action}")
+                mapped_action_name = AI_ACTION_NAMES.get(mapped_action, f"action_{mapped_action}")
+                group = increment_group(
+                    ai_decision_groups,
+                    (enemy_id, action_name),
+                    {
+                        "enemy_id": enemy_id,
+                        "enemy_type": enemy_type,
+                        "target_entnum": target_entnum,
+                        "action": action_name,
+                        "action_code": action,
+                        "mapped_action": mapped_action_name,
+                        "mapped_action_code": mapped_action,
+                        "legal_action_mask_or": 0,
+                        "input_flags_or": 0,
+                        "output_flags_or": 0,
+                        "input_hash_xor": 0,
+                        "raw_basis_xor": 0,
+                        "action_basis_xor": 0,
+                        "first_entropy_offset": entropy_offset,
+                        "last_entropy_offset": entropy_offset,
+                        "selected_probability_max": selected_probability,
+                        "action_probability_max": action_probability,
+                        "max_probability_max": max_probability,
+                        "total_probability_max": total_probability,
+                        "confidence_max": confidence,
+                    },
+                    frame,
+                )
+                group["enemy_type"] = enemy_type
+                group["target_entnum"] = target_entnum
+                group["mapped_action"] = mapped_action_name
+                group["mapped_action_code"] = mapped_action
+                group["legal_action_mask_or"] |= legal_action_mask
+                group["input_flags_or"] |= input_flags
+                group["output_flags_or"] |= output_flags
+                group["input_hash_xor"] ^= input_hash
+                group["raw_basis_xor"] ^= raw_basis
+                group["action_basis_xor"] ^= action_basis
+                group["first_entropy_offset"] = min(group["first_entropy_offset"], entropy_offset)
+                group["last_entropy_offset"] = max(group["last_entropy_offset"], entropy_offset)
+                group["selected_probability_max"] = max(group["selected_probability_max"], selected_probability)
+                group["action_probability_max"] = max(group["action_probability_max"], action_probability)
+                group["max_probability_max"] = max(group["max_probability_max"], max_probability)
+                group["total_probability_max"] = max(group["total_probability_max"], total_probability)
+                group["confidence_max"] = max(group["confidence_max"], confidence)
+                continue
+
             if kind != 5 or payload_size != STATE_PROBE.size:
                 continue
 
@@ -258,6 +326,7 @@ def parse_trace(path: str) -> dict:
         "sequence_errors": sequence_errors,
         "entropy_events": sorted(entropy_groups.values(), key=lambda item: (item["domain"], item["source"])),
         "fallback_events": sorted(fallback_groups.values(), key=lambda item: (item["domain"], item["reason_code"], item["message"])),
+        "ai_decisions": sorted(ai_decision_groups.values(), key=lambda item: (item["enemy_id"], item["action"])),
         "replay_health": replay_health,
         "state_probes": sorted(probe_groups.values(), key=lambda item: (item["domain"], item["label"])),
     }
@@ -286,6 +355,21 @@ def print_text(summary: dict) -> None:
             f"reason={fallback['reason_code']} count={fallback['count']} "
             f"frames={fallback['first_frame']}..{fallback['last_frame']} "
             f"subject={fallback['last_subject_id']} message={fallback['message']}"
+        )
+    for decision in summary["ai_decisions"]:
+        print(
+            "AI decision "
+            f"enemy={decision['enemy_id']} type={decision['enemy_type']} "
+            f"target={decision['target_entnum']} action={decision['action']} "
+            f"mapped={decision['mapped_action']} count={decision['count']} "
+            f"frames={decision['first_frame']}..{decision['last_frame']} "
+            f"legal_mask=0x{decision['legal_action_mask_or']:x} "
+            f"input_flags=0x{decision['input_flags_or']:x} "
+            f"output_flags=0x{decision['output_flags_or']:x} "
+            f"basis_xor=0x{decision['action_basis_xor']:x} "
+            f"offsets={decision['first_entropy_offset']}..{decision['last_entropy_offset']} "
+            f"prob={decision['action_probability_max']:.3f} "
+            f"confidence={decision['confidence_max']:.3f}"
         )
     for probe in summary["state_probes"]:
         extra = f" subject={probe['last_subject_id']}"

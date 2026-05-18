@@ -104,6 +104,22 @@ static qboolean qge_render_collect_frame = true;
 static qboolean qge_vis_shadow_active = false;
 static const qmodel_t *qge_vis_shadow_model = NULL;
 static int qge_vis_shadow_registered_surfaces = 0;
+static int qge_vis_authority_requested = 0;
+static int qge_vis_authority_selected = 0;
+static int qge_vis_fallback_selected = 1;
+static const char *qge_vis_authority_reason = "not_evaluated";
+static const char *qge_vis_fallback_reason = "not_evaluated";
+
+#define QGE_VIS_TRACE_FLAG_REGISTERED          0x0001u
+#define QGE_VIS_TRACE_FLAG_MISMATCH            0x0002u
+#define QGE_VIS_TRACE_FLAG_FALSE_POSITIVE      0x0004u
+#define QGE_VIS_TRACE_FLAG_FALSE_NEGATIVE      0x0008u
+#define QGE_VIS_TRACE_FLAG_OVERFLOW            0x0010u
+#define QGE_VIS_TRACE_FLAG_AUTHORITY_REQUESTED 0x0020u
+#define QGE_VIS_TRACE_FLAG_AUTHORITY_READY     0x0040u
+#define QGE_VIS_TRACE_FLAG_AUTHORITY_SELECTED  0x0080u
+#define QGE_VIS_TRACE_FLAG_FALLBACK_SELECTED   0x0100u
+#define QGE_VIS_TRACE_FLAG_WARMUP_PENDING      0x0200u
 
 #define QGE_CLASSIC_2D_VISIBLE 1
 
@@ -323,8 +339,20 @@ static int qge_phys_mirrored_water = 0;
 static int qge_phys_mirrored_impacts = 0;
 static float qge_phys_avg_shadow_error = 0.0f;
 static float qge_phys_max_shadow_error = 0.0f;
+static int qge_phys_projectile_shadow_samples = 0;
+static float qge_phys_projectile_avg_shadow_error = 0.0f;
+static float qge_phys_projectile_max_shadow_error = 0.0f;
+static int qge_phys_projectile_authority_warmup_frames = 0;
+static int qge_phys_projectile_authority_ready_frames = 0;
+static int qge_phys_projectile_authority_off_frames = 0;
+static qboolean qge_phys_projectile_authority_ready = false;
+static qge_projectile_authority_off_reason_t qge_phys_projectile_authority_off_reason =
+	QGE_PROJECTILE_AUTHORITY_OFF_DISABLED;
+static qge_projectile_authority_state_t qge_phys_projectile_authority_state;
 
 static void QGE_PhysicsRefreshStats(void);
+static void QGE_PhysicsUpdateProjectileAuthorityGate(void);
+static void QGE_TraceProjectileAuthorityGate(qge_quantum_runtime_t *rt);
 static unsigned int QGE_SurfaceLightSignal(const msurface_t *surf,
 										   float *energy,
 										   float *contrast);
@@ -2542,6 +2570,7 @@ void QGE_FrameEnd(void)
 	qge_avg_frame_ms = qge_avg_frame_ms * 0.95 + elapsed * 0.05;
 	QGE_RegisterWorldIfNeeded();
 	QGE_PhysicsRefreshStats();
+	QGE_PhysicsUpdateProjectileAuthorityGate();
 	QGE_FrameSnapshotFinalize();
 	qge_quantum_runtime_t *rt = QGE_Runtime();
 	if (rt) {
@@ -2560,6 +2589,8 @@ void QGE_FrameEnd(void)
 		probe.total_probability = qge_phys_avg_shadow_error;
 		strlcpy(probe.label, "physics_shadow", sizeof(probe.label));
 		qge_quantum_record_probe(rt, &probe);
+
+		QGE_TraceProjectileAuthorityGate(rt);
 
 		memset(&stats, 0, sizeof(stats));
 		qge_quantum_runtime_get_stats(rt, &stats);
@@ -2585,6 +2616,8 @@ void QGE_FrameEnd(void)
 				"tracked=%d active_projectiles=%d purged=%d "
 				"mirrored_bounds=%d mirrored_owner=%d mirrored_water=%d mirrored_impacts=%d "
 				"shadow_avg=%.2f shadow_max=%.2f "
+				"projectile_authority=%s reason=%s warmup=%d samples=%d "
+				"pshadow_avg=%.2f pshadow_max=%.2f ready_frames=%d off_frames=%d "
 				"qparticle_spawns=%d active_qparticles=%d frame_ms=%.2f\n",
 				qge_frame_count, qge_phys_toss_count, qge_phys_projectile_count,
 				qge_phys_impact_count, qge_phys_active_objects,
@@ -2592,6 +2625,15 @@ void QGE_FrameEnd(void)
 				qge_phys_mirrored_bounds, qge_phys_mirrored_owner,
 				qge_phys_mirrored_water, qge_phys_mirrored_impacts,
 				qge_phys_avg_shadow_error, qge_phys_max_shadow_error,
+				qge_phys_projectile_authority_ready ? "ready" : "off",
+				qge_projectile_authority_off_reason_name(
+					qge_phys_projectile_authority_off_reason),
+				qge_phys_projectile_authority_warmup_frames,
+				qge_phys_projectile_shadow_samples,
+				qge_phys_projectile_avg_shadow_error,
+				qge_phys_projectile_max_shadow_error,
+				qge_phys_projectile_authority_ready_frames,
+				qge_phys_projectile_authority_off_frames,
 				qge_phys_particle_spawns,
 				active_particles, elapsed);
 	}
@@ -7051,6 +7093,12 @@ void QGE_RenderSetOwnershipTelemetry(int classic_3d_passes,
  * Quantum Visibility
  * ============================================================================ */
 
+static qboolean QGE_VisAuthorityRequested(void)
+{
+	/* Mode 2 is the documented authority request; mode 1 stays shadow-only. */
+	return qge_initialized && quantum_vis.value >= 1.5f;
+}
+
 qboolean QGE_VisShadowBegin(qmodel_t *model)
 {
 	int i;
@@ -7058,6 +7106,12 @@ qboolean QGE_VisShadowBegin(qmodel_t *model)
 	qge_vis_shadow_active = false;
 	qge_vis_shadow_model = NULL;
 	qge_vis_shadow_registered_surfaces = 0;
+	qge_vis_authority_requested = QGE_VisAuthorityRequested() ? 1 : 0;
+	qge_vis_authority_selected = 0;
+	qge_vis_fallback_selected = 1;
+	qge_vis_authority_reason = qge_vis_authority_requested ?
+		"shadow_unavailable_fallback" : "authority_not_requested";
+	qge_vis_fallback_reason = qge_vis_authority_reason;
 
 	if (!qge_initialized || quantum_vis.value < 0.5f ||
 		!model || !model->surfaces || model->numsurfaces <= 0)
@@ -7112,20 +7166,54 @@ static void QGE_TraceVisShadowParity(const qge_vis_shadow_stats_t *stats)
 
 	mismatch_count = stats->false_positive_count + stats->false_negative_count;
 	if (qge_vis_shadow_registered_surfaces > 0)
-		flags |= 0x1u;
+		flags |= QGE_VIS_TRACE_FLAG_REGISTERED;
 	if (mismatch_count > 0)
-		flags |= 0x2u;
+		flags |= QGE_VIS_TRACE_FLAG_MISMATCH;
 	if (stats->false_positive_count > 0)
-		flags |= 0x4u;
+		flags |= QGE_VIS_TRACE_FLAG_FALSE_POSITIVE;
 	if (stats->false_negative_count > 0)
-		flags |= 0x8u;
+		flags |= QGE_VIS_TRACE_FLAG_FALSE_NEGATIVE;
 	if (stats->overflow_count > 0)
-		flags |= 0x10u;
+		flags |= QGE_VIS_TRACE_FLAG_OVERFLOW;
+
+	qge_vis_authority_requested = QGE_VisAuthorityRequested() ? 1 : 0;
+	qge_vis_authority_selected =
+		qge_vis_authority_requested && stats->authority_ready &&
+		!stats->fallback_required;
+	qge_vis_fallback_selected = !qge_vis_authority_selected;
+
+	if (!qge_vis_authority_requested) {
+		qge_vis_authority_reason =
+			qge_vis_gate_reason_name(QGE_VIS_GATE_REASON_AUTHORITY_NOT_REQUESTED);
+		qge_vis_fallback_reason = qge_vis_authority_reason;
+	} else {
+		qge_vis_authority_reason =
+			qge_vis_gate_reason_name(stats->authority_reason);
+		qge_vis_fallback_reason = qge_vis_authority_selected ?
+			qge_vis_gate_reason_name(QGE_VIS_GATE_REASON_NONE) :
+			qge_vis_gate_reason_name(stats->fallback_reason);
+	}
+
+	if (qge_vis_authority_requested)
+		flags |= QGE_VIS_TRACE_FLAG_AUTHORITY_REQUESTED;
+	if (stats->authority_ready)
+		flags |= QGE_VIS_TRACE_FLAG_AUTHORITY_READY;
+	if (qge_vis_authority_selected)
+		flags |= QGE_VIS_TRACE_FLAG_AUTHORITY_SELECTED;
+	if (qge_vis_fallback_selected)
+		flags |= QGE_VIS_TRACE_FLAG_FALLBACK_SELECTED;
+	if (stats->fallback_reason == QGE_VIS_GATE_REASON_WARMUP_PENDING ||
+		stats->fallback_reason == QGE_VIS_GATE_REASON_SURFACE_COUNT_CHANGED)
+		flags |= QGE_VIS_TRACE_FLAG_WARMUP_PENDING;
 
 	hash = QGE_RegistryHashStep(stats->classic_fingerprint,
 								stats->qge_fingerprint);
 	hash = QGE_RegistryHashStep(hash, stats->mismatch_fingerprint);
 	hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)mismatch_count);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)stats->authority_reason);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)stats->fallback_reason);
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)stats->consecutive_clean_frames);
 
 	rt = QGE_Runtime();
 	if (rt) {
@@ -7153,7 +7241,28 @@ static void QGE_TraceVisShadowParity(const qge_vis_shadow_stats_t *stats)
 		strlcpy(probe.label, "vis_shadow_parity", sizeof(probe.label));
 		qge_quantum_record_probe(rt, &probe);
 
-		if (mismatch_count > 0) {
+		memset(&probe, 0, sizeof(probe));
+		probe.frame = qge_frame_count;
+		probe.server_time_msec = QGE_ServerTimeMsec();
+		probe.domain = QGE_DOMAIN_VISIBILITY;
+		probe.representation = QGE_REP_CLASSICAL_ORACLE;
+		probe.subject_id = qge_vis_authority_selected ? 1 : 0;
+		probe.flags = flags;
+		probe.state_hash = hash ^
+			((uint64_t)stats->cumulative_mismatch_count << 32);
+		probe.entropy = (double)stats->fallback_reason;
+		probe.coherence = stats->authority_ready ? 1.0 : 0.0;
+		probe.max_probability = stats->fallback_required ? 1.0 : 0.0;
+		probe.total_probability =
+			(double)stats->cumulative_false_negative_count;
+		probe.active_basis_count = stats->consecutive_clean_frames;
+		probe.qubit_count = stats->clean_frames_required;
+		probe.memory_bytes = (uint64_t)stats->cumulative_mismatch_count;
+		strlcpy(probe.label, "vis_authority_gate", sizeof(probe.label));
+		qge_quantum_record_probe(rt, &probe);
+
+		if (mismatch_count > 0 ||
+			(qge_vis_authority_requested && qge_vis_fallback_selected)) {
 			qge_fallback_event_t event;
 
 			memset(&event, 0, sizeof(event));
@@ -7164,12 +7273,18 @@ static void QGE_TraceVisShadowParity(const qge_vis_shadow_stats_t *stats)
 			event.subject_id = stats->total_surfaces;
 			event.reason_code =
 				(stats->false_positive_count > 0 ? 1 : 0) |
-				(stats->false_negative_count > 0 ? 2 : 0);
+				(stats->false_negative_count > 0 ? 2 : 0) |
+				((int)stats->fallback_reason << 8);
 			event.metric_value = (double)mismatch_count;
 			q_snprintf(event.message, sizeof(event.message),
-					   "fp=%d fn=%d c=%llx q=%llx m=%llx",
+					   "reason=%s authority=%s fp=%d fn=%d clean=%d/%d total_mismatch=%d c=%llx q=%llx m=%llx",
+					   qge_vis_fallback_reason,
+					   qge_vis_authority_reason,
 					   stats->false_positive_count,
 					   stats->false_negative_count,
+					   stats->consecutive_clean_frames,
+					   stats->clean_frames_required,
+					   stats->cumulative_mismatch_count,
 					   (unsigned long long)stats->classic_fingerprint,
 					   (unsigned long long)stats->qge_fingerprint,
 					   (unsigned long long)stats->mismatch_fingerprint);
@@ -7183,7 +7298,11 @@ static void QGE_TraceVisShadowParity(const qge_vis_shadow_stats_t *stats)
 				"match=%d hidden=%d fp=%d fn=%d overflow=%d "
 				"first_fp=%d first_fn=%d threshold=%.8f prob_sum=%.6f "
 				"prob_max=%.6f classic_fp=0x%llx qge_fp=0x%llx "
-				"mismatch_fp=0x%llx\n",
+				"mismatch_fp=0x%llx clean=%d/%d frames=%d "
+				"total_mismatch=%d total_fn=%d authority_ready=%d "
+				"authority_requested=%d authority_selected=%d "
+				"fallback_selected=%d authority_reason=%s "
+				"fallback_reason=%s\n",
 				qge_frame_count, stats->total_surfaces,
 				stats->classic_visible_count, stats->qge_visible_count,
 				stats->matched_visible_count, stats->matched_hidden_count,
@@ -7194,7 +7313,18 @@ static void QGE_TraceVisShadowParity(const qge_vis_shadow_stats_t *stats)
 				stats->qge_probability_max,
 				(unsigned long long)stats->classic_fingerprint,
 				(unsigned long long)stats->qge_fingerprint,
-				(unsigned long long)stats->mismatch_fingerprint);
+				(unsigned long long)stats->mismatch_fingerprint,
+				stats->consecutive_clean_frames,
+				stats->clean_frames_required,
+				stats->frames_observed,
+				stats->cumulative_mismatch_count,
+				stats->cumulative_false_negative_count,
+				stats->authority_ready ? 1 : 0,
+				qge_vis_authority_requested,
+				qge_vis_authority_selected,
+				qge_vis_fallback_selected,
+				qge_vis_authority_reason,
+				qge_vis_fallback_reason);
 	}
 }
 
@@ -7295,12 +7425,17 @@ static qge_phys_object_t *QGE_PhysicsFindObject(int entnum, qboolean allocate)
 static void QGE_PhysicsRefreshStats(void)
 {
 	float sum_error = 0.0f;
+	float projectile_sum_error = 0.0f;
 	int error_count = 0;
+	int projectile_error_count = 0;
 
 	qge_phys_active_objects = 0;
 	qge_phys_active_projectiles = 0;
 	qge_phys_avg_shadow_error = 0.0f;
 	qge_phys_max_shadow_error = 0.0f;
+	qge_phys_projectile_shadow_samples = 0;
+	qge_phys_projectile_avg_shadow_error = 0.0f;
+	qge_phys_projectile_max_shadow_error = 0.0f;
 
 	for (int i = 0; i < QGE_MAX_PHYS_OBJECTS; i++) {
 		qge_phys_object_t *obj = &qge_phys_objects[i];
@@ -7322,11 +7457,146 @@ static void QGE_PhysicsRefreshStats(void)
 			error_count++;
 			if (obj->shadow_error > qge_phys_max_shadow_error)
 				qge_phys_max_shadow_error = obj->shadow_error;
+
+			if (obj->movetype == MOVETYPE_FLYMISSILE) {
+				projectile_sum_error += obj->shadow_error;
+				projectile_error_count++;
+				qge_phys_projectile_shadow_samples += obj->seen_count - 1;
+				if (obj->max_shadow_error > qge_phys_projectile_max_shadow_error)
+					qge_phys_projectile_max_shadow_error = obj->max_shadow_error;
+			}
 		}
 	}
 
 	if (error_count > 0)
 		qge_phys_avg_shadow_error = sum_error / (float)error_count;
+	if (projectile_error_count > 0)
+		qge_phys_projectile_avg_shadow_error =
+			projectile_sum_error / (float)projectile_error_count;
+}
+
+static void QGE_PhysicsUpdateProjectileAuthorityGate(void)
+{
+	qge_projectile_authority_telemetry_t telemetry;
+
+	if (quantum_physics.value >= 0.5f && quantum_projectiles.value >= 0.5f &&
+		(qge_phys_active_projectiles > 0 || qge_phys_projectile_count > 0)) {
+		qge_phys_projectile_authority_warmup_frames++;
+	} else {
+		qge_phys_projectile_authority_warmup_frames = 0;
+	}
+
+	memset(&telemetry, 0, sizeof(telemetry));
+	telemetry.requested =
+		quantum_physics.value >= 0.5f && quantum_projectiles.value >= 0.5f;
+	telemetry.active_projectiles = qge_phys_active_projectiles;
+	telemetry.frame_projectiles = qge_phys_projectile_count;
+	telemetry.warmup_frames = qge_phys_projectile_authority_warmup_frames;
+	telemetry.shadow_samples = qge_phys_projectile_shadow_samples;
+	telemetry.avg_shadow_error = qge_phys_projectile_avg_shadow_error;
+	telemetry.max_shadow_error = qge_phys_projectile_max_shadow_error;
+
+	qge_phys_projectile_authority_state =
+		qge_projectile_authority_evaluate(NULL, &telemetry);
+	qge_phys_projectile_authority_ready =
+		qge_phys_projectile_authority_state.ready ? true : false;
+	qge_phys_projectile_authority_off_reason =
+		qge_phys_projectile_authority_state.off_reason;
+
+	if (qge_phys_projectile_authority_ready)
+		qge_phys_projectile_authority_ready_frames++;
+	else if (telemetry.requested &&
+			 (telemetry.active_projectiles > 0 ||
+			  telemetry.frame_projectiles > 0))
+		qge_phys_projectile_authority_off_frames++;
+}
+
+static uint32_t QGE_PhysicsProjectileAuthorityFlags(void)
+{
+	uint32_t flags = (uint32_t)qge_phys_projectile_authority_off_reason & 0xffu;
+
+	if (qge_phys_projectile_authority_ready)
+		flags |= 0x100u;
+	if (quantum_physics.value >= 0.5f)
+		flags |= 0x200u;
+	if (quantum_projectiles.value >= 0.5f)
+		flags |= 0x400u;
+	if (qge_phys_projectile_shadow_samples >=
+		QGE_PROJECTILE_AUTHORITY_DEFAULT_MIN_SHADOW_SAMPLES)
+		flags |= 0x800u;
+	return flags;
+}
+
+static void QGE_TraceProjectileAuthorityGate(qge_quantum_runtime_t *rt)
+{
+	qge_state_probe_t probe;
+	qge_fallback_event_t fallback;
+	uint64_t hash;
+	float warmup_ratio;
+	qge_projectile_authority_gate_t gate;
+
+	if (!rt)
+		return;
+
+	gate = qge_projectile_authority_default_gate();
+	warmup_ratio = gate.warmup_frames_required > 0 ?
+		(float)qge_phys_projectile_authority_warmup_frames /
+		(float)gate.warmup_frames_required : 1.0f;
+	warmup_ratio = QGE_ClampUnit(warmup_ratio);
+
+	hash = QGE_RegistryHashStep((uint64_t)qge_frame_count,
+								(uint64_t)qge_phys_projectile_count);
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)qge_phys_active_projectiles);
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)qge_phys_projectile_shadow_samples);
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)qge_phys_projectile_authority_off_reason);
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)(qge_phys_projectile_max_shadow_error *
+										   1000.0f));
+
+	memset(&probe, 0, sizeof(probe));
+	probe.frame = qge_frame_count;
+	probe.server_time_msec = QGE_ServerTimeMsec();
+	probe.domain = QGE_DOMAIN_PROJECTILE;
+	probe.representation = QGE_REP_CLASSICAL_ORACLE;
+	probe.subject_id = qge_phys_active_projectiles;
+	probe.flags = QGE_PhysicsProjectileAuthorityFlags();
+	probe.state_hash = hash;
+	probe.entropy = qge_phys_projectile_authority_ready ? 1.0 : 0.0;
+	probe.coherence = warmup_ratio;
+	probe.max_probability = qge_phys_projectile_max_shadow_error;
+	probe.total_probability = qge_phys_projectile_avg_shadow_error;
+	probe.active_basis_count = qge_phys_projectile_shadow_samples;
+	probe.qubit_count = qge_quantum_qubits_for_basis_count(
+		(uint64_t)qge_phys_projectile_shadow_samples);
+	probe.memory_bytes = (uint64_t)qge_phys_active_projectiles *
+						 (uint64_t)sizeof(qge_phys_object_t);
+	strlcpy(probe.label, "projectile_authority_gate", sizeof(probe.label));
+	qge_quantum_record_probe(rt, &probe);
+
+	if (qge_phys_projectile_authority_ready ||
+		qge_phys_projectile_authority_off_reason ==
+			QGE_PROJECTILE_AUTHORITY_OFF_NO_PROJECTILES)
+		return;
+
+	memset(&fallback, 0, sizeof(fallback));
+	fallback.frame = qge_frame_count;
+	fallback.server_time_msec = QGE_ServerTimeMsec();
+	fallback.domain = QGE_DOMAIN_PROJECTILE;
+	fallback.representation = QGE_REP_CLASSICAL_ORACLE;
+	fallback.subject_id = qge_phys_active_projectiles;
+	fallback.reason_code = (int32_t)qge_phys_projectile_authority_off_reason;
+	fallback.metric_value = qge_phys_projectile_authority_off_reason ==
+		QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_MAX ?
+		qge_phys_projectile_max_shadow_error :
+		qge_phys_projectile_avg_shadow_error;
+	strlcpy(fallback.message,
+			qge_projectile_authority_off_reason_name(
+				qge_phys_projectile_authority_off_reason),
+			sizeof(fallback.message));
+	qge_quantum_record_fallback(rt, &fallback);
 }
 
 static qge_vec3_t QGE_VecFromQuake(const vec3_t v)

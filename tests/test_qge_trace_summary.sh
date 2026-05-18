@@ -25,6 +25,7 @@ TRACE_VERSION = 1
 HEADER = struct.Struct("<IHHIIQQQQ")
 RECORD = struct.Struct("<HHIQ")
 STATE_PROBE = struct.Struct("<iiIIiIQddddiiQ32s")
+AI_DECISION = struct.Struct("<iiiiiIIIQQQQiiddddd")
 
 
 def label(name):
@@ -96,7 +97,32 @@ records = [
         3,
         state_probe(4, 140, 0, 11, 26, 0x2, 0x44, 0.45, 0.75, 0.5, 64.0, 64, 6, 512, "render_gate_kernel"),
     ),
-    (6, 4, b""),
+    (
+        8,
+        4,
+        AI_DECISION.pack(
+            5,
+            160,
+            17,
+            2,
+            1,
+            0x10,
+            0x9,
+            0x2,
+            0x1234,
+            0x5,
+            0x1,
+            7,
+            1,
+            1,
+            0.125,
+            0.5,
+            0.5,
+            1.0,
+            0.25,
+        ),
+    ),
+    (6, 5, b""),
 ]
 
 with trace_path.open("wb") as f:
@@ -122,8 +148,20 @@ summary = json.load(open(sys.argv[1], encoding="utf-8"))
 assert summary["header"]["version"] == 1
 assert summary["header"]["flags"] == 0x3
 assert summary["header"]["run_id"] == 0x5151455F52554E31
-assert summary["records"] == {"fallback": 1, "state_probe": 3}
+assert summary["records"] == {"ai_decision": 1, "fallback": 1, "state_probe": 3}
 assert summary["sequence_errors"] == 1
+
+decision = summary["ai_decisions"][0]
+assert decision["enemy_id"] == 17
+assert decision["enemy_type"] == 2
+assert decision["action"] == "patrol"
+assert decision["mapped_action"] == "patrol"
+assert decision["legal_action_mask_or"] == 0x2
+assert decision["input_flags_or"] == 0x10
+assert decision["output_flags_or"] == 0x9
+assert decision["action_basis_xor"] == 0x1
+assert decision["last_entropy_offset"] == 7
+assert decision["confidence_max"] == 0.25
 
 probes = {(probe["label"], probe["domain"], probe["representation"]): probe for probe in summary["state_probes"]}
 ai = probes[("ai_action", "ai", "dense_state")]
@@ -146,8 +184,9 @@ assert render["max_probability_max"] == 0.5
 assert render["last_subject_id"] == 26
 PY
 
-grep -F 'Records: {"fallback": 1, "state_probe": 3}' "$summary_text" >/dev/null
+grep -F 'Records: {"ai_decision": 1, "fallback": 1, "state_probe": 3}' "$summary_text" >/dev/null
 grep -F 'Sequence errors: 1' "$summary_text" >/dev/null
+grep -F 'AI decision enemy=17 type=2 target=1 action=patrol mapped=patrol count=1 frames=5..5 legal_mask=0x2 input_flags=0x10 output_flags=0x9 basis_xor=0x1 offsets=7..7 prob=0.500 confidence=0.250' "$summary_text" >/dev/null
 grep -F 'Probe ai_action domain=ai rep=dense_state count=2 frames=1..3 basis=4..8 qubits=3..3 max_mem=256 flags_or=0x5 subject=43' "$summary_text" >/dev/null
 grep -F 'Probe render_gate_kernel domain=render rep=hybrid count=1 frames=4..4 basis=64..64 qubits=6..6 max_mem=512 flags_or=0x2 gates=26 shots=64 coherence=0.750..0.750 max_prob=0.500' "$summary_text" >/dev/null
 

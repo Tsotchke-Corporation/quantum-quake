@@ -411,6 +411,27 @@ class TraceSummaryTests(unittest.TestCase):
                 0.0,    # metric value
                 fallback_message + b"\0" * (96 - len(fallback_message)),
             )
+            ai_payload = trace_summary.AI_DECISION.pack(
+                9,       # frame
+                156,     # server time msec
+                17,      # enemy id
+                2,       # enemy type
+                1,       # target entnum
+                0x10,    # input flags
+                0x9,     # output flags
+                0x2,     # legal action mask
+                0x1234,  # input hash
+                0x5,     # raw basis
+                0x1,     # action basis
+                4,       # entropy offset
+                1,       # mapped patrol
+                1,       # action patrol
+                0.125,   # selected probability
+                0.5,     # action probability
+                0.5,     # max probability
+                1.0,     # total probability
+                0.25,    # confidence
+            )
             trace_path.write_bytes(
                 trace_summary.HEADER.pack(
                     trace_summary.TRACE_MAGIC,
@@ -444,6 +465,13 @@ class TraceSummaryTests(unittest.TestCase):
                     2,
                 )
                 + fallback_payload
+                + trace_summary.RECORD.pack(
+                    8,
+                    trace_summary.TRACE_VERSION,
+                    len(ai_payload),
+                    3,
+                )
+                + ai_payload
             )
 
             parsed = trace_summary.parse_trace(str(trace_path))
@@ -451,6 +479,7 @@ class TraceSummaryTests(unittest.TestCase):
             self.assertEqual(parsed["records"]["entropy"], 1)
             self.assertEqual(parsed["records"]["state_probe"], 1)
             self.assertEqual(parsed["records"]["fallback"], 1)
+            self.assertEqual(parsed["records"]["ai_decision"], 1)
             self.assertEqual(parsed["sequence_errors"], 0)
             self.assertEqual(parsed["replay_health"]["entropy_replay_events"], 1)
             self.assertEqual(parsed["replay_health"]["replay_metadata_mismatches"], 1)
@@ -465,6 +494,17 @@ class TraceSummaryTests(unittest.TestCase):
                 fallback["message"],
                 "replay entropy metadata mismatch",
             )
+            decision = parsed["ai_decisions"][0]
+            self.assertEqual(decision["enemy_id"], 17)
+            self.assertEqual(decision["enemy_type"], 2)
+            self.assertEqual(decision["action"], "patrol")
+            self.assertEqual(decision["mapped_action"], "patrol")
+            self.assertEqual(decision["legal_action_mask_or"], 0x2)
+            self.assertEqual(decision["input_flags_or"], 0x10)
+            self.assertEqual(decision["output_flags_or"], 0x9)
+            self.assertEqual(decision["action_basis_xor"], 0x1)
+            self.assertEqual(decision["last_entropy_offset"], 4)
+            self.assertEqual(decision["confidence_max"], 0.25)
             probe = parsed["state_probes"][0]
             self.assertEqual(probe["label"], "render_gate_kernel")
             self.assertEqual(probe["domain"], "render")

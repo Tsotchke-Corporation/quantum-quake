@@ -73,6 +73,7 @@ static entropy_ctx_t* hw_entropy = NULL;
 static enemy_quantum_info_t enemies[MAX_ENEMIES];
 static int active_enemy_count = 0;
 static uint64_t ai_entropy_offset = 0;
+static qge_quantum_runtime_t* ai_runtime_override = NULL;
 static bool ai_initialized = false;
 
 /**
@@ -358,6 +359,56 @@ static double action_probability_from_basis(const double probabilities[1 << ACTI
     return probability;
 }
 
+void qge_ai_set_runtime(qge_quantum_runtime_t* runtime) {
+    ai_runtime_override = runtime;
+}
+
+static qge_quantum_runtime_t* qge_ai_get_runtime(void) {
+    qge_context_t* ctx;
+
+    if (ai_runtime_override) {
+        return ai_runtime_override;
+    }
+    ctx = qge_get_context();
+    return ctx ? qge_get_quantum_runtime(ctx) : NULL;
+}
+
+static void record_ai_decision(const qge_ai_decision_input_t* input,
+                               const qge_ai_decision_output_t* output) {
+    qge_quantum_runtime_t* rt;
+    qge_ai_decision_event_t event;
+
+    if (!input || !output) {
+        return;
+    }
+    rt = qge_ai_get_runtime();
+    if (!rt) {
+        return;
+    }
+
+    memset(&event, 0, sizeof(event));
+    event.frame = input->frame;
+    event.server_time_msec = input->server_time_msec;
+    event.enemy_id = input->enemy_id;
+    event.enemy_type = input->enemy_type;
+    event.target_entnum = input->target_entnum;
+    event.input_flags = input->flags;
+    event.output_flags = output->flags;
+    event.legal_action_mask = output->legal_action_mask;
+    event.input_hash = output->input_hash;
+    event.raw_basis = output->raw_basis;
+    event.action_basis = output->action_basis;
+    event.entropy_offset = output->entropy_offset;
+    event.mapped_action = (int32_t)output->mapped_action;
+    event.action = (int32_t)output->action;
+    event.selected_probability = output->selected_probability;
+    event.action_probability = output->action_probability;
+    event.max_probability = output->max_probability;
+    event.total_probability = output->total_probability;
+    event.confidence = output->confidence;
+    qge_quantum_record_ai_decision(rt, &event);
+}
+
 /**
  * @brief Apply situation-dependent phase rotations to bias decision
  */
@@ -484,6 +535,7 @@ ai_action_t qge_ai_decide_traced(const qge_ai_decision_input_t* input,
     if (!ai_state) {
         out.action = clamp_legal_action(AI_IDLE, in.legal_action_mask,
                                         &out.flags);
+        record_ai_decision(&in, &out);
         if (trace) {
             trace->input = in;
             trace->output = out;
@@ -569,6 +621,7 @@ ai_action_t qge_ai_decide_traced(const qge_ai_decision_input_t* input,
         trace->input = in;
         trace->output = out;
     }
+    record_ai_decision(&in, &out);
 
     return action;
 }
@@ -728,5 +781,6 @@ void qge_ai_shutdown(void) {
     memset(enemies, 0, sizeof(enemies));
     active_enemy_count = 0;
     ai_entropy_offset = 0;
+    ai_runtime_override = NULL;
     ai_initialized = false;
 }

@@ -59,6 +59,7 @@ static int test_quantum_runtime_events(void) {
     qge_state_probe_t probe;
     qge_fallback_event_t fallback;
     qge_entanglement_edge_t edge;
+    qge_ai_decision_event_t decision;
 
     if (!rt) return 0;
     qge_quantum_runtime_set_seed(rt, 0x1234u);
@@ -103,6 +104,25 @@ static int test_quantum_runtime_events(void) {
     edge.coherence = 0.9f;
     qge_quantum_record_entanglement(rt, &edge);
 
+    memset(&decision, 0, sizeof(decision));
+    decision.frame = 7;
+    decision.server_time_msec = 112;
+    decision.enemy_id = 42;
+    decision.enemy_type = 2;
+    decision.target_entnum = 1;
+    decision.legal_action_mask = QGE_AI_ACTION_LIVE_MASK;
+    decision.input_hash = 0x5151455f41493131ULL;
+    decision.action_basis = 3;
+    decision.entropy_offset = 6;
+    decision.mapped_action = AI_ATTACK;
+    decision.action = AI_ATTACK;
+    decision.selected_probability = 0.25;
+    decision.action_probability = 0.5;
+    decision.max_probability = 0.5;
+    decision.total_probability = 1.0;
+    decision.confidence = 0.5;
+    qge_quantum_record_ai_decision(rt, &decision);
+
     qge_quantum_frame_end(rt);
     memset(&stats, 0, sizeof(stats));
     qge_quantum_runtime_get_stats(rt, &stats);
@@ -115,6 +135,7 @@ static int test_quantum_runtime_events(void) {
            stats.probe_events == 1 &&
            stats.fallback_events == 1 &&
            stats.entanglement_edges == 1 &&
+           stats.ai_decision_events == 1 &&
            stats.trace_write_errors == 0;
 }
 
@@ -130,10 +151,12 @@ static int test_quantum_trace_roundtrip(void) {
     int saw_entropy = 0;
     int saw_measurement = 0;
     int saw_probe = 0;
+    int saw_ai_decision = 0;
     int saw_end = 0;
     int read_result;
     qge_measurement_event_t measurement;
     qge_state_probe_t probe;
+    qge_ai_decision_event_t decision;
 
     if (!rt) return 0;
     qge_quantum_runtime_set_seed(rt, 0xfeedbeefu);
@@ -161,6 +184,28 @@ static int test_quantum_trace_roundtrip(void) {
     probe.max_probability = 0.25;
     strncpy(probe.label, "dwt", sizeof(probe.label) - 1);
     qge_quantum_record_probe(rt, &probe);
+
+    memset(&decision, 0, sizeof(decision));
+    decision.frame = 3;
+    decision.server_time_msec = 48;
+    decision.enemy_id = 17;
+    decision.enemy_type = 2;
+    decision.target_entnum = 1;
+    decision.input_flags = 0x10u;
+    decision.output_flags = QGE_AI_DECISION_FLAG_ADVISORY;
+    decision.legal_action_mask = QGE_AI_ACTION_PATROL_MASK;
+    decision.input_hash = 0x5151455f41493132ULL;
+    decision.raw_basis = 5;
+    decision.action_basis = 1;
+    decision.entropy_offset = 2;
+    decision.mapped_action = AI_PATROL;
+    decision.action = AI_PATROL;
+    decision.selected_probability = 0.125;
+    decision.action_probability = 0.5;
+    decision.max_probability = 0.5;
+    decision.total_probability = 1.0;
+    decision.confidence = 0.25;
+    qge_quantum_record_ai_decision(rt, &decision);
 
     qge_quantum_frame_end(rt);
     qge_quantum_runtime_free(rt);
@@ -200,6 +245,13 @@ static int test_quantum_trace_roundtrip(void) {
             qge_state_probe_t* event = (qge_state_probe_t*)payload;
             saw_probe = event->representation == QGE_REP_SPARSE_DWT &&
                         event->active_basis_count == 64;
+        } else if (record.kind == QGE_TRACE_RECORD_AI_DECISION) {
+            qge_ai_decision_event_t* event = (qge_ai_decision_event_t*)payload;
+            saw_ai_decision = event->enemy_id == 17 &&
+                              event->input_hash == 0x5151455f41493132ULL &&
+                              event->action == AI_PATROL &&
+                              event->entropy_offset == 2 &&
+                              event->confidence == 0.25;
         } else if (record.kind == QGE_TRACE_RECORD_FRAME_END) {
             saw_end = 1;
         }
@@ -207,7 +259,7 @@ static int test_quantum_trace_roundtrip(void) {
 
     qge_trace_reader_close(reader);
     return read_result == 0 && saw_begin && saw_entropy &&
-           saw_measurement && saw_probe && saw_end;
+           saw_measurement && saw_probe && saw_ai_decision && saw_end;
 }
 
 static int test_quantum_entropy_replay(void) {
@@ -1104,14 +1156,30 @@ static int test_ai_visibility_effect(void) {
 }
 
 static int test_ai_decide_traced_protocol(void) {
+    const char* path = "/tmp/qge_ai_decision_trace.bin";
+    qge_quantum_runtime_t* rt = qge_quantum_runtime_create();
+    qge_quantum_runtime_stats_t stats;
+    qge_trace_reader_t* reader;
+    qge_trace_record_header_t record;
+    unsigned char payload[256];
     qge_ai_decision_input_t input;
     qge_ai_decision_trace_t trace;
     uint64_t expected_hash;
     ai_action_t action;
+    int saw_ai_decision = 0;
+    int read_result;
+    int ok;
 
+    if (!rt) return 0;
+    if (qge_quantum_trace_open(rt, path) != 0) {
+        qge_quantum_runtime_free(rt);
+        return 0;
+    }
     memset(&input, 0, sizeof(input));
     memset(&trace, 0, sizeof(trace));
 
+    qge_ai_set_runtime(rt);
+    qge_quantum_frame_begin(rt, 123, 4567);
     qge_ai_init_enemy(17, 2);
     input.version = QGE_AI_TRACE_VERSION;
     input.frame = 123;
@@ -1129,23 +1197,54 @@ static int test_ai_decide_traced_protocol(void) {
     expected_hash = qge_ai_decision_input_hash(&input);
 
     action = qge_ai_decide_traced(&input, &trace);
+    qge_quantum_frame_end(rt);
+    memset(&stats, 0, sizeof(stats));
+    qge_quantum_runtime_get_stats(rt, &stats);
+    qge_ai_set_runtime(NULL);
+    qge_quantum_runtime_free(rt);
 
-    return action == AI_PATROL &&
-           trace.input.version == QGE_AI_TRACE_VERSION &&
-           trace.input.frame == 123 &&
-           trace.input.enemy_id == 17 &&
-           trace.output.version == QGE_AI_TRACE_VERSION &&
-           trace.output.input_hash == expected_hash &&
-           trace.output.action == AI_PATROL &&
-           trace.output.legal_action_mask == QGE_AI_ACTION_PATROL_MASK &&
-           (trace.output.flags & QGE_AI_DECISION_FLAG_ADVISORY) != 0 &&
-           (trace.output.flags & QGE_AI_DECISION_FLAG_AUTHORITY) == 0 &&
-           (trace.output.flags & QGE_AI_DECISION_FLAG_PLAYER_VISIBLE) != 0 &&
-           trace.output.action_basis < 8 &&
-           trace.output.total_probability > 0.0 &&
-           trace.output.max_probability > 0.0 &&
-           trace.output.confidence >= 0.0 &&
-           trace.output.confidence <= 1.0;
+    reader = qge_trace_reader_open(path);
+    if (!reader) return 0;
+    while ((read_result = qge_trace_reader_next(reader, &record,
+                                                payload, sizeof(payload))) == 1) {
+        if (record.kind == QGE_TRACE_RECORD_AI_DECISION) {
+            qge_ai_decision_event_t* event = (qge_ai_decision_event_t*)payload;
+            saw_ai_decision = event->frame == 123 &&
+                              event->server_time_msec == 4567 &&
+                              event->enemy_id == 17 &&
+                              event->target_entnum == 1 &&
+                              event->input_flags == 0x10u &&
+                              event->input_hash == expected_hash &&
+                              event->legal_action_mask == QGE_AI_ACTION_PATROL_MASK &&
+                              event->action == AI_PATROL &&
+                              event->entropy_offset == trace.output.entropy_offset &&
+                              event->confidence >= 0.0 &&
+                              event->confidence <= 1.0;
+        }
+    }
+    qge_trace_reader_close(reader);
+
+    ok = action == AI_PATROL &&
+         trace.input.version == QGE_AI_TRACE_VERSION &&
+         trace.input.frame == 123 &&
+         trace.input.enemy_id == 17 &&
+         trace.output.version == QGE_AI_TRACE_VERSION &&
+         trace.output.input_hash == expected_hash &&
+         trace.output.action == AI_PATROL &&
+         trace.output.legal_action_mask == QGE_AI_ACTION_PATROL_MASK &&
+         (trace.output.flags & QGE_AI_DECISION_FLAG_ADVISORY) != 0 &&
+         (trace.output.flags & QGE_AI_DECISION_FLAG_AUTHORITY) == 0 &&
+         (trace.output.flags & QGE_AI_DECISION_FLAG_PLAYER_VISIBLE) != 0 &&
+         trace.output.action_basis < 8 &&
+         trace.output.total_probability > 0.0 &&
+         trace.output.max_probability > 0.0 &&
+         trace.output.confidence >= 0.0 &&
+         trace.output.confidence <= 1.0 &&
+         stats.ai_decision_events == 1 &&
+         stats.trace_write_errors == 0 &&
+         read_result == 0 &&
+         saw_ai_decision;
+    return ok;
 }
 
 static int test_ai_entanglement(void) {
@@ -1802,6 +1901,85 @@ static int test_vis_shadow_parity_stats(void) {
            stats.mismatch_fingerprint != 0;
 }
 
+static int finish_vis_authority_gate_frame(int mark_hidden_surface,
+                                           qge_vis_shadow_stats_t* stats) {
+    qge_vec3_t eye = {0.0f, 0.0f, 0.0f};
+    qge_vec3_t forward = {0.0f, 0.0f, -1.0f};
+
+    qge_vis_clear_surfaces();
+    qge_vis_register_surface(0, -10, -10, -50, 10, 10, -40);
+    qge_vis_register_surface(1, 20, -10, -50, 40, 10, -40);
+    qge_vis_register_surface(2, -10, -10, 40, 10, 10, 50);
+    qge_vis_setup_viewpoint(eye, forward);
+
+    qge_vis_shadow_begin(3, 0.0f);
+    qge_vis_shadow_mark_classic_visible(0);
+    qge_vis_shadow_mark_classic_visible(1);
+    if (mark_hidden_surface) {
+        qge_vis_shadow_mark_classic_visible(2);
+    }
+    return qge_vis_shadow_finish(stats);
+}
+
+static int test_vis_shadow_authority_gate_warmup(void) {
+    qge_vis_shadow_stats_t stats;
+    int required;
+
+    qge_vis_shutdown();
+    memset(&stats, 0, sizeof(stats));
+
+    if (!finish_vis_authority_gate_frame(0, &stats)) {
+        return 0;
+    }
+
+    required = stats.clean_frames_required;
+    if (required <= 1 ||
+        stats.authority_ready ||
+        !stats.fallback_required ||
+        stats.fallback_reason != QGE_VIS_GATE_REASON_WARMUP_PENDING ||
+        strcmp(qge_vis_gate_reason_name(stats.fallback_reason),
+               "warmup_pending") != 0) {
+        return 0;
+    }
+
+    for (int i = 1; i < required; i++) {
+        if (!finish_vis_authority_gate_frame(0, &stats)) {
+            return 0;
+        }
+    }
+
+    if (!stats.authority_ready ||
+        stats.fallback_required ||
+        stats.fallback_reason != QGE_VIS_GATE_REASON_NONE ||
+        stats.authority_reason != QGE_VIS_GATE_REASON_AUTHORITY_READY ||
+        stats.consecutive_clean_frames != required) {
+        return 0;
+    }
+
+    if (!finish_vis_authority_gate_frame(1, &stats)) {
+        return 0;
+    }
+
+    printf("\n    Authority gate: clean=%d/%d frames=%d fallback=%s "
+           "total_mismatch=%d total_fn=%d\n    ",
+           stats.consecutive_clean_frames,
+           stats.clean_frames_required,
+           stats.frames_observed,
+           qge_vis_gate_reason_name(stats.fallback_reason),
+           stats.cumulative_mismatch_count,
+           stats.cumulative_false_negative_count);
+
+    return stats.false_negative_count == 1 &&
+           stats.fallback_required &&
+           !stats.authority_ready &&
+           stats.consecutive_clean_frames == 0 &&
+           stats.fallback_reason == QGE_VIS_GATE_REASON_FALSE_NEGATIVE &&
+           stats.authority_reason == QGE_VIS_GATE_REASON_FALSE_NEGATIVE &&
+           stats.cumulative_false_negative_count >= 1 &&
+           strcmp(qge_vis_gate_reason_name(stats.fallback_reason),
+                  "false_negative_fallback") == 0;
+}
+
 /* ============================================================================
  * Quantum Audio Tests
  * ============================================================================ */
@@ -2230,6 +2408,104 @@ static int test_physics_particle_lifetime(void) {
     return count_initial == 1 && count_final == 0;
 }
 
+static int test_physics_projectile_authority_gate_warmup(void) {
+    qge_projectile_authority_gate_t gate =
+        qge_projectile_authority_default_gate();
+    qge_projectile_authority_telemetry_t telemetry;
+    qge_projectile_authority_state_t state;
+
+    memset(&telemetry, 0, sizeof(telemetry));
+    telemetry.requested = true;
+    telemetry.active_projectiles = 1;
+    telemetry.frame_projectiles = 1;
+    telemetry.warmup_frames = gate.warmup_frames_required - 1;
+    telemetry.shadow_samples = gate.min_shadow_samples - 1;
+    telemetry.avg_shadow_error = 0.0f;
+    telemetry.max_shadow_error = 0.0f;
+
+    state = qge_projectile_authority_evaluate(&gate, &telemetry);
+
+    printf("\n    Projectile authority warmup: frames_remaining=%d "
+           "samples_remaining=%d reason=%s\n    ",
+           state.warmup_frames_remaining,
+           state.shadow_samples_remaining,
+           qge_projectile_authority_off_reason_name(state.off_reason));
+
+    return !state.ready &&
+           state.off_reason == QGE_PROJECTILE_AUTHORITY_OFF_WARMUP &&
+           state.warmup_frames_remaining == 1 &&
+           state.shadow_samples_remaining == 1 &&
+           strcmp(qge_projectile_authority_off_reason_name(state.off_reason),
+                  "warmup") == 0;
+}
+
+static int test_physics_projectile_authority_gate_thresholds(void) {
+    qge_projectile_authority_gate_t gate;
+    qge_projectile_authority_telemetry_t telemetry;
+    qge_projectile_authority_state_t ready;
+    qge_projectile_authority_state_t max_blocked;
+    qge_projectile_authority_state_t avg_blocked;
+    qge_projectile_authority_state_t disabled;
+    qge_projectile_authority_state_t no_projectiles;
+
+    gate.warmup_frames_required = 2;
+    gate.min_shadow_samples = 2;
+    gate.avg_shadow_error_max = 1.0f;
+    gate.max_shadow_error_max = 4.0f;
+
+    memset(&telemetry, 0, sizeof(telemetry));
+    telemetry.requested = true;
+    telemetry.active_projectiles = 1;
+    telemetry.frame_projectiles = 1;
+    telemetry.warmup_frames = 2;
+    telemetry.shadow_samples = 2;
+    telemetry.avg_shadow_error = 0.5f;
+    telemetry.max_shadow_error = 3.5f;
+    ready = qge_projectile_authority_evaluate(&gate, &telemetry);
+
+    telemetry.max_shadow_error = 4.5f;
+    max_blocked = qge_projectile_authority_evaluate(&gate, &telemetry);
+
+    telemetry.max_shadow_error = 3.5f;
+    telemetry.avg_shadow_error = 1.5f;
+    avg_blocked = qge_projectile_authority_evaluate(&gate, &telemetry);
+
+    telemetry.requested = false;
+    disabled = qge_projectile_authority_evaluate(&gate, &telemetry);
+
+    telemetry.requested = true;
+    telemetry.active_projectiles = 0;
+    telemetry.frame_projectiles = 0;
+    telemetry.avg_shadow_error = 0.0f;
+    telemetry.max_shadow_error = 0.0f;
+    no_projectiles = qge_projectile_authority_evaluate(&gate, &telemetry);
+
+    printf("\n    Projectile authority reasons: ready=%s max=%s avg=%s "
+           "disabled=%s none=%s\n    ",
+           qge_projectile_authority_off_reason_name(ready.off_reason),
+           qge_projectile_authority_off_reason_name(max_blocked.off_reason),
+           qge_projectile_authority_off_reason_name(avg_blocked.off_reason),
+           qge_projectile_authority_off_reason_name(disabled.off_reason),
+           qge_projectile_authority_off_reason_name(no_projectiles.off_reason));
+
+    return ready.ready &&
+           ready.off_reason == QGE_PROJECTILE_AUTHORITY_OFF_NONE &&
+           max_blocked.off_reason ==
+               QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_MAX &&
+           avg_blocked.off_reason ==
+               QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_AVG &&
+           disabled.off_reason ==
+               QGE_PROJECTILE_AUTHORITY_OFF_DISABLED &&
+           no_projectiles.off_reason ==
+               QGE_PROJECTILE_AUTHORITY_OFF_NO_PROJECTILES &&
+           strcmp(qge_projectile_authority_off_reason_name(
+                      QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_MAX),
+                  "shadow_max") == 0 &&
+           strcmp(qge_projectile_authority_off_reason_name(
+                      QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_AVG),
+                  "shadow_avg") == 0;
+}
+
 /* ============================================================================
  * Main
  * ============================================================================ */
@@ -2310,6 +2586,7 @@ int main(void) {
     TEST(vis_frustum_culling);
     TEST(vis_grover_amplification);
     TEST(vis_shadow_parity_stats);
+    TEST(vis_shadow_authority_gate_warmup);
     printf("\n");
 
     printf("Quantum Audio Tests:\n");
@@ -2331,6 +2608,8 @@ int main(void) {
     TEST(physics_impulse);
     TEST(physics_wave_spreading);
     TEST(physics_particle_lifetime);
+    TEST(physics_projectile_authority_gate_warmup);
+    TEST(physics_projectile_authority_gate_thresholds);
     printf("\n");
 
     /* Cleanup modules */

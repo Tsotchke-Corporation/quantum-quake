@@ -157,6 +157,13 @@ int qge_trace_write_entanglement(qge_trace_writer_t *writer,
                               edge, (uint32_t)sizeof(*edge));
 }
 
+int qge_trace_write_ai_decision(qge_trace_writer_t *writer,
+                                const qge_ai_decision_event_t *event)
+{
+    return trace_write_record(writer, QGE_TRACE_RECORD_AI_DECISION,
+                              event, (uint32_t)sizeof(*event));
+}
+
 qge_trace_reader_t *qge_trace_reader_open(const char *path)
 {
     qge_trace_reader_t *reader;
