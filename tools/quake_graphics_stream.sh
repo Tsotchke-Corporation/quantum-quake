@@ -862,6 +862,9 @@ fi
 if [[ "$launch_mode" == "open" && -f "$runtime_log_file" ]]; then
   cp "$runtime_log_file" "$log_file"
   cp "$runtime_log_file" "$agent_log_file"
+  if [[ "$runtime_log_file" == "$qconsole_file" ]]; then
+    rm -f "$runtime_log_file"
+  fi
 elif [[ -f "$agent_log_file" ]]; then
   cp "$agent_log_file" "$log_file"
 fi

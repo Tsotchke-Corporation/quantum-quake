@@ -97,6 +97,8 @@ grep -Fq 'noesis_max_wait="${QGE_NOESIS_MAX_WAIT:-600}"' "$repo_root/tools/quake
 grep -Fq '"noesis_max_wait": $noesis_max_wait' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'QGE_NOESIS_MAX_WAIT="$noesis_max_wait"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'QGE_NOESIS_MAX_WAIT="$noesis_max_wait"' "$repo_root/tools/quake_crash_watch.sh"
+grep -Fq 'rm -f "$runtime_log_file"' "$repo_root/tools/quake_graphics_stream.sh"
+grep -q 'removes the root `qconsole.log` copy' "$repo_root/docs/qge_agent_stream.md"
 
 python3 "$repo_root/tools/qge_image_metrics.py" --help > "$tmpdir/image_metrics_help.txt"
 grep -q -- '--check-deps' "$tmpdir/image_metrics_help.txt"

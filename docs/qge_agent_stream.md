@@ -169,7 +169,10 @@ out of AppKit state restoration. The harness passes `-nomouse` by default so
 SDL does not enter relative mouse mode or warp/capture the user cursor. Set
 `QGE_STREAM_ACTIVATE=1` only if the local window manager requires a foreground
 app for capture. A side watcher tails `qconsole.log`, mirrors screenshots, and
-refreshes audio byte counts while the app is still running.
+refreshes audio byte counts while the app is still running. After the run, the
+harness archives the log into the capture and agent-stream directories and
+removes the root `qconsole.log` copy so generated runtime output does not
+pollute source-drift checks.
 The harness also passes `-display "$QGE_STREAM_DISPLAY"` when set. On the
 current capture workstation the default is SDL display `1`, which maps to the
 BenQ PD3200U; SDL display `0` is the LG. The engine logs the available display
