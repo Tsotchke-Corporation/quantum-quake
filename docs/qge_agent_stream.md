@@ -67,6 +67,22 @@ oracle source, probability, and stable trace hash so a captured `qge_trace.bin`
 has explicit persistence-boundary evidence for replay/demo verification, not
 only frame-boundary probes.
 
+To load an earlier trace while recording a fresh replay-consumption trace:
+
+```sh
+QGE_STREAM_TRACE=1 QGE_STREAM_REPLAY_TRACE=diagnostics/quake_stream/<run>/qge_trace.bin \
+  QGE_STREAM_REPLAY_STRICT=0 bash tools/quake_graphics_stream.sh
+```
+
+The harness passes the replay path as `-qgereplay` and mirrors strictness as
+`-qgereplaystrict`. Strict replay defaults to `1`, which requires frame/time,
+domain, subject, request, and entropy-offset metadata to match exactly.
+`QGE_STREAM_REPLAY_STRICT=0` is useful for smoke tests that prove the engine can
+load and consume a prior trace while allowing a fresh live run to differ in
+timing. The output trace summary should show
+`replay_health.entropy_replay_events > 0` and zero replay mismatch/exhaustion
+counters.
+
 To exercise the sprite billboard encoder without relying on a hand-played scene:
 
 ```sh
@@ -422,6 +438,8 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
 - `QGE_STREAM_CAPTURE_WAIT`: explicit engine capture frame.
 - `QGE_STREAM_TIMEOUT_SECONDS`: explicit launch/watchdog timeout.
 - `QGE_STREAM_TRACE`: write `qge_trace.bin` when set to `1`.
+- `QGE_STREAM_REPLAY_TRACE`: load an existing QGE trace with `-qgereplay`.
+- `QGE_STREAM_REPLAY_STRICT`: strict replay metadata checks, default `1`.
 - `QGE_STREAM_SOUND`: run with game sound enabled when set to `1`.
 - `QGE_STREAM_AI`: emitted as `quantum_ai`, default `1`.
 - `QGE_STREAM_VIS`: emitted as `quantum_vis`, default `2`. Raw mode `2` uses

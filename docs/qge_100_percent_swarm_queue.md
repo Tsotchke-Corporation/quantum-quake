@@ -443,7 +443,41 @@ Verified with:
 - `make quake`
 - `QGE_STREAM_TRACE=1 QGE_STREAM_VIS=3 QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=8 QGE_STREAM_WAIT_FRAMES=12 QGE_STREAM_LAUNCH=direct QGE_STREAM_SOUND=0 QGE_STREAM_TIMEOUT_SECONDS=90 QGE_RENDER=2 QGE_RENDER_UPDATE_INTERVAL=1 bash tools/quake_graphics_stream.sh`
 
+## Wave 15 Checkpoint
+
+- Live trace replay loading: Quake now accepts `-qgereplay` and
+  `-qgereplaytrace`, with `QGE_REPLAY_TRACE_PATH` as an environment fallback,
+  and loads the trace through the shared QGE runtime during `QGE_Init()`.
+- Replay source preservation: `qge_rng_set_runtime()` no longer overwrites a
+  runtime that already loaded replay entropy. The new RNG-bind replay test
+  records deterministic RNG events, loads them into a fresh runtime, binds the
+  RNG afterward, and verifies replay values are still consumed.
+- Stream harness proof: `QGE_STREAM_REPLAY_TRACE` passes an existing trace to
+  the app and `QGE_STREAM_REPLAY_STRICT` mirrors `-qgereplaystrict`. Strict mode
+  remains the default; smoke runs can set strictness to `0` when proving
+  load/consume against a fresh live run with different frame timing.
+- Live proof: `diagnostics/quake_stream/20260519-171122` loaded
+  `diagnostics/quake_stream/20260519-165107/qge_trace.bin` and captured a new
+  trace with `replay_health.entropy_replay_events=81`, zero replay
+  mismatch/exhaustion counters, `native_bridge_count=23`, and
+  `native_fallback_count=0`. The runtime log reports
+  `entropy_loaded=87 entropy_consumed=81 ... ai_loaded=368 ai_consumed=264`
+  with all mismatch/exhaustion counters at zero.
+
+Verified with:
+
+- `bash -n tools/quake_graphics_stream.sh`
+- `python3 -m py_compile tools/qge_trace_summary.py tests/test_qge_python_tools.py`
+- `make -B build/qge/qge_rng.o build/qge/qge_quantum_runtime.o`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B qge_hooks.o qge_rng.o qge_quantum_runtime.o`
+- `make test_qge`
+- `bash tests/test_noesis_input_contract.sh`
+- `./bin/test_qge`
+- `make test`
+- `make quake`
+- `QGE_STREAM_TRACE=1 QGE_STREAM_REPLAY_TRACE=diagnostics/quake_stream/20260519-165107/qge_trace.bin QGE_STREAM_REPLAY_STRICT=0 QGE_STREAM_VIS=3 QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=2 QGE_STREAM_WAIT_FRAMES=12 QGE_STREAM_LAUNCH=direct QGE_STREAM_SOUND=0 QGE_STREAM_TIMEOUT_SECONDS=90 QGE_RENDER=2 QGE_RENDER_UPDATE_INTERVAL=1 bash tools/quake_graphics_stream.sh`
+
 ## Next Worker Tasks
 
-- No Wave 14 native-render parity task remains in this queue. Use
+- No Wave 15 live replay-loading task remains in this queue. Use
   `icc assistant-status` for the next cross-task goal suggestion.

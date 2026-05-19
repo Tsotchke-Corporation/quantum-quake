@@ -184,6 +184,21 @@ static const char *QGE_CommandLineTracePath(void)
 	return NULL;
 }
 
+static const char *QGE_CommandLineReplayPath(void)
+{
+	int arg;
+
+	arg = COM_CheckParm("-qgereplay");
+	if (arg && arg < com_argc - 1 && com_argv[arg + 1] &&
+		com_argv[arg + 1][0])
+		return com_argv[arg + 1];
+	arg = COM_CheckParm("-qgereplaytrace");
+	if (arg && arg < com_argc - 1 && com_argv[arg + 1] &&
+		com_argv[arg + 1][0])
+		return com_argv[arg + 1];
+	return NULL;
+}
+
 static qboolean QGE_CommandLineValue(const char *parm, const char **value)
 {
 	int arg;
@@ -198,6 +213,16 @@ static qboolean QGE_CommandLineValue(const char *parm, const char **value)
 		return true;
 	}
 	return false;
+}
+
+static qboolean QGE_ParseBoolValue(const char *value, qboolean default_value)
+{
+	if (!value || !value[0])
+		return default_value;
+	if (value[0] == '0' || value[0] == 'f' || value[0] == 'F' ||
+		value[0] == 'n' || value[0] == 'N')
+		return false;
+	return true;
 }
 
 static void QGE_ApplyEarlyRenderOverrides(void)
@@ -2543,6 +2568,36 @@ void QGE_Init(void)
 		Con_Printf("QGE: Quantum RNG failed, using classical fallback\n");
 	}
 
+	const char *replay_path = QGE_CommandLineReplayPath();
+	const char *replay_strict_value = NULL;
+	qboolean replay_strict =
+		QGE_ParseBoolValue(getenv("QGE_REPLAY_STRICT"), true);
+	if (QGE_CommandLineValue("-qgereplaystrict", &replay_strict_value))
+		replay_strict = QGE_ParseBoolValue(replay_strict_value, replay_strict);
+	if (!replay_path || !replay_path[0])
+		replay_path = getenv("QGE_REPLAY_TRACE_PATH");
+	if (replay_path && replay_path[0]) {
+		qge_quantum_runtime_t *rt = QGE_Runtime();
+		qge_quantum_runtime_stats_t replay_stats;
+
+		qge_quantum_runtime_set_replay_strict(rt, replay_strict ? true : false);
+		if (qge_quantum_runtime_load_replay_trace(rt, replay_path) == 0) {
+			memset(&replay_stats, 0, sizeof(replay_stats));
+			qge_quantum_runtime_get_stats(rt, &replay_stats);
+			Con_Printf("QGE: Replay trace loaded from %s (strict=%d)\n",
+					   replay_path, replay_strict ? 1 : 0);
+			fprintf(stderr,
+					"QGE replay path=%s strict=%d entropy_loaded=%llu ai_loaded=%llu\n",
+					replay_path, replay_strict ? 1 : 0,
+					(unsigned long long)replay_stats.replay_events_loaded,
+					(unsigned long long)replay_stats.replay_ai_decisions_loaded);
+		} else {
+			Con_Printf("QGE: Failed to load replay trace %s\n", replay_path);
+			fprintf(stderr, "QGE replay load failed path=%s strict=%d\n",
+					replay_path, replay_strict ? 1 : 0);
+		}
+	}
+
 	if (quantum_state_init(&qge_render_gate_state, QGE_RENDER_GATE_QUBITS) == QS_SUCCESS) {
 		qge_render_gate_initialized = true;
 		Con_Printf("QGE: Render gate kernel initialized (%d qubits)\n",
@@ -2743,6 +2798,25 @@ void QGE_Shutdown(void)
 	qge_rng_shutdown();
 
 	if (qge_ctx) {
+		qge_quantum_runtime_stats_t replay_stats;
+
+		memset(&replay_stats, 0, sizeof(replay_stats));
+		qge_quantum_runtime_get_stats(QGE_Runtime(), &replay_stats);
+		if (replay_stats.replay_events_loaded ||
+			replay_stats.replay_ai_decisions_loaded ||
+			replay_stats.replay_events_consumed ||
+			replay_stats.replay_ai_decisions_consumed) {
+			fprintf(stderr,
+					"QGE replay stats entropy_loaded=%llu entropy_consumed=%llu entropy_mismatches=%llu entropy_exhaustions=%llu ai_loaded=%llu ai_consumed=%llu ai_mismatches=%llu ai_exhaustions=%llu\n",
+					(unsigned long long)replay_stats.replay_events_loaded,
+					(unsigned long long)replay_stats.replay_events_consumed,
+					(unsigned long long)replay_stats.replay_mismatches,
+					(unsigned long long)replay_stats.replay_exhaustions,
+					(unsigned long long)replay_stats.replay_ai_decisions_loaded,
+					(unsigned long long)replay_stats.replay_ai_decisions_consumed,
+					(unsigned long long)replay_stats.replay_ai_decision_mismatches,
+					(unsigned long long)replay_stats.replay_ai_decision_exhaustions);
+		}
 		QGE_TraceBackendGate("shutdown");
 		qge_shutdown(qge_ctx);
 		qge_ctx = NULL;

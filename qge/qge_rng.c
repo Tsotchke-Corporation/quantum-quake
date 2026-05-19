@@ -315,10 +315,13 @@ int qge_m_random(void) {
 void qge_rng_set_runtime(qge_quantum_runtime_t* runtime) {
     rng_runtime = runtime;
     if (rng_runtime) {
-        qge_quantum_runtime_set_entropy_source(rng_runtime,
-                                               QGE_ENTROPY_SOURCE_QRNG,
-                                               qge_rng_entropy_callback,
-                                               NULL);
+        if (qge_quantum_runtime_get_entropy_source(rng_runtime) !=
+            QGE_ENTROPY_SOURCE_REPLAY) {
+            qge_quantum_runtime_set_entropy_source(rng_runtime,
+                                                   QGE_ENTROPY_SOURCE_QRNG,
+                                                   qge_rng_entropy_callback,
+                                                   NULL);
+        }
     }
 }
 

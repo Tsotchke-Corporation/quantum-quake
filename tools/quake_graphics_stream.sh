@@ -57,6 +57,8 @@ sound="${QGE_STREAM_SOUND:-0}"
 sound_quantum_mode="${QGE_STREAM_SND_QUANTUM:-1}"
 sound_source_authority="${QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY:-0}"
 trace="${QGE_STREAM_TRACE:-0}"
+replay_trace="${QGE_STREAM_REPLAY_TRACE:-${QGE_REPLAY_TRACE_PATH:-}}"
+replay_strict="${QGE_STREAM_REPLAY_STRICT:-${QGE_REPLAY_STRICT:-1}}"
 engine_capture="${QGE_STREAM_ENGINE_CAPTURE:-1}"
 launch_mode="${QGE_STREAM_LAUNCH:-auto}"
 timeout_seconds="${QGE_STREAM_TIMEOUT_SECONDS:-}"
@@ -118,6 +120,7 @@ physics_authoritative="$(normalize_bool "$physics_authoritative")"
 particles_value="$(normalize_nonnegative_int "$particles_value" 0)"
 ai_value="$(normalize_nonnegative_int "$ai_value" 1)"
 vis_value="$(normalize_nonnegative_int "$vis_value" 2)"
+replay_strict="$(normalize_bool "$replay_strict")"
 scene_surface_budget="$(normalize_positive_int "$scene_surface_budget" 128)"
 width="$(normalize_positive_int "$width" 800)"
 height="$(normalize_positive_int "$height" 600)"
@@ -319,6 +322,11 @@ write_agent_manifest() {
   },
   "sound_requested": $sound,
   "trace_requested": $trace,
+  "replay": {
+    "requested": $([[ -n "$replay_trace" ]] && printf '1' || printf '0'),
+    "trace_file": $(json_string "$replay_trace"),
+    "strict": $replay_strict
+  },
   "timeout_seconds": $max_seconds,
   "input": {
     "mouse_enabled": $stream_mouse,
@@ -675,7 +683,7 @@ echo "Streaming Quantum Quake graphics diagnostics"
 echo "  outdir=$outdir"
 echo "  agent_stream=$agent_stream"
 echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter update_interval=$render_update_interval sprite_test=$sprite_test quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_physics_authoritative=$physics_authoritative quantum_particles=$particles_value quantum_ai=$ai_value quantum_vis=$vis_value"
-echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound snd_quantum=$sound_quantum_mode snd_quantum_source_authority=$sound_source_authority trace=$trace fire_test=$fire_test fire_min_start_wait=$fire_min_start_wait fire_min_frames=$fire_min_frames scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_max_wait=$noesis_max_wait"
+echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound snd_quantum=$sound_quantum_mode snd_quantum_source_authority=$sound_source_authority trace=$trace replay=$replay_trace replay_strict=$replay_strict fire_test=$fire_test fire_min_start_wait=$fire_min_start_wait fire_min_frames=$fire_min_frames scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_max_wait=$noesis_max_wait"
 echo "QGE_AGENT_STREAM $agent_stream"
 
 print_log_updates() {
@@ -895,6 +903,9 @@ fi
 if [[ "$trace" == "1" ]]; then
   run_args+=(-qgetrace "$trace_file")
 fi
+if [[ -n "$replay_trace" ]]; then
+  run_args+=(-qgereplay "$replay_trace" -qgereplaystrict "$replay_strict")
+fi
 if [[ "$launch_mode" == "open" ]]; then
   runtime_log_file="$qconsole_file"
   : > "$runtime_log_file"
@@ -1050,6 +1061,8 @@ Trace file: $([[ "$trace" == "1" ]] && printf '%s' "$trace_file" || printf 'not 
 Trace summary: $([[ "$trace" == "1" ]] && printf '%s' "$trace_summary_file" || printf 'not requested')
 Trace summary status: $trace_summary_status
 Runtime evidence ready: $trace_runtime_evidence_ready
+Replay trace: $([[ -n "$replay_trace" ]] && printf '%s' "$replay_trace" || printf 'not requested')
+Replay strict: $replay_strict
 Timeout seconds: $max_seconds
 Log: $log_file
 Performance summary: $perf_summary_file

@@ -326,6 +326,73 @@ static int test_quantum_entropy_replay(void) {
            stats.fallback_events == 0;
 }
 
+static int test_quantum_entropy_replay_survives_rng_bind(void) {
+    const char* path = "/tmp/qge_entropy_replay_rng_bind.bin";
+    uint16_t recorded[6];
+    uint16_t replayed[6];
+    qge_quantum_runtime_t* rt_record = qge_quantum_runtime_create();
+    qge_quantum_runtime_t* rt_replay;
+    qge_quantum_runtime_stats_t stats;
+
+    if (!rt_record) return 0;
+    qge_rng_set_runtime(rt_record);
+    qge_quantum_runtime_set_entropy_source(rt_record,
+                                           QGE_ENTROPY_SOURCE_DETERMINISTIC,
+                                           NULL, NULL);
+    qge_quantum_runtime_set_seed(rt_record, 0x5151455f52455031ULL);
+    if (qge_quantum_trace_open(rt_record, path) != 0) {
+        qge_rng_set_runtime(NULL);
+        qge_quantum_runtime_free(rt_record);
+        return 0;
+    }
+    qge_quantum_frame_begin(rt_record, 6, 96);
+    for (int i = 0; i < 6; i++) {
+        recorded[i] = qge_random();
+    }
+    qge_quantum_frame_end(rt_record);
+    qge_rng_set_runtime(NULL);
+    qge_quantum_runtime_free(rt_record);
+
+    rt_replay = qge_quantum_runtime_create();
+    if (!rt_replay) return 0;
+    if (qge_quantum_runtime_load_replay_entropy(rt_replay, path) != 0 ||
+        qge_quantum_runtime_get_entropy_source(rt_replay) !=
+            QGE_ENTROPY_SOURCE_REPLAY) {
+        qge_quantum_runtime_free(rt_replay);
+        return 0;
+    }
+    qge_rng_set_runtime(rt_replay);
+    if (qge_quantum_runtime_get_entropy_source(rt_replay) !=
+        QGE_ENTROPY_SOURCE_REPLAY) {
+        qge_rng_set_runtime(NULL);
+        qge_quantum_runtime_free(rt_replay);
+        return 0;
+    }
+
+    qge_quantum_frame_begin(rt_replay, 6, 96);
+    for (int i = 0; i < 6; i++) {
+        replayed[i] = qge_random();
+        if (replayed[i] != recorded[i]) {
+            qge_rng_set_runtime(NULL);
+            qge_quantum_runtime_free(rt_replay);
+            return 0;
+        }
+    }
+    qge_quantum_frame_end(rt_replay);
+
+    memset(&stats, 0, sizeof(stats));
+    qge_quantum_runtime_get_stats(rt_replay, &stats);
+    qge_rng_set_runtime(NULL);
+    qge_quantum_runtime_free(rt_replay);
+
+    return stats.entropy_events == 6 &&
+           stats.replay_events_loaded == 6 &&
+           stats.replay_events_consumed == 6 &&
+           stats.replay_mismatches == 0 &&
+           stats.replay_exhaustions == 0 &&
+           stats.fallback_events == 0;
+}
+
 static int test_quantum_entropy_replay_strict_mismatch(void) {
     const char* path = "/tmp/qge_entropy_replay_mismatch.bin";
     uint64_t recorded;
@@ -3591,6 +3658,7 @@ int main(void) {
     TEST(quantum_runtime_events);
     TEST(quantum_trace_roundtrip);
     TEST(quantum_entropy_replay);
+    TEST(quantum_entropy_replay_survives_rng_bind);
     TEST(quantum_entropy_replay_strict_mismatch);
     TEST(quantum_entropy_replay_exhaustion);
     printf("\n");
