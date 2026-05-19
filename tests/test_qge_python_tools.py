@@ -17,6 +17,7 @@ if str(TOOLS_DIR) not in sys.path:
 
 import qge_advantage_benchmark as advantage  # noqa: E402
 import qge_image_metrics as image_metrics  # noqa: E402
+import qge_noesis_summary as noesis_summary  # noqa: E402
 import qge_oracle_export as oracle_export  # noqa: E402
 import qge_perf_summary as perf_summary  # noqa: E402
 import qge_publication_pack as publication_pack  # noqa: E402
@@ -366,6 +367,161 @@ class PerformanceSummaryTests(unittest.TestCase):
                 "qge_runtime_performance_complete",
             )
             self.assertTrue(icc["failure_free"])
+
+
+class NoesisSummaryTests(unittest.TestCase):
+    def test_build_summary_and_icc_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            input_dir = tmpdir / "input"
+            log_dir = tmpdir / "logs"
+            trace_dir = tmpdir / "trace"
+            input_dir.mkdir()
+            log_dir.mkdir()
+            trace_dir.mkdir()
+            actions_path = input_dir / "noesis_actions.txt"
+            commands_path = input_dir / "noesis_commands.cfg"
+            log_path = log_dir / "quantum_quake.log"
+            trace_path = trace_dir / "qge_trace_summary.json"
+            manifest_path = tmpdir / "manifest.json"
+
+            actions_path.write_text(
+                "\n".join(
+                    [
+                        "cmd echo QGE_NOESIS_POLICY map=e1m1 plan=adaptive",
+                        "center-view",
+                        "cmd echo QGE_NOESIS_PHASE phase=e1m1_entry_clear",
+                        "advance-fire 12",
+                        "circle-fire-left 8",
+                        "jump-forward 4",
+                        "clear-input 2",
+                        "cmd echo QGE_NOESIS_POLICY done",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            commands_path.write_text(
+                "\n".join(
+                    [
+                        "echo QGE_NOESIS_PLAYER start source=cmd start_wait=0",
+                        "echo QGE_NOESIS_POLICY map=e1m1 plan=adaptive",
+                        "centerview",
+                        "echo QGE_NOESIS_PHASE phase=e1m1_entry_clear",
+                        "+forward",
+                        "+attack",
+                        "wait",
+                        "-attack",
+                        "-forward",
+                        "+moveleft",
+                        "+right",
+                        "+attack",
+                        "wait",
+                        "-attack",
+                        "-right",
+                        "-moveleft",
+                        "+jump",
+                        "+forward",
+                        "wait",
+                        "-forward",
+                        "-jump",
+                        "echo QGE_NOESIS_PLAYER wait_clamped requested=8 max=3",
+                        "echo QGE_NOESIS_PLAYER done",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            log_path.write_text(
+                "QGE_NOESIS_POLICY map=e1m1 plan=adaptive\n"
+                "QGE_NOESIS_PHASE phase=e1m1_entry_clear\n",
+                encoding="utf-8",
+            )
+            trace_path.write_text(
+                json.dumps({
+                    "runtime_evidence": {
+                        "single_trace_ready": False,
+                        "ai": {"decision_count": 7},
+                        "render": {
+                            "sparse_dwt_count": 5,
+                            "native_bridge_count": 5,
+                            "native_fallback_count": 0,
+                        },
+                        "visibility": {"authority_apply_count": 3},
+                        "projectile": {"branch_state_count": 0},
+                    },
+                }),
+                encoding="utf-8",
+            )
+            manifest_path.write_text(
+                json.dumps({
+                    "status": "complete",
+                    "map": "e1m1",
+                    "frames_requested": 0,
+                    "frames_captured": 0,
+                    "run": {
+                        "status": "ok",
+                        "success": 1,
+                        "timed_out": 0,
+                        "startup_issue": "",
+                    },
+                    "input": {
+                        "player": "noesis",
+                        "noesis_plan": "adaptive",
+                    },
+                }),
+                encoding="utf-8",
+            )
+
+            args = SimpleNamespace(
+                manifest=manifest_path,
+                actions=actions_path,
+                commands=commands_path,
+                log=log_path,
+                trace_summary=trace_path,
+                frames_dir=None,
+                plan="",
+                player="",
+                min_actions=1,
+                min_commands=1,
+                min_frames=0,
+                min_frame_mae=None,
+                require_phase_markers=True,
+                require_combat=True,
+            )
+            summary = noesis_summary.build_summary(args)
+            self.assertEqual(summary["schema"], "qge.noesis_summary.v0")
+            self.assertEqual(summary["status"], "pass")
+            self.assertEqual(summary["map"], "e1m1")
+            self.assertEqual(summary["plan"], "adaptive")
+            self.assertEqual(summary["actions"]["verb_counts"]["advance-fire"], 1)
+            self.assertEqual(summary["actions"]["combat_action_count"], 2)
+            self.assertTrue(summary["quality_gates"]["movement_actions_present"])
+            self.assertTrue(summary["quality_gates"]["combat_required"])
+            self.assertTrue(summary["commands"]["player_start_present"])
+            self.assertTrue(summary["commands"]["player_done_present"])
+            self.assertEqual(summary["commands"]["wait_clamped_count"], 1)
+            self.assertEqual(summary["trace"]["ai_decision_count"], 7)
+
+            icc = noesis_summary.build_icc_evidence(
+                summary,
+                tmpdir / "qge_noesis_summary.json",
+            )
+            by_name = {entry["name"]: entry["value"] for entry in icc}
+            self.assertEqual(by_name["runtime_backend"], "qge_noesis_summary")
+            self.assertEqual(
+                by_name["completion_reason"],
+                "qge_noesis_summary_complete",
+            )
+            self.assertTrue(by_name["noesis_failure_free"])
+            self.assertEqual(by_name["noesis_plan"], "adaptive")
+            self.assertEqual(by_name["noesis_action_count"], 8)
+
+            commands_path.unlink()
+            blocked = noesis_summary.build_summary(args)
+            self.assertEqual(blocked["status"], "blocked")
+            self.assertIn(str(commands_path), blocked["inputs"]["missing_inputs"])
+            self.assertIn("commands_present", blocked["failures"])
 
 
 class TraceSummaryTests(unittest.TestCase):

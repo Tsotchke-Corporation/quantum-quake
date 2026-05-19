@@ -120,6 +120,11 @@ The stream directory is intentionally simple and tail-friendly:
 - `input/noesis_actions.txt`: Noesis action lines selected for this run.
 - `input/noesis_commands.cfg`: translated Quake console commands emitted by
   the Noesis player.
+- `noesis/qge_noesis_summary.json`: gameplay-quality reducer for Noesis runs,
+  combining action/command traces, log health, captured frame motion, and trace
+  evidence into a pass/blocked/not-requested status.
+- `noesis/qge_noesis_icc_evidence.json`: ICC evidence generated from the
+  Noesis summary, including `agent_stream_noesis_status` inputs.
 - `logs/quantum_quake.log`: runtime console log mirrored into the stream.
 - `logs/open.log`: LaunchServices notes for macOS `open` mode.
 - `trace/qge_trace_summary.json`: JSON summary of `qge_trace.bin`, including
@@ -131,9 +136,10 @@ The stream directory is intentionally simple and tail-friendly:
 - `qge_agent_stream_icc_evidence.jsonl`: ICC-native evidence entries for the
   manifest, events file, Noesis input traces, latest video frame, raw audio,
   audio metadata, trace artifact, trace summary, frame count, run outcome,
-  trace status, runtime evidence readiness, and completion signal. Consumers
-  can key on run outcome, trace status, and runtime evidence readiness without
-  reading the console log.
+  trace status, Noesis summary status, runtime evidence readiness, and
+  completion signal. Consumers can key on run outcome, trace status,
+  `agent_stream_noesis_status`, and runtime evidence readiness without reading
+  the console log.
 
 The harness also refreshes stable pointers in the diagnostics roots:
 
@@ -332,6 +338,16 @@ pack, expose direct and per-mode max average/render timing fields in the
 publication runtime summary and ICC evidence, and treat an explicit blocked
 performance sidecar as evidence-only rather than
 `qge_publication_artifact_pack_complete`.
+
+`tools/qge_noesis_summary.py` reads the stream manifest, Noesis action trace,
+translated command buffer, runtime log, captured frames, and optional trace
+summary. The stream harness runs it after frame, performance, and trace
+collection, writes `qge_noesis_summary.json` and
+`qge_noesis_icc_evidence.json` under the capture directory, mirrors both files
+into `agent_stream/noesis/`, and records the result as
+`agent_stream_noesis_status` in the JSONL ICC sidecar. This reducer is
+evidence-only: a blocked Noesis quality summary does not turn a completed media
+stream into a process failure.
 
 `tools/quake_crash_watch.sh` uses the same Noesis player/provider contract for
 its scripted movement by default, stores `input/noesis_actions.txt` and

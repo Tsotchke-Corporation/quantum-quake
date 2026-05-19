@@ -183,6 +183,7 @@ agent_trace_dir="$agent_stream/trace"
 agent_input_dir="$agent_stream/input"
 agent_log_dir="$agent_stream/logs"
 agent_perf_dir="$agent_stream/performance"
+agent_noesis_dir="$agent_stream/noesis"
 agent_events_file="$agent_stream/events.ndjson"
 agent_manifest_file="$agent_stream/manifest.json"
 agent_icc_file="$agent_stream/qge_agent_stream_icc_evidence.jsonl"
@@ -199,8 +200,14 @@ perf_summary_file="$outdir/qge_perf_summary.json"
 perf_icc_file="$outdir/qge_perf_icc_evidence.json"
 perf_stdout_file="$outdir/qge_perf_summary.txt"
 perf_stderr_file="$outdir/qge_perf_summary.err"
+noesis_summary_file="$outdir/qge_noesis_summary.json"
+noesis_icc_file="$outdir/qge_noesis_icc_evidence.json"
+noesis_stdout_file="$outdir/qge_noesis_summary.txt"
+noesis_stderr_file="$outdir/qge_noesis_summary.err"
 agent_perf_summary_file="$agent_perf_dir/qge_perf_summary.json"
 agent_perf_icc_file="$agent_perf_dir/qge_perf_icc_evidence.json"
+agent_noesis_summary_file="$agent_noesis_dir/qge_noesis_summary.json"
+agent_noesis_icc_file="$agent_noesis_dir/qge_noesis_icc_evidence.json"
 agent_trace_summary_file="$agent_trace_dir/qge_trace_summary.json"
 agent_trace_summary_stderr_file="$agent_trace_dir/qge_trace_summary.err"
 agent_input_actions_file="$agent_input_dir/noesis_actions.txt"
@@ -212,9 +219,10 @@ agent_frame_count_file="$agent_stream/video/frame_count.txt"
 agent_last_frame_file="$agent_stream/video/latest_frame.txt"
 last_agent_frame=""
 perf_status="not_run"
+noesis_summary_status="not_run"
 trace_summary_status="not_requested"
 trace_runtime_evidence_ready=0
-mkdir -p "$quake_stream_root" "$agent_stream_root" "$outdir" "$agent_video_dir" "$agent_audio_dir" "$agent_trace_dir" "$agent_input_dir" "$agent_log_dir" "$agent_perf_dir"
+mkdir -p "$quake_stream_root" "$agent_stream_root" "$outdir" "$agent_video_dir" "$agent_audio_dir" "$agent_trace_dir" "$agent_input_dir" "$agent_log_dir" "$agent_perf_dir" "$agent_noesis_dir"
 : > "$agent_events_file"
 : > "$agent_input_actions_file"
 : > "$agent_input_commands_file"
@@ -399,6 +407,13 @@ write_agent_manifest() {
     "max_average_ms": $(json_string "$perf_max_average_ms"),
     "max_render_ms": $(json_string "$perf_max_render_ms")
   },
+  "noesis": {
+    "status": $(json_string "$noesis_summary_status"),
+    "summary_file": $(json_string "$agent_noesis_summary_file"),
+    "icc_evidence_file": $(json_string "$agent_noesis_icc_file"),
+    "capture_summary_file": $(json_string "$noesis_summary_file"),
+    "capture_icc_evidence_file": $(json_string "$noesis_icc_file")
+  },
   "icc_evidence": $(json_string "$agent_icc_file"),
   "trace": $(json_string "$manifest_trace_file"),
   "trace_status": $(json_string "$trace_status"),
@@ -456,12 +471,15 @@ write_agent_icc_evidence() {
     printf '{"kind":"runtime_state","name":"agent_stream_trace_summary_status","value":%s,"path":%s}\n' "$(json_string "$trace_summary_status")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"runtime_state","name":"agent_stream_runtime_evidence_ready","value":%s,"path":%s}\n' "$(json_string "$trace_runtime_evidence_ready")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"runtime_state","name":"agent_stream_perf_status","value":%s,"path":%s}\n' "$(json_string "$perf_status")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"runtime_state","name":"agent_stream_noesis_status","value":%s,"path":%s}\n' "$(json_string "$noesis_summary_status")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_stream_manifest_file","value":%s,"path":%s}\n' "$(json_string "$agent_manifest_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_events_file","value":%s,"path":%s}\n' "$(json_string "$agent_events_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_trace_file","value":%s,"path":%s}\n' "$(json_string "$icc_trace_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_trace_summary_file","value":%s,"path":%s}\n' "$(json_string "$icc_trace_summary_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_perf_summary_file","value":%s,"path":%s}\n' "$(json_string "$agent_perf_summary_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_perf_icc_evidence_file","value":%s,"path":%s}\n' "$(json_string "$agent_perf_icc_file")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"artifact","name":"agent_noesis_summary_file","value":%s,"path":%s}\n' "$(json_string "$agent_noesis_summary_file")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"artifact","name":"agent_noesis_icc_evidence_file","value":%s,"path":%s}\n' "$(json_string "$agent_noesis_icc_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_input_actions_file","value":%s,"path":%s}\n' "$(json_string "$agent_input_actions_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_input_commands_file","value":%s,"path":%s}\n' "$(json_string "$agent_input_commands_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_video_frame_file","value":%s,"path":%s}\n' "$(json_string "$last_agent_frame")" "$(json_string "$agent_icc_file")"
@@ -495,6 +513,56 @@ write_perf_summary() {
   fi
   agent_event "performance_summary" "$agent_perf_summary_file" "status=$perf_status"
   echo "QGE_PERF_SUMMARY status=$perf_status $perf_summary_file"
+}
+
+write_noesis_summary() {
+  local -a noesis_args
+
+  if [[ "$stream_player" != "noesis" ]]; then
+    noesis_summary_status="not_requested"
+    agent_event "noesis_summary" "$agent_noesis_summary_file" \
+      "status=$noesis_summary_status"
+    return
+  fi
+
+  noesis_args=(
+    --manifest "$agent_manifest_file"
+    --actions "$agent_input_actions_file"
+    --commands "$agent_input_commands_file"
+    --log "$agent_log_file"
+    --frames-dir "$agent_video_dir"
+    --plan "$noesis_plan"
+    --player "$stream_player"
+    --min-actions 1
+    --min-commands 1
+    --min-frames "$frames"
+    --min-frame-mae 2.0
+    --require-phase-markers
+    --require-combat
+    --out "$noesis_summary_file"
+    --icc-out "$noesis_icc_file"
+  )
+  if [[ "$trace_summary_status" == "complete" && -s "$trace_summary_file" ]]; then
+    noesis_args+=(--trace-summary "$trace_summary_file")
+  fi
+
+  if python3 "$repo_root/tools/qge_noesis_summary.py" "${noesis_args[@]}" \
+    > "$noesis_stdout_file" 2> "$noesis_stderr_file"; then
+    noesis_summary_status="pass"
+  else
+    noesis_summary_status="blocked"
+  fi
+
+  if [[ -s "$noesis_summary_file" ]]; then
+    noesis_summary_status="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("status", "blocked"))' "$noesis_summary_file" 2>/dev/null || printf '%s' "$noesis_summary_status")"
+    cp "$noesis_summary_file" "$agent_noesis_summary_file"
+  fi
+  if [[ -s "$noesis_icc_file" ]]; then
+    cp "$noesis_icc_file" "$agent_noesis_icc_file"
+  fi
+  agent_event "noesis_summary" "$agent_noesis_summary_file" \
+    "status=$noesis_summary_status"
+  echo "QGE_NOESIS_SUMMARY status=$noesis_summary_status $noesis_summary_file"
 }
 
 recover_latest_trace_pointer() {
@@ -1035,6 +1103,9 @@ if [[ "$trace" == "1" ]]; then
   fi
 fi
 
+write_agent_manifest "complete"
+write_noesis_summary
+
 cat > "$outdir/README.txt" <<EOF
 Quantum Quake graphics stream
 
@@ -1068,6 +1139,9 @@ Log: $log_file
 Performance summary: $perf_summary_file
 Performance ICC evidence: $perf_icc_file
 Performance status: $perf_status
+Noesis summary: $noesis_summary_file
+Noesis ICC evidence: $noesis_icc_file
+Noesis status: $noesis_summary_status
 Agent stream: $agent_stream
 Agent manifest: $agent_manifest_file
 Agent events: $agent_events_file
