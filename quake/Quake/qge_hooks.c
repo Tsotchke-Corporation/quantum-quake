@@ -164,6 +164,18 @@ static int qge_gameplay_prev_damageable_alive = 0;
 static float *qge_gameplay_prev_edict_health = NULL;
 static int qge_gameplay_prev_edict_capacity = 0;
 static int qge_noesis_assist_last_log_frame = -999999;
+static int qge_noesis_assist_mode = 0;
+static qboolean qge_noesis_assist_active = false;
+static int qge_noesis_assist_target_id = 0;
+static qboolean qge_noesis_assist_target_visible = false;
+static float qge_noesis_assist_target_distance = -1.0f;
+static float qge_noesis_assist_aim_pitch = 0.0f;
+static float qge_noesis_assist_aim_yaw = 0.0f;
+static float qge_noesis_assist_forwardmove = 0.0f;
+static float qge_noesis_assist_sidemove = 0.0f;
+static float qge_noesis_assist_forward_clear = -1.0f;
+static float qge_noesis_assist_left_clear = -1.0f;
+static float qge_noesis_assist_right_clear = -1.0f;
 
 static int QGE_RenderUpdateInterval(void);
 static qboolean QGE_RenderShouldUpdateFrame(void);
@@ -899,6 +911,22 @@ static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
 	return best_nearest;
 }
 
+static void QGE_NoesisAssistResetFrame(void)
+{
+	qge_noesis_assist_mode = (int)qge_noesis_assist.value;
+	qge_noesis_assist_active = false;
+	qge_noesis_assist_target_id = 0;
+	qge_noesis_assist_target_visible = false;
+	qge_noesis_assist_target_distance = -1.0f;
+	qge_noesis_assist_aim_pitch = 0.0f;
+	qge_noesis_assist_aim_yaw = 0.0f;
+	qge_noesis_assist_forwardmove = 0.0f;
+	qge_noesis_assist_sidemove = 0.0f;
+	qge_noesis_assist_forward_clear = -1.0f;
+	qge_noesis_assist_left_clear = -1.0f;
+	qge_noesis_assist_right_clear = -1.0f;
+}
+
 void QGE_NoesisAssistClientThink(client_t *client,
 								 edict_t *player,
 								 usercmd_t *move)
@@ -945,6 +973,7 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	player->v.fixangle = 1.0f;
 
 	chase_mode = qge_noesis_assist.value >= 1.5f ? 1 : 0;
+	forward_clear = left_clear = right_clear = -1.0f;
 	if (chase_mode) {
 		move->forwardmove = visible && distance < 384.0f ? 120.0f : 400.0f;
 		move->sidemove = 0.0f;
@@ -970,6 +999,19 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	else if (chase_mode) {
 		player->v.button0 = 0.0f;
 	}
+
+	qge_noesis_assist_mode = chase_mode ? 2 : 1;
+	qge_noesis_assist_active = true;
+	qge_noesis_assist_target_id = NUM_FOR_EDICT(enemy);
+	qge_noesis_assist_target_visible = visible;
+	qge_noesis_assist_target_distance = distance;
+	qge_noesis_assist_aim_pitch = aim[PITCH];
+	qge_noesis_assist_aim_yaw = aim[YAW];
+	qge_noesis_assist_forwardmove = move->forwardmove;
+	qge_noesis_assist_sidemove = move->sidemove;
+	qge_noesis_assist_forward_clear = forward_clear;
+	qge_noesis_assist_left_clear = left_clear;
+	qge_noesis_assist_right_clear = right_clear;
 
 	if (quantum_debug.value >= 1.0f &&
 		qge_frame_count - qge_noesis_assist_last_log_frame >= 30) {
@@ -1155,6 +1197,12 @@ static void QGE_GameplayOutcomeSample(void)
 		"\"nearest_enemy_id\":%d,\"nearest_enemy_distance\":%.3f,"
 		"\"nearest_enemy_visible\":%s,\"visible_enemy_count\":%d,"
 		"\"attack_press_delta\":%d,\"attack_presses_total\":%d},"
+		"\"assist\":{\"mode\":%d,\"active\":%s,\"target_id\":%d,"
+		"\"target_visible\":%s,\"target_distance\":%.3f,"
+		"\"aim_pitch\":%.3f,\"aim_yaw\":%.3f,"
+		"\"forwardmove\":%.3f,\"sidemove\":%.3f,"
+		"\"forward_clear\":%.3f,\"left_clear\":%.3f,"
+		"\"right_clear\":%.3f},"
 		"\"pickup\":{\"pickup_delta\":%d,\"pickups_total\":%d,"
 		"\"item_bits_added\":%d,\"weapon_changed_delta\":%d,"
 		"\"weapon_changes_total\":%d}}\n",
@@ -1175,6 +1223,15 @@ static void QGE_GameplayOutcomeSample(void)
 		nearest_enemy_distance,
 		nearest_enemy_visible ? "true" : "false", visible_enemy_count,
 		attack_press_delta, qge_gameplay_attack_presses_total,
+		qge_noesis_assist_mode,
+		qge_noesis_assist_active ? "true" : "false",
+		qge_noesis_assist_target_id,
+		qge_noesis_assist_target_visible ? "true" : "false",
+		qge_noesis_assist_target_distance,
+		qge_noesis_assist_aim_pitch, qge_noesis_assist_aim_yaw,
+		qge_noesis_assist_forwardmove, qge_noesis_assist_sidemove,
+		qge_noesis_assist_forward_clear, qge_noesis_assist_left_clear,
+		qge_noesis_assist_right_clear,
 		pickup_delta, qge_gameplay_pickups_total, item_bits_added,
 		weapon_changed_delta, qge_gameplay_weapon_changes_total);
 
@@ -3423,6 +3480,7 @@ void QGE_FrameBegin(void)
 	qge_render_collect_frame = QGE_RenderShouldUpdateFrame();
 	QGE_FrameSnapshotBeginCurrent();
 	QGE_SceneBegin();
+	QGE_NoesisAssistResetFrame();
 	qge_phys_toss_count = 0;
 	qge_phys_projectile_count = 0;
 	qge_phys_impact_count = 0;

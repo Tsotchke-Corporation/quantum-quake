@@ -491,6 +491,14 @@ class NoesisSummaryTests(unittest.TestCase):
                                 "pickups_total": 0,
                                 "weapon_changes_total": 0,
                             },
+                            "assist": {
+                                "mode": 0,
+                                "active": False,
+                                "target_visible": False,
+                                "target_distance": -1.0,
+                                "forwardmove": 0.0,
+                                "sidemove": 0.0,
+                            },
                         }),
                         json.dumps({
                             "schema": "qge.gameplay_outcome.v0",
@@ -499,6 +507,7 @@ class NoesisSummaryTests(unittest.TestCase):
                             "player": {
                                 "health": 94,
                                 "armor": 0,
+                                "attack_active": True,
                                 "origin": [128, 12, 0],
                             },
                             "route": {
@@ -519,6 +528,14 @@ class NoesisSummaryTests(unittest.TestCase):
                             "pickup": {
                                 "pickups_total": 1,
                                 "weapon_changes_total": 1,
+                            },
+                            "assist": {
+                                "mode": 2,
+                                "active": True,
+                                "target_visible": True,
+                                "target_distance": 280.0,
+                                "forwardmove": 400.0,
+                                "sidemove": 220.0,
                             },
                         }),
                         json.dumps({
@@ -565,6 +582,7 @@ class NoesisSummaryTests(unittest.TestCase):
                     "input": {
                         "player": "noesis",
                         "noesis_plan": "adaptive",
+                        "noesis_assist": 2,
                     },
                     "noesis": {
                         "gameplay_outcomes_file": str(gameplay_path),
@@ -616,6 +634,17 @@ class NoesisSummaryTests(unittest.TestCase):
                 148.0,
             )
             self.assertTrue(summary["gameplay"]["player"]["survived"])
+            self.assertEqual(summary["inputs"]["noesis_assist_requested"], 2)
+            self.assertEqual(summary["gameplay"]["assist"]["mode_max"], 2.0)
+            self.assertEqual(summary["gameplay"]["assist"]["active_frames"], 1)
+            self.assertEqual(
+                summary["gameplay"]["assist"]["visible_target_frames"],
+                1,
+            )
+            self.assertEqual(
+                summary["gameplay"]["assist"]["attack_visible_frames"],
+                1,
+            )
             self.assertTrue(summary["quality_gates"]["route_progress_required"])
             self.assertEqual(summary["trace"]["ai_decision_count"], 7)
             self.assertGreaterEqual(summary["gameplay_score"]["score"], 35.0)
@@ -644,6 +673,15 @@ class NoesisSummaryTests(unittest.TestCase):
             self.assertEqual(by_name["noesis_gameplay_outcome_sample_count"], 2)
             self.assertEqual(by_name["noesis_gameplay_total_distance"], 148.0)
             self.assertTrue(by_name["noesis_gameplay_survived"])
+            self.assertEqual(by_name["noesis_assist_requested_mode"], 2)
+            self.assertEqual(by_name["noesis_assist_mode_max"], 2.0)
+            self.assertEqual(by_name["noesis_assist_active_sample_count"], 1)
+            self.assertEqual(
+                by_name["noesis_assist_target_visible_sample_count"],
+                1,
+            )
+            self.assertEqual(by_name["noesis_assist_steering_sample_count"], 1)
+            self.assertEqual(by_name["noesis_assist_attack_visible_frames"], 1)
 
             commands_path.unlink()
             blocked = noesis_summary.build_summary(args)

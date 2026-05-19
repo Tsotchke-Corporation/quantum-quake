@@ -384,6 +384,51 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
         for sample in playable_samples
     ]
     nearest_distances = [value for value in nearest_distances if value >= 0.0]
+    assist_active_frames = sum(
+        1 for sample in playable_samples
+        if bool(value_at(sample, "assist", "active", default=False))
+    )
+    assist_telemetry_samples = sum(
+        1 for sample in playable_samples
+        if isinstance(value_at(sample, "assist", default=None), dict)
+    )
+    assist_visible_target_frames = sum(
+        1 for sample in playable_samples
+        if bool(value_at(sample, "assist", "target_visible", default=False))
+    )
+    assist_modes = [
+        as_number(value_at(sample, "assist", "mode"), 0.0)
+        for sample in playable_samples
+    ]
+    assist_target_distances = [
+        as_number(value_at(sample, "assist", "target_distance"), -1.0)
+        for sample in playable_samples
+    ]
+    assist_target_distances = [
+        value for value in assist_target_distances if value >= 0.0
+    ]
+    assist_target_ids = {
+        int(as_number(value_at(sample, "assist", "target_id"), 0.0))
+        for sample in playable_samples
+        if int(as_number(value_at(sample, "assist", "target_id"), 0.0)) > 0
+    }
+    assist_steering_frames = sum(
+        1 for sample in playable_samples
+        if abs(as_number(value_at(sample, "assist", "forwardmove"), 0.0)) > 0.0
+        or abs(as_number(value_at(sample, "assist", "sidemove"), 0.0)) > 0.0
+    )
+    assist_wall_probe_frames = sum(
+        1 for sample in playable_samples
+        if as_number(value_at(sample, "assist", "forward_clear"), -1.0) >= 0.0
+        or as_number(value_at(sample, "assist", "left_clear"), -1.0) >= 0.0
+        or as_number(value_at(sample, "assist", "right_clear"), -1.0) >= 0.0
+    )
+    assist_attack_visible_frames = sum(
+        1 for sample in playable_samples
+        if bool(value_at(sample, "assist", "active", default=False))
+        and bool(value_at(sample, "assist", "target_visible", default=False))
+        and bool(value_at(sample, "player", "attack_active", default=False))
+    )
     death_count = 0
     prev_health = health_values[0]
     for health in health_values[1:]:
@@ -435,6 +480,27 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
         "pickup": {
             "pickup_count": pickups,
             "weapon_change_count": weapon_changes,
+        },
+        "assist": {
+            "telemetry_sample_count": assist_telemetry_samples,
+            "active_frames": assist_active_frames,
+            "active_sample_count": assist_active_frames,
+            "visible_target_frames": assist_visible_target_frames,
+            "target_visible_sample_count": assist_visible_target_frames,
+            "mode_max": max(assist_modes) if assist_modes else 0.0,
+            "target_count": len(assist_target_ids),
+            "target_distance_min": (
+                min(assist_target_distances)
+                if assist_target_distances else None
+            ),
+            "target_distance_max": (
+                max(assist_target_distances)
+                if assist_target_distances else None
+            ),
+            "steering_frames": assist_steering_frames,
+            "steering_sample_count": assist_steering_frames,
+            "wall_probe_sample_count": assist_wall_probe_frames,
+            "attack_visible_frames": assist_attack_visible_frames,
         },
     }
 
@@ -532,6 +598,11 @@ def build_gameplay_score(
     press_counts = commands.get("press_counts") or {}
     delta = frames.get("delta") or {}
     gameplay_present = int(gameplay.get("sample_count") or 0) >= 2
+    assist_state = gameplay.get("assist") or {}
+    assist_telemetry_present = (
+        int(assist_state.get("active_frames") or 0) > 0 or
+        int(assist_state.get("mode_max") or 0) > 0
+    )
     mae_norm = delta.get("mae_rgb_normalized")
     if not isinstance(mae_norm, (int, float)):
         mae_norm = 0.0
@@ -699,6 +770,7 @@ def build_gameplay_score(
         "generated_phase_count": generated_phase_count,
         "phase_execution_ratio": round(phase_ratio, 4),
         "outcome_telemetry_present": gameplay_present,
+        "assist_telemetry_present": assist_telemetry_present,
         "outcome_telemetry_missing": [] if gameplay_present else [
             "kills",
             "damage_dealt",
@@ -727,6 +799,8 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
     noesis_manifest = manifest.get("noesis") or {}
     plan = args.plan or str(input_manifest.get("noesis_plan") or "")
     player = args.player or str(input_manifest.get("player") or "noesis")
+    noesis_assist_requested = int(as_number(
+        input_manifest.get("noesis_assist"), 0.0))
     gameplay_path = args.gameplay_outcomes
     if gameplay_path is None:
         manifest_gameplay = noesis_manifest.get("gameplay_outcomes_file") or ""
@@ -854,6 +928,7 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
             "trace_summary": str(args.trace_summary) if args.trace_summary else "",
             "frames_dir": str(args.frames_dir) if args.frames_dir else "",
             "missing_inputs": missing_inputs,
+            "noesis_assist_requested": noesis_assist_requested,
         },
         "actions": actions,
         "commands": commands,
@@ -879,6 +954,7 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
     gameplay_route = gameplay.get("route") or {}
     gameplay_combat = gameplay.get("combat") or {}
     gameplay_pickup = gameplay.get("pickup") or {}
+    gameplay_assist = gameplay.get("assist") or {}
     return [
         {
             "kind": "runtime_backend",
@@ -978,6 +1054,13 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
         },
         {
             "kind": "runtime_state",
+            "name": "noesis_assist_requested_mode",
+            "value": (summary.get("inputs") or {}).get(
+                "noesis_assist_requested", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
             "name": "noesis_gameplay_outcome_sample_count",
             "value": gameplay.get("sample_count", 0),
             "path": str(summary_path),
@@ -1028,6 +1111,66 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "kind": "runtime_state",
             "name": "noesis_gameplay_pickups",
             "value": gameplay_pickup.get("pickup_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_active_frames",
+            "value": gameplay_assist.get("active_frames", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_telemetry_sample_count",
+            "value": gameplay_assist.get("telemetry_sample_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_active_sample_count",
+            "value": gameplay_assist.get("active_sample_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_visible_target_frames",
+            "value": gameplay_assist.get("visible_target_frames", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_target_visible_sample_count",
+            "value": gameplay_assist.get("target_visible_sample_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_steering_frames",
+            "value": gameplay_assist.get("steering_frames", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_steering_sample_count",
+            "value": gameplay_assist.get("steering_sample_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_attack_visible_frames",
+            "value": gameplay_assist.get("attack_visible_frames", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_mode_max",
+            "value": gameplay_assist.get("mode_max", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_target_distance_min",
+            "value": gameplay_assist.get("target_distance_min"),
             "path": str(summary_path),
         },
         {

@@ -130,7 +130,9 @@ The stream directory is intentionally simple and tail-friendly:
   written once per host frame when `-qgestreamdir` is present. It records player
   health, armor, ammo, weapon, origin/view angles, route distance, leaf
   transitions, inferred damage dealt/taken, kills, pickups, attack presses, and
-  enemy proximity/visibility.
+  enemy proximity/visibility. When `QGE_NOESIS_ASSIST` is enabled, samples also
+  include assist mode, target visibility/distance, aim yaw/pitch, steering
+  commands, and wall-probe distances.
 - `logs/quantum_quake.log`: runtime console log mirrored into the stream.
 - `logs/open.log`: LaunchServices notes for macOS `open` mode.
 - `trace/qge_trace_summary.json`: JSON summary of `qge_trace.bin`, including
@@ -357,7 +359,9 @@ into `agent_stream/noesis/`, and records the result as
 `noesis_gameplay_quality_grade`, `noesis_log_phase_count`,
 `noesis_log_policy_done`, `noesis_gameplay_outcome_sample_count`,
 `noesis_gameplay_total_distance`, survival, damage, kill, pickup, and visible
-enemy evidence. Set `QGE_NOESIS_MIN_LOG_PHASES` to
+enemy evidence. Assist runs additionally emit requested mode, active sample
+count, visible-target sample count, steering sample count, attack-visible
+frames, and target-distance evidence. Set `QGE_NOESIS_MIN_LOG_PHASES` to
 require that many `QGE_NOESIS_PHASE` markers to appear in the engine log, which
 is useful when proving that a longer route plan actually executed rather than
 only being generated. Set `QGE_NOESIS_MIN_GAMEPLAY_SAMPLES` and
