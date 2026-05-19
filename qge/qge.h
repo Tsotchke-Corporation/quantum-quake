@@ -412,9 +412,11 @@ typedef struct {
     int matched_hidden_count;
     int false_positive_count;
     int false_negative_count;
+    int false_negative_repaired_count;
     int overflow_count;
     int first_false_positive;
     int first_false_negative;
+    int first_false_negative_repaired;
     uint64_t classic_fingerprint;
     uint64_t qge_fingerprint;
     uint64_t mismatch_fingerprint;

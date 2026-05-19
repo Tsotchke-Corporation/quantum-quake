@@ -127,6 +127,7 @@ static qboolean qge_vis_last_decision_valid = false;
 #define QGE_VIS_TRACE_FLAG_FALLBACK_SELECTED   0x0100u
 #define QGE_VIS_TRACE_FLAG_WARMUP_PENDING      0x0200u
 #define QGE_VIS_TRACE_FLAG_CONTROLLED_SMOKE    0x0400u
+#define QGE_VIS_TRACE_FLAG_FN_REPAIRED         0x0800u
 
 #define QGE_CLASSIC_2D_VISIBLE 1
 
@@ -7264,7 +7265,8 @@ static void QGE_TraceVisShadowParity(const qge_vis_shadow_stats_t *stats)
 	if (!stats)
 		return;
 
-	mismatch_count = stats->false_positive_count + stats->false_negative_count;
+	mismatch_count = stats->false_positive_count +
+		stats->false_negative_count + stats->false_negative_repaired_count;
 	if (qge_vis_shadow_registered_surfaces > 0)
 		flags |= QGE_VIS_TRACE_FLAG_REGISTERED;
 	if (mismatch_count > 0)
@@ -7273,6 +7275,8 @@ static void QGE_TraceVisShadowParity(const qge_vis_shadow_stats_t *stats)
 		flags |= QGE_VIS_TRACE_FLAG_FALSE_POSITIVE;
 	if (stats->false_negative_count > 0)
 		flags |= QGE_VIS_TRACE_FLAG_FALSE_NEGATIVE;
+	if (stats->false_negative_repaired_count > 0)
+		flags |= QGE_VIS_TRACE_FLAG_FN_REPAIRED;
 	if (stats->overflow_count > 0)
 		flags |= QGE_VIS_TRACE_FLAG_OVERFLOW;
 
@@ -7335,7 +7339,9 @@ static void QGE_TraceVisShadowParity(const qge_vis_shadow_stats_t *stats)
 		if (probe.coherence < 0.0)
 			probe.coherence = 0.0;
 		probe.max_probability = (double)stats->false_positive_count;
-		probe.total_probability = (double)stats->false_negative_count;
+		probe.total_probability =
+			(double)(stats->false_negative_count +
+					 stats->false_negative_repaired_count);
 		probe.active_basis_count = stats->qge_visible_count;
 		probe.qubit_count =
 			qge_quantum_qubits_for_basis_count((uint64_t)stats->total_surfaces);
@@ -7376,14 +7382,16 @@ static void QGE_TraceVisShadowParity(const qge_vis_shadow_stats_t *stats)
 			event.reason_code =
 				(stats->false_positive_count > 0 ? 1 : 0) |
 				(stats->false_negative_count > 0 ? 2 : 0) |
+				(stats->false_negative_repaired_count > 0 ? 8 : 0) |
 				((int)stats->fallback_reason << 8);
 			event.metric_value = (double)mismatch_count;
 			q_snprintf(event.message, sizeof(event.message),
-					   "reason=%s authority=%s fp=%d fn=%d clean=%d/%d total_mismatch=%d c=%llx q=%llx m=%llx",
+					   "reason=%s authority=%s fp=%d fn=%d repaired_fn=%d clean=%d/%d total_mismatch=%d c=%llx q=%llx m=%llx",
 					   qge_vis_fallback_reason,
 					   qge_vis_authority_reason,
 					   stats->false_positive_count,
 					   stats->false_negative_count,
+					   stats->false_negative_repaired_count,
 					   stats->consecutive_clean_frames,
 					   stats->clean_frames_required,
 					   stats->cumulative_mismatch_count,
@@ -7397,8 +7405,8 @@ static void QGE_TraceVisShadowParity(const qge_vis_shadow_stats_t *stats)
 	if (quantum_debug.value >= 1.0f ||
 		qge_frame_count < 5 || (qge_frame_count % 60) == 0) {
 		fprintf(stderr, "QGE vis shadow frame=%d total=%d classic=%d qge=%d "
-				"match=%d hidden=%d fp=%d fn=%d overflow=%d "
-				"first_fp=%d first_fn=%d threshold=%.8f prob_sum=%.6f "
+				"match=%d hidden=%d fp=%d fn=%d repaired_fn=%d overflow=%d "
+				"first_fp=%d first_fn=%d first_repaired_fn=%d threshold=%.8f prob_sum=%.6f "
 				"prob_max=%.6f classic_fp=0x%llx qge_fp=0x%llx "
 				"mismatch_fp=0x%llx clean=%d/%d frames=%d "
 				"total_mismatch=%d total_fn=%d authority_ready=%d "
@@ -7410,8 +7418,10 @@ static void QGE_TraceVisShadowParity(const qge_vis_shadow_stats_t *stats)
 				stats->classic_visible_count, stats->qge_visible_count,
 				stats->matched_visible_count, stats->matched_hidden_count,
 				stats->false_positive_count, stats->false_negative_count,
+				stats->false_negative_repaired_count,
 				stats->overflow_count,
 				stats->first_false_positive, stats->first_false_negative,
+				stats->first_false_negative_repaired,
 				stats->threshold, stats->qge_probability_sum,
 				stats->qge_probability_max,
 				(unsigned long long)stats->classic_fingerprint,

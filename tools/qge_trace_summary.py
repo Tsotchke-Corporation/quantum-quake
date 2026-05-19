@@ -121,6 +121,7 @@ VIS_FLAGS = {
     "fallback_selected": 0x0100,
     "warmup_pending": 0x0200,
     "controlled_authority_smoke": 0x0400,
+    "false_negative_repaired": 0x0800,
 }
 
 AUDIO_FLAGS = {

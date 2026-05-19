@@ -2020,23 +2020,26 @@ static int test_vis_shadow_parity_stats(void) {
         return 0;
     }
 
-    printf("\n    Shadow parity: classic=%d qge=%d fp=%d fn=%d "
+    printf("\n    Shadow parity: classic=%d qge=%d fp=%d fn=%d repaired=%d "
            "classic_fp=0x%llx qge_fp=0x%llx mismatch_fp=0x%llx\n    ",
            stats.classic_visible_count,
            stats.qge_visible_count,
            stats.false_positive_count,
            stats.false_negative_count,
+           stats.false_negative_repaired_count,
            (unsigned long long)stats.classic_fingerprint,
            (unsigned long long)stats.qge_fingerprint,
            (unsigned long long)stats.mismatch_fingerprint);
 
     return stats.total_surfaces == 3 &&
            stats.classic_visible_count == 2 &&
-           stats.qge_visible_count == 2 &&
+           stats.qge_visible_count == 3 &&
            stats.false_positive_count == 1 &&
-           stats.false_negative_count == 1 &&
+           stats.false_negative_count == 0 &&
+           stats.false_negative_repaired_count == 1 &&
            stats.first_false_positive == 1 &&
-           stats.first_false_negative == 2 &&
+           stats.first_false_negative == -1 &&
+           stats.first_false_negative_repaired == 2 &&
            stats.classic_fingerprint != stats.qge_fingerprint &&
            stats.mismatch_fingerprint != 0;
 }
@@ -2109,15 +2112,16 @@ static int test_vis_shadow_authority_gate_warmup(void) {
            stats.cumulative_mismatch_count,
            stats.cumulative_false_negative_count);
 
-    return stats.false_negative_count == 1 &&
+    return stats.false_negative_count == 0 &&
+           stats.false_negative_repaired_count == 1 &&
            stats.fallback_required &&
            !stats.authority_ready &&
            stats.consecutive_clean_frames == 0 &&
-           stats.fallback_reason == QGE_VIS_GATE_REASON_FALSE_NEGATIVE &&
-           stats.authority_reason == QGE_VIS_GATE_REASON_FALSE_NEGATIVE &&
-           stats.cumulative_false_negative_count >= 1 &&
+           stats.fallback_reason == QGE_VIS_GATE_REASON_PARITY_MISMATCH &&
+           stats.authority_reason == QGE_VIS_GATE_REASON_PARITY_MISMATCH &&
+           stats.cumulative_false_negative_count == 0 &&
            strcmp(qge_vis_gate_reason_name(stats.fallback_reason),
-                  "false_negative_fallback") == 0;
+                  "parity_mismatch_fallback") == 0;
 }
 
 static int test_vis_writeback_decision_disabled(void) {
@@ -2158,7 +2162,7 @@ static int test_vis_writeback_decision_warmup(void) {
            decision.clean_frames_required == stats.clean_frames_required;
 }
 
-static int test_vis_writeback_decision_false_negative(void) {
+static int test_vis_writeback_decision_repaired_false_negative(void) {
     qge_vis_shadow_stats_t stats;
     qge_vis_writeback_decision_t decision;
 
@@ -2172,10 +2176,11 @@ static int test_vis_writeback_decision_false_negative(void) {
            decision.shadow_observed &&
            !decision.writeback_allowed &&
            decision.fallback_selected &&
-           decision.false_negative_forced_classic &&
+           !decision.false_negative_forced_classic &&
            decision.source == QGE_VIS_WRITEBACK_SOURCE_CLASSIC &&
-           decision.last_false_negative_count == 1 &&
-           decision.fallback_reason == QGE_VIS_GATE_REASON_FALSE_NEGATIVE;
+           decision.last_false_negative_count == 0 &&
+           stats.false_negative_repaired_count == 1 &&
+           decision.fallback_reason == QGE_VIS_GATE_REASON_PARITY_MISMATCH;
 }
 
 static int test_vis_writeback_decision_ready(void) {
@@ -3413,7 +3418,7 @@ int main(void) {
     TEST(vis_shadow_authority_gate_warmup);
     TEST(vis_writeback_decision_disabled);
     TEST(vis_writeback_decision_warmup);
-    TEST(vis_writeback_decision_false_negative);
+    TEST(vis_writeback_decision_repaired_false_negative);
     TEST(vis_writeback_decision_ready);
     TEST(vis_audited_mask_requires_ready_decision);
     TEST(vis_audited_mask_ready_visible_set);

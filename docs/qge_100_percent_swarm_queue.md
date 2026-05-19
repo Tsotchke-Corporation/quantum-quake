@@ -338,11 +338,41 @@ Verified with:
 - `bash tests/test_qge_trace_summary.sh`
 - `./bin/test_qge`
 
+## Wave 12 Checkpoint
+
+- Live smoke launcher: macOS stream launches now bypass the AppKit launcher
+  before SDL video setup and preserve `-nolauncher`, so direct and `open`
+  automation no longer stalls behind the launcher UI or rewrites stream args.
+- Fire-smoke evidence: `QGE_STREAM_FIRE_TEST=1` promotes Noesis start wait and
+  capture frames enough for a real projectile to pass authority warmup, select
+  writeback, select pre-impact QGE branches, and emit collision-oracle traces.
+- Controlled visibility smoke: `QGE_STREAM_VIS=3` forces the audited QGE
+  writeback mask to match the classic accepted set, proving
+  `vis_authority_apply` and all-domain `runtime_evidence.single_trace_ready`
+  independently of the raw Grover/PVS parity problem.
+- Raw visibility safety: `QGE_STREAM_VIS=2` now repairs QGE false negatives
+  against the audited classic visible set and marks
+  `false_negative_repaired`; raw authority still falls back on remaining
+  false positives or parity mismatch instead of applying an unsafe mask.
+
+Verified with:
+
+- `python3 -m py_compile tools/qge_trace_summary.py tests/test_qge_python_tools.py`
+- `python3 tests/test_qge_python_tools.py`
+- `bash tests/test_qge_trace_summary.sh`
+- `bash tests/test_noesis_input_contract.sh`
+- `make test_qge`
+- `./bin/test_qge`
+- `make test`
+- `make quake`
+- `QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=8 QGE_STREAM_WAIT_FRAMES=40 QGE_STREAM_TRACE=1 QGE_STREAM_SOUND=1 QGE_STREAM_SND_QUANTUM=2 QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY=1 QGE_STREAM_FIRE_TEST=1 QGE_STREAM_AI=1 QGE_STREAM_VIS=2 QGE_RENDER=2 QGE_PHYSICS=1 QGE_PROJECTILES=1 QGE_PHYSICS_AUTHORITATIVE=1 QGE_STREAM_TIMEOUT_SECONDS=150 QGE_STREAM_LAUNCH=direct bash tools/quake_graphics_stream.sh`
+- `QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=8 QGE_STREAM_WAIT_FRAMES=40 QGE_STREAM_TRACE=1 QGE_STREAM_SOUND=1 QGE_STREAM_SND_QUANTUM=2 QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY=1 QGE_STREAM_FIRE_TEST=1 QGE_STREAM_AI=1 QGE_STREAM_VIS=3 QGE_RENDER=2 QGE_PHYSICS=1 QGE_PROJECTILES=1 QGE_PHYSICS_AUTHORITATIVE=1 QGE_STREAM_TIMEOUT_SECONDS=150 QGE_STREAM_LAUNCH=direct bash tools/quake_graphics_stream.sh`
+
 ## Next Worker Tasks
 
-- Fix the current macOS/SDL live-smoke launch blocker so wave9/wave11 runtime
-  evidence can be captured from an actual `e1m1` authority run again.
-- Build the next bounded visibility authority slice with `authority_apply_count
-  > 0`, zero false negatives, and explicit fallback evidence on mismatch.
+- Reduce raw visibility false-positive over-inclusion so `QGE_STREAM_VIS=2`
+  can approach clean parity without relying on the controlled smoke path.
 - Add replay/demo boundary evidence for projectile branch and collision-oracle
   choices so selected traces are deterministic across saved runs.
+- Continue render ownership work for HUD and console surfaces, which still
+  report as classic 2D ownership in live render telemetry.

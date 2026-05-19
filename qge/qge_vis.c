@@ -1005,6 +1005,7 @@ bool qge_vis_shadow_finish(qge_vis_shadow_stats_t* stats) {
     memset(stats, 0, sizeof(*stats));
     stats->first_false_positive = -1;
     stats->first_false_negative = -1;
+    stats->first_false_negative_repaired = -1;
     stats->controlled_authority_smoke = shadow_controlled_authority_smoke;
 
     if (!shadow_active || !shadow_classic_visible || shadow_surface_count <= 0) {
@@ -1035,6 +1036,14 @@ bool qge_vis_shadow_finish(qge_vis_shadow_stats_t* stats) {
         raw_qge_visible = probability > 0.0f && probability >= threshold;
         qge_visible = stats->controlled_authority_smoke ?
             classic_visible : raw_qge_visible;
+        if (!stats->controlled_authority_smoke &&
+            classic_visible && !raw_qge_visible) {
+            qge_visible = true;
+            stats->false_negative_repaired_count++;
+            if (stats->first_false_negative_repaired < 0) {
+                stats->first_false_negative_repaired = i;
+            }
+        }
         if (shadow_qge_visible && i < shadow_qge_capacity) {
             shadow_qge_visible[i] = qge_visible ? 1 : 0;
         }
@@ -1055,6 +1064,17 @@ bool qge_vis_shadow_finish(qge_vis_shadow_stats_t* stats) {
 
         if (classic_visible && qge_visible) {
             stats->matched_visible_count++;
+            if (!stats->controlled_authority_smoke &&
+                classic_visible && !raw_qge_visible) {
+                uint64_t quantized_probability =
+                    (uint64_t)(probability * 1000000000.0f);
+
+                mismatch_hash =
+                    vis_hash_step(mismatch_hash, (uint64_t)i + 1ULL);
+                mismatch_hash = vis_hash_step(mismatch_hash, 3ULL);
+                mismatch_hash =
+                    vis_hash_step(mismatch_hash, quantized_probability);
+            }
         } else if (!classic_visible && !qge_visible) {
             stats->matched_hidden_count++;
         } else {
@@ -1087,7 +1107,9 @@ bool qge_vis_shadow_finish(qge_vis_shadow_stats_t* stats) {
     stats->mismatch_fingerprint = mismatch_hash;
     stats->threshold = threshold;
     stats->mismatch_count =
-        stats->false_positive_count + stats->false_negative_count;
+        stats->false_positive_count +
+        stats->false_negative_count +
+        stats->false_negative_repaired_count;
 
     surface_count_changed = shadow_gate_surface_count != 0 &&
                             shadow_gate_surface_count != shadow_surface_count;
@@ -1115,7 +1137,8 @@ bool qge_vis_shadow_finish(qge_vis_shadow_stats_t* stats) {
         shadow_fallback_reason = QGE_VIS_GATE_REASON_SHADOW_OVERFLOW;
     } else if (stats->false_negative_count > 0) {
         shadow_fallback_reason = QGE_VIS_GATE_REASON_FALSE_NEGATIVE;
-    } else if (stats->false_positive_count > 0) {
+    } else if (stats->false_positive_count > 0 ||
+               stats->false_negative_repaired_count > 0) {
         shadow_fallback_reason = QGE_VIS_GATE_REASON_PARITY_MISMATCH;
     } else if (surface_count_changed && !shadow_authority_ready) {
         shadow_fallback_reason = QGE_VIS_GATE_REASON_SURFACE_COUNT_CHANGED;
