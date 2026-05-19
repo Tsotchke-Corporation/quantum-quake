@@ -61,6 +61,20 @@ qboolean QGE_RenderIsPrimary(void);
 void QGE_RenderSetOwnershipTelemetry(int classic_3d_passes,
                                      int suppressed_3d_passes);
 
+#define QGE_2D_LAYER_NONE 0
+#define QGE_2D_LAYER_HUD 1
+#define QGE_2D_LAYER_CONSOLE 2
+
+/* Mirror classic 2D draw calls into QGE ownership telemetry. The OpenGL draw
+ * still executes, but QGE can prove that HUD/console assets, glyphs, and
+ * generated fills are registered and accounted for. */
+void QGE_2DBeginFrame(void);
+void QGE_2DEndFrame(void);
+void QGE_2DSetLayer(int layer);
+void QGE_2DSubmitPic(const qpic_t *pic);
+void QGE_2DSubmitCharacter(int ch);
+void QGE_2DSubmitFill(void);
+
 /* Begin collecting world/entity draw submissions for this frame. */
 void QGE_SceneBegin(void);
 

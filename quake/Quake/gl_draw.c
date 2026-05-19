@@ -495,6 +495,7 @@ void Draw_Character (int x, int y, int num)
 	if (num == 32)
 		return; //don't waste verts on spaces
 
+	QGE_2DSubmitCharacter(num);
 	GL_Bind (char_texture);
 	glBegin (GL_QUADS);
 
@@ -518,8 +519,10 @@ void Draw_String (int x, int y, const char *str)
 
 	while (*str)
 	{
-		if (*str != 32) //don't waste verts on spaces
+		if (*str != 32) { //don't waste verts on spaces
+			QGE_2DSubmitCharacter(*str);
 			Draw_CharacterQuad (x, y, *str);
+		}
 		str++;
 		x += 8;
 	}
@@ -539,6 +542,7 @@ void Draw_Pic (int x, int y, qpic_t *pic)
 	if (scrap_dirty)
 		Scrap_Upload ();
 	gl = (glpic_t *)pic->data;
+	QGE_2DSubmitPic(pic);
 	GL_Bind (gl->gltexture);
 	glBegin (GL_QUADS);
 	glTexCoord2f (gl->sl, gl->tl);
@@ -630,6 +634,7 @@ void Draw_TileClear (int x, int y, int w, int h)
 
 	gl = (glpic_t *)draw_backtile->data;
 
+	QGE_2DSubmitPic(draw_backtile);
 	glColor3f (1,1,1);
 	GL_Bind (gl->gltexture);
 	glBegin (GL_QUADS);
@@ -655,6 +660,7 @@ void Draw_Fill (int x, int y, int w, int h, int c, float alpha) //johnfitz -- ad
 {
 	byte *pal = (byte *)d_8to24table; //johnfitz -- use d_8to24table instead of host_basepal
 
+	QGE_2DSubmitFill();
 	glDisable (GL_TEXTURE_2D);
 	glEnable (GL_BLEND); //johnfitz -- for alpha
 	glDisable (GL_ALPHA_TEST); //johnfitz -- for alpha
@@ -682,6 +688,7 @@ void Draw_FadeScreen (void)
 {
 	GL_SetCanvas (CANVAS_DEFAULT);
 
+	QGE_2DSubmitFill();
 	glEnable (GL_BLEND);
 	glDisable (GL_ALPHA_TEST);
 	glDisable (GL_TEXTURE_2D);

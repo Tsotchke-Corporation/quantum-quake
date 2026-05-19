@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // screen.c -- master for refresh, status bar, console, chat, notify, etc
 
 #include "quakedef.h"
+#include "qge_hooks.h"
 
 /*
 
@@ -1119,6 +1120,8 @@ void SCR_UpdateScreen (void)
 
 	V_RenderView ();
 
+	QGE_2DBeginFrame ();
+	QGE_2DSetLayer (QGE_2D_LAYER_HUD);
 	GL_Set2D ();
 
 	//FIXME: only call this when needed
@@ -1127,7 +1130,11 @@ void SCR_UpdateScreen (void)
 	if (scr_drawdialog) //new game confirm
 	{
 		if (con_forcedup)
+		{
+			QGE_2DSetLayer (QGE_2D_LAYER_CONSOLE);
 			Draw_ConsoleBackground ();
+			QGE_2DSetLayer (QGE_2D_LAYER_HUD);
+		}
 		else
 			Sbar_Draw ();
 		Draw_FadeScreen ();
@@ -1158,9 +1165,14 @@ void SCR_UpdateScreen (void)
 		SCR_DrawDevStats (); //johnfitz
 		SCR_DrawFPS (); //johnfitz
 		SCR_DrawClock (); //johnfitz
+		QGE_2DSetLayer (QGE_2D_LAYER_CONSOLE);
 		SCR_DrawConsole ();
+		QGE_2DSetLayer (QGE_2D_LAYER_HUD);
 		M_Draw ();
 	}
+
+	QGE_2DSetLayer (QGE_2D_LAYER_NONE);
+	QGE_2DEndFrame ();
 
 	V_UpdateBlend (); //johnfitz -- V_UpdatePalette cleaned up and renamed
 

@@ -164,6 +164,14 @@ high-resolution CPU timing split:
 - `convert`: tone mapping and RGB display-buffer conversion.
 - `blit`: OpenGL texture upload and screen draw.
 
+Primary render logs also include ownership fields for the 2D pass. QGE mirrors
+HUD and console draw calls through registered HUD image refs, the conchars
+glyph atlas, and generated fill primitives. Once a completed 2D frame has been
+mirrored, `own_hud=1`, `own_console=1`, `classic2d=0`,
+`suppressed2d=<draws>`, and `fallback_reason=none` prove the classic 2D output
+is accounted for by QGE ownership telemetry. The trace also records
+`render_2d_overlay` probes for those mirrored draw calls.
+
 `quantum_render_update_interval` controls how often the expensive 1024-frame
 QGE field is regenerated. The default interval is `8`, which reuses the last
 QGE texture between updates while still drawing at the requested resolution.

@@ -355,6 +355,12 @@ Verified with:
   false-negative repair and falls back on repair or any remaining parity
   mismatch, but the e1m1 live smoke now reaches clean raw
   `vis_authority_apply` without controlled smoke.
+- HUD/console ownership: the renderer mirrors classic 2D HUD and console draw
+  calls into QGE ownership telemetry using registered HUD image refs, the
+  conchars glyph atlas, and generated fill primitives. Live primary render
+  telemetry now reaches `classic2d=0`, `own_hud=1`, `own_console=1`,
+  `suppressed2d>0`, and `fallback_reason=none` after the first completed 2D
+  frame, with `render_2d_overlay` trace probes.
 
 Verified with:
 
@@ -368,10 +374,9 @@ Verified with:
 - `make quake`
 - `QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=16 QGE_STREAM_WAIT_FRAMES=12 QGE_STREAM_TRACE=1 QGE_STREAM_SOUND=1 QGE_STREAM_SND_QUANTUM=2 QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY=1 QGE_STREAM_FIRE_TEST=1 QGE_STREAM_AI=1 QGE_STREAM_VIS=2 QGE_RENDER=2 QGE_PHYSICS=1 QGE_PROJECTILES=1 QGE_PHYSICS_AUTHORITATIVE=1 QGE_STREAM_TIMEOUT_SECONDS=180 QGE_STREAM_LAUNCH=direct bash tools/quake_graphics_stream.sh`
 - `QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=8 QGE_STREAM_WAIT_FRAMES=40 QGE_STREAM_TRACE=1 QGE_STREAM_SOUND=1 QGE_STREAM_SND_QUANTUM=2 QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY=1 QGE_STREAM_FIRE_TEST=1 QGE_STREAM_AI=1 QGE_STREAM_VIS=3 QGE_RENDER=2 QGE_PHYSICS=1 QGE_PROJECTILES=1 QGE_PHYSICS_AUTHORITATIVE=1 QGE_STREAM_TIMEOUT_SECONDS=150 QGE_STREAM_LAUNCH=direct bash tools/quake_graphics_stream.sh`
+- `QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=4 QGE_STREAM_WAIT_FRAMES=12 QGE_STREAM_TRACE=1 QGE_STREAM_SOUND=0 QGE_STREAM_AI=1 QGE_STREAM_VIS=2 QGE_RENDER=2 QGE_RENDER_UPDATE_INTERVAL=1 QGE_PHYSICS=1 QGE_PROJECTILES=1 QGE_PHYSICS_AUTHORITATIVE=1 QGE_STREAM_TIMEOUT_SECONDS=90 QGE_STREAM_LAUNCH=direct bash tools/quake_graphics_stream.sh`
 
 ## Next Worker Tasks
 
 - Add replay/demo boundary evidence for projectile branch and collision-oracle
   choices so selected traces are deterministic across saved runs.
-- Continue render ownership work for HUD and console surfaces, which still
-  report as classic 2D ownership in live render telemetry.

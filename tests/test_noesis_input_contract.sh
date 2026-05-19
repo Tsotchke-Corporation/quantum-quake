@@ -218,4 +218,15 @@ if [[ "$clamped_wait_count" != "3" ]]; then
   exit 1
 fi
 
+grep -Fq 'void QGE_2DBeginFrame(void);' "$repo_root/quake/Quake/qge_hooks.h"
+grep -Fq 'void QGE_2DSubmitPic(const qpic_t *pic);' "$repo_root/quake/Quake/qge_hooks.h"
+grep -Fq 'QGE_2DBeginFrame ();' "$repo_root/quake/Quake/gl_screen.c"
+grep -Fq 'QGE_2DSetLayer (QGE_2D_LAYER_CONSOLE);' "$repo_root/quake/Quake/gl_screen.c"
+grep -Fq 'QGE_2DEndFrame ();' "$repo_root/quake/Quake/gl_screen.c"
+grep -Fq 'QGE_2DSubmitCharacter(*str);' "$repo_root/quake/Quake/gl_draw.c"
+grep -Fq 'QGE_2DSubmitPic(pic);' "$repo_root/quake/Quake/gl_draw.c"
+grep -Fq 'QGE_2DSubmitFill();' "$repo_root/quake/Quake/gl_draw.c"
+grep -Fq 'strlcpy(probe.label, "render_2d_overlay", sizeof(probe.label));' "$repo_root/quake/Quake/qge_hooks.c"
+grep -Fq 'own_hud=%d own_console=%d' "$repo_root/quake/Quake/qge_hooks.c"
+
 echo "Noesis input contract: PASSED"

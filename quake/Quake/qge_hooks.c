@@ -588,6 +588,23 @@ typedef struct {
 static qge_hud_image_pending_t qge_hud_images[QGE_MAX_HUD_IMAGE_REFS];
 static int qge_hud_image_count = 0;
 static int qge_hud_image_dropped = 0;
+static qboolean qge_hud_conchars_registered = false;
+
+typedef struct {
+	int hud_draws;
+	int hud_owned;
+	int hud_unowned;
+	int console_draws;
+	int console_owned;
+	int console_unowned;
+	int other_draws;
+} qge_2d_ownership_frame_t;
+
+static qge_2d_ownership_frame_t qge_2d_current;
+static qge_2d_ownership_frame_t qge_2d_last;
+static qboolean qge_2d_collecting = false;
+static qboolean qge_2d_last_valid = false;
+static int qge_2d_layer = QGE_2D_LAYER_NONE;
 
 static int QGE_ServerTimeMsec(void)
 {
@@ -1592,12 +1609,155 @@ void QGE_RegisterHudImageAsset(const char *name,
 	ref.source_hash = QGE_RegistryHashStep(ref.source_hash, source_crc);
 	ref.debug_cookie = (uint64_t)(uintptr_t)debug_cookie;
 	pending->ref = ref;
+	if (strstr(name, "conchars"))
+		qge_hud_conchars_registered = true;
 
 	if (!qge_initialized || !qge_ctx)
 		return;
 	world = qge_get_world(qge_ctx);
 	if (world)
 		QGE_RegisterHudImageIndex(world, index);
+}
+
+static qboolean QGE_HudImageCookieRegistered(const void *debug_cookie)
+{
+	uint64_t cookie = (uint64_t)(uintptr_t)debug_cookie;
+
+	if (!cookie)
+		return false;
+	for (int i = 0; i < qge_hud_image_count; i++) {
+		if (qge_hud_images[i].used &&
+			qge_hud_images[i].ref.debug_cookie == cookie)
+			return true;
+	}
+	return false;
+}
+
+static void QGE_2DAccountDraw(qboolean owned)
+{
+	if (!qge_2d_collecting)
+		return;
+	if (qge_2d_layer == QGE_2D_LAYER_HUD) {
+		qge_2d_current.hud_draws++;
+		if (owned)
+			qge_2d_current.hud_owned++;
+		else
+			qge_2d_current.hud_unowned++;
+	} else if (qge_2d_layer == QGE_2D_LAYER_CONSOLE) {
+		qge_2d_current.console_draws++;
+		if (owned)
+			qge_2d_current.console_owned++;
+		else
+			qge_2d_current.console_unowned++;
+	} else {
+		qge_2d_current.other_draws++;
+	}
+}
+
+static int QGE_2DLastDrawCount(void)
+{
+	return qge_2d_last.hud_draws +
+		   qge_2d_last.console_draws +
+		   qge_2d_last.other_draws;
+}
+
+static int QGE_2DOwnsHud(void)
+{
+	return qge_2d_last_valid &&
+		   qge_2d_last.hud_draws > 0 &&
+		   qge_2d_last.hud_unowned == 0;
+}
+
+static int QGE_2DOwnsConsole(void)
+{
+	return qge_2d_last_valid &&
+		   qge_hud_conchars_registered &&
+		   qge_2d_last.console_unowned == 0;
+}
+
+static int QGE_2DHasUnownedClassicOutput(void)
+{
+	if (!QGE_RenderIsPrimary())
+		return 1;
+	return !(QGE_2DOwnsHud() && QGE_2DOwnsConsole());
+}
+
+void QGE_2DBeginFrame(void)
+{
+	memset(&qge_2d_current, 0, sizeof(qge_2d_current));
+	qge_2d_layer = QGE_2D_LAYER_NONE;
+	qge_2d_collecting = qge_initialized && quantum_render.value >= 0.5f;
+}
+
+void QGE_2DEndFrame(void)
+{
+	qge_quantum_runtime_t *rt;
+	qge_state_probe_t probe;
+	int draw_count;
+	uint32_t flags = 0u;
+
+	if (!qge_2d_collecting)
+		return;
+
+	qge_2d_last = qge_2d_current;
+	qge_2d_last_valid = true;
+	qge_2d_collecting = false;
+	qge_2d_layer = QGE_2D_LAYER_NONE;
+
+	draw_count = QGE_2DLastDrawCount();
+	if (QGE_2DOwnsHud())
+		flags |= 0x1u;
+	if (QGE_2DOwnsConsole())
+		flags |= 0x2u;
+	if (qge_2d_last.hud_unowned || qge_2d_last.console_unowned)
+		flags |= 0x4u;
+	if (qge_2d_last.other_draws)
+		flags |= 0x8u;
+
+	rt = QGE_Runtime();
+	if (!rt)
+		return;
+	memset(&probe, 0, sizeof(probe));
+	probe.frame = qge_frame_count;
+	probe.server_time_msec = QGE_ServerTimeMsec();
+	probe.domain = QGE_DOMAIN_RENDER;
+	probe.representation = QGE_REP_CLASSICAL_ORACLE;
+	probe.active_basis_count = (uint32_t)draw_count;
+	probe.qubit_count =
+		qge_quantum_qubits_for_basis_count((uint64_t)(draw_count > 0 ? draw_count : 1));
+	probe.subject_id = (uint64_t)qge_2d_last.hud_draws;
+	probe.flags = flags;
+	probe.total_probability = (double)qge_2d_last.console_draws;
+	probe.max_probability = (double)qge_2d_last.hud_owned;
+	probe.coherence = (double)qge_2d_last.console_owned;
+	probe.entropy = (double)(qge_2d_last.hud_unowned +
+							 qge_2d_last.console_unowned);
+	strlcpy(probe.label, "render_2d_overlay", sizeof(probe.label));
+	qge_quantum_record_probe(rt, &probe);
+}
+
+void QGE_2DSetLayer(int layer)
+{
+	if (layer != QGE_2D_LAYER_HUD &&
+		layer != QGE_2D_LAYER_CONSOLE)
+		layer = QGE_2D_LAYER_NONE;
+	qge_2d_layer = layer;
+}
+
+void QGE_2DSubmitPic(const qpic_t *pic)
+{
+	QGE_2DAccountDraw(QGE_HudImageCookieRegistered(pic));
+}
+
+void QGE_2DSubmitCharacter(int ch)
+{
+	(void)ch;
+	QGE_2DAccountDraw(qge_hud_conchars_registered);
+}
+
+void QGE_2DSubmitFill(void)
+{
+	QGE_2DAccountDraw(true);
 }
 
 static void QGE_RegisterWorldIfNeeded(void)
@@ -6887,7 +7047,7 @@ static const char *QGE_RenderOwnershipFallbackReason(void)
 	if (qge_scene_encoded_surfaces <= 0 &&
 		(qge_scene_surface_count > 0 || qge_scene_world_surfaces > 0))
 		return "world_unowned";
-	if (QGE_CLASSIC_2D_VISIBLE > 0)
+	if (QGE_CLASSIC_2D_VISIBLE > 0 && QGE_2DHasUnownedClassicOutput())
 		return "classic2d_unowned";
 	return "none";
 }
@@ -6910,6 +7070,8 @@ void QGE_RenderScene(void)
 	int own_sprites;
 	int own_particles;
 	int own_viewmodel;
+	int own_hud;
+	int own_console;
 
 	if (!qge_initialized ||
 		!qge_dwt_fb[QGE_DWT_R] || !qge_dwt_fb[QGE_DWT_G] ||
@@ -6971,8 +7133,11 @@ void QGE_RenderScene(void)
 		sparsity = (float)active / (float)total_coefficients;
 
 	primary_fb = QGE_RenderIsPrimary() ? 1 : 0;
-	classic2d = QGE_CLASSIC_2D_VISIBLE;
-	suppressed2d = 0;
+	own_hud = QGE_2DOwnsHud();
+	own_console = QGE_2DOwnsConsole();
+	classic2d = QGE_2DHasUnownedClassicOutput() ? QGE_CLASSIC_2D_VISIBLE : 0;
+	suppressed2d = (!classic2d && QGE_RenderIsPrimary()) ?
+		(QGE_2DLastDrawCount() > 0 ? QGE_2DLastDrawCount() : 1) : 0;
 	own_world =
 		qge_scene_encoded_surfaces > 0 &&
 		qge_scene_polygon_fallback == 0 &&
@@ -7034,7 +7199,7 @@ void QGE_RenderScene(void)
 						   "readout=%.3f edgeq=%.3f ggain=%.3f egain=%.3f "
 						   "nonzero=%d/%d primary_fb=%d classic2d=%d suppressed2d=%d "
 						   "own_world=%d own_textures=%d own_lightmaps=%d own_entities=%d own_sprites=%d own_particles=%d own_viewmodel=%d "
-						   "own_hud=0 own_console=0 "
+						   "own_hud=%d own_console=%d "
 						   "fallback_reason=%s\n",
 						   qge_frame_count, QGE_RenderIsPrimary() ? "primary" : "overlay",
 						   qge_render_qge_primary_owned ? "qge_3d" : "mixed",
@@ -7074,6 +7239,7 @@ void QGE_RenderScene(void)
 						   own_world, own_textures, own_lightmaps,
 						   own_entities, own_sprites, own_particles,
 						   own_viewmodel,
+						   own_hud, own_console,
 						   QGE_RenderOwnershipFallbackReason());
 			}
 			fprintf(stderr, "QGE render frame=%d mode=%s owner=%s classic3d=%d suppressed3d=%d "
@@ -7092,7 +7258,7 @@ void QGE_RenderScene(void)
 					"tone_floor=%.6f tone_white=%.6f tone_clip=%d levels=%d gl_upload=0x%x gl_draw=0x%x "
 					"primary_fb=%d classic2d=%d suppressed2d=%d "
 					"own_world=%d own_textures=%d own_lightmaps=%d own_entities=%d own_sprites=%d own_particles=%d own_viewmodel=%d "
-					"own_hud=0 own_console=0 "
+					"own_hud=%d own_console=%d "
 					"fallback_reason=%s\n",
 					qge_frame_count, QGE_RenderIsPrimary() ? "primary" : "overlay",
 					qge_render_qge_primary_owned ? "qge_3d" : "mixed",
@@ -7149,6 +7315,7 @@ void QGE_RenderScene(void)
 					own_world, own_textures, own_lightmaps,
 					own_entities, own_sprites, own_particles,
 					own_viewmodel,
+					own_hud, own_console,
 					QGE_RenderOwnershipFallbackReason());
 		} else {
 			Con_DPrintf("QGE render: %.1f ms | %d coeffs (%.1f%% sparse) | %d DWT levels\n",
