@@ -45,6 +45,7 @@ cvar_t quantum_physics   = {"quantum_physics",   "1", CVAR_ARCHIVE};
 cvar_t quantum_projectiles = {"quantum_projectiles", "1", CVAR_ARCHIVE};
 cvar_t quantum_physics_authoritative = {"quantum_physics_authoritative", "0", CVAR_ARCHIVE};
 cvar_t quantum_debug     = {"quantum_debug",     "0", CVAR_NONE};
+cvar_t qge_noesis_assist = {"qge_noesis_assist", "0", CVAR_NONE};
 cvar_t quantum_overlay_alpha = {"quantum_overlay_alpha", "0.10", CVAR_ARCHIVE};
 cvar_t quantum_scene_surface_budget = {"quantum_scene_surface_budget", "128", CVAR_ARCHIVE};
 cvar_t quantum_render_res = {"quantum_render_res", "1024", CVAR_ARCHIVE};
@@ -162,6 +163,7 @@ static int qge_gameplay_prev_attack_active = 0;
 static int qge_gameplay_prev_damageable_alive = 0;
 static float *qge_gameplay_prev_edict_health = NULL;
 static int qge_gameplay_prev_edict_capacity = 0;
+static int qge_noesis_assist_last_log_frame = -999999;
 
 static int QGE_RenderUpdateInterval(void);
 static qboolean QGE_RenderShouldUpdateFrame(void);
@@ -818,6 +820,166 @@ static qboolean QGE_GameplayEnemyVisible(edict_t *player, edict_t *enemy)
 					player);
 	return (!trace.allsolid && !trace.startsolid &&
 			trace.fraction >= 0.99f) ? true : false;
+}
+
+static float QGE_NoesisAssistTraceDistance(edict_t *player, float yaw)
+{
+	trace_t trace;
+	vec3_t angles;
+	vec3_t forward;
+	vec3_t right;
+	vec3_t up;
+	vec3_t start;
+	vec3_t end;
+	const float probe_distance = 128.0f;
+
+	if (!player)
+		return 0.0f;
+
+	angles[0] = angles[1] = angles[2] = 0.0f;
+	angles[YAW] = yaw;
+	AngleVectors(angles, forward, right, up);
+	VectorCopy(player->v.origin, start);
+	start[2] += player->v.view_ofs[2] * 0.5f;
+	VectorMA(start, probe_distance, forward, end);
+	trace = SV_Move(start, player->v.mins, player->v.maxs, end,
+					MOVE_NOMONSTERS, player);
+	if (trace.startsolid || trace.allsolid)
+		return 0.0f;
+	return trace.fraction * probe_distance;
+}
+
+static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
+										  qboolean *visible_out,
+										  float *distance_out)
+{
+	edict_t *best_visible = NULL;
+	edict_t *best_nearest = NULL;
+	float best_visible_distance = 999999.0f;
+	float best_nearest_distance = 999999.0f;
+
+	if (visible_out)
+		*visible_out = false;
+	if (distance_out)
+		*distance_out = -1.0f;
+	if (!player || !sv.active)
+		return NULL;
+
+	for (int i = 2; i < sv.num_edicts; i++) {
+		edict_t *ent = EDICT_NUM(i);
+		vec3_t delta;
+		float distance;
+
+		if (!ent || ent->free || ent->v.health <= 0.0f ||
+			!((int)ent->v.flags & FL_MONSTER))
+			continue;
+
+		VectorSubtract(ent->v.origin, player->v.origin, delta);
+		distance = VectorLength(delta);
+		if (distance < best_nearest_distance) {
+			best_nearest_distance = distance;
+			best_nearest = ent;
+		}
+		if (QGE_GameplayEnemyVisible(player, ent) &&
+			distance < best_visible_distance) {
+			best_visible_distance = distance;
+			best_visible = ent;
+		}
+	}
+
+	if (best_visible) {
+		if (visible_out)
+			*visible_out = true;
+		if (distance_out)
+			*distance_out = best_visible_distance;
+		return best_visible;
+	}
+	if (distance_out && best_nearest)
+		*distance_out = best_nearest_distance;
+	return best_nearest;
+}
+
+void QGE_NoesisAssistClientThink(client_t *client,
+								 edict_t *player,
+								 usercmd_t *move)
+{
+	edict_t *enemy;
+	vec3_t eye;
+	vec3_t target;
+	vec3_t delta;
+	vec3_t aim;
+	qboolean visible = false;
+	float distance = -1.0f;
+	float forward_clear;
+	float left_clear;
+	float right_clear;
+	int chase_mode;
+
+	(void)client;
+	if (!qge_initialized || qge_noesis_assist.value < 0.5f ||
+		!move || !player || player->free || player->v.health <= 0.0f ||
+		!sv.active || !QGE_GameplayStreamDir())
+		return;
+
+	enemy = QGE_NoesisAssistFindEnemy(player, &visible, &distance);
+	if (!enemy)
+		return;
+
+	VectorAdd(player->v.origin, player->v.view_ofs, eye);
+	target[0] = enemy->v.origin[0] +
+				0.5f * (enemy->v.mins[0] + enemy->v.maxs[0]);
+	target[1] = enemy->v.origin[1] +
+				0.5f * (enemy->v.mins[1] + enemy->v.maxs[1]);
+	target[2] = enemy->v.origin[2] +
+				0.5f * (enemy->v.mins[2] + enemy->v.maxs[2]);
+	VectorSubtract(target, eye, delta);
+	VectorAngles(delta, aim);
+	aim[PITCH] = q_max(-60.0f, q_min(60.0f, aim[PITCH]));
+	aim[YAW] = anglemod(aim[YAW]);
+	aim[ROLL] = 0.0f;
+
+	VectorCopy(aim, player->v.v_angle);
+	player->v.angles[PITCH] = -aim[PITCH] / 3.0f;
+	player->v.angles[YAW] = aim[YAW];
+	player->v.angles[ROLL] = 0.0f;
+	player->v.fixangle = 1.0f;
+
+	chase_mode = qge_noesis_assist.value >= 1.5f ? 1 : 0;
+	if (chase_mode) {
+		move->forwardmove = visible && distance < 384.0f ? 120.0f : 400.0f;
+		move->sidemove = 0.0f;
+		move->upmove = 0.0f;
+
+		forward_clear = QGE_NoesisAssistTraceDistance(player, aim[YAW]);
+		left_clear = QGE_NoesisAssistTraceDistance(player,
+												   anglemod(aim[YAW] + 45.0f));
+		right_clear = QGE_NoesisAssistTraceDistance(player,
+													anglemod(aim[YAW] - 45.0f));
+		if (forward_clear < 56.0f) {
+			move->sidemove = left_clear >= right_clear ? 320.0f : -320.0f;
+			move->forwardmove = 180.0f;
+		}
+		else if (visible && distance < 512.0f) {
+			move->sidemove = (qge_frame_count & 8) ? 220.0f : -220.0f;
+		}
+	}
+
+	if (visible && distance <= 1024.0f) {
+		player->v.button0 = 1.0f;
+	}
+	else if (chase_mode) {
+		player->v.button0 = 0.0f;
+	}
+
+	if (quantum_debug.value >= 1.0f &&
+		qge_frame_count - qge_noesis_assist_last_log_frame >= 30) {
+		qge_noesis_assist_last_log_frame = qge_frame_count;
+		Con_Printf("QGE noesis assist frame=%d mode=%d target=%d "
+				   "visible=%d distance=%.1f fmove=%.1f smove=%.1f\n",
+				   qge_frame_count, chase_mode ? 2 : 1,
+				   NUM_FOR_EDICT(enemy), visible ? 1 : 0, distance,
+				   move->forwardmove, move->sidemove);
+	}
 }
 
 static void QGE_GameplayOutcomeSample(void)
@@ -2957,6 +3119,7 @@ void QGE_Init(void)
 	Cvar_RegisterVariable(&quantum_projectiles);
 	Cvar_RegisterVariable(&quantum_physics_authoritative);
 	Cvar_RegisterVariable(&quantum_debug);
+	Cvar_RegisterVariable(&qge_noesis_assist);
 	Cvar_RegisterVariable(&quantum_overlay_alpha);
 	Cvar_RegisterVariable(&quantum_scene_surface_budget);
 	Cvar_RegisterVariable(&quantum_render_res);

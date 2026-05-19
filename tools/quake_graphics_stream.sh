@@ -45,6 +45,7 @@ noesis_max_wait="${QGE_NOESIS_MAX_WAIT:-600}"
 noesis_min_log_phases="${QGE_NOESIS_MIN_LOG_PHASES:-0}"
 noesis_min_gameplay_samples="${QGE_NOESIS_MIN_GAMEPLAY_SAMPLES:-2}"
 noesis_min_route_distance="${QGE_NOESIS_MIN_ROUTE_DISTANCE:-64}"
+noesis_assist="${QGE_NOESIS_ASSIST:-0}"
 noesis_cmd="${QGE_NOESIS_CMD:-}"
 default_noesis_cmd="$repo_root/tools/noesis_quake_policy.sh"
 noesis_cmd_default=0
@@ -131,6 +132,7 @@ noesis_start_wait="$(normalize_nonnegative_int "$noesis_start_wait" 16)"
 noesis_max_wait="$(normalize_positive_int "$noesis_max_wait" 600)"
 noesis_min_log_phases="$(normalize_nonnegative_int "$noesis_min_log_phases" 0)"
 noesis_min_gameplay_samples="$(normalize_nonnegative_int "$noesis_min_gameplay_samples" 2)"
+noesis_assist="$(normalize_nonnegative_int "$noesis_assist" 0)"
 fire_min_start_wait="$(normalize_nonnegative_int "$fire_min_start_wait" 48)"
 fire_min_frames="$(normalize_nonnegative_int "$fire_min_frames" 8)"
 frames="$(normalize_positive_int "$frames" 12)"
@@ -357,6 +359,7 @@ write_agent_manifest() {
     "noesis_min_log_phases": $noesis_min_log_phases,
     "noesis_min_gameplay_samples": $noesis_min_gameplay_samples,
     "noesis_min_route_distance": $(json_string "$noesis_min_route_distance"),
+    "noesis_assist": $noesis_assist,
     "fire_test": $fire_test,
     "fire_min_start_wait": $fire_min_start_wait,
     "fire_min_frames": $fire_min_frames,
@@ -703,6 +706,7 @@ trap restore_autoexec EXIT
   echo "quantum_particles $particles_value"
   echo "quantum_ai $ai_value"
   echo "quantum_vis $vis_value"
+  echo "qge_noesis_assist $noesis_assist"
   if [[ "$sound" == "1" ]]; then
     echo "snd_quantum $sound_quantum_mode"
     echo "snd_quantum_source_authority $sound_source_authority"
@@ -771,7 +775,7 @@ echo "Streaming Quantum Quake graphics diagnostics"
 echo "  outdir=$outdir"
 echo "  agent_stream=$agent_stream"
 echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter update_interval=$render_update_interval sprite_test=$sprite_test quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_physics_authoritative=$physics_authoritative quantum_particles=$particles_value quantum_ai=$ai_value quantum_vis=$vis_value"
-echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound snd_quantum=$sound_quantum_mode snd_quantum_source_authority=$sound_source_authority trace=$trace replay=$replay_trace replay_strict=$replay_strict fire_test=$fire_test fire_min_start_wait=$fire_min_start_wait fire_min_frames=$fire_min_frames scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_max_wait=$noesis_max_wait noesis_min_log_phases=$noesis_min_log_phases noesis_min_gameplay_samples=$noesis_min_gameplay_samples noesis_min_route_distance=$noesis_min_route_distance"
+echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound snd_quantum=$sound_quantum_mode snd_quantum_source_authority=$sound_source_authority trace=$trace replay=$replay_trace replay_strict=$replay_strict fire_test=$fire_test fire_min_start_wait=$fire_min_start_wait fire_min_frames=$fire_min_frames scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_max_wait=$noesis_max_wait noesis_min_log_phases=$noesis_min_log_phases noesis_min_gameplay_samples=$noesis_min_gameplay_samples noesis_min_route_distance=$noesis_min_route_distance noesis_assist=$noesis_assist"
 echo "QGE_AGENT_STREAM $agent_stream"
 
 print_log_updates() {
@@ -1173,6 +1177,7 @@ Noesis status: $noesis_summary_status
 Noesis min log phases: $noesis_min_log_phases
 Noesis min gameplay samples: $noesis_min_gameplay_samples
 Noesis min route distance: $noesis_min_route_distance
+Noesis assist: $noesis_assist
 Agent stream: $agent_stream
 Agent manifest: $agent_manifest_file
 Agent events: $agent_events_file

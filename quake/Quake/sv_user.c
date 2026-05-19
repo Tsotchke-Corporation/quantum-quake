@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // sv_user.c -- server code for moving users
 
 #include "quakedef.h"
+#include "qge_hooks.h"
 
 edict_t	*sv_player;
 
@@ -621,7 +622,10 @@ void SV_RunClients (void)
 
 // always pause in single player if in console or menus
 		if (!sv.paused && (svs.maxclients > 1 || key_dest == key_game) )
+		{
+			QGE_NoesisAssistClientThink(host_client, sv_player,
+										&host_client->cmd);
 			SV_ClientThink ();
+		}
 	}
 }
-

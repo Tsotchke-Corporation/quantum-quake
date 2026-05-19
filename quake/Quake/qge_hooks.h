@@ -149,6 +149,12 @@ void QGE_PhysicsTrackImpact(edict_t *ent, const trace_t *trace);
  * Returns an action index (0=IDLE, 1=PATROL, 2=CHASE, 3=ATTACK, 4=FLEE). */
 int QGE_AIDecide(int enemy_id, float aggression, float distance, int visible);
 
+/* Opt-in server-side Noesis assist for automation runs. This adjusts only the
+ * current server usercmd when qge_noesis_assist is enabled. */
+void QGE_NoesisAssistClientThink(client_t *client,
+								 edict_t *player,
+								 usercmd_t *move);
+
 /* ============================================================================
  * CVars
  * ============================================================================ */
@@ -162,6 +168,7 @@ extern cvar_t quantum_physics;      /* Feed server physics into QGE (default 1) 
 extern cvar_t quantum_projectiles;  /* Feed projectile/missile state into QGE (default 1) */
 extern cvar_t quantum_physics_authoritative; /* Let QGE write approved physics state (default 0) */
 extern cvar_t quantum_debug;        /* Emit QGE render diagnostics (default 0) */
+extern cvar_t qge_noesis_assist;    /* Opt-in server-state Noesis assist (default 0) */
 extern cvar_t quantum_overlay_alpha;/* Quantum render composite alpha (default 0.10) */
 extern cvar_t quantum_scene_surface_budget; /* DWT surface encode budget (default 128) */
 extern cvar_t quantum_render_update_interval; /* QGE update cadence in host frames (default 8) */

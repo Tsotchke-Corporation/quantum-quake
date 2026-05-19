@@ -534,6 +534,12 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
 - `QGE_NOESIS_MIN_ROUTE_DISTANCE`: minimum route distance or displacement, in
   Quake units, required for route-heavy Noesis plans once gameplay telemetry is
   present, default `64`.
+- `QGE_NOESIS_ASSIST`: opt-in server-state assist for Noesis automation,
+  default `0`. Mode `1` aims and fires at visible monsters while preserving the
+  scripted movement command. Mode `2` also steers the server usercmd toward the
+  nearest monster with a small wall-avoidance probe. The engine-side cvar is
+  `qge_noesis_assist`, remains off by default, and only acts during
+  `-qgestreamdir` runs so normal local play is untouched.
 - `QGE_NOESIS_CMD`: optional Noesis action provider command. When set, the
   harness runs it from `QGE_NOESIS_DIR` and translates its stdout action lines;
   this takes precedence over `QGE_NOESIS_ACTIONS_FILE` and the default
