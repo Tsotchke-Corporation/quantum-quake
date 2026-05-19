@@ -198,6 +198,15 @@ def agent_manifest_summary(path: Path) -> dict[str, Any]:
             "performance_icc_evidence_file": performance.get(
                 "icc_evidence_file"),
         })
+    trace_summary = manifest.get("trace_summary", {})
+    if isinstance(trace_summary, dict):
+        summary.update({
+            "trace_summary_status": trace_summary.get("status"),
+            "trace_summary_file": trace_summary.get("file"),
+            "trace_summary_agent_file": trace_summary.get("agent_file"),
+            "trace_runtime_evidence_ready": trace_summary.get(
+                "runtime_evidence_ready"),
+        })
     return summary
 
 
@@ -269,6 +278,62 @@ def explicit_performance_failure(performance: dict[str, Any],
     return False
 
 
+def trace_summary_path(capture_dir: Path,
+                       mode: str,
+                       agent_run: dict[str, Any]) -> Path | None:
+    candidates: list[Path] = []
+    for key in ("trace_summary_file", "trace_summary_agent_file"):
+        value = agent_run.get(key)
+        if isinstance(value, str) and value:
+            candidates.append(Path(value))
+    trace_summary = agent_run.get("trace_summary")
+    if isinstance(trace_summary, dict):
+        for key in ("file", "agent_file"):
+            value = trace_summary.get(key)
+            if isinstance(value, str) and value:
+                candidates.append(Path(value))
+    trace_path = agent_run.get("trace")
+    if isinstance(trace_path, str) and trace_path:
+        candidates.append(Path(trace_path).with_name("qge_trace_summary.json"))
+    candidates.extend([
+        capture_dir / f"{mode}.qge_trace_summary.json",
+        capture_dir / "qge_trace_summary.json",
+    ])
+    for candidate in candidates:
+        if not candidate.is_absolute():
+            candidate = capture_dir / candidate
+        if candidate.is_file():
+            return candidate
+    return candidates[0] if candidates else None
+
+
+def trace_evidence_summary(path: Path | None) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "exists": False,
+        "path": str(path) if path is not None else "",
+        "runtime_evidence": {},
+        "single_trace_ready": False,
+    }
+    if path is None:
+        return summary
+    summary.update(file_info(path))
+    if not path.is_file():
+        return summary
+    try:
+        data = load_json(path)
+    except (OSError, ValueError) as exc:
+        summary["error"] = str(exc)
+        return summary
+    runtime_evidence = data.get("runtime_evidence", {})
+    if not isinstance(runtime_evidence, dict):
+        runtime_evidence = {}
+    summary["records"] = data.get("records", {})
+    summary["runtime_evidence"] = runtime_evidence
+    summary["single_trace_ready"] = bool(
+        runtime_evidence.get("single_trace_ready"))
+    return summary
+
+
 def mode_entry(capture_dir: Path,
                mode: str,
                render_value: int,
@@ -322,6 +387,8 @@ def mode_entry(capture_dir: Path,
         entry["runtime"]["qge_scene_line"] = scene_line
         entry["runtime"]["qge_scene"] = parse_key_values(scene_line)
         entry["runtime"]["qge_scene_max"] = scene_max
+    entry["runtime"]["trace_evidence"] = trace_evidence_summary(
+        trace_summary_path(capture_dir, mode, entry["agent_stream_run"]))
     return entry
 
 
@@ -361,6 +428,10 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
     )
     qge_render = qge.get("runtime", {}).get("qge_render", {})
     qge_render_max = qge.get("runtime", {}).get("qge_render_max", {})
+    qge_trace = qge.get("runtime", {}).get("trace_evidence", {})
+    qge_runtime_evidence = qge_trace.get("runtime_evidence", {})
+    if not isinstance(qge_runtime_evidence, dict):
+        qge_runtime_evidence = {}
     fallback_count = max(int(qge_render.get("fallback", 0) or 0),
                          int(qge_render_max.get("fallback", 0) or 0))
     surrogate_count = max(int(qge_render.get("surrogate", 0) or 0),
@@ -385,6 +456,7 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
         "claim_id": "engine.vanilla_quake_conformance",
         "modes": [classic, qge],
         "image_metrics": summarize_metrics(metrics),
+        "runtime_evidence_summary": qge_runtime_evidence,
         "conformance_summary": {
             "status": "evidence_only",
             "classic_frame_exists": classic["frame"]["exists"],
@@ -411,6 +483,10 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
             "qge_performance_threshold_failures": qge_perf.get(
                 "threshold_failures"),
             "performance_sidecars_success": performance_sidecars_success,
+            "runtime_evidence_ready": bool(
+                qge_runtime_evidence.get("single_trace_ready")),
+            "qge_trace_summary_file": qge_trace.get("path"),
+            "qge_trace_summary_exists": qge_trace.get("exists"),
             "fallback_count": fallback_count,
             "classic3d_count": classic3d,
             "classic2d_count": classic2d,
@@ -478,6 +554,21 @@ def build_icc_evidence(matrix: dict[str, Any],
     classic = modes.get("classic", matrix["modes"][0])
     qge = modes.get("quantum", matrix["modes"][-1])
     ready = bool(summary["ready_for_complete_claim"])
+    runtime_evidence = matrix.get("runtime_evidence_summary", {})
+    if not isinstance(runtime_evidence, dict):
+        runtime_evidence = {}
+    runtime_ai = runtime_evidence.get("ai", {})
+    runtime_audio = runtime_evidence.get("audio", {})
+    runtime_visibility = runtime_evidence.get("visibility", {})
+    runtime_projectile = runtime_evidence.get("projectile", {})
+    if not isinstance(runtime_ai, dict):
+        runtime_ai = {}
+    if not isinstance(runtime_audio, dict):
+        runtime_audio = {}
+    if not isinstance(runtime_visibility, dict):
+        runtime_visibility = {}
+    if not isinstance(runtime_projectile, dict):
+        runtime_projectile = {}
     return {
         "schema": "qge.icc_evidence.v0",
         "runtime_backend": "qge_vanilla_capture_matrix",
@@ -516,6 +607,20 @@ def build_icc_evidence(matrix: dict[str, Any],
             "qge_performance_threshold_failures"),
         "performance_sidecars_success": summary.get(
             "performance_sidecars_success"),
+        "runtime_evidence_ready": summary.get("runtime_evidence_ready"),
+        "runtime_evidence_single_trace_ready": runtime_evidence.get(
+            "single_trace_ready"),
+        "runtime_evidence_ai_decision_count": runtime_ai.get(
+            "decision_count"),
+        "runtime_evidence_audio_source_spatial_count": runtime_audio.get(
+            "source_spatial_count"),
+        "runtime_evidence_visibility_authority_gate_count": (
+            runtime_visibility.get("authority_gate_count")),
+        "runtime_evidence_projectile_authority_gate_count": (
+            runtime_projectile.get("authority_gate_count")),
+        "runtime_evidence_visibility": runtime_visibility,
+        "runtime_evidence_projectile": runtime_projectile,
+        "qge_trace_summary_file": summary.get("qge_trace_summary_file"),
         "viewmodel_encoded": summary["viewmodel_encoded"],
         "ready_for_complete_claim": ready,
         "status": "success" if ready else "blocked",

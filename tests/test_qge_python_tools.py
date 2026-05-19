@@ -513,6 +513,120 @@ class TraceSummaryTests(unittest.TestCase):
             self.assertEqual(probe["active_basis_max"], 128)
             self.assertEqual(probe["flags_or"], 0x3)
 
+    def test_runtime_evidence_groups_from_single_trace(self) -> None:
+        def label_bytes(label: bytes) -> bytes:
+            return label + b"\0" * (32 - len(label))
+
+        def state_probe_payload(
+            frame: int,
+            domain: int,
+            representation: int,
+            subject_id: int,
+            flags: int,
+            label: bytes,
+            active_basis: int = 1,
+            qubits: int = 1,
+        ) -> bytes:
+            return trace_summary.STATE_PROBE.pack(
+                frame,
+                100 + frame,
+                domain,
+                representation,
+                subject_id,
+                flags,
+                0xAA00 + frame,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                active_basis,
+                qubits,
+                active_basis * 16,
+                label_bytes(label),
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            trace_path = Path(tmp) / "qge_trace.bin"
+            ai_payload = trace_summary.AI_DECISION.pack(
+                1,
+                101,
+                17,
+                2,
+                1,
+                0x10,
+                0x9,
+                0x2,
+                0x1234,
+                0x5,
+                0x1,
+                4,
+                1,
+                1,
+                0.125,
+                0.5,
+                0.5,
+                1.0,
+                0.25,
+            )
+            payloads = [
+                (8, ai_payload),
+                (5, state_probe_payload(
+                    2, 4, 9, 3, 0x0A, b"audio_source_spatial")),
+                (5, state_probe_payload(
+                    3, 1, 8, 12, 0x061, b"vis_shadow_parity", 6, 4)),
+                (5, state_probe_payload(
+                    4, 1, 7, 1, 0x0E0, b"vis_authority_gate", 5, 4)),
+                (5, state_probe_payload(
+                    5, 2, 7, 1, 0x0F00, b"projectile_authority_gate", 4, 3)),
+            ]
+            data = trace_summary.HEADER.pack(
+                trace_summary.TRACE_MAGIC,
+                trace_summary.TRACE_VERSION,
+                trace_summary.HEADER.size,
+                0x1,
+                0,
+                0x5151455F52554E31,
+                0x2,
+                0x3,
+                0x4,
+            )
+            for sequence, (kind, payload) in enumerate(payloads):
+                data += trace_summary.RECORD.pack(
+                    kind,
+                    trace_summary.TRACE_VERSION,
+                    len(payload),
+                    sequence,
+                )
+                data += payload
+            trace_path.write_bytes(data)
+
+            parsed = trace_summary.parse_trace(str(trace_path))
+            evidence = parsed["runtime_evidence"]
+            self.assertTrue(evidence["single_trace_ready"])
+            self.assertEqual(evidence["ai"]["decision_count"], 1)
+            self.assertEqual(evidence["audio"]["source_spatial_count"], 1)
+            self.assertTrue(evidence["audio"]["flags"]["spatial"])
+            self.assertTrue(evidence["audio"]["flags"]["processed"])
+            self.assertEqual(
+                evidence["visibility"]["authority_gate_count"],
+                1,
+            )
+            self.assertTrue(
+                evidence["visibility"]["flags"]["authority_requested"]
+            )
+            self.assertTrue(evidence["visibility"]["flags"]["authority_ready"])
+            self.assertTrue(
+                evidence["visibility"]["flags"]["authority_selected"]
+            )
+            self.assertEqual(
+                evidence["projectile"]["authority_gate_count"],
+                1,
+            )
+            self.assertTrue(
+                evidence["projectile"]["flags"]["authority_ready"]
+            )
+            self.assertEqual(evidence["projectile"]["off_reason"], "none")
+
 
 class VanillaCaptureMatrixTests(unittest.TestCase):
     def test_build_matrix_and_icc_evidence(self) -> None:
@@ -556,6 +670,31 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             capture_dir = Path(tmp)
             vanilla_matrix.write_json(capture_dir / "metrics.json", metrics)
+            runtime_evidence = {
+                "single_trace_ready": True,
+                "ai": {"ready": True, "decision_count": 2},
+                "audio": {
+                    "ready": True,
+                    "source_spatial_count": 3,
+                },
+                "visibility": {
+                    "ready": True,
+                    "authority_gate_count": 1,
+                    "flags": {"authority_requested": True},
+                },
+                "projectile": {
+                    "ready": True,
+                    "authority_gate_count": 1,
+                    "off_reason": "none",
+                },
+            }
+            vanilla_matrix.write_json(
+                capture_dir / "quantum.qge_trace_summary.json",
+                {
+                    "records": {"ai_decision": 2},
+                    "runtime_evidence": runtime_evidence,
+                },
+            )
             for mode, render_value in (("classic", 0), ("quantum", 2)):
                 (capture_dir / f"{mode}.png").write_bytes(b"png")
                 (capture_dir / f"{mode}.README.txt").write_text(
@@ -603,6 +742,10 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
             self.assertTrue(summary["qge_classic_output_hidden"])
             self.assertTrue(summary["qge_asset_ownership_complete"])
             self.assertEqual(summary["qge_asset_ownership"]["own_world"], 1)
+            self.assertTrue(summary["runtime_evidence_ready"])
+            self.assertTrue(
+                matrix["runtime_evidence_summary"]["single_trace_ready"]
+            )
 
             icc = vanilla_matrix.build_icc_evidence(
                 matrix,
@@ -610,6 +753,8 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
                 capture_dir / "qge_vanilla_icc_evidence.json",
             )
             self.assertEqual(icc["runtime_backend"], "qge_vanilla_capture_matrix")
+            self.assertTrue(icc["runtime_evidence_ready"])
+            self.assertEqual(icc["runtime_evidence_ai_decision_count"], 2)
             self.assertEqual(
                 icc["completion_reason"],
                 "qge_vanilla_capture_matrix_complete",

@@ -28,6 +28,8 @@ sprite_test="${QGE_STREAM_SPRITE_TEST:-0}"
 physics_value="${QGE_PHYSICS:-1}"
 projectiles_value="${QGE_PROJECTILES:-1}"
 particles_value="${QGE_PARTICLES:-0}"
+ai_value="${QGE_STREAM_AI:-${QGE_AI:-1}}"
+vis_value="${QGE_STREAM_VIS:-${QGE_VIS:-2}}"
 overlay_alpha="${QGE_OVERLAY_ALPHA:-0.10}"
 scene_surface_budget="${QGE_SCENE_SURFACE_BUDGET:-128}"
 stream_mouse="${QGE_STREAM_MOUSE:-0}"
@@ -110,6 +112,8 @@ render_update_interval="$(normalize_positive_int "$render_update_interval" 8)"
 physics_value="$(normalize_nonnegative_int "$physics_value" 1)"
 projectiles_value="$(normalize_nonnegative_int "$projectiles_value" 1)"
 particles_value="$(normalize_nonnegative_int "$particles_value" 0)"
+ai_value="$(normalize_nonnegative_int "$ai_value" 1)"
+vis_value="$(normalize_nonnegative_int "$vis_value" 2)"
 scene_surface_budget="$(normalize_positive_int "$scene_surface_budget" 128)"
 width="$(normalize_positive_int "$width" 800)"
 height="$(normalize_positive_int "$height" 600)"
@@ -155,6 +159,7 @@ outdir="$quake_stream_root/$stamp"
 agent_stream="${QGE_AGENT_STREAM_DIR:-$agent_stream_root/$stamp}"
 agent_video_dir="$agent_stream/video/frames"
 agent_audio_dir="$agent_stream/audio"
+agent_trace_dir="$agent_stream/trace"
 agent_input_dir="$agent_stream/input"
 agent_log_dir="$agent_stream/logs"
 agent_perf_dir="$agent_stream/performance"
@@ -168,12 +173,16 @@ agent_latest_icc_file="$agent_stream_root/latest_icc_evidence.txt"
 quake_latest_stream_file="$quake_stream_root/latest_stream.txt"
 quake_latest_trace_file="$quake_stream_root/latest_trace.txt"
 trace_file="$outdir/qge_trace.bin"
+trace_summary_file="$outdir/qge_trace_summary.json"
+trace_summary_stderr_file="$outdir/qge_trace_summary.err"
 perf_summary_file="$outdir/qge_perf_summary.json"
 perf_icc_file="$outdir/qge_perf_icc_evidence.json"
 perf_stdout_file="$outdir/qge_perf_summary.txt"
 perf_stderr_file="$outdir/qge_perf_summary.err"
 agent_perf_summary_file="$agent_perf_dir/qge_perf_summary.json"
 agent_perf_icc_file="$agent_perf_dir/qge_perf_icc_evidence.json"
+agent_trace_summary_file="$agent_trace_dir/qge_trace_summary.json"
+agent_trace_summary_stderr_file="$agent_trace_dir/qge_trace_summary.err"
 agent_input_actions_file="$agent_input_dir/noesis_actions.txt"
 agent_input_commands_file="$agent_input_dir/noesis_commands.cfg"
 agent_audio_raw="$agent_audio_dir/quake_mix_s16le.raw"
@@ -183,7 +192,9 @@ agent_frame_count_file="$agent_stream/video/frame_count.txt"
 agent_last_frame_file="$agent_stream/video/latest_frame.txt"
 last_agent_frame=""
 perf_status="not_run"
-mkdir -p "$quake_stream_root" "$agent_stream_root" "$outdir" "$agent_video_dir" "$agent_audio_dir" "$agent_input_dir" "$agent_log_dir" "$agent_perf_dir"
+trace_summary_status="not_requested"
+trace_runtime_evidence_ready=0
+mkdir -p "$quake_stream_root" "$agent_stream_root" "$outdir" "$agent_video_dir" "$agent_audio_dir" "$agent_trace_dir" "$agent_input_dir" "$agent_log_dir" "$agent_perf_dir"
 : > "$agent_events_file"
 : > "$agent_input_actions_file"
 : > "$agent_input_commands_file"
@@ -227,6 +238,8 @@ write_agent_manifest() {
   local manifest_trace_file=""
   local trace_status="not_requested"
   local trace_bytes=0
+  local manifest_trace_summary_file=""
+  local manifest_agent_trace_summary_file=""
   if [[ "$status" == "running" ]]; then
     run_status="running"
     run_success=0
@@ -251,6 +264,8 @@ write_agent_manifest() {
       trace_status="complete"
       trace_bytes="$(wc -c < "$trace_file" | tr -d ' ')"
     fi
+    manifest_trace_summary_file="$trace_summary_file"
+    manifest_agent_trace_summary_file="$agent_trace_summary_file"
   fi
   cat > "$agent_manifest_file" <<EOF
 {
@@ -314,6 +329,12 @@ write_agent_manifest() {
     "quantum_render_update_interval": $render_update_interval,
     "sprite_test": $sprite_test
   },
+  "ai": {
+    "quantum_ai": $ai_value
+  },
+  "visibility": {
+    "quantum_vis": $vis_value
+  },
   "video": {
     "frames_dir": $(json_string "$agent_video_dir"),
     "frame_count_file": $(json_string "$agent_frame_count_file"),
@@ -347,7 +368,14 @@ write_agent_manifest() {
   "icc_evidence": $(json_string "$agent_icc_file"),
   "trace": $(json_string "$manifest_trace_file"),
   "trace_status": $(json_string "$trace_status"),
-  "trace_bytes": $trace_bytes
+  "trace_bytes": $trace_bytes,
+  "trace_summary": {
+    "status": $(json_string "$trace_summary_status"),
+    "file": $(json_string "$manifest_trace_summary_file"),
+    "agent_file": $(json_string "$manifest_agent_trace_summary_file"),
+    "stderr_file": $(json_string "$trace_summary_stderr_file"),
+    "runtime_evidence_ready": $trace_runtime_evidence_ready
+  }
 }
 EOF
 }
@@ -360,6 +388,7 @@ write_agent_icc_evidence() {
   local icc_trace_file=""
   local icc_trace_status="not_requested"
   local icc_trace_bytes=0
+  local icc_trace_summary_file=""
   if [[ -n "$startup_issue" ]]; then
     icc_run_status="failed"
     icc_run_success=0
@@ -371,6 +400,7 @@ write_agent_icc_evidence() {
       icc_trace_status="complete"
       icc_trace_bytes="$(wc -c < "$trace_file" | tr -d ' ')"
     fi
+    icc_trace_summary_file="$trace_summary_file"
   fi
   if [[ -s "$agent_audio_raw" ]]; then
     audio_raw_file="$agent_audio_raw"
@@ -389,10 +419,13 @@ write_agent_icc_evidence() {
     printf '{"kind":"runtime_state","name":"agent_stream_frames_captured","value":%s,"path":%s}\n' "$(json_string "$frame_index")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"runtime_state","name":"agent_stream_trace_status","value":%s,"path":%s}\n' "$(json_string "$icc_trace_status")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"runtime_state","name":"agent_stream_trace_bytes","value":%s,"path":%s}\n' "$(json_string "$icc_trace_bytes")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"runtime_state","name":"agent_stream_trace_summary_status","value":%s,"path":%s}\n' "$(json_string "$trace_summary_status")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"runtime_state","name":"agent_stream_runtime_evidence_ready","value":%s,"path":%s}\n' "$(json_string "$trace_runtime_evidence_ready")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"runtime_state","name":"agent_stream_perf_status","value":%s,"path":%s}\n' "$(json_string "$perf_status")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_stream_manifest_file","value":%s,"path":%s}\n' "$(json_string "$agent_manifest_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_events_file","value":%s,"path":%s}\n' "$(json_string "$agent_events_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_trace_file","value":%s,"path":%s}\n' "$(json_string "$icc_trace_file")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"artifact","name":"agent_trace_summary_file","value":%s,"path":%s}\n' "$(json_string "$icc_trace_summary_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_perf_summary_file","value":%s,"path":%s}\n' "$(json_string "$agent_perf_summary_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_perf_icc_evidence_file","value":%s,"path":%s}\n' "$(json_string "$agent_perf_icc_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_input_actions_file","value":%s,"path":%s}\n' "$(json_string "$agent_input_actions_file")" "$(json_string "$agent_icc_file")"
@@ -445,6 +478,37 @@ recover_latest_trace_pointer() {
     -name qge_trace.bin -type f -size +0c -print 2>/dev/null | sort | tail -n 1)"
   if [[ -n "$recovered_trace" ]]; then
     printf '%s\n' "$recovered_trace" > "$quake_latest_trace_file"
+  fi
+}
+
+write_trace_summary() {
+  trace_summary_status="not_requested"
+  trace_runtime_evidence_ready=0
+  if [[ "$trace" != "1" ]]; then
+    return
+  fi
+  trace_summary_status="requested_missing"
+  if [[ ! -s "$trace_file" ]]; then
+    return
+  fi
+  if python3 "$repo_root/tools/qge_trace_summary.py" "$trace_file" --json \
+      > "$trace_summary_file" 2> "$trace_summary_stderr_file"; then
+    trace_summary_status="complete"
+    if grep -q '"single_trace_ready": true' "$trace_summary_file"; then
+      trace_runtime_evidence_ready=1
+    fi
+    cp "$trace_summary_file" "$agent_trace_summary_file"
+    if [[ -s "$trace_summary_stderr_file" ]]; then
+      cp "$trace_summary_stderr_file" "$agent_trace_summary_stderr_file"
+    else
+      : > "$agent_trace_summary_stderr_file"
+    fi
+    agent_event "trace_summary_done" "$trace_summary_file" \
+      "runtime_evidence_ready=$trace_runtime_evidence_ready"
+  else
+    trace_summary_status="failed"
+    cp "$trace_summary_stderr_file" "$agent_trace_summary_stderr_file" 2>/dev/null || true
+    agent_event "trace_summary_failed" "$trace_summary_file"
   fi
 }
 
@@ -514,6 +578,8 @@ trap restore_autoexec EXIT
   echo "quantum_physics $physics_value"
   echo "quantum_projectiles $projectiles_value"
   echo "quantum_particles $particles_value"
+  echo "quantum_ai $ai_value"
+  echo "quantum_vis $vis_value"
   if [[ "$sound" == "1" ]]; then
     echo "snd_quantum $sound_quantum_mode"
     echo "snd_quantum_source_authority $sound_source_authority"
@@ -581,7 +647,7 @@ cp "$before_file" "$seen_file"
 echo "Streaming Quantum Quake graphics diagnostics"
 echo "  outdir=$outdir"
 echo "  agent_stream=$agent_stream"
-echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter update_interval=$render_update_interval sprite_test=$sprite_test quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_particles=$particles_value"
+echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter update_interval=$render_update_interval sprite_test=$sprite_test quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_particles=$particles_value quantum_ai=$ai_value quantum_vis=$vis_value"
 echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound snd_quantum=$sound_quantum_mode snd_quantum_source_authority=$sound_source_authority trace=$trace fire_test=$fire_test scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_max_wait=$noesis_max_wait"
 echo "QGE_AGENT_STREAM $agent_stream"
 
@@ -915,6 +981,20 @@ collect_new_frames
 poll_agent_audio
 sync_agent_frame_state
 
+if [[ "$trace" == "1" ]]; then
+  if [[ -s "$trace_file" ]]; then
+    trace_bytes="$(wc -c < "$trace_file" | tr -d ' ')"
+    agent_event "trace_done" "$trace_file" "bytes=$trace_bytes"
+    echo "QGE_TRACE_DONE $trace_file bytes=$trace_bytes"
+    write_trace_summary
+  else
+    trace_summary_status="requested_missing"
+    trace_runtime_evidence_ready=0
+    agent_event "trace_missing" "$trace_file"
+    echo "QGE_TRACE_MISSING $trace_file" >&2
+  fi
+fi
+
 cat > "$outdir/README.txt" <<EOF
 Quantum Quake graphics stream
 
@@ -928,12 +1008,17 @@ Render material gain: $render_material_gain
 Render edge samples: $render_edge_samples
 Scene surface budget: $scene_surface_budget
 Physics cvars: quantum_physics $physics_value, quantum_projectiles $projectiles_value, quantum_particles $particles_value
+AI cvar: quantum_ai $ai_value
+Visibility cvar: quantum_vis $vis_value
 Fire test: $fire_test
 Sound quantum mode: $sound_quantum_mode
 Sound source authority: $sound_source_authority
 Launch mode: $launch_mode
 Trace requested: $trace
 Trace file: $([[ "$trace" == "1" ]] && printf '%s' "$trace_file" || printf 'not requested')
+Trace summary: $([[ "$trace" == "1" ]] && printf '%s' "$trace_summary_file" || printf 'not requested')
+Trace summary status: $trace_summary_status
+Runtime evidence ready: $trace_runtime_evidence_ready
 Timeout seconds: $max_seconds
 Log: $log_file
 Performance summary: $perf_summary_file
@@ -947,17 +1032,6 @@ Agent audio raw: $agent_audio_raw
 Engine auto capture: $engine_capture
 Autoexec used: $outdir/autoexec.cfg.used
 EOF
-
-if [[ "$trace" == "1" ]]; then
-  if [[ -s "$trace_file" ]]; then
-    trace_bytes="$(wc -c < "$trace_file" | tr -d ' ')"
-    agent_event "trace_done" "$trace_file" "bytes=$trace_bytes"
-    echo "QGE_TRACE_DONE $trace_file bytes=$trace_bytes"
-  else
-    agent_event "trace_missing" "$trace_file"
-    echo "QGE_TRACE_MISSING $trace_file" >&2
-  fi
-fi
 
 poll_agent_audio
 agent_event "stream_done" "$outdir" "frames=$frame_index"

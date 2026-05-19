@@ -128,31 +128,37 @@ Verified with:
 - `make test`
 - `make -C quake/Quake -f Makefile.darwin USE_SDL2=1`
 
+## Wave 5 Checkpoint
+
+- Runtime evidence capture: the stream harness now exposes explicit
+  `quantum_ai` and `quantum_vis` knobs, writes a `qge_trace_summary.json`
+  sidecar, mirrors that summary into the agent stream, and reports
+  `runtime_evidence_ready` through the manifest and ICC evidence.
+- Single-trace evidence: `qge_trace_summary.py` derives a
+  `runtime_evidence` block from one binary trace. The ready gate requires
+  nonzero AI decision records, audio source-spatial probes, visibility shadow
+  parity plus authority-gate probes, and projectile authority-gate probes.
+- Matrix propagation: `qge_vanilla_capture_matrix.py` loads the trace summary
+  sidecar and exposes runtime-evidence counts in the matrix and ICC sidecar
+  without folding them into the vanilla renderer conformance claim.
+- Live proof: a compact `e1m1` trace produced
+  `runtime_evidence.single_trace_ready=true` with 245 AI decisions, 25 audio
+  source-spatial probes, 43 visibility authority-gate probes, and 45
+  projectile authority-gate probes.
+
+Verified with:
+
+- `python3 -m py_compile tools/qge_trace_summary.py tools/qge_vanilla_capture_matrix.py tests/test_qge_python_tools.py`
+- `python3 tests/test_qge_python_tools.py`
+- `bash tests/test_qge_trace_summary.sh`
+- `bash tests/test_snd_quantum_source_contract.sh`
+- `bash tests/test_noesis_input_contract.sh`
+- `make test_qge_python_tools`
+- `make test`
+- `QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=2 QGE_STREAM_WAIT_FRAMES=40 QGE_STREAM_CAPTURE_WAIT=40 QGE_STREAM_TRACE=1 QGE_STREAM_SOUND=1 QGE_STREAM_SND_QUANTUM=2 QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY=1 QGE_STREAM_FIRE_TEST=1 QGE_STREAM_AI=1 QGE_STREAM_VIS=2 QGE_RENDER=2 QGE_PHYSICS=1 QGE_PROJECTILES=1 QGE_STREAM_TIMEOUT_SECONDS=120 QGE_STREAM_LAUNCH=open bash tools/quake_graphics_stream.sh`
+- `python3 tools/qge_trace_summary.py diagnostics/quake_stream/20260518-213208/qge_trace.bin --json`
+
 ## Next Worker Tasks
-
-### Runtime Evidence Capture V4
-
-Owned files:
-
-- `tools/quake_graphics_stream.sh`
-- `tools/qge_trace_summary.py`
-- `tools/qge_vanilla_capture_matrix.py`
-- `tests/test_qge_python_tools.py`
-
-Goal:
-
-Run or harden a live compact capture that produces one trace containing
-entropy replay data, AI decisions, visibility decisions, source audio spatial
-parity, and projectile authority telemetry. This is the evidence slice that
-turns the remaining ICC runtime-evidence action into concrete artifacts.
-
-Gate:
-
-- Trace summary reports nonzero AI decision, audio spatial, visibility, and
-  projectile groups from a single run.
-- Capture matrix links the trace and marks authority/fallback state explicitly.
-- ICC `qge_domain_ownership_swarm` reaches score 100 or the remaining missing
-  evidence is named precisely.
 
 ### Visibility Authority Apply V3
 

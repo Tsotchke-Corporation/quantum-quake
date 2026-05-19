@@ -81,6 +81,43 @@ STATE_PROBE = struct.Struct("<iiIIiIQddddiiQ32s")
 FALLBACK = struct.Struct("<iiIIiid96s")
 AI_DECISION = struct.Struct("<iiiiiIIIQQQQiiddddd")
 
+VIS_FLAGS = {
+    "registered": 0x0001,
+    "mismatch": 0x0002,
+    "false_positive": 0x0004,
+    "false_negative": 0x0008,
+    "overflow": 0x0010,
+    "authority_requested": 0x0020,
+    "authority_ready": 0x0040,
+    "authority_selected": 0x0080,
+    "fallback_selected": 0x0100,
+    "warmup_pending": 0x0200,
+}
+
+AUDIO_FLAGS = {
+    "dry_fallback": 0x0001,
+    "processed": 0x0002,
+    "clipped": 0x0004,
+    "spatial": 0x0008,
+    "view_entity": 0x0010,
+}
+
+PROJECTILE_FLAGS = {
+    "authority_ready": 0x0100,
+    "quantum_physics_enabled": 0x0200,
+    "quantum_projectiles_enabled": 0x0400,
+    "min_shadow_samples": 0x0800,
+}
+
+PROJECTILE_OFF_REASONS = {
+    0: "none",
+    1: "disabled",
+    2: "no_projectiles",
+    3: "warmup",
+    4: "shadow_max",
+    5: "shadow_avg",
+}
+
 
 def clean_label(raw: bytes) -> str:
     return raw.split(b"\0", 1)[0].decode("utf-8", errors="replace")
@@ -98,6 +135,132 @@ def increment_group(groups: dict[tuple, dict], key: tuple, initial: dict, frame:
     group["first_frame"] = min(group["first_frame"], frame)
     group["last_frame"] = max(group["last_frame"], frame)
     return group
+
+
+def flags_summary(flags: int, mapping: dict[str, int]) -> dict[str, bool]:
+    return {name: bool(flags & bit) for name, bit in mapping.items()}
+
+
+def probe_by_label(probes: list[dict], label: str) -> dict | None:
+    for probe in probes:
+        if probe.get("label") == label:
+            return probe
+    return None
+
+
+def probe_count(probes: list[dict], label: str, domain: str | None = None) -> int:
+    total = 0
+    for probe in probes:
+        if probe.get("label") != label:
+            continue
+        if domain is not None and probe.get("domain") != domain:
+            continue
+        total += int(probe.get("count", 0) or 0)
+    return total
+
+
+def build_runtime_evidence(summary: dict) -> dict:
+    probes = summary.get("state_probes", [])
+    records = summary.get("records", {})
+    ai_decision_count = sum(
+        int(decision.get("count", 0) or 0)
+        for decision in summary.get("ai_decisions", [])
+    )
+    audio_source_spatial = probe_by_label(probes, "audio_source_spatial")
+    audio_source_frame = probe_by_label(probes, "audio_source_frame")
+    audio_pan_authority = probe_by_label(
+        probes, "audio_attenuation_pan_authority")
+    vis_shadow = probe_by_label(probes, "vis_shadow_parity")
+    vis_gate = probe_by_label(probes, "vis_authority_gate")
+    projectile_gate = probe_by_label(probes, "projectile_authority_gate")
+
+    audio_source_spatial_count = probe_count(
+        probes, "audio_source_spatial", "audio")
+    audio_source_frame_count = probe_count(
+        probes, "audio_source_frame", "audio")
+    audio_pan_authority_count = probe_count(
+        probes, "audio_attenuation_pan_authority", "audio")
+    vis_shadow_count = probe_count(
+        probes, "vis_shadow_parity", "visibility")
+    vis_gate_count = probe_count(
+        probes, "vis_authority_gate", "visibility")
+    projectile_gate_count = probe_count(
+        probes, "projectile_authority_gate", "projectile")
+
+    audio_flags = 0
+    for probe in (audio_source_spatial, audio_source_frame,
+                  audio_pan_authority):
+        if probe:
+            audio_flags |= int(probe.get("flags_or", 0) or 0)
+
+    visibility_flags = int(vis_gate.get("flags_or", 0) or 0) if vis_gate else 0
+    projectile_flags = (
+        int(projectile_gate.get("flags_or", 0) or 0)
+        if projectile_gate else 0
+    )
+    projectile_off_reason_code = projectile_flags & 0xff
+
+    ai_ready = ai_decision_count > 0 and int(records.get("ai_decision", 0)) > 0
+    audio_ready = audio_source_spatial_count > 0
+    visibility_ready = vis_shadow_count > 0 and vis_gate_count > 0
+    projectile_ready = projectile_gate_count > 0
+
+    return {
+        "single_trace_ready": (
+            ai_ready and audio_ready and visibility_ready and projectile_ready
+        ),
+        "ai": {
+            "ready": ai_ready,
+            "decision_count": ai_decision_count,
+            "record_count": int(records.get("ai_decision", 0) or 0),
+        },
+        "audio": {
+            "ready": audio_ready,
+            "source_spatial_count": audio_source_spatial_count,
+            "source_frame_count": audio_source_frame_count,
+            "attenuation_pan_authority_count": audio_pan_authority_count,
+            "flags": flags_summary(audio_flags, AUDIO_FLAGS),
+            "flags_or": audio_flags,
+        },
+        "visibility": {
+            "ready": visibility_ready,
+            "shadow_parity_count": vis_shadow_count,
+            "authority_gate_count": vis_gate_count,
+            "flags": flags_summary(visibility_flags, VIS_FLAGS),
+            "flags_or": visibility_flags,
+            "fallback_reason_code": (
+                int(round(vis_gate.get("entropy_max", 0.0)))
+                if vis_gate else None
+            ),
+            "clean_frames": (
+                int(vis_gate.get("active_basis_max", 0) or 0)
+                if vis_gate else 0
+            ),
+            "clean_frames_required": (
+                int(vis_gate.get("qubit_max", 0) or 0)
+                if vis_gate else 0
+            ),
+        },
+        "projectile": {
+            "ready": projectile_ready,
+            "authority_gate_count": projectile_gate_count,
+            "flags": flags_summary(projectile_flags, PROJECTILE_FLAGS),
+            "flags_or": projectile_flags,
+            "off_reason_code": projectile_off_reason_code,
+            "off_reason": PROJECTILE_OFF_REASONS.get(
+                projectile_off_reason_code,
+                f"reason_{projectile_off_reason_code}",
+            ),
+            "active_projectiles": (
+                int(projectile_gate.get("last_subject_id", 0) or 0)
+                if projectile_gate else 0
+            ),
+            "shadow_samples": (
+                int(projectile_gate.get("active_basis_max", 0) or 0)
+                if projectile_gate else 0
+            ),
+        },
+    }
 
 
 def parse_trace(path: str) -> dict:
@@ -295,6 +458,8 @@ def parse_trace(path: str) -> dict:
                     "memory_bytes_max": memory_bytes,
                     "flags_or": 0,
                     "state_hash_xor": 0,
+                    "entropy_min": entropy,
+                    "entropy_max": entropy,
                     "coherence_min": coherence,
                     "coherence_max": coherence,
                     "total_probability_max": total_probability,
@@ -314,13 +479,15 @@ def parse_trace(path: str) -> dict:
             group["memory_bytes_max"] = max(group["memory_bytes_max"], memory_bytes)
             group["flags_or"] |= probe_flags
             group["state_hash_xor"] ^= state_hash
+            group["entropy_min"] = min(group["entropy_min"], entropy)
+            group["entropy_max"] = max(group["entropy_max"], entropy)
             group["coherence_min"] = min(group["coherence_min"], coherence)
             group["coherence_max"] = max(group["coherence_max"], coherence)
             group["total_probability_max"] = max(group["total_probability_max"], total_probability)
             group["max_probability_max"] = max(group["max_probability_max"], max_probability)
             group["last_subject_id"] = subject_id
 
-    return {
+    summary = {
         "path": path,
         "header": {
             "version": version,
@@ -338,6 +505,8 @@ def parse_trace(path: str) -> dict:
         "replay_health": replay_health,
         "state_probes": sorted(probe_groups.values(), key=lambda item: (item["domain"], item["label"])),
     }
+    summary["runtime_evidence"] = build_runtime_evidence(summary)
+    return summary
 
 
 def print_text(summary: dict) -> None:
@@ -345,6 +514,7 @@ def print_text(summary: dict) -> None:
     print(f"Run: 0x{summary['header']['run_id']:016x}")
     print(f"Records: {json.dumps(summary['records'], sort_keys=True)}")
     print(f"Sequence errors: {summary['sequence_errors']}")
+    print(f"Runtime evidence: {json.dumps(summary['runtime_evidence'], sort_keys=True)}")
     if any(summary["replay_health"].values()):
         print(f"Replay: {json.dumps(summary['replay_health'], sort_keys=True)}")
     for entropy in summary["entropy_events"]:

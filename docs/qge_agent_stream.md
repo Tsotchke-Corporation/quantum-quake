@@ -27,6 +27,16 @@ QGE_STREAM_MAP=e1m1 QGE_STREAM_SOUND=1 QGE_STREAM_TRACE=1 \
   bash tools/quake_graphics_stream.sh
 ```
 
+Capture a compact runtime-ownership evidence run:
+
+```sh
+QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=2 QGE_STREAM_WAIT_FRAMES=40 \
+  QGE_STREAM_TRACE=1 QGE_STREAM_SOUND=1 QGE_STREAM_SND_QUANTUM=2 \
+  QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY=1 QGE_STREAM_FIRE_TEST=1 \
+  QGE_STREAM_AI=1 QGE_STREAM_VIS=2 QGE_RENDER=2 QGE_PHYSICS=1 \
+  QGE_PROJECTILES=1 bash tools/quake_graphics_stream.sh
+```
+
 Run the scripted weapon smoke and capture before the script exits:
 
 ```sh
@@ -73,10 +83,15 @@ The stream directory is intentionally simple and tail-friendly:
   the Noesis player.
 - `logs/quantum_quake.log`: runtime console log mirrored into the stream.
 - `logs/open.log`: LaunchServices notes for macOS `open` mode.
+- `trace/qge_trace_summary.json`: JSON summary of `qge_trace.bin`, including
+  `runtime_evidence.single_trace_ready` and per-domain AI, audio, visibility,
+  and projectile evidence counts.
 - `qge_agent_stream_icc_evidence.jsonl`: ICC-native evidence entries for the
   manifest, events file, Noesis input traces, latest video frame, raw audio,
-  audio metadata, trace artifact, frame count, run outcome, trace status, and
-  completion signal.
+  audio metadata, trace artifact, trace summary, frame count, run outcome,
+  trace status, runtime evidence readiness, and completion signal. Consumers
+  can key on run outcome, trace status, and runtime evidence readiness without
+  reading the console log.
 
 The harness also refreshes stable pointers in the diagnostics roots:
 
@@ -359,6 +374,8 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
 - `QGE_STREAM_TIMEOUT_SECONDS`: explicit launch/watchdog timeout.
 - `QGE_STREAM_TRACE`: write `qge_trace.bin` when set to `1`.
 - `QGE_STREAM_SOUND`: run with game sound enabled when set to `1`.
+- `QGE_STREAM_AI`: emitted as `quantum_ai`, default `1`.
+- `QGE_STREAM_VIS`: emitted as `quantum_vis`, default `2`.
 - `QGE_STREAM_FIRE_TEST`: run the scripted weapon smoke when set to `1`.
   With the default Noesis player this selects the Noesis `fire` plan unless
   `QGE_NOESIS_PLAN` is set explicitly.
