@@ -122,7 +122,10 @@ The stream directory is intentionally simple and tail-friendly:
   the Noesis player.
 - `noesis/qge_noesis_summary.json`: gameplay-quality reducer for Noesis runs,
   combining action/command traces, log health, captured frame motion, and trace
-  evidence into a pass/blocked/not-requested status.
+  evidence into a pass/blocked/not-requested status plus
+  `noesis_gameplay_quality_score`. The score is a live-smoke proxy for clean,
+  active, varied gameplay evidence; it is not yet an outcome score for kills,
+  damage, pickups, or level progress.
 - `noesis/qge_noesis_icc_evidence.json`: ICC evidence generated from the
   Noesis summary, including `agent_stream_noesis_status` inputs.
 - `logs/quantum_quake.log`: runtime console log mirrored into the stream.
@@ -345,9 +348,14 @@ summary. The stream harness runs it after frame, performance, and trace
 collection, writes `qge_noesis_summary.json` and
 `qge_noesis_icc_evidence.json` under the capture directory, mirrors both files
 into `agent_stream/noesis/`, and records the result as
-`agent_stream_noesis_status` in the JSONL ICC sidecar. This reducer is
-evidence-only: a blocked Noesis quality summary does not turn a completed media
-stream into a process failure.
+`agent_stream_noesis_status` in the JSONL ICC sidecar. It also emits
+`noesis_route_action_count`, `noesis_gameplay_quality_score`,
+`noesis_gameplay_quality_grade`, `noesis_log_phase_count`, and
+`noesis_log_policy_done` ICC evidence. Set `QGE_NOESIS_MIN_LOG_PHASES` to
+require that many `QGE_NOESIS_PHASE` markers to appear in the engine log, which
+is useful when proving that a longer route plan actually executed rather than
+only being generated. This reducer is evidence-only: a blocked Noesis quality
+summary does not turn a completed media stream into a process failure.
 
 `tools/quake_crash_watch.sh` uses the same Noesis player/provider contract for
 its scripted movement by default, stores `input/noesis_actions.txt` and
@@ -431,8 +439,12 @@ Supported movement/action verbs are `forward`, `back`, `turn-left`,
 `wait`, `weapon`, `weapon-next`, `weapon-prev`, and `give`. Composite combat
 verbs include `run-forward`, `jump-forward`, `advance-fire`, `retreat-fire`,
 `strafe-fire-left`, `strafe-fire-right`, `circle-fire-left`,
-`circle-fire-right`, and `clear-input`. `cmd` or `quake` passes the remaining
-text through as a raw Quake console command for targeted probes.
+`circle-fire-right`, `wall-slide-left`, `wall-slide-right`,
+`speed-jump-forward`, `door-bump`, and `clear-input`. `door-bump` uses a timed
+forward bump plus recovery because classic Quake doors are route-touch targets
+rather than reliable `+use` targets in this command-buffer path. `cmd` or
+`quake` passes the remaining text through as a raw Quake console command for
+targeted probes.
 
 Action streams can come from either `QGE_NOESIS_ACTIONS_FILE` or
 `QGE_NOESIS_CMD`. The command provider runs from `QGE_NOESIS_DIR` and should
@@ -489,14 +501,15 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   `~/Desktop/noesis`.
 - `QGE_NOESIS_PLAN`: Noesis command-buffer plan, default `adaptive`;
   supported plans are `patrol`, `scout`, `fire`, `map-scout`, `combat-scout`,
-  `combat-explore`, `weapon-cycle-smoke`, and `adaptive`. `adaptive` selects a
-  map-aware combat route when one exists, and otherwise falls back to the
-  generic combat-exploration loop.
+  `combat-explore`, `e1m1-route-push`, `weapon-cycle-smoke`, and `adaptive`.
+  `adaptive` selects a map-aware route/combat plan when one exists, and
+  otherwise falls back to the generic combat-exploration loop.
 - `QGE_NOESIS_ACTIONS_FILE`: optional Noesis action file. When present, the
   harness translates each line into Quake console commands instead of using
   the built-in plan. Supported actions include `forward`, `back`,
   `turn-left`, `turn-right`, `strafe-left`, `strafe-right`, `jump`,
   `center-view`, `advance-fire`, `circle-fire-left`, `circle-fire-right`,
+  `wall-slide-left`, `wall-slide-right`, `speed-jump-forward`, `door-bump`,
   `weapon-next`, `weapon-prev`, `attack`, `wait`, `weapon`, and `give`, with an
   optional wait-count argument.
 - `QGE_NOESIS_START_WAIT`: command-buffer waits emitted before Noesis actions,
@@ -505,6 +518,8 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
 - `QGE_NOESIS_MAX_WAIT`: maximum waits emitted by a single Noesis action,
   default `600`; larger counts are clamped and traced. The stream manifest
   records the normalized cap as `input.noesis_max_wait`.
+- `QGE_NOESIS_MIN_LOG_PHASES`: minimum Noesis phase markers that must appear in
+  the runtime log for the Noesis summary to pass, default `0`.
 - `QGE_NOESIS_CMD`: optional Noesis action provider command. When set, the
   harness runs it from `QGE_NOESIS_DIR` and translates its stdout action lines;
   this takes precedence over `QGE_NOESIS_ACTIONS_FILE` and the default

@@ -392,6 +392,9 @@ class NoesisSummaryTests(unittest.TestCase):
                         "center-view",
                         "cmd echo QGE_NOESIS_PHASE phase=e1m1_entry_clear",
                         "advance-fire 12",
+                        "wall-slide-right 10",
+                        "speed-jump-forward 3",
+                        "door-bump 4",
                         "circle-fire-left 8",
                         "jump-forward 4",
                         "clear-input 2",
@@ -420,6 +423,25 @@ class NoesisSummaryTests(unittest.TestCase):
                         "-attack",
                         "-right",
                         "-moveleft",
+                        "+speed",
+                        "+forward",
+                        "+moveright",
+                        "wait",
+                        "-moveright",
+                        "-forward",
+                        "-speed",
+                        "+speed",
+                        "+jump",
+                        "+forward",
+                        "wait",
+                        "-forward",
+                        "-jump",
+                        "-speed",
+                        "+speed",
+                        "+forward",
+                        "wait",
+                        "-forward",
+                        "-speed",
                         "+jump",
                         "+forward",
                         "wait",
@@ -486,6 +508,7 @@ class NoesisSummaryTests(unittest.TestCase):
                 min_commands=1,
                 min_frames=0,
                 min_frame_mae=None,
+                min_log_phases=1,
                 require_phase_markers=True,
                 require_combat=True,
             )
@@ -495,13 +518,24 @@ class NoesisSummaryTests(unittest.TestCase):
             self.assertEqual(summary["map"], "e1m1")
             self.assertEqual(summary["plan"], "adaptive")
             self.assertEqual(summary["actions"]["verb_counts"]["advance-fire"], 1)
+            self.assertEqual(summary["actions"]["verb_counts"]["wall-slide-right"], 1)
+            self.assertEqual(summary["actions"]["verb_counts"]["door-bump"], 1)
             self.assertEqual(summary["actions"]["combat_action_count"], 2)
+            self.assertEqual(summary["actions"]["route_action_count"], 4)
             self.assertTrue(summary["quality_gates"]["movement_actions_present"])
             self.assertTrue(summary["quality_gates"]["combat_required"])
+            self.assertEqual(summary["commands"]["pressed_button_variety"], 7)
             self.assertTrue(summary["commands"]["player_start_present"])
             self.assertTrue(summary["commands"]["player_done_present"])
             self.assertEqual(summary["commands"]["wait_clamped_count"], 1)
+            self.assertEqual(summary["log"]["phase_count"], 1)
             self.assertEqual(summary["trace"]["ai_decision_count"], 7)
+            self.assertGreaterEqual(summary["gameplay_score"]["score"], 35.0)
+            self.assertEqual(summary["gameplay_score"]["executed_phase_count"], 1)
+            self.assertEqual(
+                summary["gameplay_score"]["outcome_telemetry_present"],
+                False,
+            )
 
             icc = noesis_summary.build_icc_evidence(
                 summary,
@@ -515,7 +549,10 @@ class NoesisSummaryTests(unittest.TestCase):
             )
             self.assertTrue(by_name["noesis_failure_free"])
             self.assertEqual(by_name["noesis_plan"], "adaptive")
-            self.assertEqual(by_name["noesis_action_count"], 8)
+            self.assertEqual(by_name["noesis_action_count"], 11)
+            self.assertEqual(by_name["noesis_route_action_count"], 4)
+            self.assertGreaterEqual(by_name["noesis_gameplay_quality_score"], 35.0)
+            self.assertEqual(by_name["noesis_log_phase_count"], 1)
 
             commands_path.unlink()
             blocked = noesis_summary.build_summary(args)

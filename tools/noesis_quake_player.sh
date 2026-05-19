@@ -164,8 +164,24 @@ emit_action() {
     run-forward|sprint-forward|charge)
       hold_command_set "${arg:-1}" "speed" "forward"
       ;;
+    wall-slide-left|route-left|corridor-left)
+      hold_command_set "${arg:-1}" "speed" "forward" "moveleft"
+      ;;
+    wall-slide-right|route-right|corridor-right)
+      hold_command_set "${arg:-1}" "speed" "forward" "moveright"
+      ;;
     jump-forward|hop-forward)
       hold_command_set "${arg:-1}" "jump" "forward"
+      ;;
+    speed-jump-forward|run-jump-forward|jump-run-forward)
+      hold_command_set "${arg:-1}" "speed" "jump" "forward"
+      ;;
+    door-bump|door-push|bump-door)
+      hold_command_set "${arg:-8}" "speed" "forward"
+      clear_held_commands
+      emit_waits 1
+      hold_command "back" 2
+      emit_command "centerview"
       ;;
     advance-fire|fire-forward|push-fire|attack-move)
       hold_command_set "${arg:-1}" "forward" "attack"
@@ -220,7 +236,7 @@ emit_action() {
         emit_command "$arg"
       fi
       ;;
-    +forward|+back|+left|+right|+moveleft|+moveright|+attack|-forward|-back|-left|-right|-moveleft|-moveright|-attack)
+    +forward|+back|+left|+right|+moveleft|+moveright|+attack|+jump|+use|+speed|+moveup|+movedown|+lookup|+lookdown|-forward|-back|-left|-right|-moveleft|-moveright|-attack|-jump|-use|-speed|-moveup|-movedown|-lookup|-lookdown)
       emit_command "$line"
       ;;
     *)
@@ -274,11 +290,32 @@ emit_builtin_plan() {
       emit_action "advance-fire 10"
       emit_action "circle-fire-left 8"
       emit_action "circle-fire-right 8"
-      emit_action "jump-forward 4"
+      emit_action "wall-slide-right 10"
+      emit_action "wall-slide-left 8"
+      emit_action "speed-jump-forward 4"
       emit_action "turn-right 5"
       emit_action "advance-fire 12"
       emit_action "strafe-fire-left 6"
       emit_action "strafe-fire-right 6"
+      emit_action "clear-input 2"
+      ;;
+    e1m1-route-push|route-push)
+      emit_action "weapon 2"
+      emit_action "center-view"
+      emit_action "wait 6"
+      emit_action "advance-fire 12"
+      emit_action "wall-slide-right 12"
+      emit_action "circle-fire-left 6"
+      emit_action "run-forward 10"
+      emit_action "wall-slide-left 12"
+      emit_action "speed-jump-forward 4"
+      emit_action "advance-fire 10"
+      emit_action "clear-input 2"
+      emit_action "wall-slide-right 10"
+      emit_action "door-bump 8"
+      emit_action "wall-slide-left 8"
+      emit_action "advance-fire 14"
+      emit_action "circle-fire-right 8"
       emit_action "clear-input 2"
       ;;
     patrol|*)

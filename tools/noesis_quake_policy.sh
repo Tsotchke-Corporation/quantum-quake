@@ -109,6 +109,33 @@ emit_e1m1_combat_explore() {
   emit "clear-input 2"
 }
 
+emit_e1m1_route_push() {
+  emit "weapon 2"
+  emit "center-view"
+  emit_phase "phase=e1m1_entry_clear"
+  emit "wait 6"
+  emit "advance-fire 12"
+  emit "wall-slide-right 12"
+  emit "circle-fire-left 6"
+  emit "center-view"
+  emit_phase "phase=e1m1_bridge_route"
+  emit "run-forward 10"
+  emit "wall-slide-left 12"
+  emit "speed-jump-forward 4"
+  emit "advance-fire 10"
+  emit_phase "phase=e1m1_door_slide"
+  emit "clear-input 2"
+  emit "wall-slide-right 10"
+  emit "door-bump 8"
+  emit "wall-slide-left 8"
+  emit_phase "phase=e1m1_exit_route"
+  emit "center-view"
+  emit "advance-fire 14"
+  emit "wall-slide-right 12"
+  emit "circle-fire-right 8"
+  emit "clear-input 2"
+}
+
 emit_weapon_cycle_smoke() {
   emit "weapon 2"
   emit "wait 4"
@@ -151,7 +178,7 @@ emit_map_scout() {
 emit_adaptive() {
   case "$map_name" in
     e1m1)
-      emit_e1m1_combat_explore
+      emit_e1m1_route_push
       ;;
     *)
       emit_combat_explore
@@ -177,6 +204,9 @@ case "$plan" in
     ;;
   combat|combat-scout|combat-explore)
     emit_combat_explore
+    ;;
+  e1m1-route-push|route-push)
+    emit_e1m1_route_push
     ;;
   adaptive)
     emit_adaptive

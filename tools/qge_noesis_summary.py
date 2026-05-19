@@ -47,9 +47,21 @@ MOVEMENT_VERBS = {
     "hop",
     "jump-forward",
     "hop-forward",
+    "speed-jump-forward",
+    "run-jump-forward",
+    "jump-run-forward",
+    "door-bump",
+    "door-push",
+    "bump-door",
     "run-forward",
     "sprint-forward",
     "charge",
+    "wall-slide-left",
+    "wall-slide-right",
+    "route-left",
+    "route-right",
+    "corridor-left",
+    "corridor-right",
     "circle-left",
     "circle-right",
     "circle-fire-left",
@@ -58,6 +70,27 @@ MOVEMENT_VERBS = {
     "swim-down",
     "move-up",
     "move-down",
+}
+ROUTE_VERBS = {
+    "run-forward",
+    "sprint-forward",
+    "charge",
+    "jump-forward",
+    "hop-forward",
+    "speed-jump-forward",
+    "run-jump-forward",
+    "jump-run-forward",
+    "door-bump",
+    "door-push",
+    "bump-door",
+    "wall-slide-left",
+    "wall-slide-right",
+    "route-left",
+    "route-right",
+    "corridor-left",
+    "corridor-right",
+    "circle-left",
+    "circle-right",
 }
 BUTTON_COMMANDS = {
     "attack",
@@ -116,6 +149,7 @@ def summarize_actions(path: Path) -> dict[str, Any]:
     ]
     combat_count = sum(verb_counts[verb] for verb in COMBAT_VERBS)
     movement_count = sum(verb_counts[verb] for verb in MOVEMENT_VERBS)
+    route_count = sum(verb_counts[verb] for verb in ROUTE_VERBS)
     return {
         "path": str(path),
         "exists": path.is_file(),
@@ -126,6 +160,7 @@ def summarize_actions(path: Path) -> dict[str, Any]:
         "verb_counts": dict(sorted(verb_counts.items())),
         "combat_action_count": combat_count,
         "movement_action_count": movement_count,
+        "route_action_count": route_count,
     }
 
 
@@ -169,6 +204,7 @@ def summarize_commands(path: Path) -> dict[str, Any]:
         "max_consecutive_waits": max_consecutive_waits,
         "press_counts": dict(sorted(press_counts.items())),
         "release_counts": dict(sorted(release_counts.items())),
+        "pressed_button_variety": len(press_counts),
         "policy_marker_count": len(policy_markers),
         "phase_marker_count": len(phase_markers),
         "player_start_present": any("QGE_NOESIS_PLAYER start" in line for line in lines),
@@ -188,12 +224,23 @@ def summarize_log(path: Path) -> dict[str, Any]:
     noesis_lines = [
         line.strip() for line in lines if "QGE_NOESIS_" in line
     ]
+    phases = [
+        line.split("QGE_NOESIS_PHASE", 1)[1].strip()
+        for line in noesis_lines
+        if "QGE_NOESIS_PHASE" in line
+    ]
     return {
         "path": str(path),
         "exists": path.is_file(),
         "unknown_command_count": len(unknown_commands),
         "unknown_command_lines": unknown_commands,
         "noesis_log_line_count": len(noesis_lines),
+        "phase_count": len(phases),
+        "phases": phases,
+        "policy_start_present": any("QGE_NOESIS_POLICY" in line for line in noesis_lines),
+        "policy_done_present": any("QGE_NOESIS_POLICY done" in line for line in noesis_lines),
+        "player_start_present": any("QGE_NOESIS_PLAYER start" in line for line in noesis_lines),
+        "player_done_present": any("QGE_NOESIS_PLAYER done" in line for line in noesis_lines),
     }
 
 
@@ -270,6 +317,132 @@ def summarize_frames(frames_dir: Path) -> dict[str, Any]:
     return summary
 
 
+def score_component(value: float, maximum: float, weight: float) -> float:
+    if maximum <= 0.0:
+        return 0.0
+    bounded = max(0.0, min(float(value), maximum))
+    return round((bounded / maximum) * weight, 3)
+
+
+def build_gameplay_score(
+    actions: dict[str, Any],
+    commands: dict[str, Any],
+    log: dict[str, Any],
+    frames: dict[str, Any],
+    trace: dict[str, Any],
+    gates: dict[str, bool],
+) -> dict[str, Any]:
+    press_counts = commands.get("press_counts") or {}
+    delta = frames.get("delta") or {}
+    mae_norm = delta.get("mae_rgb_normalized")
+    if not isinstance(mae_norm, (int, float)):
+        mae_norm = 0.0
+
+    runtime_score = 0.0
+    if trace.get("ai_decision_count", 0) > 0:
+        runtime_score += 5.0
+    if (
+        trace.get("render_sparse_dwt_count", 0) > 0 or
+        trace.get("render_native_bridge_count", 0) > 0
+    ):
+        runtime_score += 5.0
+    if trace.get("exists") and trace.get("render_native_fallback_count", 0) == 0:
+        runtime_score += 5.0
+    if trace.get("visibility_authority_apply_count", 0) > 0:
+        runtime_score += 5.0
+
+    route_button_count = sum(
+        1 for button in ("speed", "forward", "moveleft", "moveright", "jump")
+        if int(press_counts.get(button) or 0) > 0
+    )
+    wait_ratio = 0.0
+    if commands.get("line_count", 0) > 0:
+        wait_ratio = float(commands.get("wait_count", 0)) / float(commands["line_count"])
+    wait_ratio_ok = 0.30 <= wait_ratio <= 0.85
+    generated_phase_count = int(actions.get("phase_count") or 0)
+    executed_phase_count = int(log.get("phase_count") or 0)
+    if generated_phase_count > 0:
+        phase_ratio = min(1.0, executed_phase_count / generated_phase_count)
+    else:
+        phase_ratio = 1.0 if log.get("policy_done_present") else 0.0
+
+    breakdown = {
+        "harness_validity": (
+            20.0 if (
+                gates.get("required_inputs_present", False) and
+                gates.get("run_completed", True) and
+                gates.get("frames_present", True) and
+                gates.get("no_unknown_actions", False) and
+                gates.get("no_unknown_commands", False) and
+                commands.get("wait_clamped_count", 0) == 0
+            ) else 0.0
+        ),
+        "intent_richness": round(
+            score_component(actions.get("line_count", 0), 24.0, 4.0) +
+            score_component(actions.get("movement_action_count", 0), 10.0, 4.0) +
+            score_component(actions.get("combat_action_count", 0), 8.0, 4.0) +
+            score_component(commands.get("pressed_button_variety", 0), 8.0, 4.0) +
+            (4.0 if wait_ratio_ok else 0.0),
+            3,
+        ),
+        "observable_world_change": round(
+            score_component(frames.get("frame_count", 0), 12.0, 5.0) +
+            score_component(mae_norm, 0.12, 15.0),
+            3,
+        ),
+        "runtime_engagement": runtime_score,
+        "route_control": round(
+            score_component(actions.get("route_action_count", 0), 5.0, 6.0) +
+            score_component(route_button_count, 5.0, 4.0),
+            3,
+        ),
+        "runtime_plan_progress": round(
+            score_component(phase_ratio, 1.0, 7.0) +
+            (3.0 if log.get("policy_done_present") else 0.0),
+            3,
+        ),
+    }
+    raw_score = round(sum(breakdown.values()), 3)
+    blocking_gates = sorted(key for key, value in gates.items() if not value)
+    score = min(raw_score, 39.0) if blocking_gates else raw_score
+    if blocking_gates:
+        grade = "blocked_by_gates"
+    elif score >= 90.0:
+        grade = "excellent_smoke"
+    elif score >= 75.0:
+        grade = "strong_smoke"
+    elif score >= 60.0:
+        grade = "fair_smoke"
+    elif score >= 40.0:
+        grade = "weak_smoke"
+    else:
+        grade = "blocked_or_idle"
+    return {
+        "score": score,
+        "raw_score": raw_score,
+        "max_score": 100,
+        "grade": grade,
+        "blocking_gates": blocking_gates,
+        "breakdown": breakdown,
+        "wait_ratio": round(wait_ratio, 4),
+        "route_button_count": route_button_count,
+        "executed_phase_count": executed_phase_count,
+        "generated_phase_count": generated_phase_count,
+        "phase_execution_ratio": round(phase_ratio, 4),
+        "outcome_telemetry_present": False,
+        "outcome_telemetry_missing": [
+            "kills",
+            "damage_dealt",
+            "damage_taken",
+            "health",
+            "armor",
+            "pickups",
+            "position",
+            "map_progress",
+        ],
+    }
+
+
 def load_manifest(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
@@ -338,6 +511,11 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
         gates["frame_delta_required"] = (
             isinstance(mae, (int, float)) and mae >= args.min_frame_mae
         )
+    if args.min_log_phases > 0:
+        gates["log_phase_markers_required"] = (
+            log["phase_count"] >= args.min_log_phases
+        )
+    gameplay_score = build_gameplay_score(actions, commands, log, frames, trace, gates)
 
     failures = [key for key, value in gates.items() if not value]
     status = "pass" if not failures else "blocked"
@@ -373,6 +551,7 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
         "log": log,
         "trace": trace,
         "frames": frames,
+        "gameplay_score": gameplay_score,
         "quality_gates": gates,
         "failures": failures,
     }
@@ -384,6 +563,7 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
     frames = summary.get("frames") or {}
     trace = summary.get("trace") or {}
     run = summary.get("run") or {}
+    log = summary.get("log") or {}
     return [
         {
             "kind": "runtime_backend",
@@ -452,6 +632,36 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "path": str(summary_path),
         },
         {
+            "kind": "runtime_state",
+            "name": "noesis_route_action_count",
+            "value": actions.get("route_action_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_quality_score",
+            "value": (summary.get("gameplay_score") or {}).get("score", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_quality_grade",
+            "value": (summary.get("gameplay_score") or {}).get("grade", ""),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_log_phase_count",
+            "value": log.get("phase_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_log_policy_done",
+            "value": log.get("policy_done_present", False),
+            "path": str(summary_path),
+        },
+        {
             "kind": "artifact",
             "name": "noesis_actions_file",
             "value": (summary.get("inputs") or {}).get("actions", ""),
@@ -493,6 +703,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--min-commands", type=int, default=1)
     parser.add_argument("--min-frames", type=int, default=0)
     parser.add_argument("--min-frame-mae", type=float)
+    parser.add_argument("--min-log-phases", type=int, default=0)
     parser.add_argument("--require-phase-markers", action="store_true")
     parser.add_argument("--require-combat", action="store_true")
     parser.add_argument("--out", type=Path)
