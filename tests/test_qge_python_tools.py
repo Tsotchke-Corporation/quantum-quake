@@ -581,7 +581,7 @@ class TraceSummaryTests(unittest.TestCase):
                 (5, state_probe_payload(
                     6, 2, 7, 1, 0x0F00, b"projectile_authority_gate", 4, 3)),
                 (5, state_probe_payload(
-                    7, 2, 7, 313, 0x3300, b"projectile_writeback_decision",
+                    7, 2, 7, 313, 0x13F00, b"projectile_writeback_decision",
                     0, 0)),
             ]
             data = trace_summary.HEADER.pack(
@@ -642,7 +642,13 @@ class TraceSummaryTests(unittest.TestCase):
                 evidence["projectile"]["flags"]["authority_requested"]
             )
             self.assertTrue(
+                evidence["projectile"]["flags"]["quantum_projectiles_enabled"]
+            )
+            self.assertTrue(
                 evidence["projectile"]["flags"]["writeback_selected"]
+            )
+            self.assertTrue(
+                evidence["projectile"]["flags"]["physics_authoritative_cvar"]
             )
             self.assertEqual(evidence["projectile"]["off_reason"], "none")
 

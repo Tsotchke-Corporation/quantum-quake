@@ -207,9 +207,47 @@ Verified with:
 - `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B qge_hooks.o`
 - `make test_qge`
 - `./bin/test_qge`
+- `make quake`
+- `QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=2 QGE_STREAM_WAIT_FRAMES=40 QGE_STREAM_CAPTURE_WAIT=40 QGE_STREAM_TRACE=1 QGE_STREAM_SOUND=1 QGE_STREAM_SND_QUANTUM=2 QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY=1 QGE_STREAM_FIRE_TEST=1 QGE_STREAM_AI=1 QGE_STREAM_VIS=2 QGE_STREAM_DISPLAY=0 QGE_RENDER=2 QGE_PHYSICS=1 QGE_PROJECTILES=2 QGE_STREAM_TIMEOUT_SECONDS=120 QGE_STREAM_LAUNCH=direct bash tools/quake_graphics_stream.sh`
+- `python3` validation of `diagnostics/agent_stream/20260518-223046/trace/qge_trace_summary.json`:
+  `runtime_evidence.projectile.writeback_decision_count=21`,
+  `authority_requested=true`, and `writeback_selected=true`.
+
+## Wave 8 Checkpoint
+
+- Explicit physics authority cvar: projectile writeback now recognizes
+  `quantum_physics_authoritative 1` as the documented authority request while
+  preserving `quantum_projectiles >= 1.5` as a compatibility path for existing
+  authority smokes.
+- Harness propagation: `tools/quake_graphics_stream.sh` and
+  `tools/quake_crash_watch.sh` can set `QGE_PHYSICS_AUTHORITATIVE`, write
+  `quantum_physics_authoritative` into generated autoexec files, and mirror the
+  setting into run output or agent manifests.
+- Traceability: projectile runtime evidence now exposes a
+  `physics_authoritative_cvar` flag so authority traces can distinguish the
+  explicit cvar from the legacy projectile-mode compatibility request.
+
+Verified with:
+
+- `python3 -m py_compile tools/qge_trace_summary.py tests/test_qge_python_tools.py`
+- `bash -n tools/quake_graphics_stream.sh`
+- `bash -n tools/quake_crash_watch.sh`
+- `python3 tests/test_qge_python_tools.py`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B qge_hooks.o`
+- `make test_qge_python_tools`
+- `make test_qge`
+- `./bin/test_qge`
+- `make test`
+- `make quake`
+- `QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=2 QGE_STREAM_WAIT_FRAMES=40 QGE_STREAM_CAPTURE_WAIT=40 QGE_STREAM_TRACE=1 QGE_STREAM_SOUND=1 QGE_STREAM_SND_QUANTUM=2 QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY=1 QGE_STREAM_FIRE_TEST=1 QGE_STREAM_AI=1 QGE_STREAM_VIS=2 QGE_STREAM_DISPLAY=0 QGE_RENDER=2 QGE_PHYSICS=1 QGE_PROJECTILES=1 QGE_PHYSICS_AUTHORITATIVE=1 QGE_STREAM_TIMEOUT_SECONDS=120 QGE_STREAM_LAUNCH=direct bash tools/quake_graphics_stream.sh`
+- `python3` validation of `diagnostics/agent_stream/20260518-224342/trace/qge_trace_summary.json`:
+  `runtime_evidence.projectile.writeback_decision_count=21`,
+  `authority_requested=true`, `writeback_selected=true`, and
+  `physics_authoritative_cvar=true`.
 
 ## Next Worker Tasks
 
-- Run a compact live `e1m1` authority smoke with `QGE_PROJECTILES=2`,
-  `QGE_PHYSICS=1`, and `QGE_STREAM_TRACE=1`, then verify
-  `projectile_writeback_decision` appears in `qge_trace_summary.json`.
+- Start the next implementation slice from the swarm review: replace the
+  classical previous-prediction projectile writeback source with a real
+  projectile branch-state authority module that tracks branch weights,
+  decoherence, observation boundaries, and projectile impact measurements.

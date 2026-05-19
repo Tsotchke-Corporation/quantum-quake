@@ -43,6 +43,7 @@ cvar_t quantum_particles = {"quantum_particles", "0", CVAR_ARCHIVE};
 cvar_t quantum_vis       = {"quantum_vis",       "0", CVAR_ARCHIVE};
 cvar_t quantum_physics   = {"quantum_physics",   "1", CVAR_ARCHIVE};
 cvar_t quantum_projectiles = {"quantum_projectiles", "1", CVAR_ARCHIVE};
+cvar_t quantum_physics_authoritative = {"quantum_physics_authoritative", "0", CVAR_ARCHIVE};
 cvar_t quantum_debug     = {"quantum_debug",     "0", CVAR_NONE};
 cvar_t quantum_overlay_alpha = {"quantum_overlay_alpha", "0.10", CVAR_ARCHIVE};
 cvar_t quantum_scene_surface_budget = {"quantum_scene_surface_budget", "128", CVAR_ARCHIVE};
@@ -360,6 +361,7 @@ static int qge_phys_projectile_writeback_fallback = 0;
 static int qge_phys_projectile_writeback_rollback = 0;
 
 static void QGE_PhysicsRefreshStats(void);
+static qboolean QGE_PhysicsProjectileAuthorityRequested(void);
 static void QGE_PhysicsUpdateProjectileAuthorityGate(void);
 static void QGE_TraceProjectileAuthorityGate(qge_quantum_runtime_t *rt);
 static void QGE_TraceProjectileWritebackDecision(
@@ -2292,6 +2294,7 @@ void QGE_Init(void)
 	Cvar_RegisterVariable(&quantum_vis);
 	Cvar_RegisterVariable(&quantum_physics);
 	Cvar_RegisterVariable(&quantum_projectiles);
+	Cvar_RegisterVariable(&quantum_physics_authoritative);
 	Cvar_RegisterVariable(&quantum_debug);
 	Cvar_RegisterVariable(&quantum_overlay_alpha);
 	Cvar_RegisterVariable(&quantum_scene_surface_budget);
@@ -2440,8 +2443,9 @@ void QGE_Init(void)
 	Con_Printf("  quantum_rng %d | quantum_ai %d | quantum_render %d\n",
 			   (int)quantum_rng.value, (int)quantum_ai.value,
 			   (int)quantum_render.value);
-	Con_Printf("  quantum_physics %d | quantum_projectiles %d | quantum_particles %d\n",
+	Con_Printf("  quantum_physics %d | quantum_projectiles %d | quantum_physics_authoritative %d | quantum_particles %d\n",
 			   (int)quantum_physics.value, (int)quantum_projectiles.value,
+			   (int)quantum_physics_authoritative.value,
 			   (int)quantum_particles.value);
 	Con_Printf("  RGB sparse DWT | Stable DWT quality | Backend bridge pending\n");
 	Con_Printf("===================================\n\n");
@@ -2636,7 +2640,7 @@ void QGE_FrameEnd(void)
 				"tracked=%d active_projectiles=%d purged=%d "
 				"mirrored_bounds=%d mirrored_owner=%d mirrored_water=%d mirrored_impacts=%d "
 				"shadow_avg=%.2f shadow_max=%.2f "
-				"projectile_authority=%s reason=%s warmup=%d samples=%d "
+				"projectile_authority=%s reason=%s requested=%d authoritative_cvar=%d warmup=%d samples=%d "
 				"pshadow_avg=%.2f pshadow_max=%.2f ready_frames=%d off_frames=%d "
 				"pwriteback decisions=%d selected=%d fallback=%d rollback=%d "
 				"qparticle_spawns=%d active_qparticles=%d frame_ms=%.2f\n",
@@ -2649,6 +2653,8 @@ void QGE_FrameEnd(void)
 				qge_phys_projectile_authority_ready ? "ready" : "off",
 				qge_projectile_authority_off_reason_name(
 					qge_phys_projectile_authority_off_reason),
+				QGE_PhysicsProjectileAuthorityRequested() ? 1 : 0,
+				quantum_physics_authoritative.value >= 0.5f ? 1 : 0,
 				qge_phys_projectile_authority_warmup_frames,
 				qge_phys_projectile_shadow_samples,
 				qge_phys_projectile_avg_shadow_error,
@@ -7520,6 +7526,17 @@ static qboolean QGE_PhysicsShouldTrack(edict_t *ent)
 		   movetype == MOVETYPE_GIB;
 }
 
+static qboolean QGE_PhysicsProjectileAuthorityRequested(void)
+{
+	if (quantum_physics.value < 0.5f || quantum_projectiles.value < 0.5f)
+		return false;
+
+	/* Compatibility: quantum_projectiles 2 requested authority before the
+	 * explicit quantum_physics_authoritative cvar existed. */
+	return quantum_physics_authoritative.value >= 0.5f ||
+		   quantum_projectiles.value >= 1.5f;
+}
+
 static qge_phys_object_t *QGE_PhysicsFindObject(int entnum, qboolean allocate)
 {
 	qge_phys_object_t *oldest = NULL;
@@ -7653,6 +7670,8 @@ static uint32_t QGE_PhysicsProjectileAuthorityFlags(void)
 	if (qge_phys_projectile_shadow_samples >=
 		QGE_PROJECTILE_AUTHORITY_DEFAULT_MIN_SHADOW_SAMPLES)
 		flags |= 0x800u;
+	if (quantum_physics_authoritative.value >= 0.5f)
+		flags |= 0x10000u;
 	return flags;
 }
 
@@ -7681,6 +7700,8 @@ static uint32_t QGE_PhysicsProjectileWritebackFlags(
 		flags |= 0x4000u;
 	if (decision->rollback_required)
 		flags |= 0x8000u;
+	if (quantum_physics_authoritative.value >= 0.5f)
+		flags |= 0x10000u;
 	return flags;
 }
 
@@ -7888,7 +7909,7 @@ static qboolean QGE_PhysicsBuildProjectileWritebackRequest(
 	memset(request, 0, sizeof(*request));
 	request->entity_id = NUM_FOR_EDICT(ent);
 	request->telemetry.requested =
-		quantum_physics.value >= 0.5f && quantum_projectiles.value >= 1.5f;
+		QGE_PhysicsProjectileAuthorityRequested();
 	request->telemetry.active_projectiles =
 		qge_phys_active_projectiles > 0 ? qge_phys_active_projectiles : 1;
 	request->telemetry.frame_projectiles = qge_phys_projectile_count + 1;

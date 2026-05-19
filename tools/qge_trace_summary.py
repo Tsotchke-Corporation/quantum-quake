@@ -111,6 +111,7 @@ PROJECTILE_FLAGS = {
     "writeback_selected": 0x2000,
     "fallback_selected": 0x4000,
     "rollback_required": 0x8000,
+    "physics_authoritative_cvar": 0x10000,
 }
 
 PROJECTILE_OFF_REASONS = {

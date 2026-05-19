@@ -365,6 +365,7 @@ quake:
 	@echo "  quantum_ai 1      - Enable quantum AI (default)"
 	@echo "  quantum_particles 1 - Enable quantum wave particles"
 	@echo "  quantum_vis 1     - Enable Grover BSP visibility"
+	@echo "  quantum_physics_authoritative 1 - Allow approved QGE projectile writeback"
 
 # Run Quantum Quake (requires Quake game data in assets/id1/)
 run-quake: quake

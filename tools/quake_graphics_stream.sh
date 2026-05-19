@@ -27,6 +27,7 @@ render_update_interval="${QGE_RENDER_UPDATE_INTERVAL:-8}"
 sprite_test="${QGE_STREAM_SPRITE_TEST:-0}"
 physics_value="${QGE_PHYSICS:-1}"
 projectiles_value="${QGE_PROJECTILES:-1}"
+physics_authoritative="${QGE_PHYSICS_AUTHORITATIVE:-0}"
 particles_value="${QGE_PARTICLES:-0}"
 ai_value="${QGE_STREAM_AI:-${QGE_AI:-1}}"
 vis_value="${QGE_STREAM_VIS:-${QGE_VIS:-2}}"
@@ -111,6 +112,7 @@ render_display_filter="$(normalize_nonnegative_int "$render_display_filter" 0)"
 render_update_interval="$(normalize_positive_int "$render_update_interval" 8)"
 physics_value="$(normalize_nonnegative_int "$physics_value" 1)"
 projectiles_value="$(normalize_nonnegative_int "$projectiles_value" 1)"
+physics_authoritative="$(normalize_bool "$physics_authoritative")"
 particles_value="$(normalize_nonnegative_int "$particles_value" 0)"
 ai_value="$(normalize_nonnegative_int "$ai_value" 1)"
 vis_value="$(normalize_nonnegative_int "$vis_value" 2)"
@@ -334,6 +336,12 @@ write_agent_manifest() {
   },
   "visibility": {
     "quantum_vis": $vis_value
+  },
+  "physics": {
+    "quantum_physics": $physics_value,
+    "quantum_projectiles": $projectiles_value,
+    "quantum_physics_authoritative": $physics_authoritative,
+    "quantum_particles": $particles_value
   },
   "video": {
     "frames_dir": $(json_string "$agent_video_dir"),
@@ -577,6 +585,7 @@ trap restore_autoexec EXIT
   echo "quantum_scene_surface_budget $scene_surface_budget"
   echo "quantum_physics $physics_value"
   echo "quantum_projectiles $projectiles_value"
+  echo "quantum_physics_authoritative $physics_authoritative"
   echo "quantum_particles $particles_value"
   echo "quantum_ai $ai_value"
   echo "quantum_vis $vis_value"
@@ -647,7 +656,7 @@ cp "$before_file" "$seen_file"
 echo "Streaming Quantum Quake graphics diagnostics"
 echo "  outdir=$outdir"
 echo "  agent_stream=$agent_stream"
-echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter update_interval=$render_update_interval sprite_test=$sprite_test quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_particles=$particles_value quantum_ai=$ai_value quantum_vis=$vis_value"
+echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter update_interval=$render_update_interval sprite_test=$sprite_test quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_physics_authoritative=$physics_authoritative quantum_particles=$particles_value quantum_ai=$ai_value quantum_vis=$vis_value"
 echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound snd_quantum=$sound_quantum_mode snd_quantum_source_authority=$sound_source_authority trace=$trace fire_test=$fire_test scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_max_wait=$noesis_max_wait"
 echo "QGE_AGENT_STREAM $agent_stream"
 
@@ -1007,7 +1016,7 @@ Render edge gain: $render_edge_gain
 Render material gain: $render_material_gain
 Render edge samples: $render_edge_samples
 Scene surface budget: $scene_surface_budget
-Physics cvars: quantum_physics $physics_value, quantum_projectiles $projectiles_value, quantum_particles $particles_value
+Physics cvars: quantum_physics $physics_value, quantum_projectiles $projectiles_value, quantum_physics_authoritative $physics_authoritative, quantum_particles $particles_value
 AI cvar: quantum_ai $ai_value
 Visibility cvar: quantum_vis $vis_value
 Fire test: $fire_test
