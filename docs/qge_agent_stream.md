@@ -40,10 +40,17 @@ QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=2 QGE_STREAM_WAIT_FRAMES=40 \
 Run the scripted weapon smoke and capture before the script exits:
 
 ```sh
-QGE_STREAM_MAP=e1m1 QGE_STREAM_FIRE_TEST=1 QGE_STREAM_CAPTURE_WAIT=20 \
-  QGE_STREAM_FRAMES=1 QGE_STREAM_WAIT_FRAMES=30 QGE_STREAM_TRACE=1 \
+QGE_STREAM_MAP=e1m1 QGE_STREAM_FIRE_TEST=1 QGE_STREAM_TRACE=1 \
   bash tools/quake_graphics_stream.sh
 ```
+
+For `QGE_STREAM_FIRE_TEST=1`, the stream harness promotes the Noesis start
+wait to at least `QGE_STREAM_FIRE_MIN_START_WAIT` (default `48`) and engine
+captures to at least `QGE_STREAM_FIRE_MIN_FRAMES` (default `8`). These defaults
+let the scripted rocket spawn after full signon and keep the run alive long
+enough for projectile authority warmup, writeback, and pre-impact oracle trace
+records. Set either minimum to `0` only when intentionally testing a shorter
+input or capture path.
 
 To exercise the sprite billboard encoder without relying on a hand-played scene:
 
@@ -59,7 +66,8 @@ The stream directory is intentionally simple and tail-friendly:
 - `manifest.json`: rewritten whenever stream state changes. It records the
   capture path, map, render settings, trace status, and current audio/video/log
   locations. The input block also records `noesis_max_wait`, the per-action
-  wait cap used by the Noesis command translator for that run. When
+  wait cap used by the Noesis command translator for that run, plus fire-test
+  minimums when the scripted projectile smoke is enabled. When
   `QGE_STREAM_TRACE=0`, `trace_status` is `not_requested`, `trace_bytes` is
   `0`, and `trace` is an empty string rather than a nonexistent planned path.
   Top-level `status` reports stream artifact finalization; `run.status`,

@@ -278,7 +278,11 @@ def build_runtime_evidence(summary: dict) -> dict:
         projectile_flags |= (
             int(projectile_preimpact.get("flags_or", 0) or 0) & ~0xff
         )
-    projectile_off_reason_code = projectile_flags & 0xff
+    projectile_off_reason_flags = (
+        int(projectile_gate.get("last_flags", projectile_flags) or 0)
+        if projectile_gate else projectile_flags
+    )
+    projectile_off_reason_code = projectile_off_reason_flags & 0xff
 
     ai_ready = ai_decision_count > 0 and int(records.get("ai_decision", 0)) > 0
     audio_ready = audio_source_spatial_count > 0
@@ -619,6 +623,7 @@ def parse_trace(path: str) -> dict:
                     "qubit_max": qubit_count,
                     "memory_bytes_max": memory_bytes,
                     "flags_or": 0,
+                    "last_flags": probe_flags,
                     "state_hash_xor": 0,
                     "entropy_min": entropy,
                     "entropy_max": entropy,
@@ -640,6 +645,7 @@ def parse_trace(path: str) -> dict:
             group["qubit_max"] = max(group["qubit_max"], qubit_count)
             group["memory_bytes_max"] = max(group["memory_bytes_max"], memory_bytes)
             group["flags_or"] |= probe_flags
+            group["last_flags"] = probe_flags
             group["state_hash_xor"] ^= state_hash
             group["entropy_min"] = min(group["entropy_min"], entropy)
             group["entropy_max"] = max(group["entropy_max"], entropy)

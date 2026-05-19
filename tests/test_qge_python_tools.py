@@ -593,7 +593,9 @@ class TraceSummaryTests(unittest.TestCase):
                 (5, state_probe_payload(
                     5, 1, 7, 2, 0x0E0, b"vis_authority_apply", 5, 4)),
                 (5, state_probe_payload(
-                    6, 2, 7, 1, 0x0F00, b"projectile_authority_gate", 4, 3)),
+                    6, 2, 7, 1, 0x0F03, b"projectile_authority_gate", 2, 1)),
+                (5, state_probe_payload(
+                    7, 2, 7, 1, 0x0F00, b"projectile_authority_gate", 4, 3)),
                 (5, state_probe_payload(
                     7, 2, 7, 313, 0x13F00, b"projectile_writeback_decision",
                     0, 0)),
@@ -650,7 +652,7 @@ class TraceSummaryTests(unittest.TestCase):
             )
             self.assertEqual(
                 evidence["projectile"]["authority_gate_count"],
-                1,
+                2,
             )
             self.assertEqual(
                 evidence["projectile"]["writeback_decision_count"],

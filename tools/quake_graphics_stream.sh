@@ -51,6 +51,8 @@ height="${QGE_STREAM_HEIGHT:-600}"
 stream_display="${QGE_STREAM_DISPLAY:-}"
 fullscreen="${QGE_STREAM_FULLSCREEN:-0}"
 fire_test="${QGE_STREAM_FIRE_TEST:-0}"
+fire_min_start_wait="${QGE_STREAM_FIRE_MIN_START_WAIT:-48}"
+fire_min_frames="${QGE_STREAM_FIRE_MIN_FRAMES:-8}"
 sound="${QGE_STREAM_SOUND:-0}"
 sound_quantum_mode="${QGE_STREAM_SND_QUANTUM:-1}"
 sound_source_authority="${QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY:-0}"
@@ -121,6 +123,8 @@ width="$(normalize_positive_int "$width" 800)"
 height="$(normalize_positive_int "$height" 600)"
 noesis_start_wait="$(normalize_nonnegative_int "$noesis_start_wait" 16)"
 noesis_max_wait="$(normalize_positive_int "$noesis_max_wait" 600)"
+fire_min_start_wait="$(normalize_nonnegative_int "$fire_min_start_wait" 48)"
+fire_min_frames="$(normalize_nonnegative_int "$fire_min_frames" 8)"
 frames="$(normalize_positive_int "$frames" 12)"
 waits_per_frame="$(normalize_positive_int "$waits_per_frame" 20)"
 case "$capture_wait_override" in
@@ -128,6 +132,16 @@ case "$capture_wait_override" in
 esac
 if [[ "$fire_test" == "1" && "$stream_player" == "noesis" && -z "${QGE_NOESIS_PLAN+x}" ]]; then
   noesis_plan="fire"
+fi
+if [[ "$fire_test" == "1" && "$stream_player" == "noesis" &&
+      "$fire_min_start_wait" -gt 0 &&
+      "$noesis_start_wait" -lt "$fire_min_start_wait" ]]; then
+  noesis_start_wait="$fire_min_start_wait"
+fi
+if [[ "$fire_test" == "1" && "$engine_capture" == "1" &&
+      "$fire_min_frames" -gt 0 &&
+      "$frames" -lt "$fire_min_frames" ]]; then
+  frames="$fire_min_frames"
 fi
 if [[ "$stream_player" == "noesis" && -z "$noesis_cmd" && -z "$noesis_actions_file" && -x "$default_noesis_cmd" ]]; then
   noesis_cmd="$default_noesis_cmd"
@@ -314,6 +328,9 @@ write_agent_manifest() {
     "noesis_actions_file": $(json_string "$noesis_actions_file"),
     "noesis_start_wait": $noesis_start_wait,
     "noesis_max_wait": $noesis_max_wait,
+    "fire_test": $fire_test,
+    "fire_min_start_wait": $fire_min_start_wait,
+    "fire_min_frames": $fire_min_frames,
     "noesis_cmd": $(json_string "$noesis_cmd"),
     "noesis_cmd_default": $noesis_cmd_default,
     "noesis_player_tool": $(json_string "$noesis_player_tool"),
@@ -658,7 +675,7 @@ echo "Streaming Quantum Quake graphics diagnostics"
 echo "  outdir=$outdir"
 echo "  agent_stream=$agent_stream"
 echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter update_interval=$render_update_interval sprite_test=$sprite_test quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_physics_authoritative=$physics_authoritative quantum_particles=$particles_value quantum_ai=$ai_value quantum_vis=$vis_value"
-echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound snd_quantum=$sound_quantum_mode snd_quantum_source_authority=$sound_source_authority trace=$trace fire_test=$fire_test scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_max_wait=$noesis_max_wait"
+echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound snd_quantum=$sound_quantum_mode snd_quantum_source_authority=$sound_source_authority trace=$trace fire_test=$fire_test fire_min_start_wait=$fire_min_start_wait fire_min_frames=$fire_min_frames scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_max_wait=$noesis_max_wait"
 echo "QGE_AGENT_STREAM $agent_stream"
 
 print_log_updates() {
@@ -1023,6 +1040,8 @@ Physics cvars: quantum_physics $physics_value, quantum_projectiles $projectiles_
 AI cvar: quantum_ai $ai_value
 Visibility cvar: quantum_vis $vis_value
 Fire test: $fire_test
+Fire min start wait: $fire_min_start_wait
+Fire min frames: $fire_min_frames
 Sound quantum mode: $sound_quantum_mode
 Sound source authority: $sound_source_authority
 Launch mode: $launch_mode
