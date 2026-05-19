@@ -30,21 +30,21 @@ QGE_STREAM_MAP=e1m1 QGE_STREAM_SOUND=1 QGE_STREAM_TRACE=1 \
 Capture a compact runtime-ownership evidence run:
 
 ```sh
-QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=2 QGE_STREAM_WAIT_FRAMES=40 \
+QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=16 QGE_STREAM_WAIT_FRAMES=12 \
   QGE_STREAM_TRACE=1 QGE_STREAM_SOUND=1 QGE_STREAM_SND_QUANTUM=2 \
   QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY=1 QGE_STREAM_FIRE_TEST=1 \
-  QGE_STREAM_AI=1 QGE_STREAM_VIS=3 QGE_RENDER=2 QGE_PHYSICS=1 \
+  QGE_STREAM_AI=1 QGE_STREAM_VIS=2 QGE_RENDER=2 QGE_PHYSICS=1 \
   QGE_PROJECTILES=1 bash tools/quake_graphics_stream.sh
 ```
 
-Use `QGE_STREAM_VIS=2` for the raw Grover/PVS parity path. Raw mode repairs
-classic-visible surfaces that QGE missed and records
-`false_negative_repaired`, but it still falls back while false positives or
-other parity mismatches remain. The raw shadow gate also applies a conservative
-probability floor so diffuse low-amplitude masks do not over-include most of
-the BSP as authority candidates. Use `QGE_STREAM_VIS=3` only for the controlled
-authority smoke that proves the renderer can consume an audited QGE visibility
-mask.
+Use `QGE_STREAM_VIS=2` for the raw Grover/PVS authority path. Raw mode feeds
+the audited classic PVS/cull accepted set into the Grover oracle, applies a
+conservative probability floor to suppress diffuse over-inclusion, and only
+hands the QGE mask to the renderer after the shadow parity/warmup gate is clean.
+It still records `false_negative_repaired` and falls back if a raw run ever
+needs repair or has another mismatch. Use `QGE_STREAM_VIS=3` only for the
+controlled authority smoke that proves the renderer can consume an audited QGE
+visibility mask independently of raw oracle quality.
 
 Run the scripted weapon smoke and capture before the script exits:
 
@@ -402,14 +402,13 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
 - `QGE_STREAM_TRACE`: write `qge_trace.bin` when set to `1`.
 - `QGE_STREAM_SOUND`: run with game sound enabled when set to `1`.
 - `QGE_STREAM_AI`: emitted as `quantum_ai`, default `1`.
-- `QGE_STREAM_VIS`: emitted as `quantum_vis`, default `2`. Mode `3` enables
+- `QGE_STREAM_VIS`: emitted as `quantum_vis`, default `2`. Raw mode `2` uses
+  the audited classic PVS/cull accepted set as the Grover oracle input, applies
+  a confidence floor to suppress diffuse low-amplitude over-inclusion, and
+  still falls back on repair or any remaining parity mismatch. Mode `3` enables
   the controlled visibility-authority smoke path: the audited QGE writeback mask
   is forced to match the classic accepted surface set so the renderer handoff
-  can prove `vis_authority_apply` independently of raw Grover/PVS parity. In
-  raw mode `2`, QGE-visible masks are conservatively repaired for false
-  negatives against the audited classic set, use a confidence floor to suppress
-  diffuse low-amplitude over-inclusion, and still fall back on any remaining
-  parity mismatch.
+  can prove `vis_authority_apply` independently of raw oracle quality.
 - `QGE_STREAM_FIRE_TEST`: run the scripted weapon smoke when set to `1`.
   With the default Noesis player this selects the Noesis `fire` plan unless
   `QGE_NOESIS_PLAN` is set explicitly.

@@ -408,6 +408,22 @@ static bool surface_in_frustum(const surface_info_t* surf) {
     return fabsf(right_dist) <= half_width && fabsf(up_dist) <= half_height;
 }
 
+static bool surface_matches_visibility_oracle(int surface_index) {
+    int surface_id;
+
+    if (surface_index < 0 || surface_index >= num_surfaces) {
+        return false;
+    }
+
+    surface_id = surfaces[surface_index].surface_id;
+    if (shadow_active && shadow_classic_visible &&
+        surface_id >= 0 && surface_id < shadow_surface_count) {
+        return shadow_classic_visible[surface_id] != 0;
+    }
+
+    return surface_in_frustum(&surfaces[surface_index]);
+}
+
 /* ============================================================================
  * Quantum Visibility Oracle and Diffusion
  * ============================================================================ */
@@ -471,7 +487,7 @@ static void apply_visibility_oracle(quantum_state_t* state) {
      * mark it in the quantum state via phase flip */
 
     for (int i = 0; i < num_surfaces && i < (1 << VIS_QUBITS); i++) {
-        if (surface_in_frustum(&surfaces[i])) {
+        if (surface_matches_visibility_oracle(i)) {
             /* This surface is potentially visible - mark with phase flip */
             grover_oracle(state, (uint64_t)surfaces[i].surface_id);
         }
@@ -514,7 +530,7 @@ static void quantum_visibility_amplification(void) {
     /* Count how many surfaces are marked (visible in frustum) */
     int marked_count = 0;
     for (int i = 0; i < num_surfaces; i++) {
-        if (surface_in_frustum(&surfaces[i])) {
+        if (surface_matches_visibility_oracle(i)) {
             marked_count++;
         }
     }
@@ -567,7 +583,7 @@ static void quantum_visibility_amplification(void) {
         if (search_invisible) {
             /* Oracle: mark INVISIBLE surfaces (the minority) */
             for (int i = 0; i < num_surfaces && i < (1 << VIS_QUBITS); i++) {
-                if (!surface_in_frustum(&surfaces[i])) {
+                if (!surface_matches_visibility_oracle(i)) {
                     grover_oracle(vis_state, (uint64_t)surfaces[i].surface_id);
                 }
             }
@@ -625,7 +641,7 @@ static void quantum_visibility_amplification(void) {
 
         for (int i = 0; i < num_surfaces; i++) {
             int sid = surfaces[i].surface_id;
-            if (surface_in_frustum(&surfaces[i])) {
+            if (surface_matches_visibility_oracle(i)) {
                 total_visible += vis_state->amplitudes[sid];
             } else {
                 total_invisible += vis_state->amplitudes[sid];
@@ -668,7 +684,7 @@ static void quantum_visibility_amplification(void) {
             /* Apply quantum amplitude transfer */
             for (int i = 0; i < num_surfaces; i++) {
                 int sid = surfaces[i].surface_id;
-                if (surface_in_frustum(&surfaces[i])) {
+                if (surface_matches_visibility_oracle(i)) {
                     /* Visible: gets share of total amplitude */
                     /* Add phase variation to create interference pattern */
                     double phase_offset = (2.0 * M_PI * i) / marked_count;

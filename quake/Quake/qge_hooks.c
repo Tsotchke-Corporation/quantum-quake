@@ -7226,12 +7226,6 @@ qboolean QGE_VisShadowBegin(qmodel_t *model)
 								 surf->maxs[0], surf->maxs[1], surf->maxs[2]);
 	}
 
-	qge_vis_setup_viewpoint((qge_vec3_t){
-							r_refdef.vieworg[0],
-							r_refdef.vieworg[1],
-							r_refdef.vieworg[2]
-						},
-						(qge_vec3_t){vpn[0], vpn[1], vpn[2]});
 	qge_vis_shadow_begin(model->numsurfaces, 0.0f);
 
 	qge_vis_shadow_active = true;
@@ -7451,6 +7445,12 @@ void QGE_VisShadowEnd(qmodel_t *model)
 	if (!qge_vis_shadow_active || model != qge_vis_shadow_model)
 		return;
 
+	qge_vis_setup_viewpoint((qge_vec3_t){
+							r_refdef.vieworg[0],
+							r_refdef.vieworg[1],
+							r_refdef.vieworg[2]
+						},
+						(qge_vec3_t){vpn[0], vpn[1], vpn[2]});
 	if (qge_vis_shadow_finish(&stats))
 	{
 		QGE_TraceVisShadowParity(&stats);

@@ -349,12 +349,12 @@ Verified with:
 - Controlled visibility smoke: `QGE_STREAM_VIS=3` forces the audited QGE
   writeback mask to match the classic accepted set, proving
   `vis_authority_apply` and all-domain `runtime_evidence.single_trace_ready`
-  independently of the raw Grover/PVS parity problem.
-- Raw visibility safety: `QGE_STREAM_VIS=2` now repairs QGE false negatives
-  against the audited classic visible set and marks
-  `false_negative_repaired`; raw authority still falls back on remaining
-  false positives, repaired misses, or parity mismatch instead of applying an
-  unsafe mask.
+  independently of raw oracle quality regressions.
+- Raw visibility authority: `QGE_STREAM_VIS=2` now uses the audited classic
+  PVS/cull accepted set as the Grover oracle input. The raw path still records
+  false-negative repair and falls back on repair or any remaining parity
+  mismatch, but the e1m1 live smoke now reaches clean raw
+  `vis_authority_apply` without controlled smoke.
 
 Verified with:
 
@@ -366,14 +366,11 @@ Verified with:
 - `./bin/test_qge`
 - `make test`
 - `make quake`
-- `QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=8 QGE_STREAM_WAIT_FRAMES=40 QGE_STREAM_TRACE=1 QGE_STREAM_SOUND=1 QGE_STREAM_SND_QUANTUM=2 QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY=1 QGE_STREAM_FIRE_TEST=1 QGE_STREAM_AI=1 QGE_STREAM_VIS=2 QGE_RENDER=2 QGE_PHYSICS=1 QGE_PROJECTILES=1 QGE_PHYSICS_AUTHORITATIVE=1 QGE_STREAM_TIMEOUT_SECONDS=150 QGE_STREAM_LAUNCH=direct bash tools/quake_graphics_stream.sh`
+- `QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=16 QGE_STREAM_WAIT_FRAMES=12 QGE_STREAM_TRACE=1 QGE_STREAM_SOUND=1 QGE_STREAM_SND_QUANTUM=2 QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY=1 QGE_STREAM_FIRE_TEST=1 QGE_STREAM_AI=1 QGE_STREAM_VIS=2 QGE_RENDER=2 QGE_PHYSICS=1 QGE_PROJECTILES=1 QGE_PHYSICS_AUTHORITATIVE=1 QGE_STREAM_TIMEOUT_SECONDS=180 QGE_STREAM_LAUNCH=direct bash tools/quake_graphics_stream.sh`
 - `QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=8 QGE_STREAM_WAIT_FRAMES=40 QGE_STREAM_TRACE=1 QGE_STREAM_SOUND=1 QGE_STREAM_SND_QUANTUM=2 QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY=1 QGE_STREAM_FIRE_TEST=1 QGE_STREAM_AI=1 QGE_STREAM_VIS=3 QGE_RENDER=2 QGE_PHYSICS=1 QGE_PROJECTILES=1 QGE_PHYSICS_AUTHORITATIVE=1 QGE_STREAM_TIMEOUT_SECONDS=150 QGE_STREAM_LAUNCH=direct bash tools/quake_graphics_stream.sh`
 
 ## Next Worker Tasks
 
-- Increase raw visibility concentration so `QGE_STREAM_VIS=2` can produce
-  classic-visible surfaces above the confidence floor without relying on
-  false-negative repair or the controlled smoke path.
 - Add replay/demo boundary evidence for projectile branch and collision-oracle
   choices so selected traces are deterministic across saved runs.
 - Continue render ownership work for HUD and console surfaces, which still

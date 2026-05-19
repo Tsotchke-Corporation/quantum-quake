@@ -2083,6 +2083,47 @@ static int test_vis_shadow_threshold_floor_suppresses_diffuse_candidates(void) {
            stats.fallback_reason == QGE_VIS_GATE_REASON_PARITY_MISMATCH;
 }
 
+static int test_vis_shadow_pvs_oracle_concentrates_classic_set(void) {
+    qge_vis_shadow_stats_t stats;
+    const int surface_count = 1024;
+
+    qge_vis_shutdown();
+    for (int i = 0; i < surface_count; i++) {
+        qge_vis_register_surface(i, -10, -10, -80, 10, 10, -70);
+    }
+
+    qge_vis_shadow_begin(surface_count, 0.0f);
+    qge_vis_shadow_mark_classic_visible(0);
+
+    qge_vec3_t eye = {0.0f, 0.0f, 0.0f};
+    qge_vec3_t forward = {0.0f, 0.0f, -1.0f};
+    qge_vis_setup_viewpoint(eye, forward);
+
+    if (!qge_vis_shadow_finish(&stats)) {
+        return 0;
+    }
+
+    printf("\n    Shadow PVS oracle: threshold=%.6f max=%.6f "
+           "classic=%d qge=%d fp=%d repaired=%d clean=%d/%d\n    ",
+           stats.threshold,
+           stats.qge_probability_max,
+           stats.classic_visible_count,
+           stats.qge_visible_count,
+           stats.false_positive_count,
+           stats.false_negative_repaired_count,
+           stats.consecutive_clean_frames,
+           stats.clean_frames_required);
+
+    return stats.total_surfaces == surface_count &&
+           stats.classic_visible_count == 1 &&
+           stats.qge_visible_count == 1 &&
+           stats.false_positive_count == 0 &&
+           stats.false_negative_count == 0 &&
+           stats.false_negative_repaired_count == 0 &&
+           stats.qge_probability_max >= stats.threshold &&
+           stats.fallback_reason == QGE_VIS_GATE_REASON_WARMUP_PENDING;
+}
+
 static int finish_vis_authority_gate_frame(int mark_hidden_surface,
                                            qge_vis_shadow_stats_t* stats) {
     qge_vec3_t eye = {0.0f, 0.0f, 0.0f};
@@ -3455,6 +3496,7 @@ int main(void) {
     TEST(vis_grover_amplification);
     TEST(vis_shadow_parity_stats);
     TEST(vis_shadow_threshold_floor_suppresses_diffuse_candidates);
+    TEST(vis_shadow_pvs_oracle_concentrates_classic_set);
     TEST(vis_shadow_authority_gate_warmup);
     TEST(vis_writeback_decision_disabled);
     TEST(vis_writeback_decision_warmup);
