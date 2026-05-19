@@ -13,7 +13,7 @@ fail_icc_json="$tmpdir/fail-icc.json"
 
 cat > "$log_file" <<'LOG'
 QGE: Backend gate phase=init backend=Metal status=capable, inactive native=1 active=0 flags=0x3d path=sparse_dwt_cpu_render_path reason=native_backend_available_sparse_dwt_cpu_path_pending_renderer_bridge probe=metal_system_device_available
-QGE render frame=3 mode=primary owner=qge_3d classic3d=0 suppressed3d=9 res=1024 time=27.0 encode=13.0 setup=0.0 raster=9.0 fdwt=4.0 dwt=3.0 convert=3.0 blit=8.0 reuse=0 interval=8 coeffs=192495 snapshot=117 snapshot_miss=0 texcache=234/0 lightcache=234/0 poly=117 tris=348 edgefills=0 microfill=0 culled=0 surrogate=0 micro=0 clipped=0 fallback=0 encoded=117 material=117 edicts=1 alias=1 sprites=0 sbill=0 emesh=0 ecoeff=4 viewmodel=1 entity_miss=0 particles=0 pcoeff=0 gates=26 shots=64 readout=0.953 edgeq=0.031 ggain=1.054 egain=0.727 nonzero=448991/1048576
+QGE render frame=3 mode=primary owner=qge_3d classic3d=0 suppressed3d=9 res=1024 time=27.0 encode=13.0 setup=0.0 raster=9.0 fdwt=4.0 dwt=3.0 convert=3.0 blit=8.0 reuse=0 interval=8 coeffs=192495 snapshot=117 snapshot_miss=0 texcache=234/0 lightcache=234/0 poly=117 tris=348 edgefills=0 microfill=0 culled=0 surrogate=0 micro=0 clipped=0 fallback=0 encoded=117 material=117 edicts=1 alias=1 sprites=0 sbill=0 emesh=0 ecoeff=4 viewmodel=1 entity_miss=0 particles=0 pcoeff=0 gates=26 shots=64 readout=0.953 edgeq=0.031 ggain=1.054 egain=0.727 native_idwt=3 idwt_fallback=0 cpu_idwt=0 nonzero=448991/1048576
 QGE: Average quantum render time: 16.27 ms (24 frames)
 QGE: Backend gate phase=shutdown backend=Metal status=capable, inactive native=1 active=0 flags=0x3d path=sparse_dwt_cpu_render_path reason=native_backend_available_sparse_dwt_cpu_path_pending_renderer_bridge probe=metal_system_device_available
 LOG
@@ -38,8 +38,16 @@ assert summary["aggregate"]["engine_average_quantum_ms_max"] == 16.27
 assert summary["aggregate"]["render_time_ms_max"] == 27.0
 assert summary["logs"][0]["render_frame_count"] == 1
 assert summary["logs"][0]["last_render_frame"]["owner"] == "qge_3d"
+assert summary["logs"][0]["native_idwt"]["sum"] == 3
+assert summary["logs"][0]["idwt_fallback"]["sum"] == 0
+assert summary["logs"][0]["cpu_idwt"]["sum"] == 0
+assert summary["aggregate"]["native_idwt_sum"] == 3
+assert summary["aggregate"]["idwt_fallback_sum"] == 0
+assert summary["aggregate"]["cpu_idwt_sum"] == 0
 assert summary["logs"][0]["components"]["encode"]["max_ms"] == 13.0
 assert icc["completion_reason"] == "qge_runtime_performance_complete"
+assert icc["native_idwt_sum"] == 3
+assert icc["idwt_fallback_sum"] == 0
 assert icc["failure_free"] is True
 PY
 

@@ -169,6 +169,10 @@ high-resolution CPU timing split:
 - `raster`: world/entity/particle rasterization into sparse spatial fields.
 - `fdwt`: forward sparse DWT encoding for the RGB spatial fields.
 - `dwt`: sparse coefficient extraction plus inverse DWT reconstruction.
+  Native bridge runs also emit `native_idwt`, `idwt_fallback`, and `cpu_idwt`
+  counts. `native_idwt>0` with `idwt_fallback=0` proves the sparse DWT
+  framebuffer reconstructed through the native Metal bridge instead of the CPU
+  inverse-DWT path.
 - `convert`: tone mapping and RGB display-buffer conversion.
 - `blit`: OpenGL texture upload and screen draw.
 
@@ -194,8 +198,10 @@ Startup logs and traces also include a `backend_gate` probe. It reports the
 selected backend, whether the native backend probe succeeded, whether
 acceleration is active for the live context, the runtime path, the native probe
 reason, and the reason when a capable backend is intentionally running the
-sparse CPU path. The engine emits the gate at init and shutdown so traces prove
-both the selected backend and the teardown path.
+sparse CPU path. Once the sparse render bridge is active, the path becomes
+`native_sparse_dwt_render_bridge` and render traces set the `native_idwt` flag.
+The engine emits the gate at init, render-bridge activation, and shutdown so
+traces prove both the selected backend and the teardown path.
 Texture/material setup emits `texture_signal_cache` and
 `lightmap_signal_cache` probes as well. These mark the surface texture and
 lightmap signal paths as intentional CPU-side metadata/sample caches and record

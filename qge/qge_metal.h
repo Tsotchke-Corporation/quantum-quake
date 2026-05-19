@@ -13,9 +13,14 @@
 #ifndef QGE_METAL_H
 #define QGE_METAL_H
 
+#include <complex.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
 /* Forward declarations to avoid circular includes */
-struct dwt_framebuffer;
-typedef struct dwt_framebuffer dwt_framebuffer_t;
+struct dwt_framebuffer_s;
+typedef struct dwt_framebuffer_s dwt_framebuffer_t;
 
 /* Metal compute context from Moonlab */
 typedef struct metal_compute_ctx metal_compute_ctx_t;
@@ -28,7 +33,6 @@ extern int metal_is_available(void);
 extern metal_buffer_t* metal_buffer_create(metal_compute_ctx_t* ctx, size_t size);
 extern void* metal_buffer_contents(metal_buffer_t* buffer);
 extern void metal_buffer_free(metal_buffer_t* buffer);
-#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,6 +73,19 @@ typedef struct {
  * @return QGE Metal context or NULL on failure
  */
 qge_metal_ctx_t* qge_metal_init(int num_qubits, int screen_res);
+
+/**
+ * @brief Initialize QGE Metal sparse-DWT render bridge
+ *
+ * This compiles the Metal render kernels and attaches the Moonlab Metal
+ * context without allocating the dense amplitude buffer used by full-state
+ * marginalization. It is the safe real-time path for sparse DWT framebuffers.
+ *
+ * @param num_qubits Context qubit budget for evidence and optional dense paths
+ * @param screen_res Sparse DWT reconstruction resolution
+ * @return QGE Metal context or NULL on failure
+ */
+qge_metal_ctx_t* qge_metal_init_render_bridge(int num_qubits, int screen_res);
 
 /**
  * @brief Free QGE Metal context

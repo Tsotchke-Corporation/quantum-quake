@@ -90,6 +90,21 @@ def parse_log(path: Path) -> dict[str, Any]:
             "max_ms": max(values) if values else None,
             "mean_ms": statistics.fmean(values) if values else None,
         }
+    native_idwt_values = [
+        int(frame["native_idwt"])
+        for frame in render_frames
+        if isinstance(frame.get("native_idwt"), int)
+    ]
+    idwt_fallback_values = [
+        int(frame["idwt_fallback"])
+        for frame in render_frames
+        if isinstance(frame.get("idwt_fallback"), int)
+    ]
+    cpu_idwt_values = [
+        int(frame["cpu_idwt"])
+        for frame in render_frames
+        if isinstance(frame.get("cpu_idwt"), int)
+    ]
 
     return {
         "input_path": str(path),
@@ -104,6 +119,21 @@ def parse_log(path: Path) -> dict[str, Any]:
             "mean": statistics.fmean(render_times) if render_times else None,
         },
         "components": components,
+        "native_idwt": {
+            "max": max(native_idwt_values) if native_idwt_values else None,
+            "sum": sum(native_idwt_values) if native_idwt_values else 0,
+        },
+        "idwt_fallback": {
+            "max": (
+                max(idwt_fallback_values)
+                if idwt_fallback_values else None
+            ),
+            "sum": sum(idwt_fallback_values) if idwt_fallback_values else 0,
+        },
+        "cpu_idwt": {
+            "max": max(cpu_idwt_values) if cpu_idwt_values else None,
+            "sum": sum(cpu_idwt_values) if cpu_idwt_values else 0,
+        },
         "last_render_frame": render_frames[-1] if render_frames else None,
         "backend_gate_count": len(backend_gate_lines),
         "backend_gate_init": backend_gate_lines[0] if backend_gate_lines else None,
@@ -125,6 +155,18 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
         for log in logs
         if isinstance(log.get("render_time_ms"), dict) and
         isinstance(log["render_time_ms"].get("max"), (int, float))
+    ]
+    native_idwt_sums = [
+        int((log.get("native_idwt") or {}).get("sum") or 0)
+        for log in logs
+    ]
+    idwt_fallback_sums = [
+        int((log.get("idwt_fallback") or {}).get("sum") or 0)
+        for log in logs
+    ]
+    cpu_idwt_sums = [
+        int((log.get("cpu_idwt") or {}).get("sum") or 0)
+        for log in logs
     ]
     missing_logs = [log["log_path"] for log in logs if not log["exists"]]
     metric_evidence_present = bool(average_values or render_max_values)
@@ -164,6 +206,9 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
             "render_time_ms_max": (
                 max(render_max_values) if render_max_values else None
             ),
+            "native_idwt_sum": sum(native_idwt_sums),
+            "idwt_fallback_sum": sum(idwt_fallback_sums),
+            "cpu_idwt_sum": sum(cpu_idwt_sums),
             "threshold_failures": threshold_failures,
             "max_average_ms": args.max_average_ms,
             "max_render_ms": args.max_render_ms,
@@ -196,6 +241,9 @@ def build_icc_evidence(summary: dict[str, Any],
         "engine_average_quantum_ms_max": aggregate[
             "engine_average_quantum_ms_max"],
         "render_time_ms_max": aggregate["render_time_ms_max"],
+        "native_idwt_sum": aggregate["native_idwt_sum"],
+        "idwt_fallback_sum": aggregate["idwt_fallback_sum"],
+        "cpu_idwt_sum": aggregate["cpu_idwt_sum"],
         "max_average_ms": aggregate["max_average_ms"],
         "max_render_ms": aggregate["max_render_ms"],
         "threshold_failures": aggregate["threshold_failures"],
@@ -226,7 +274,10 @@ def print_text(summary: dict[str, Any]) -> None:
             f"avg={log['engine_average_quantum_ms']} "
             f"avg_frames={log['engine_average_frame_count']} "
             f"render_frames={log['render_frame_count']} "
-            f"render_max={log['render_time_ms']['max']}"
+            f"render_max={log['render_time_ms']['max']} "
+            f"native_idwt={log['native_idwt']['sum']} "
+            f"idwt_fallback={log['idwt_fallback']['sum']} "
+            f"cpu_idwt={log['cpu_idwt']['sum']}"
         )
     for failure in aggregate["threshold_failures"]:
         print(

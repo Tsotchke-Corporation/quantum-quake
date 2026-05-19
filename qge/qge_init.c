@@ -13,7 +13,7 @@
 
 #if defined(__APPLE__)
 #include <sys/sysctl.h>
-extern bool qge_metal_available(void);
+#include "qge_metal.h"
 #endif
 
 /* ============================================================================
@@ -48,6 +48,7 @@ struct qge_context_s {
 
     /* GPU context */
     void* gpu_context;  /* Metal/Vulkan context */
+    int gpu_context_screen_res;
     bool backend_native_available;
     const char* backend_probe_reason;
 };
@@ -192,6 +193,19 @@ static bool qge_backend_uses_native_render_bridge(qge_backend_t backend) {
     }
 }
 
+static void qge_context_free_gpu_context(qge_context_t* ctx) {
+    if (!ctx) {
+        return;
+    }
+#if defined(__APPLE__)
+    if (ctx->gpu_context && ctx->backend == QGE_BACKEND_METAL) {
+        qge_metal_free((qge_metal_ctx_t*)ctx->gpu_context);
+    }
+#endif
+    ctx->gpu_context = NULL;
+    ctx->gpu_context_screen_res = 0;
+}
+
 bool qge_context_has_active_acceleration(qge_context_t* ctx) {
     if (!ctx) {
         return false;
@@ -264,6 +278,9 @@ const char* qge_context_backend_reason(qge_context_t* ctx) {
         return "uninitialized";
     }
     if (qge_context_has_active_acceleration(ctx)) {
+        if (qge_backend_uses_native_render_bridge(ctx->backend)) {
+            return "native_sparse_dwt_render_bridge_active";
+        }
         return "accelerator_context_active";
     }
     if (qge_backend_uses_native_render_bridge(ctx->backend)) {
@@ -290,6 +307,9 @@ const char* qge_context_backend_runtime_path(qge_context_t* ctx) {
         return "uninitialized";
     }
     if (qge_context_has_active_acceleration(ctx)) {
+        if (qge_backend_uses_native_render_bridge(ctx->backend)) {
+            return "native_sparse_dwt_render_bridge";
+        }
         return "accelerated_render_path";
     }
     if (qge_backend_uses_native_render_bridge(ctx->backend)) {
@@ -299,6 +319,39 @@ const char* qge_context_backend_runtime_path(qge_context_t* ctx) {
         return "cpu_simd_render_path";
     }
     return "portable_render_path";
+}
+
+void* qge_context_get_or_create_render_acceleration(qge_context_t* ctx,
+                                                    int screen_res) {
+    if (!ctx || screen_res <= 0) {
+        return NULL;
+    }
+    if (ctx->gpu_context) {
+        if (ctx->gpu_context_screen_res == screen_res) {
+            return ctx->gpu_context;
+        }
+        qge_context_free_gpu_context(ctx);
+    }
+    if (!ctx->backend_native_available ||
+        !qge_backend_uses_native_render_bridge(ctx->backend)) {
+        return NULL;
+    }
+
+#if defined(__APPLE__)
+    if (ctx->backend == QGE_BACKEND_METAL) {
+        qge_metal_ctx_t* metal =
+            qge_metal_init_render_bridge(ctx->num_qubits, screen_res);
+        if (!metal) {
+            ctx->backend_probe_reason = "metal_render_bridge_init_failed";
+            return NULL;
+        }
+        ctx->gpu_context = metal;
+        ctx->gpu_context_screen_res = screen_res;
+        return ctx->gpu_context;
+    }
+#endif
+
+    return NULL;
 }
 
 static int qubits_for_tier(qge_hardware_tier_t tier) {
@@ -504,6 +557,8 @@ void qge_shutdown(qge_context_t* ctx) {
 
     qge_world_free(ctx->world);
     ctx->world = NULL;
+
+    qge_context_free_gpu_context(ctx);
 
     if (g_qge_ctx == ctx) {
         g_qge_ctx = NULL;

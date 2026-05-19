@@ -99,6 +99,13 @@ typedef struct {
     bool quantum_measurement_extract; // Extract coefficients via quantum measurement (slower, captures interference)
 } dwt_config_t;
 
+typedef enum {
+    QGE_DWT_RENDER_BACKEND_NONE = 0,
+    QGE_DWT_RENDER_BACKEND_CPU,
+    QGE_DWT_RENDER_BACKEND_NATIVE,
+    QGE_DWT_RENDER_BACKEND_NATIVE_FALLBACK
+} qge_dwt_render_backend_t;
+
 /* ============================================================================
  * Core Types
  * ============================================================================ */
@@ -199,6 +206,14 @@ const char* qge_context_backend_probe_reason(qge_context_t* ctx);
  * Stable runtime path string for backend-gate logs and trace probes.
  */
 const char* qge_context_backend_runtime_path(qge_context_t* ctx);
+
+/**
+ * Attach or return a bounded render-acceleration bridge for the requested
+ * sparse DWT resolution. The returned pointer is backend-specific and owned by
+ * the context; callers must not free it.
+ */
+void* qge_context_get_or_create_render_acceleration(qge_context_t* ctx,
+                                                    int screen_res);
 
 /**
  * Get recommended resolution for detected hardware.
@@ -377,6 +392,11 @@ void qge_dwt_framebuffer_free(dwt_framebuffer_t* fb);
  * Render DWT framebuffer to output pixels.
  */
 void qge_dwt_render(dwt_framebuffer_t* fb, float* output);
+
+/**
+ * Return the reconstruction backend used by the most recent qge_dwt_render().
+ */
+qge_dwt_render_backend_t qge_dwt_last_render_backend(dwt_framebuffer_t* fb);
 
 /**
  * Get count of active (non-zero) coefficients.

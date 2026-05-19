@@ -384,4 +384,42 @@ Verified with:
 - `QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=8 QGE_STREAM_WAIT_FRAMES=40 QGE_STREAM_TRACE=1 QGE_STREAM_SOUND=1 QGE_STREAM_SND_QUANTUM=2 QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY=1 QGE_STREAM_FIRE_TEST=1 QGE_STREAM_AI=1 QGE_STREAM_VIS=3 QGE_RENDER=2 QGE_PHYSICS=1 QGE_PROJECTILES=1 QGE_PHYSICS_AUTHORITATIVE=1 QGE_STREAM_TIMEOUT_SECONDS=150 QGE_STREAM_LAUNCH=direct bash tools/quake_graphics_stream.sh`
 - `QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=4 QGE_STREAM_WAIT_FRAMES=12 QGE_STREAM_TRACE=1 QGE_STREAM_SOUND=0 QGE_STREAM_AI=1 QGE_STREAM_VIS=2 QGE_RENDER=2 QGE_RENDER_UPDATE_INTERVAL=1 QGE_PHYSICS=1 QGE_PROJECTILES=1 QGE_PHYSICS_AUTHORITATIVE=1 QGE_STREAM_TIMEOUT_SECONDS=90 QGE_STREAM_LAUNCH=direct bash tools/quake_graphics_stream.sh`
 
+## Wave 13 Checkpoint
+
+- Native sparse-DWT render bridge: Metal-capable contexts now keep the initial
+  backend gate honest (`capable, inactive`) until the renderer asks for a
+  sparse render bridge. Bridge activation initializes Metal without allocating
+  the dense full-state amplitude buffer, switches the runtime path to
+  `native_sparse_dwt_render_bridge`, and preserves the existing CPU sparse path
+  as fallback.
+- Runtime render authority evidence: `qge_dwt_render()` records the backend
+  used for each inverse DWT. Live `QGE render frame=...` telemetry now reports
+  `native_idwt`, `idwt_fallback`, and `cpu_idwt`, and `render_sparse_dwt` trace
+  probes carry matching primary/native/fallback/CPU flags.
+- Summary coverage: `qge_trace_summary.py` exposes
+  `runtime_evidence.render.flags.native_idwt`, native bridge counts, and native
+  fallback counts. `qge_perf_summary.py` aggregates native/fallback/CPU IDWT
+  sums and includes them in ICC evidence.
+- Live proof: `diagnostics/quake_stream/20260519-163923` captured eight e1m1
+  frames with `native_idwt_sum=93`, `idwt_fallback_sum=0`, trace
+  `render.flags.native_idwt=true`, and backend gate shutdown path
+  `native_sparse_dwt_render_bridge`.
+
+Verified with:
+
+- `make -B build/qge/qge_init.o build/qge/qge_render.o build/qge/qge_metal.o`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B qge_hooks.o qge_init.o qge_render.o qge_metal.o`
+- `python3 -m py_compile tools/qge_trace_summary.py tools/qge_perf_summary.py tests/test_qge_python_tools.py`
+- `python3 tests/test_qge_python_tools.py`
+- `bash tests/test_qge_perf_summary.sh`
+- `bash tests/test_qge_trace_summary.sh`
+- `make test_qge`
+- `./bin/test_qge`
+- `make test`
+- `make quake`
+- `QGE_STREAM_TRACE=1 QGE_STREAM_VIS=3 QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=8 QGE_STREAM_WAIT_FRAMES=12 QGE_STREAM_LAUNCH=direct QGE_STREAM_SOUND=0 QGE_STREAM_TIMEOUT_SECONDS=90 QGE_RENDER=2 QGE_RENDER_UPDATE_INTERVAL=1 bash tools/quake_graphics_stream.sh`
+
 ## Next Worker Tasks
+
+- No Wave 13 native-render bridge task remains in this queue. Use
+  `icc assistant-status` for the next cross-task goal suggestion.

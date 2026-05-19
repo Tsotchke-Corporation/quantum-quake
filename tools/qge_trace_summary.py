@@ -135,6 +135,13 @@ AUDIO_FLAGS = {
     "view_entity": 0x0010,
 }
 
+RENDER_FLAGS = {
+    "primary_owned": 0x00010000,
+    "native_idwt": 0x00020000,
+    "native_idwt_fallback": 0x00040000,
+    "cpu_idwt": 0x00080000,
+}
+
 PROJECTILE_FLAGS = {
     "authority_ready": 0x0100,
     "quantum_physics_enabled": 0x0200,
@@ -226,6 +233,7 @@ def build_runtime_evidence(summary: dict) -> dict:
     vis_shadow = probe_by_label(probes, "vis_shadow_parity")
     vis_gate = probe_by_label(probes, "vis_authority_gate")
     vis_apply = probe_by_label(probes, "vis_authority_apply")
+    render_sparse = probe_by_label(probes, "render_sparse_dwt")
     projectile_gate = probe_by_label(probes, "projectile_authority_gate")
     projectile_writeback = probe_by_label(
         probes, "projectile_writeback_decision")
@@ -245,6 +253,8 @@ def build_runtime_evidence(summary: dict) -> dict:
         probes, "vis_authority_gate", "visibility")
     vis_apply_count = probe_count(
         probes, "vis_authority_apply", "visibility")
+    render_sparse_count = probe_count(
+        probes, "render_sparse_dwt", "render")
     projectile_gate_count = probe_count(
         probes, "projectile_authority_gate", "projectile")
     projectile_writeback_count = probe_count(
@@ -301,6 +311,10 @@ def build_runtime_evidence(summary: dict) -> dict:
         visibility_flags = int(vis_apply.get("last_flags", 0) or 0)
     elif vis_gate:
         visibility_flags = int(vis_gate.get("last_flags", 0) or 0)
+    render_flags = (
+        int(render_sparse.get("flags_or", 0) or 0)
+        if render_sparse else 0
+    )
     projectile_flags = (
         int(projectile_gate.get("flags_or", 0) or 0)
         if projectile_gate else 0
@@ -349,6 +363,21 @@ def build_runtime_evidence(summary: dict) -> dict:
             "attenuation_pan_authority_count": audio_pan_authority_count,
             "flags": flags_summary(audio_flags, AUDIO_FLAGS),
             "flags_or": audio_flags,
+        },
+        "render": {
+            "sparse_dwt_count": render_sparse_count,
+            "flags": flags_summary(render_flags, RENDER_FLAGS),
+            "flags_or": render_flags,
+            "native_bridge_count": (
+                render_sparse_count
+                if render_flags & RENDER_FLAGS["native_idwt"]
+                else 0
+            ),
+            "native_fallback_count": (
+                render_sparse_count
+                if render_flags & RENDER_FLAGS["native_idwt_fallback"]
+                else 0
+            ),
         },
         "visibility": {
             "ready": visibility_ready,

@@ -147,6 +147,7 @@ kernel void haar_inverse_level(
     device float* output [[buffer(1)]],
     constant uint& width [[buffer(2)]],
     constant uint& height [[buffer(3)]],
+    constant uint& stride [[buffer(4)]],
     uint2 gid [[thread_position_in_grid]]
 ) {
     uint x = gid.x;
@@ -157,15 +158,15 @@ kernel void haar_inverse_level(
     if (x >= half_w || y >= half_h) return;
 
     /* Read four subband values */
-    float ll = input[y * width + x];                      /* LL */
-    float hl = input[y * width + (half_w + x)];          /* HL */
-    float lh = input[(half_h + y) * width + x];          /* LH */
-    float hh = input[(half_h + y) * width + (half_w + x)]; /* HH */
+    float ll = input[y * stride + x];                      /* LL */
+    float hl = input[y * stride + (half_w + x)];          /* HL */
+    float lh = input[(half_h + y) * stride + x];          /* LH */
+    float hh = input[(half_h + y) * stride + (half_w + x)]; /* HH */
 
     /* Haar inverse: reconstruct 2×2 block */
     uint out_x = x * 2;
     uint out_y = y * 2;
-    uint out_w = width;
+    uint out_w = stride;
 
     /* 2D inverse Haar:
      * [a b]   [ll+hl+lh+hh  ll-hl+lh-hh]
@@ -292,7 +293,9 @@ struct qge_metal_internal {
  * INITIALIZATION
  * ============================================================================ */
 
-extern "C" qge_metal_ctx_t* qge_metal_init(int num_qubits, int screen_res) {
+static qge_metal_ctx_t* qge_metal_init_common(int num_qubits,
+                                              int screen_res,
+                                              bool allocate_dense_amplitudes) {
     @autoreleasepool {
         /* Check Metal availability */
         id<MTLDevice> device = MTLCreateSystemDefaultDevice();
@@ -359,19 +362,39 @@ extern "C" qge_metal_ctx_t* qge_metal_init(int num_qubits, int screen_res) {
         printf("[QGE Metal] Position qubits: %d, non-position: %d\n",
                ctx->position_qubits, num_qubits - ctx->position_qubits);
 
-        /* Allocate GPU buffers */
+        /* Allocate GPU buffers. The sparse render bridge deliberately avoids
+         * the dense amplitude buffer used by full-state marginalization; live
+         * Quake frames are sparse-DWT and must not allocate 2^N amplitudes just
+         * to activate GPU reconstruction. */
         size_t state_size = (1ULL << num_qubits) * sizeof(float) * 2;  /* Complex as 2 floats */
         size_t prob_size = screen_res * screen_res * sizeof(float);
 
-        ctx->amplitude_buffer = metal_buffer_create(ctx->metal_ctx, state_size);
-        ctx->probability_buffer = metal_buffer_create(ctx->metal_ctx, prob_size);
-        ctx->output_buffer = metal_buffer_create(ctx->metal_ctx, screen_res * screen_res * 3);
+        if (ctx->metal_ctx && allocate_dense_amplitudes) {
+            ctx->amplitude_buffer = metal_buffer_create(ctx->metal_ctx, state_size);
+        }
+        if (ctx->metal_ctx) {
+            ctx->probability_buffer = metal_buffer_create(ctx->metal_ctx, prob_size);
+            ctx->output_buffer = metal_buffer_create(ctx->metal_ctx, screen_res * screen_res * 3);
+        }
 
-        printf("[QGE Metal] Allocated %.1f GB for quantum state\n",
-               state_size / (1024.0 * 1024.0 * 1024.0));
+        if (ctx->amplitude_buffer) {
+            printf("[QGE Metal] Allocated %.1f GB for quantum state\n",
+                   state_size / (1024.0 * 1024.0 * 1024.0));
+        } else {
+            printf("[QGE Metal] Sparse render bridge active (dense state buffer deferred)\n");
+        }
 
         return ctx;
     }
+}
+
+extern "C" qge_metal_ctx_t* qge_metal_init(int num_qubits, int screen_res) {
+    return qge_metal_init_common(num_qubits, screen_res, true);
+}
+
+extern "C" qge_metal_ctx_t* qge_metal_init_render_bridge(int num_qubits,
+                                                          int screen_res) {
+    return qge_metal_init_common(num_qubits, screen_res, false);
 }
 
 extern "C" void qge_metal_free(qge_metal_ctx_t* ctx) {
@@ -567,6 +590,7 @@ extern "C" int qge_metal_inverse_dwt(
 
         int base_res = ctx->screen_res;
         size_t buf_size = base_res * base_res * sizeof(float);
+        uint32_t base_stride = (uint32_t)base_res;
 
         /* Create double-buffered GPU storage for ping-pong */
         id<MTLBuffer> bufA = [internal->device newBufferWithLength:buf_size
@@ -603,6 +627,7 @@ extern "C" int qge_metal_inverse_dwt(
             [encoder setBuffer:outputBuf offset:0 atIndex:1];
             [encoder setBytes:&size_at_level length:sizeof(uint32_t) atIndex:2];
             [encoder setBytes:&size_at_level length:sizeof(uint32_t) atIndex:3];
+            [encoder setBytes:&base_stride length:sizeof(uint32_t) atIndex:4];
 
             /* Dispatch: one thread per 2×2 output block */
             NSUInteger tgWidth = 16;
@@ -673,6 +698,7 @@ extern "C" int qge_metal_extract_sparse_coeffs(
         uint64_t state_dim = 1ULL << ctx->num_qubits;
 
         /* Convert amplitudes to float2 in the GPU amplitude buffer */
+        if (!ctx->amplitude_buffer) return -1;
         float* gpu_amps = (float*)metal_buffer_contents(ctx->amplitude_buffer);
         if (!gpu_amps) return -1;
         convert_amplitudes_to_float2(amplitudes, gpu_amps, state_dim);

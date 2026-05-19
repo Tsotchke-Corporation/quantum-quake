@@ -549,6 +549,57 @@ static int test_context_backend_gate(void) {
     return ok;
 }
 
+static int test_context_render_bridge_activation(void) {
+    qge_context_t* ctx = qge_init_with_config(
+        QGE_TIER_MEDIUM,
+        QGE_RENDER_DWT,
+        QGE_RES_640x480
+    );
+    qge_backend_t backend;
+    void* bridge;
+    void* same_bridge;
+    void* resized_bridge;
+    uint32_t flags;
+    int ok = 1;
+
+    if (!ctx) return 0;
+
+    backend = qge_get_backend(ctx);
+    bridge = qge_context_get_or_create_render_acceleration(ctx, 64);
+    same_bridge = qge_context_get_or_create_render_acceleration(ctx, 64);
+    resized_bridge = qge_context_get_or_create_render_acceleration(ctx, 32);
+    flags = qge_context_backend_flags(ctx);
+
+    if (backend == QGE_BACKEND_METAL) {
+        ok = bridge != NULL &&
+             same_bridge == bridge &&
+             resized_bridge != NULL &&
+             qge_context_has_active_acceleration(ctx) &&
+             qge_context_backend_native_available(ctx) &&
+             strcmp(qge_context_acceleration_status(ctx),
+                    "active acceleration") == 0 &&
+             strcmp(qge_context_backend_runtime_path(ctx),
+                    "native_sparse_dwt_render_bridge") == 0 &&
+             strcmp(qge_context_backend_reason(ctx),
+                    "native_sparse_dwt_render_bridge_active") == 0 &&
+             (flags & QGE_BACKEND_FLAG_ACCELERATED_CAPABLE) != 0 &&
+             (flags & QGE_BACKEND_FLAG_NATIVE_AVAILABLE) != 0 &&
+             (flags & QGE_BACKEND_FLAG_GPU_CONTEXT_REQUIRED) != 0 &&
+             (flags & QGE_BACKEND_FLAG_ACTIVE_ACCELERATION) != 0 &&
+             (flags & QGE_BACKEND_FLAG_INTENTIONAL_CPU_PATH) == 0 &&
+             (flags & QGE_BACKEND_FLAG_RENDER_BRIDGE_PENDING) == 0;
+    } else if (qge_backend_is_accelerated(backend)) {
+        ok = bridge == NULL &&
+             qge_context_has_active_acceleration(ctx);
+    } else {
+        ok = bridge == NULL &&
+             !qge_context_has_active_acceleration(ctx);
+    }
+
+    qge_shutdown(ctx);
+    return ok;
+}
+
 static int test_context_quantum_runtime(void) {
     qge_context_t* ctx = qge_init_with_config(
         QGE_TIER_MEDIUM,
@@ -3470,6 +3521,7 @@ int main(void) {
     TEST(context_init);
     TEST(context_with_config);
     TEST(context_backend_gate);
+    TEST(context_render_bridge_activation);
     TEST(context_quantum_runtime);
     printf("\n");
 

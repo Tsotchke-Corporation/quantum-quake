@@ -29,6 +29,10 @@
 #include <stdio.h>
 #include <math.h>
 
+#if defined(__APPLE__)
+#include "qge_metal.h"
+#endif
+
 /* ============================================================================
  * Constants and Bit Layout
  * ============================================================================ */
@@ -80,6 +84,7 @@ struct qge_framebuffer_s {
 };
 
 struct dwt_framebuffer_s {
+    qge_context_t* ctx;
     quantum_state_t* state;
     quantum_entropy_ctx_t* entropy;
     entropy_ctx_t* hw_entropy;
@@ -97,6 +102,7 @@ struct dwt_framebuffer_s {
     float* transform_scratch;   /* Row/column scratch for DWT passes */
     int coeff_size;             /* Size of coefficient buffer */
     int transform_scratch_size;  /* Number of floats in transform_scratch */
+    qge_dwt_render_backend_t last_render_backend;
 
     bool initialized;
 };
@@ -205,11 +211,9 @@ void qge_framebuffer_free(qge_framebuffer_t* fb) {
 
 dwt_framebuffer_t* qge_dwt_framebuffer_create(qge_context_t* ctx,
                                                const dwt_config_t* config) {
-    /* ctx is optional - we create our own quantum state */
-    (void)ctx;
-
     dwt_framebuffer_t* fb = calloc(1, sizeof(dwt_framebuffer_t));
     if (!fb) return NULL;
+    fb->ctx = ctx;
 
     /* Copy configuration */
     if (config) {
@@ -338,6 +342,7 @@ void qge_dwt_framebuffer_reset(dwt_framebuffer_t* fb) {
         fb->state->amplitudes[0] = 1.0 + 0.0*I;
     }
     fb->active_coeff_count = 0;
+    fb->last_render_backend = QGE_DWT_RENDER_BACKEND_NONE;
 }
 
 void qge_dwt_framebuffer_free(dwt_framebuffer_t* fb) {
@@ -1186,6 +1191,7 @@ void qge_dwt_render(dwt_framebuffer_t* fb, float* output) {
     if (!fb || !output) return;
 
     int base_res = fb->config.base_resolution;
+    fb->last_render_backend = QGE_DWT_RENDER_BACKEND_CPU;
 
     /* Step 0: Normalize quantum state only when using full measurement extraction.
      * quantum_state_normalize iterates all 2^28 = 268M amplitudes (4.3GB read),
@@ -1198,11 +1204,32 @@ void qge_dwt_render(dwt_framebuffer_t* fb, float* output) {
     /* Step 1: Extract coefficients directly into the caller's output buffer. */
     qge_extract_coefficients(fb, output);
 
+#if defined(__APPLE__)
+    if (fb->config.gpu_reconstruct && fb->config.mode == DWT_MODE_HAAR) {
+        qge_metal_ctx_t* metal =
+            (qge_metal_ctx_t*)qge_context_get_or_create_render_acceleration(
+                fb->ctx, base_res);
+        if (metal &&
+            qge_metal_inverse_dwt(metal, output, output,
+                                  fb->config.num_levels) == 0) {
+            fb->last_render_backend = QGE_DWT_RENDER_BACKEND_NATIVE;
+            return;
+        }
+        if (metal) {
+            fb->last_render_backend = QGE_DWT_RENDER_BACKEND_NATIVE_FALLBACK;
+        }
+    }
+#endif
+
     /* Step 2: Inverse DWT in place. */
     qge_inverse_dwt_matrix_scratch(output, output,
                                    base_res, base_res, fb->config.num_levels,
                                    fb->config.mode, fb->transform_scratch,
                                    fb->coeff_buffer);
+}
+
+qge_dwt_render_backend_t qge_dwt_last_render_backend(dwt_framebuffer_t* fb) {
+    return fb ? fb->last_render_backend : QGE_DWT_RENDER_BACKEND_NONE;
 }
 
 /* ============================================================================

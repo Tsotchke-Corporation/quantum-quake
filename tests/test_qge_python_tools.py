@@ -629,6 +629,9 @@ class TraceSummaryTests(unittest.TestCase):
                 (5, state_probe_payload(
                     2, 4, 9, 3, 0x0A, b"audio_source_spatial")),
                 (5, state_probe_payload(
+                    2, 0, 2, 117, 0x30000, b"render_sparse_dwt",
+                    192, 20)),
+                (5, state_probe_payload(
                     3, 1, 8, 12, 0x461, b"vis_shadow_parity", 6, 4)),
                 (5, state_probe_payload(
                     4, 1, 7, 1, 0x7E0, b"vis_authority_gate", 5, 4)),
@@ -677,6 +680,14 @@ class TraceSummaryTests(unittest.TestCase):
             self.assertEqual(evidence["audio"]["source_spatial_count"], 1)
             self.assertTrue(evidence["audio"]["flags"]["spatial"])
             self.assertTrue(evidence["audio"]["flags"]["processed"])
+            self.assertEqual(evidence["render"]["sparse_dwt_count"], 1)
+            self.assertTrue(evidence["render"]["flags"]["primary_owned"])
+            self.assertTrue(evidence["render"]["flags"]["native_idwt"])
+            self.assertFalse(
+                evidence["render"]["flags"]["native_idwt_fallback"]
+            )
+            self.assertEqual(evidence["render"]["native_bridge_count"], 1)
+            self.assertEqual(evidence["render"]["native_fallback_count"], 0)
             self.assertEqual(
                 evidence["visibility"]["authority_gate_count"],
                 1,
