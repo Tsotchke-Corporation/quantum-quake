@@ -466,6 +466,16 @@ bool qge_vis_get_writeback_decision(bool authority_requested,
                                     qge_vis_writeback_decision_t* decision);
 
 /**
+ * Return the audited QGE-visible mask from the last completed shadow parity
+ * frame. This is intentionally available only when the supplied writeback
+ * decision allows QGE authority for the frame.
+ */
+bool qge_vis_get_audited_visible_mask(
+    const qge_vis_writeback_decision_t* decision,
+    const unsigned char** visible_mask,
+    int* surface_count);
+
+/**
  * Set up viewpoint for visibility queries.
  */
 void qge_vis_setup_viewpoint(qge_vec3_t eye, qge_vec3_t forward);

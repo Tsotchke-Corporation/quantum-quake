@@ -577,7 +577,9 @@ class TraceSummaryTests(unittest.TestCase):
                 (5, state_probe_payload(
                     4, 1, 7, 1, 0x0E0, b"vis_authority_gate", 5, 4)),
                 (5, state_probe_payload(
-                    5, 2, 7, 1, 0x0F00, b"projectile_authority_gate", 4, 3)),
+                    5, 1, 7, 2, 0x0E0, b"vis_authority_apply", 5, 4)),
+                (5, state_probe_payload(
+                    6, 2, 7, 1, 0x0F00, b"projectile_authority_gate", 4, 3)),
             ]
             data = trace_summary.HEADER.pack(
                 trace_summary.TRACE_MAGIC,
@@ -609,6 +611,10 @@ class TraceSummaryTests(unittest.TestCase):
             self.assertTrue(evidence["audio"]["flags"]["processed"])
             self.assertEqual(
                 evidence["visibility"]["authority_gate_count"],
+                1,
+            )
+            self.assertEqual(
+                evidence["visibility"]["authority_apply_count"],
                 1,
             )
             self.assertTrue(

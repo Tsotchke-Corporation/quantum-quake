@@ -172,6 +172,7 @@ def build_runtime_evidence(summary: dict) -> dict:
         probes, "audio_attenuation_pan_authority")
     vis_shadow = probe_by_label(probes, "vis_shadow_parity")
     vis_gate = probe_by_label(probes, "vis_authority_gate")
+    vis_apply = probe_by_label(probes, "vis_authority_apply")
     projectile_gate = probe_by_label(probes, "projectile_authority_gate")
 
     audio_source_spatial_count = probe_count(
@@ -184,6 +185,8 @@ def build_runtime_evidence(summary: dict) -> dict:
         probes, "vis_shadow_parity", "visibility")
     vis_gate_count = probe_count(
         probes, "vis_authority_gate", "visibility")
+    vis_apply_count = probe_count(
+        probes, "vis_authority_apply", "visibility")
     projectile_gate_count = probe_count(
         probes, "projectile_authority_gate", "projectile")
 
@@ -193,7 +196,10 @@ def build_runtime_evidence(summary: dict) -> dict:
         if probe:
             audio_flags |= int(probe.get("flags_or", 0) or 0)
 
-    visibility_flags = int(vis_gate.get("flags_or", 0) or 0) if vis_gate else 0
+    visibility_flags = 0
+    for probe in (vis_gate, vis_apply):
+        if probe:
+            visibility_flags |= int(probe.get("flags_or", 0) or 0)
     projectile_flags = (
         int(projectile_gate.get("flags_or", 0) or 0)
         if projectile_gate else 0
@@ -226,6 +232,7 @@ def build_runtime_evidence(summary: dict) -> dict:
             "ready": visibility_ready,
             "shadow_parity_count": vis_shadow_count,
             "authority_gate_count": vis_gate_count,
+            "authority_apply_count": vis_apply_count,
             "flags": flags_summary(visibility_flags, VIS_FLAGS),
             "flags_or": visibility_flags,
             "fallback_reason_code": (

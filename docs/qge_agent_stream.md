@@ -304,6 +304,11 @@ The raw audio format is signed 16-bit little-endian stereo PCM. Read
 If sound is requested but no audio has arrived yet, `manifest.json` reports
 `audio.status` as `requested_missing` and `audio/bytes.txt` remains `0`.
 
+For source-authority runs, `tools/qge_audio_authority_smoke.py` validates a
+completed agent stream. It checks `snd_quantum 2`, source authority enabled,
+nonzero captured audio, source-spatial/source-frame trace probes, and source
+volume selection or explicit gated fallback telemetry in the runtime log.
+
 ## Failure Signals
 
 When trace capture is requested but no trace file is written, the harness

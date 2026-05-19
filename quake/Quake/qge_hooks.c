@@ -109,6 +109,11 @@ static int qge_vis_authority_selected = 0;
 static int qge_vis_fallback_selected = 1;
 static const char *qge_vis_authority_reason = "not_evaluated";
 static const char *qge_vis_fallback_reason = "not_evaluated";
+static const qmodel_t *qge_vis_authority_model = NULL;
+static const unsigned char *qge_vis_authority_mask = NULL;
+static int qge_vis_authority_mask_count = 0;
+static qge_vis_writeback_decision_t qge_vis_last_decision;
+static qboolean qge_vis_last_decision_valid = false;
 
 #define QGE_VIS_TRACE_FLAG_REGISTERED          0x0001u
 #define QGE_VIS_TRACE_FLAG_MISMATCH            0x0002u
@@ -7109,6 +7114,11 @@ qboolean QGE_VisShadowBegin(qmodel_t *model)
 	qge_vis_authority_requested = QGE_VisAuthorityRequested() ? 1 : 0;
 	qge_vis_authority_selected = 0;
 	qge_vis_fallback_selected = 1;
+	qge_vis_authority_model = NULL;
+	qge_vis_authority_mask = NULL;
+	qge_vis_authority_mask_count = 0;
+	memset(&qge_vis_last_decision, 0, sizeof(qge_vis_last_decision));
+	qge_vis_last_decision_valid = false;
 	qge_vis_authority_reason = qge_vis_authority_requested ?
 		"shadow_unavailable_fallback" : "authority_not_requested";
 	qge_vis_fallback_reason = qge_vis_authority_reason;
@@ -7331,16 +7341,115 @@ static void QGE_TraceVisShadowParity(const qge_vis_shadow_stats_t *stats)
 void QGE_VisShadowEnd(qmodel_t *model)
 {
 	qge_vis_shadow_stats_t stats;
+	const unsigned char *visible_mask = NULL;
+	int surface_count = 0;
 
 	if (!qge_vis_shadow_active || model != qge_vis_shadow_model)
 		return;
 
 	if (qge_vis_shadow_finish(&stats))
+	{
 		QGE_TraceVisShadowParity(&stats);
+		qge_vis_last_decision_valid =
+			qge_vis_get_writeback_decision(QGE_VisAuthorityRequested(),
+										   &qge_vis_last_decision);
+		if (qge_vis_last_decision_valid &&
+			qge_vis_get_audited_visible_mask(&qge_vis_last_decision,
+											 &visible_mask,
+											 &surface_count))
+		{
+			qge_vis_authority_model = model;
+			qge_vis_authority_mask = visible_mask;
+			qge_vis_authority_mask_count = surface_count;
+		}
+	}
 
 	qge_vis_shadow_active = false;
 	qge_vis_shadow_model = NULL;
 	qge_vis_shadow_registered_surfaces = 0;
+}
+
+qboolean QGE_VisAuthorityGetMask(qmodel_t *model,
+								 const unsigned char **visible_mask,
+								 int *surface_count)
+{
+	if (visible_mask)
+		*visible_mask = NULL;
+	if (surface_count)
+		*surface_count = 0;
+	if (!qge_initialized || !model || model != qge_vis_authority_model ||
+		!qge_vis_last_decision_valid ||
+		!qge_vis_last_decision.writeback_allowed ||
+		!qge_vis_authority_mask || qge_vis_authority_mask_count <= 0)
+		return false;
+	if (visible_mask)
+		*visible_mask = qge_vis_authority_mask;
+	if (surface_count)
+		*surface_count = qge_vis_authority_mask_count;
+	return true;
+}
+
+void QGE_VisAuthorityTraceApply(qmodel_t *model, int applied_surfaces)
+{
+	qge_quantum_runtime_t *rt;
+	qge_state_probe_t probe;
+	uint32_t flags = 0u;
+	uint64_t hash;
+
+	if (!qge_initialized || !model || !qge_vis_last_decision_valid)
+		return;
+
+	if (qge_vis_authority_mask_count > 0)
+		flags |= QGE_VIS_TRACE_FLAG_REGISTERED;
+	if (qge_vis_last_decision.authority_requested)
+		flags |= QGE_VIS_TRACE_FLAG_AUTHORITY_REQUESTED;
+	if (qge_vis_last_decision.authority_ready)
+		flags |= QGE_VIS_TRACE_FLAG_AUTHORITY_READY;
+	if (qge_vis_last_decision.writeback_allowed)
+		flags |= QGE_VIS_TRACE_FLAG_AUTHORITY_SELECTED;
+	if (qge_vis_last_decision.fallback_selected)
+		flags |= QGE_VIS_TRACE_FLAG_FALLBACK_SELECTED;
+	if (qge_vis_last_decision.false_negative_forced_classic)
+		flags |= QGE_VIS_TRACE_FLAG_FALSE_NEGATIVE;
+	if (qge_vis_last_decision.fallback_reason ==
+		QGE_VIS_GATE_REASON_WARMUP_PENDING ||
+		qge_vis_last_decision.fallback_reason ==
+		QGE_VIS_GATE_REASON_SURFACE_COUNT_CHANGED)
+		flags |= QGE_VIS_TRACE_FLAG_WARMUP_PENDING;
+
+	hash = QGE_RegistryHashStep(1469598103934665603ULL,
+								(uint64_t)(uint32_t)model->numsurfaces);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)applied_surfaces);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)qge_vis_last_decision.flags);
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)qge_vis_last_decision.authority_reason);
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)qge_vis_last_decision.fallback_reason);
+
+	rt = QGE_Runtime();
+	if (!rt)
+		return;
+
+	memset(&probe, 0, sizeof(probe));
+	probe.frame = qge_frame_count;
+	probe.server_time_msec = QGE_ServerTimeMsec();
+	probe.domain = QGE_DOMAIN_VISIBILITY;
+	probe.representation = QGE_REP_CLASSICAL_ORACLE;
+	probe.subject_id = applied_surfaces;
+	probe.flags = flags;
+	probe.state_hash = hash;
+	probe.entropy = (double)qge_vis_last_decision.fallback_reason;
+	probe.coherence = qge_vis_last_decision.writeback_allowed ? 1.0 : 0.0;
+	probe.max_probability =
+		qge_vis_last_decision.fallback_selected ? 1.0 : 0.0;
+	probe.total_probability =
+		(double)qge_vis_last_decision.last_false_negative_count;
+	probe.active_basis_count =
+		qge_vis_last_decision.consecutive_clean_frames;
+	probe.qubit_count = qge_vis_last_decision.clean_frames_required;
+	probe.memory_bytes = (uint64_t)qge_vis_authority_mask_count;
+	strlcpy(probe.label, "vis_authority_apply", sizeof(probe.label));
+	qge_quantum_record_probe(rt, &probe);
 }
 
 float QGE_VisQuerySurface(int surface_id)

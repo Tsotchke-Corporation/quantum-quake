@@ -82,8 +82,11 @@ static bool cache_valid = false;
 
 /* Shadow parity state: compares QGE visibility to the classic accepted set. */
 static unsigned char* shadow_classic_visible = NULL;
+static unsigned char* shadow_qge_visible = NULL;
 static int shadow_classic_capacity = 0;
+static int shadow_qge_capacity = 0;
 static int shadow_surface_count = 0;
+static int shadow_qge_surface_count = 0;
 static int shadow_overflow_count = 0;
 static float shadow_visibility_threshold = 0.0f;
 static bool shadow_active = false;
@@ -334,6 +337,30 @@ bool qge_vis_get_writeback_decision(bool authority_requested,
     decision->last_false_negative_count = shadow_last_false_negative_count;
     decision->consecutive_clean_frames = shadow_consecutive_clean_frames;
     decision->clean_frames_required = VIS_AUTHORITY_CLEAN_FRAMES_REQUIRED;
+    return true;
+}
+
+bool qge_vis_get_audited_visible_mask(
+    const qge_vis_writeback_decision_t* decision,
+    const unsigned char** visible_mask,
+    int* surface_count) {
+    if (visible_mask) {
+        *visible_mask = NULL;
+    }
+    if (surface_count) {
+        *surface_count = 0;
+    }
+    if (!decision || !decision->writeback_allowed ||
+        decision->source != QGE_VIS_WRITEBACK_SOURCE_QGE ||
+        !shadow_qge_visible || shadow_qge_surface_count <= 0) {
+        return false;
+    }
+    if (visible_mask) {
+        *visible_mask = shadow_qge_visible;
+    }
+    if (surface_count) {
+        *surface_count = shadow_qge_surface_count;
+    }
     return true;
 }
 
@@ -903,11 +930,13 @@ void qge_vis_get_stats(int* total_surfaces, int* visible_count,
 
 void qge_vis_shadow_begin(int total_surfaces, float visibility_threshold) {
     unsigned char* new_classic;
+    unsigned char* new_qge;
 
     ensure_vis_initialized();
 
     shadow_active = false;
     shadow_surface_count = 0;
+    shadow_qge_surface_count = 0;
     shadow_overflow_count = 0;
     shadow_visibility_threshold = visibility_threshold;
 
@@ -925,8 +954,20 @@ void qge_vis_shadow_begin(int total_surfaces, float visibility_threshold) {
         shadow_classic_visible = new_classic;
         shadow_classic_capacity = total_surfaces;
     }
+    if (total_surfaces > shadow_qge_capacity) {
+        new_qge = realloc(shadow_qge_visible,
+                          (size_t)total_surfaces * sizeof(unsigned char));
+        if (!new_qge) {
+            fprintf(stderr, "QGE VIS: Failed to allocate audited QGE mask\n");
+            return;
+        }
+        shadow_qge_visible = new_qge;
+        shadow_qge_capacity = total_surfaces;
+    }
 
     memset(shadow_classic_visible, 0,
+           (size_t)total_surfaces * sizeof(unsigned char));
+    memset(shadow_qge_visible, 0,
            (size_t)total_surfaces * sizeof(unsigned char));
     shadow_surface_count = total_surfaces;
     shadow_active = true;
@@ -985,6 +1026,9 @@ bool qge_vis_shadow_finish(qge_vis_shadow_stats_t* stats) {
         }
 
         qge_visible = probability > 0.0f && probability >= threshold;
+        if (shadow_qge_visible && i < shadow_qge_capacity) {
+            shadow_qge_visible[i] = qge_visible ? 1 : 0;
+        }
 
         if (classic_visible) {
             stats->classic_visible_count++;
@@ -1089,6 +1133,7 @@ bool qge_vis_shadow_finish(qge_vis_shadow_stats_t* stats) {
         shadow_fallback_reason != QGE_VIS_GATE_REASON_NONE;
     stats->authority_reason = shadow_authority_reason;
     stats->fallback_reason = shadow_fallback_reason;
+    shadow_qge_surface_count = shadow_surface_count;
 
     shadow_active = false;
     return true;
@@ -1120,17 +1165,21 @@ void qge_vis_shutdown(void) {
     free(visible_surface_cache);
     free(visibility_probabilities);
     free(shadow_classic_visible);
+    free(shadow_qge_visible);
 
     surfaces = NULL;
     visible_surface_cache = NULL;
     visibility_probabilities = NULL;
     shadow_classic_visible = NULL;
+    shadow_qge_visible = NULL;
     num_surfaces = 0;
     surfaces_capacity = 0;
     cached_visible_count = 0;
     cache_valid = false;
     shadow_classic_capacity = 0;
+    shadow_qge_capacity = 0;
     shadow_surface_count = 0;
+    shadow_qge_surface_count = 0;
     shadow_overflow_count = 0;
     shadow_visibility_threshold = 0.0f;
     shadow_active = false;

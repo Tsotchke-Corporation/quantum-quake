@@ -2208,6 +2208,63 @@ static int test_vis_writeback_decision_ready(void) {
            decision.consecutive_clean_frames == required;
 }
 
+static int test_vis_audited_mask_requires_ready_decision(void) {
+    qge_vis_shadow_stats_t stats;
+    qge_vis_writeback_decision_t decision;
+    const unsigned char *visible_mask = NULL;
+    int surface_count = 0;
+
+    qge_vis_shutdown();
+    if (!finish_vis_authority_gate_frame(0, &stats) ||
+        !qge_vis_get_writeback_decision(true, &decision)) {
+        return 0;
+    }
+
+    if (qge_vis_get_audited_visible_mask(&decision,
+                                         &visible_mask,
+                                         &surface_count)) {
+        return 0;
+    }
+
+    return visible_mask == NULL && surface_count == 0;
+}
+
+static int test_vis_audited_mask_ready_visible_set(void) {
+    qge_vis_shadow_stats_t stats;
+    qge_vis_writeback_decision_t decision;
+    const unsigned char *visible_mask = NULL;
+    int surface_count = 0;
+    int required;
+
+    qge_vis_shutdown();
+    if (!finish_vis_authority_gate_frame(0, &stats)) {
+        return 0;
+    }
+    required = stats.clean_frames_required;
+    for (int i = 1; i < required; i++) {
+        if (!finish_vis_authority_gate_frame(0, &stats)) {
+            return 0;
+        }
+    }
+    if (!qge_vis_get_writeback_decision(true, &decision) ||
+        !qge_vis_get_audited_visible_mask(&decision,
+                                          &visible_mask,
+                                          &surface_count)) {
+        return 0;
+    }
+
+    printf("\n    Audited visibility mask: count=%d visible=%d/%d/%d\n    ",
+           surface_count,
+           visible_mask[0],
+           visible_mask[1],
+           visible_mask[2]);
+
+    return surface_count == 3 &&
+           visible_mask[0] == 1 &&
+           visible_mask[1] == 1 &&
+           visible_mask[2] == 0;
+}
+
 /* ============================================================================
  * Quantum Audio Tests
  * ============================================================================ */
@@ -2963,6 +3020,8 @@ int main(void) {
     TEST(vis_writeback_decision_warmup);
     TEST(vis_writeback_decision_false_negative);
     TEST(vis_writeback_decision_ready);
+    TEST(vis_audited_mask_requires_ready_decision);
+    TEST(vis_audited_mask_ready_visible_set);
     printf("\n");
 
     printf("Quantum Audio Tests:\n");

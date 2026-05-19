@@ -28,7 +28,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 extern cvar_t gl_fullbrights, r_drawflat, gl_overbright, r_oldwater, r_oldskyleaf, r_showtris; //johnfitz
 
 byte *SV_FatPVS (vec3_t org, qmodel_t *worldmodel);
-extern unsigned int qge_vis_authority_writeback_flags(int authority_requested);
 
 //==============================================================================
 //
@@ -89,6 +88,41 @@ qboolean R_BackFaceCull (msurface_t *surf)
 	return false;
 }
 
+static int R_ApplyQGEVisibilityAuthority (qmodel_t *model,
+	const unsigned char *visible_mask, int surface_count)
+{
+	msurface_t	*surf;
+	int			i, limit, applied;
+
+	if (!model || !visible_mask || surface_count <= 0)
+		return 0;
+
+	limit = q_min(model->numsurfaces, surface_count);
+	applied = 0;
+	R_ClearTextureChains(model, chain_world);
+	QGE_SceneBegin();
+	r_visframecount++;
+
+	for (i = 0, surf = model->surfaces; i < limit; i++, surf++)
+	{
+		if (!visible_mask[i])
+			continue;
+		if (R_CullBox(surf->mins, surf->maxs) || R_BackFaceCull(surf))
+			continue;
+
+		surf->visframe = r_visframecount;
+		rs_brushpolys++;
+		R_ChainSurface(surf, chain_world);
+		QGE_SceneSubmitWorldSurface(model, surf);
+		R_RenderDynamicLightmaps(surf);
+		if (surf->texinfo->texture->warpimage)
+			surf->texinfo->texture->update_warp = true;
+		applied++;
+	}
+
+	return applied;
+}
+
 /*
 ===============
 R_MarkSurfaces -- johnfitz -- mark surfaces based on PVS and rebuild texture chains
@@ -102,7 +136,9 @@ void R_MarkSurfaces (void)
 	int			i, j;
 	qboolean	nearwaterportal;
 	qboolean	qge_vis_shadow;
-	unsigned int qge_vis_writeback_flags;
+	const unsigned char *qge_vis_authority_mask;
+	int qge_vis_authority_count;
+	int qge_vis_applied_surfaces;
 
 	// clear lightmap chains
 	for (i=0 ; i<lightmap_count ; i++)
@@ -124,8 +160,9 @@ void R_MarkSurfaces (void)
 		vis = Mod_LeafPVS (r_viewleaf, cl.worldmodel);
 
 	qge_vis_shadow = QGE_VisShadowBegin(cl.worldmodel);
-	qge_vis_writeback_flags =
-		qge_vis_authority_writeback_flags(quantum_vis.value >= 1.5f);
+	qge_vis_authority_mask = NULL;
+	qge_vis_authority_count = 0;
+	qge_vis_applied_surfaces = 0;
 	r_visframecount++;
 
 	// set all chains to null
@@ -171,16 +208,18 @@ void R_MarkSurfaces (void)
 	if (qge_vis_shadow)
 	{
 		QGE_VisShadowEnd(cl.worldmodel);
-		qge_vis_writeback_flags =
-			qge_vis_authority_writeback_flags(quantum_vis.value >= 1.5f);
+		if (QGE_VisAuthorityGetMask(cl.worldmodel,
+									&qge_vis_authority_mask,
+									&qge_vis_authority_count))
+		{
+			qge_vis_applied_surfaces =
+				R_ApplyQGEVisibilityAuthority(cl.worldmodel,
+											 qge_vis_authority_mask,
+											 qge_vis_authority_count);
+			QGE_VisAuthorityTraceApply(cl.worldmodel,
+									   qge_vis_applied_surfaces);
+		}
 	}
-
-	/* Visibility Authority Writeback V2 is deliberately sandboxed here:
-	 * R_MarkSurfaces keeps classic PVS/cull output authoritative. Hook-level
-	 * consumers of quantum_vis 2 must query qge_vis_authority_writeback_flags()
-	 * after a clean shadow gate; false negatives keep source=CLASSIC.
-	 */
-	(void)qge_vis_writeback_flags;
 }
 
 //==============================================================================

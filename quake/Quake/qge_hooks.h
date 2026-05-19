@@ -98,6 +98,10 @@ void QGE_VisSetupViewpoint(float eye_x, float eye_y, float eye_z,
 qboolean QGE_VisShadowBegin(qmodel_t *model);
 void QGE_VisShadowMarkClassicSurface(qmodel_t *model, msurface_t *surf);
 void QGE_VisShadowEnd(qmodel_t *model);
+qboolean QGE_VisAuthorityGetMask(qmodel_t *model,
+                                 const unsigned char **visible_mask,
+                                 int *surface_count);
+void QGE_VisAuthorityTraceApply(qmodel_t *model, int applied_surfaces);
 
 /* ============================================================================
  * Quantum Particles

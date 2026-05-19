@@ -158,52 +158,34 @@ Verified with:
 - `QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=2 QGE_STREAM_WAIT_FRAMES=40 QGE_STREAM_CAPTURE_WAIT=40 QGE_STREAM_TRACE=1 QGE_STREAM_SOUND=1 QGE_STREAM_SND_QUANTUM=2 QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY=1 QGE_STREAM_FIRE_TEST=1 QGE_STREAM_AI=1 QGE_STREAM_VIS=2 QGE_RENDER=2 QGE_PHYSICS=1 QGE_PROJECTILES=1 QGE_STREAM_TIMEOUT_SECONDS=120 QGE_STREAM_LAUNCH=open bash tools/quake_graphics_stream.sh`
 - `python3 tools/qge_trace_summary.py diagnostics/quake_stream/20260518-213208/qge_trace.bin --json`
 
+## Wave 6 Checkpoint
+
+- Visibility authority apply: `R_MarkSurfaces()` can now opt into an audited
+  QGE visibility mask after the shadow parity gate reports clean, ready
+  authority. Classic PVS/cull output remains the default, and false negatives
+  still force classic visibility for the frame.
+- Visibility apply traceability: QGE records `vis_authority_apply` probes when
+  the renderer consumes the audited mask, and the trace summary reports
+  `runtime_evidence.visibility.authority_apply_count`.
+- Audio authority smoke: a reusable checker validates compact agent-stream
+  runs for `snd_quantum 2` plus `snd_quantum_source_authority 1`, requiring
+  nonzero audio bytes, source-spatial trace probes, source-frame probes, and
+  selected or explicitly gated source-volume telemetry.
+
+Verified with:
+
+- `python3 -m py_compile tools/qge_trace_summary.py tools/qge_audio_authority_smoke.py tests/test_qge_python_tools.py`
+- `python3 tests/test_qge_python_tools.py`
+- `bash tests/test_qge_audio_authority_smoke.sh`
+- `bash tests/test_qge_trace_summary.sh`
+- `make test_qge_python_tools`
+- `make test_qge_audio_authority_smoke`
+- `make test_qge`
+- `./bin/test_qge`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B qge_hooks.o`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B r_world.o`
+
 ## Next Worker Tasks
-
-### Visibility Authority Apply V3
-
-Owned files:
-
-- `qge/qge_vis.c`
-- `quake/Quake/r_world.c`
-- `quake/Quake/qge_hooks.c`
-- `tests/test_qge.c`
-
-Goal:
-
-Turn the sandbox decision into an opt-in application path that can use the QGE
-visible set only after the writeback decision allows it. The default remains
-classic visibility.
-
-Gate:
-
-- False negatives always force classic visibility for the frame.
-- Authority writeback has an explicit trace event and fallback reason.
-- Capture/trace artifacts prove whether the frame used classic or QGE
-  visibility authority.
-
-### Audio Authority Runtime Smoke V3
-
-Owned files:
-
-- `quake/Quake/snd_mix.c`
-- `quake/Quake/snd_quantum.c`
-- `quake/Quake/snd_quantum.h`
-- `quake/Quake/qge_hooks.c`
-- `tools/quake_graphics_stream.sh`
-
-Goal:
-
-Exercise `snd_quantum 2` plus `snd_quantum_source_authority 1` in a compact live
-run and prove that parity gates either keep classic audio or explicitly select
-QGE source volumes without silent dry loss.
-
-Gate:
-
-- Agent stream manifest records source authority mode and nonzero audio.
-- Runtime log includes classic/QGE source volume error and selected/fallback
-  counts.
-- Trace contains matching audio source probes/measurements.
 
 ### Projectile Hook Writeback V2
 
