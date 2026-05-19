@@ -2,7 +2,8 @@
 set -euo pipefail
 
 noesis_dir="${QGE_NOESIS_DIR:-$HOME/Desktop/noesis}"
-plan="${QGE_NOESIS_PLAN:-patrol}"
+plan="${QGE_NOESIS_PLAN:-adaptive}"
+map_name="${QGE_STREAM_MAP:-start}"
 actions_file="${QGE_NOESIS_ACTIONS_FILE:-}"
 start_wait="${QGE_NOESIS_START_WAIT:-16}"
 max_wait="${QGE_NOESIS_MAX_WAIT:-600}"
@@ -49,9 +50,40 @@ hold_command() {
   local command="$1"
   local count="${2:-1}"
 
-  emit_command "+$command"
+  hold_command_set "$count" "$command"
+}
+
+hold_command_set() {
+  local count="${1:-1}"
+  shift || true
+  local -a commands=("$@")
+  local command
+  local i
+
+  if (( ${#commands[@]} == 0 )); then
+    emit_waits "$count"
+    return
+  fi
+
+  for command in "${commands[@]}"; do
+    emit_command "+$command"
+  done
   emit_waits "$count"
-  emit_command "-$command"
+  for (( i=${#commands[@]} - 1; i >= 0; i-- )); do
+    emit_command "-${commands[$i]}"
+  done
+}
+
+clear_held_commands() {
+  local -a commands=(
+    attack forward back left right moveleft moveright
+    jump use speed strafe moveup movedown lookup lookdown klook mlook
+  )
+  local command
+
+  for command in "${commands[@]}"; do
+    emit_command "-$command"
+  done
 }
 
 emit_action() {
@@ -99,11 +131,80 @@ emit_action() {
     strafe-right|move-right|east)
       hold_command "moveright" "${arg:-1}"
       ;;
+    jump|hop)
+      hold_command "jump" "${arg:-1}"
+      ;;
+    use|activate)
+      hold_command "use" "${arg:-1}"
+      ;;
+    speed|run)
+      hold_command "speed" "${arg:-1}"
+      ;;
+    strafe)
+      hold_command "strafe" "${arg:-1}"
+      ;;
+    swim-up|move-up|rise)
+      hold_command "moveup" "${arg:-1}"
+      ;;
+    swim-down|move-down|drop)
+      hold_command "movedown" "${arg:-1}"
+      ;;
+    look-up|lookup)
+      hold_command "lookup" "${arg:-1}"
+      ;;
+    look-down|lookdown)
+      hold_command "lookdown" "${arg:-1}"
+      ;;
+    center-view|centerview)
+      emit_command "centerview"
+      ;;
     attack|fire|shoot)
       hold_command "attack" "${arg:-1}"
       ;;
+    run-forward|sprint-forward|charge)
+      hold_command_set "${arg:-1}" "speed" "forward"
+      ;;
+    jump-forward|hop-forward)
+      hold_command_set "${arg:-1}" "jump" "forward"
+      ;;
+    advance-fire|fire-forward|push-fire|attack-move)
+      hold_command_set "${arg:-1}" "forward" "attack"
+      ;;
+    retreat-fire|kite-back)
+      hold_command_set "${arg:-1}" "back" "attack"
+      ;;
+    strafe-fire-left|fire-strafe-left)
+      hold_command_set "${arg:-1}" "moveleft" "attack"
+      ;;
+    strafe-fire-right|fire-strafe-right)
+      hold_command_set "${arg:-1}" "moveright" "attack"
+      ;;
+    circle-left)
+      hold_command_set "${arg:-1}" "moveleft" "right"
+      ;;
+    circle-right)
+      hold_command_set "${arg:-1}" "moveright" "left"
+      ;;
+    circle-fire-left|circle-strafe-left)
+      hold_command_set "${arg:-1}" "moveleft" "right" "attack"
+      ;;
+    circle-fire-right|circle-strafe-right)
+      hold_command_set "${arg:-1}" "moveright" "left" "attack"
+      ;;
+    clear-input|release-all|stop)
+      clear_held_commands
+      if [[ -n "${arg:-}" ]]; then
+        emit_waits "$arg"
+      fi
+      ;;
     weapon|impulse)
       emit_command "impulse ${arg:-7}"
+      ;;
+    weapon-next|next-weapon)
+      emit_command "impulse 10"
+      ;;
+    weapon-prev|prev-weapon|previous-weapon)
+      emit_command "impulse 12"
       ;;
     give)
       if [[ -n "${arg:-}" && -n "${rest:-}" ]]; then
@@ -144,6 +245,41 @@ emit_builtin_plan() {
       emit_action "wait 8"
       emit_action "turn-right 6"
       emit_action "attack 8"
+      ;;
+    map-scout)
+      case "$map_name" in
+        e1m1)
+          emit_action "forward 8"
+          emit_action "turn-right 4"
+          emit_action "forward 6"
+          emit_action "give 7"
+          emit_action "give r 100"
+          emit_action "weapon 7"
+          emit_action "wait 8"
+          emit_action "attack 8"
+          emit_action "wait 8"
+          emit_action "turn-right 6"
+          emit_action "attack 8"
+          ;;
+        *)
+          emit_action "forward 18"
+          emit_action "turn-right 8"
+          emit_action "forward 18"
+          ;;
+      esac
+      ;;
+    combat|combat-scout|combat-explore|adaptive)
+      emit_action "weapon 2"
+      emit_action "wait 4"
+      emit_action "advance-fire 10"
+      emit_action "circle-fire-left 8"
+      emit_action "circle-fire-right 8"
+      emit_action "jump-forward 4"
+      emit_action "turn-right 5"
+      emit_action "advance-fire 12"
+      emit_action "strafe-fire-left 6"
+      emit_action "strafe-fire-right 6"
+      emit_action "clear-input 2"
       ;;
     patrol|*)
       emit_action "forward 12"

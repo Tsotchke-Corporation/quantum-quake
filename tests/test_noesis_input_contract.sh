@@ -116,7 +116,17 @@ grep -q 'child process exit status' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'process exit status in its final' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'QGE_NOESIS_MAX_WAIT' "$repo_root/tools/noesis_quake_player.sh"
 grep -q 'wait_clamped requested=' "$repo_root/tools/noesis_quake_player.sh"
+grep -Fq 'plan="${QGE_NOESIS_PLAN:-adaptive}"' "$repo_root/tools/noesis_quake_player.sh"
+grep -Fq 'plan="${QGE_NOESIS_PLAN:-adaptive}"' "$repo_root/tools/noesis_quake_policy.sh"
+grep -Fq 'noesis_plan="${QGE_NOESIS_PLAN:-adaptive}"' "$repo_root/tools/quake_graphics_stream.sh"
+grep -Fq 'noesis_plan="${QGE_NOESIS_PLAN:-adaptive}"' "$repo_root/tools/quake_crash_watch.sh"
+grep -q 'advance-fire' "$repo_root/tools/noesis_quake_player.sh"
+grep -q 'circle-fire-left' "$repo_root/tools/noesis_quake_policy.sh"
+grep -q 'QGE_NOESIS_PHASE' "$repo_root/tools/noesis_quake_policy.sh"
 grep -q 'QGE_NOESIS_MAX_WAIT' "$repo_root/docs/qge_agent_stream.md"
+grep -q 'combat-explore' "$repo_root/docs/qge_agent_stream.md"
+grep -q 'advance-fire' "$repo_root/docs/qge_agent_stream.md"
+grep -q 'weapon-cycle-smoke' "$repo_root/docs/qge_agent_stream.md"
 grep -Fq 'noesis_max_wait="${QGE_NOESIS_MAX_WAIT:-600}"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq '"noesis_max_wait": $noesis_max_wait' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'fire_min_start_wait="${QGE_STREAM_FIRE_MIN_START_WAIT:-48}"' "$repo_root/tools/quake_graphics_stream.sh"
@@ -174,6 +184,94 @@ if (( command_count < 50 )); then
   echo "expected translated Quake command trace, got only $command_count lines" >&2
   exit 1
 fi
+
+adaptive_actions="$tmpdir/adaptive-actions.txt"
+adaptive_commands="$tmpdir/adaptive-commands.cfg"
+adaptive_stdout="$tmpdir/adaptive-stdout.cfg"
+
+QGE_NOESIS_DIR="$repo_root" \
+QGE_NOESIS_PLAN=adaptive \
+QGE_STREAM_MAP=e1m1 \
+QGE_NOESIS_CMD="$repo_root/tools/noesis_quake_policy.sh" \
+QGE_NOESIS_START_WAIT=0 \
+QGE_NOESIS_ACTION_TRACE_FILE="$adaptive_actions" \
+QGE_NOESIS_COMMAND_TRACE_FILE="$adaptive_commands" \
+  "$repo_root/tools/noesis_quake_player.sh" > "$adaptive_stdout"
+
+cmp -s "$adaptive_stdout" "$adaptive_commands"
+
+grep -q '^cmd echo QGE_NOESIS_POLICY .*map=e1m1 plan=adaptive' "$adaptive_actions"
+grep -q '^center-view$' "$adaptive_actions"
+grep -q '^cmd echo QGE_NOESIS_PHASE phase=e1m1_entry_clear$' "$adaptive_actions"
+grep -q '^advance-fire 12$' "$adaptive_actions"
+grep -q '^circle-fire-left 8$' "$adaptive_actions"
+grep -q '^jump-forward 4$' "$adaptive_actions"
+grep -q '^clear-input 2$' "$adaptive_actions"
+grep -q '^cmd echo QGE_NOESIS_POLICY done$' "$adaptive_actions"
+
+grep -q '^echo QGE_NOESIS_PHASE phase=e1m1_entry_clear$' "$adaptive_commands"
+grep -q '^centerview$' "$adaptive_commands"
+grep -q '^+forward$' "$adaptive_commands"
+grep -q '^+attack$' "$adaptive_commands"
+grep -q '^+moveleft$' "$adaptive_commands"
+grep -q '^+moveright$' "$adaptive_commands"
+grep -q '^+jump$' "$adaptive_commands"
+grep -q '^-attack$' "$adaptive_commands"
+grep -q '^-forward$' "$adaptive_commands"
+grep -q '^echo QGE_NOESIS_PLAYER done$' "$adaptive_commands"
+
+adaptive_command_count="$(wc -l < "$adaptive_commands" | tr -d ' ')"
+if (( adaptive_command_count < 150 )); then
+  echo "expected rich adaptive Quake command trace, got only $adaptive_command_count lines" >&2
+  exit 1
+fi
+
+combo_actions="$tmpdir/combo-actions.txt"
+combo_trace="$tmpdir/combo-trace.txt"
+combo_commands="$tmpdir/combo-commands.cfg"
+combo_stdout="$tmpdir/combo-stdout.cfg"
+cat > "$combo_actions" <<'EOF'
+advance-fire 2
+circle-fire-right 3
+jump-forward 2
+use 1
+look-up 1
+swim-up 1
+center-view
+weapon-next
+weapon-prev
+reload 1
+clear-input 1
+EOF
+
+QGE_NOESIS_DIR="$repo_root" \
+QGE_NOESIS_ACTIONS_FILE="$combo_actions" \
+QGE_NOESIS_START_WAIT=0 \
+QGE_NOESIS_MAX_WAIT=4 \
+QGE_NOESIS_ACTION_TRACE_FILE="$combo_trace" \
+QGE_NOESIS_COMMAND_TRACE_FILE="$combo_commands" \
+  "$repo_root/tools/noesis_quake_player.sh" > "$combo_stdout"
+
+cmp -s "$combo_stdout" "$combo_commands"
+grep -q '^advance-fire 2$' "$combo_trace"
+grep -q '^circle-fire-right 3$' "$combo_trace"
+grep -q '^+forward$' "$combo_commands"
+grep -q '^+attack$' "$combo_commands"
+grep -q '^+moveright$' "$combo_commands"
+grep -q '^+left$' "$combo_commands"
+grep -q '^+jump$' "$combo_commands"
+grep -q '^+use$' "$combo_commands"
+grep -q '^+lookup$' "$combo_commands"
+grep -q '^+moveup$' "$combo_commands"
+grep -q '^centerview$' "$combo_commands"
+grep -q '^impulse 10$' "$combo_commands"
+grep -q '^impulse 12$' "$combo_commands"
+grep -q '^echo QGE_NOESIS_PLAYER skipped_unknown_action=reload$' "$combo_commands"
+grep -q '^-moveup$' "$combo_commands"
+grep -q '^-lookup$' "$combo_commands"
+grep -q '^-use$' "$combo_commands"
+grep -q '^-jump$' "$combo_commands"
+grep -q '^-attack$' "$combo_commands"
 
 override_actions="$tmpdir/override-actions.txt"
 override_commands="$tmpdir/override-commands.cfg"

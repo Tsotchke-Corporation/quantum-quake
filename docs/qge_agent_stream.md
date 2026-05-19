@@ -410,9 +410,13 @@ wait 2
 ```
 
 Supported movement/action verbs are `forward`, `back`, `turn-left`,
-`turn-right`, `strafe-left`, `strafe-right`, `attack`, `wait`, `weapon`, and
-`give`. `cmd` or `quake` passes the remaining text through as a raw Quake
-console command for targeted probes.
+`turn-right`, `strafe-left`, `strafe-right`, `jump`, `use`, `speed`,
+`look-up`, `look-down`, `center-view`, `swim-up`, `swim-down`, `attack`,
+`wait`, `weapon`, `weapon-next`, `weapon-prev`, and `give`. Composite combat
+verbs include `run-forward`, `jump-forward`, `advance-fire`, `retreat-fire`,
+`strafe-fire-left`, `strafe-fire-right`, `circle-fire-left`,
+`circle-fire-right`, and `clear-input`. `cmd` or `quake` passes the remaining
+text through as a raw Quake console command for targeted probes.
 
 Action streams can come from either `QGE_NOESIS_ACTIONS_FILE` or
 `QGE_NOESIS_CMD`. The command provider runs from `QGE_NOESIS_DIR` and should
@@ -467,13 +471,18 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   to disable harness-generated gameplay commands.
 - `QGE_NOESIS_DIR`: Noesis repo path used for player provenance, default
   `~/Desktop/noesis`.
-- `QGE_NOESIS_PLAN`: Noesis command-buffer plan, default `patrol`; supported
-  plans are `patrol`, `scout`, `fire`, `map-scout`, and `adaptive`.
+- `QGE_NOESIS_PLAN`: Noesis command-buffer plan, default `adaptive`;
+  supported plans are `patrol`, `scout`, `fire`, `map-scout`, `combat-scout`,
+  `combat-explore`, `weapon-cycle-smoke`, and `adaptive`. `adaptive` selects a
+  map-aware combat route when one exists, and otherwise falls back to the
+  generic combat-exploration loop.
 - `QGE_NOESIS_ACTIONS_FILE`: optional Noesis action file. When present, the
   harness translates each line into Quake console commands instead of using
   the built-in plan. Supported actions include `forward`, `back`,
-  `turn-left`, `turn-right`, `strafe-left`, `strafe-right`, `attack`, `wait`,
-  `weapon`, and `give`, with an optional wait-count argument.
+  `turn-left`, `turn-right`, `strafe-left`, `strafe-right`, `jump`,
+  `center-view`, `advance-fire`, `circle-fire-left`, `circle-fire-right`,
+  `weapon-next`, `weapon-prev`, `attack`, `wait`, `weapon`, and `give`, with an
+  optional wait-count argument.
 - `QGE_NOESIS_START_WAIT`: command-buffer waits emitted before Noesis actions,
   default `16`. Set to `0` when the action file already includes its own
   startup delay.
