@@ -244,6 +244,201 @@ def summarize_log(path: Path) -> dict[str, Any]:
     }
 
 
+def value_at(data: dict[str, Any], *keys: str, default: Any = None) -> Any:
+    current: Any = data
+    for key in keys:
+        if not isinstance(current, dict):
+            return default
+        current = current.get(key)
+    return default if current is None else current
+
+
+def as_number(value: Any, default: float = 0.0) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def summarize_gameplay(path: Path | None) -> dict[str, Any]:
+    if not path:
+        return {
+            "path": "",
+            "exists": False,
+            "sample_count": 0,
+            "event_count": 0,
+        }
+    lines = read_lines(path)
+    if not path.is_file():
+        return {
+            "path": str(path),
+            "exists": False,
+            "sample_count": 0,
+            "event_count": 0,
+        }
+
+    samples: list[dict[str, Any]] = []
+    event_counts: Counter[str] = Counter()
+    parse_error_count = 0
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            item = json.loads(stripped)
+        except json.JSONDecodeError:
+            parse_error_count += 1
+            continue
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "sample":
+            samples.append(item)
+        elif item.get("type") == "event":
+            event_counts[str(item.get("kind") or "unknown")] += 1
+
+    if not samples:
+        return {
+            "path": str(path),
+            "exists": True,
+            "line_count": len([line for line in lines if line.strip()]),
+            "parse_error_count": parse_error_count,
+            "sample_count": 0,
+            "event_count": sum(event_counts.values()),
+            "event_counts": dict(sorted(event_counts.items())),
+        }
+
+    playable_samples = [
+        sample for sample in samples
+        if as_number(value_at(sample, "player", "health"), 0.0) > 0.0
+        or as_number(value_at(sample, "player", "weapon"), 0.0) != 0.0
+        or as_number(value_at(sample, "player", "items"), 0.0) != 0.0
+    ]
+    if not playable_samples:
+        playable_samples = samples
+    first = playable_samples[0]
+    last = playable_samples[-1]
+    health_values = [
+        as_number(value_at(sample, "player", "health"), 0.0)
+        for sample in playable_samples
+    ]
+    armor_values = [
+        as_number(value_at(sample, "player", "armor"), 0.0)
+        for sample in playable_samples
+    ]
+    damage_taken = max(
+        as_number(value_at(sample, "combat", "damage_taken_total"), 0.0)
+        for sample in playable_samples
+    )
+    damage_dealt = max(
+        as_number(value_at(
+            sample, "combat", "damage_dealt_inferred_total"), 0.0)
+        for sample in playable_samples
+    )
+    kills = max(
+        as_number(value_at(sample, "combat", "kills_total"), 0.0)
+        for sample in playable_samples
+    )
+    pickups = max(
+        as_number(value_at(sample, "pickup", "pickups_total"), 0.0)
+        for sample in playable_samples
+    )
+    attack_presses = max(
+        as_number(value_at(sample, "combat", "attack_presses_total"), 0.0)
+        for sample in playable_samples
+    )
+    weapon_changes = max(
+        as_number(value_at(sample, "pickup", "weapon_changes_total"), 0.0)
+        for sample in playable_samples
+    )
+    total_distance = max(
+        as_number(value_at(sample, "route", "total_distance"), 0.0)
+        for sample in playable_samples
+    )
+    max_displacement = max(
+        as_number(value_at(
+            sample, "route", "max_displacement_from_start"), 0.0)
+        for sample in playable_samples
+    )
+    leaf_transitions = max(
+        as_number(value_at(sample, "route", "leaf_transition_count"), 0.0)
+        for sample in playable_samples
+    )
+    visible_enemy_frames = sum(
+        1 for sample in playable_samples
+        if as_number(value_at(sample, "combat", "visible_enemy_count"), 0.0) > 0
+        or bool(value_at(sample, "combat", "nearest_enemy_visible", default=False))
+    )
+    enemy_contact_frames = sum(
+        1 for sample in playable_samples
+        if (
+            as_number(value_at(sample, "combat", "visible_enemy_count"), 0.0) > 0
+            or 0.0 <= as_number(
+                value_at(sample, "combat", "nearest_enemy_distance"), -1.0
+            ) <= 768.0
+        )
+    )
+    nearest_distances = [
+        as_number(value_at(sample, "combat", "nearest_enemy_distance"), -1.0)
+        for sample in playable_samples
+    ]
+    nearest_distances = [value for value in nearest_distances if value >= 0.0]
+    death_count = 0
+    prev_health = health_values[0]
+    for health in health_values[1:]:
+        if prev_health > 0.0 and health <= 0.0:
+            death_count += 1
+        prev_health = health
+
+    return {
+        "path": str(path),
+        "exists": True,
+        "line_count": len([line for line in lines if line.strip()]),
+        "parse_error_count": parse_error_count,
+        "sample_count": len(samples),
+        "playable_sample_count": len(playable_samples),
+        "event_count": sum(event_counts.values()),
+        "event_counts": dict(sorted(event_counts.items())),
+        "first_frame": int(as_number(first.get("frame"), 0.0)),
+        "last_frame": int(as_number(last.get("frame"), 0.0)),
+        "player": {
+            "health_start": health_values[0],
+            "health_end": health_values[-1],
+            "health_min": min(health_values),
+            "armor_start": armor_values[0],
+            "armor_end": armor_values[-1],
+            "armor_max": max(armor_values),
+            "death_count": death_count,
+            "survived": death_count == 0 and health_values[-1] > 0.0,
+            "start_origin": value_at(first, "player", "origin", default=[]),
+            "end_origin": value_at(last, "player", "origin", default=[]),
+        },
+        "route": {
+            "total_distance": total_distance,
+            "max_displacement_from_start": max_displacement,
+            "end_displacement_from_start": as_number(
+                value_at(last, "route", "displacement_from_start"), 0.0),
+            "leaf_transition_count": leaf_transitions,
+        },
+        "combat": {
+            "damage_taken": damage_taken,
+            "damage_dealt_inferred": damage_dealt,
+            "kills": kills,
+            "attack_press_count": attack_presses,
+            "visible_enemy_frames": visible_enemy_frames,
+            "enemy_contact_frames": enemy_contact_frames,
+            "nearest_enemy_distance_min": (
+                min(nearest_distances) if nearest_distances else None
+            ),
+        },
+        "pickup": {
+            "pickup_count": pickups,
+            "weapon_change_count": weapon_changes,
+        },
+    }
+
+
 def summarize_trace(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {
@@ -330,10 +525,13 @@ def build_gameplay_score(
     log: dict[str, Any],
     frames: dict[str, Any],
     trace: dict[str, Any],
+    gameplay: dict[str, Any],
     gates: dict[str, bool],
+    min_route_distance: float = 64.0,
 ) -> dict[str, Any]:
     press_counts = commands.get("press_counts") or {}
     delta = frames.get("delta") or {}
+    gameplay_present = int(gameplay.get("sample_count") or 0) >= 2
     mae_norm = delta.get("mae_rgb_normalized")
     if not isinstance(mae_norm, (int, float)):
         mae_norm = 0.0
@@ -366,42 +564,113 @@ def build_gameplay_score(
     else:
         phase_ratio = 1.0 if log.get("policy_done_present") else 0.0
 
-    breakdown = {
-        "harness_validity": (
-            20.0 if (
-                gates.get("required_inputs_present", False) and
-                gates.get("run_completed", True) and
-                gates.get("frames_present", True) and
-                gates.get("no_unknown_actions", False) and
-                gates.get("no_unknown_commands", False) and
-                commands.get("wait_clamped_count", 0) == 0
-            ) else 0.0
-        ),
-        "intent_richness": round(
-            score_component(actions.get("line_count", 0), 24.0, 4.0) +
-            score_component(actions.get("movement_action_count", 0), 10.0, 4.0) +
-            score_component(actions.get("combat_action_count", 0), 8.0, 4.0) +
-            score_component(commands.get("pressed_button_variety", 0), 8.0, 4.0) +
-            (4.0 if wait_ratio_ok else 0.0),
-            3,
-        ),
-        "observable_world_change": round(
-            score_component(frames.get("frame_count", 0), 12.0, 5.0) +
-            score_component(mae_norm, 0.12, 15.0),
-            3,
-        ),
-        "runtime_engagement": runtime_score,
-        "route_control": round(
-            score_component(actions.get("route_action_count", 0), 5.0, 6.0) +
-            score_component(route_button_count, 5.0, 4.0),
-            3,
-        ),
-        "runtime_plan_progress": round(
-            score_component(phase_ratio, 1.0, 7.0) +
-            (3.0 if log.get("policy_done_present") else 0.0),
-            3,
-        ),
-    }
+    if gameplay_present:
+        player = gameplay.get("player") or {}
+        route = gameplay.get("route") or {}
+        combat = gameplay.get("combat") or {}
+        pickup = gameplay.get("pickup") or {}
+        total_distance = float(route.get("total_distance") or 0.0)
+        max_displacement = float(route.get("max_displacement_from_start") or 0.0)
+        leaf_transitions = float(route.get("leaf_transition_count") or 0.0)
+        damage_dealt = float(combat.get("damage_dealt_inferred") or 0.0)
+        damage_taken = float(combat.get("damage_taken") or 0.0)
+        kills = float(combat.get("kills") or 0.0)
+        attack_presses = float(combat.get("attack_press_count") or 0.0)
+        visible_enemy_frames = float(combat.get("visible_enemy_frames") or 0.0)
+        contact_frames = float(combat.get("enemy_contact_frames") or 0.0)
+        pickups = float(pickup.get("pickup_count") or 0.0)
+        survived = bool(player.get("survived", False))
+        min_distance = max(float(min_route_distance), 1.0)
+        not_stuck = (
+            actions.get("movement_action_count", 0) <= 0 or
+            total_distance >= min(48.0, min_distance) or
+            max_displacement >= min(32.0, min_distance)
+        )
+
+        breakdown = {
+            "harness_validity": (
+                15.0 if (
+                    gates.get("required_inputs_present", False) and
+                    gates.get("run_completed", True) and
+                    gates.get("frames_present", True) and
+                    gates.get("no_unknown_actions", False) and
+                    gates.get("no_unknown_commands", False) and
+                    commands.get("wait_clamped_count", 0) == 0
+                ) else 0.0
+            ),
+            "intent_richness": round(
+                score_component(actions.get("line_count", 0), 24.0, 2.0) +
+                score_component(actions.get("movement_action_count", 0), 10.0, 2.0) +
+                score_component(actions.get("combat_action_count", 0), 8.0, 2.0) +
+                score_component(commands.get("pressed_button_variety", 0), 8.0, 2.0) +
+                (2.0 if wait_ratio_ok else 0.0),
+                3,
+            ),
+            "observable_world_change": round(
+                score_component(frames.get("frame_count", 0), 12.0, 4.0) +
+                score_component(mae_norm, 0.12, 6.0),
+                3,
+            ),
+            "runtime_engagement": round(runtime_score * 0.75, 3),
+            "route_progress": round(
+                score_component(total_distance, min_distance * 2.5, 7.0) +
+                score_component(max_displacement, min_distance, 7.0) +
+                score_component(leaf_transitions, 2.0, 3.0) +
+                score_component(pickups, 1.0, 3.0),
+                3,
+            ),
+            "combat_effectiveness": round(
+                score_component(attack_presses, 2.0, 4.0) +
+                score_component(visible_enemy_frames, 4.0, 4.0) +
+                score_component(contact_frames, 8.0, 3.0) +
+                score_component(damage_dealt, 40.0, 6.0) +
+                score_component(kills, 1.0, 3.0),
+                3,
+            ),
+            "survival_no_stuck": round(
+                (6.0 if survived else 0.0) +
+                (2.0 if not_stuck else 0.0) +
+                (2.0 if damage_taken <= 75.0 else 0.0),
+                3,
+            ),
+        }
+    else:
+        breakdown = {
+            "harness_validity": (
+                20.0 if (
+                    gates.get("required_inputs_present", False) and
+                    gates.get("run_completed", True) and
+                    gates.get("frames_present", True) and
+                    gates.get("no_unknown_actions", False) and
+                    gates.get("no_unknown_commands", False) and
+                    commands.get("wait_clamped_count", 0) == 0
+                ) else 0.0
+            ),
+            "intent_richness": round(
+                score_component(actions.get("line_count", 0), 24.0, 4.0) +
+                score_component(actions.get("movement_action_count", 0), 10.0, 4.0) +
+                score_component(actions.get("combat_action_count", 0), 8.0, 4.0) +
+                score_component(commands.get("pressed_button_variety", 0), 8.0, 4.0) +
+                (4.0 if wait_ratio_ok else 0.0),
+                3,
+            ),
+            "observable_world_change": round(
+                score_component(frames.get("frame_count", 0), 12.0, 5.0) +
+                score_component(mae_norm, 0.12, 15.0),
+                3,
+            ),
+            "runtime_engagement": runtime_score,
+            "route_control": round(
+                score_component(actions.get("route_action_count", 0), 5.0, 6.0) +
+                score_component(route_button_count, 5.0, 4.0),
+                3,
+            ),
+            "runtime_plan_progress": round(
+                score_component(phase_ratio, 1.0, 7.0) +
+                (3.0 if log.get("policy_done_present") else 0.0),
+                3,
+            ),
+        }
     raw_score = round(sum(breakdown.values()), 3)
     blocking_gates = sorted(key for key, value in gates.items() if not value)
     score = min(raw_score, 39.0) if blocking_gates else raw_score
@@ -429,8 +698,8 @@ def build_gameplay_score(
         "executed_phase_count": executed_phase_count,
         "generated_phase_count": generated_phase_count,
         "phase_execution_ratio": round(phase_ratio, 4),
-        "outcome_telemetry_present": False,
-        "outcome_telemetry_missing": [
+        "outcome_telemetry_present": gameplay_present,
+        "outcome_telemetry_missing": [] if gameplay_present else [
             "kills",
             "damage_dealt",
             "damage_taken",
@@ -455,11 +724,18 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
     manifest = load_manifest(args.manifest) if args.manifest else {}
     input_manifest = manifest.get("input") or {}
     run_manifest = manifest.get("run") or {}
+    noesis_manifest = manifest.get("noesis") or {}
     plan = args.plan or str(input_manifest.get("noesis_plan") or "")
     player = args.player or str(input_manifest.get("player") or "noesis")
+    gameplay_path = args.gameplay_outcomes
+    if gameplay_path is None:
+        manifest_gameplay = noesis_manifest.get("gameplay_outcomes_file") or ""
+        if manifest_gameplay:
+            gameplay_path = Path(str(manifest_gameplay))
     actions = summarize_actions(args.actions)
     commands = summarize_commands(args.commands)
     log = summarize_log(args.log)
+    gameplay = summarize_gameplay(gameplay_path)
     trace = summarize_trace(args.trace_summary) if args.trace_summary else {
         "path": "",
         "exists": False,
@@ -477,6 +753,8 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
     for input_path in (args.actions, args.commands, args.log):
         if not input_path.is_file():
             missing_inputs.append(str(input_path))
+    if args.gameplay_outcomes and not args.gameplay_outcomes.is_file():
+        missing_inputs.append(str(args.gameplay_outcomes))
     if args.trace_summary and not args.trace_summary.is_file():
         missing_inputs.append(str(args.trace_summary))
     if args.frames_dir and not args.frames_dir.is_dir():
@@ -515,7 +793,37 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
         gates["log_phase_markers_required"] = (
             log["phase_count"] >= args.min_log_phases
         )
-    gameplay_score = build_gameplay_score(actions, commands, log, frames, trace, gates)
+    if args.min_gameplay_samples > 0:
+        gates["gameplay_outcomes_required"] = (
+            gameplay.get("sample_count", 0) >= args.min_gameplay_samples
+        )
+    if gameplay.get("sample_count", 0) >= 2:
+        player_state = gameplay.get("player") or {}
+        route_state = gameplay.get("route") or {}
+        total_distance = float(route_state.get("total_distance") or 0.0)
+        max_displacement = float(
+            route_state.get("max_displacement_from_start") or 0.0)
+        gates["survived"] = bool(player_state.get("survived", False))
+        if actions.get("route_action_count", 0) > 0 and args.min_route_distance > 0:
+            gates["route_progress_required"] = (
+                total_distance >= args.min_route_distance or
+                max_displacement >= args.min_route_distance
+            )
+        if actions.get("movement_action_count", 0) > 0:
+            gates["not_stuck"] = (
+                total_distance >= min(48.0, args.min_route_distance) or
+                max_displacement >= min(32.0, args.min_route_distance)
+            )
+    gameplay_score = build_gameplay_score(
+        actions,
+        commands,
+        log,
+        frames,
+        trace,
+        gameplay,
+        gates,
+        args.min_route_distance,
+    )
 
     failures = [key for key, value in gates.items() if not value]
     status = "pass" if not failures else "blocked"
@@ -542,6 +850,7 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
             "actions": str(args.actions),
             "commands": str(args.commands),
             "log": str(args.log),
+            "gameplay_outcomes": str(gameplay_path) if gameplay_path else "",
             "trace_summary": str(args.trace_summary) if args.trace_summary else "",
             "frames_dir": str(args.frames_dir) if args.frames_dir else "",
             "missing_inputs": missing_inputs,
@@ -549,6 +858,7 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
         "actions": actions,
         "commands": commands,
         "log": log,
+        "gameplay": gameplay,
         "trace": trace,
         "frames": frames,
         "gameplay_score": gameplay_score,
@@ -564,6 +874,11 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
     trace = summary.get("trace") or {}
     run = summary.get("run") or {}
     log = summary.get("log") or {}
+    gameplay = summary.get("gameplay") or {}
+    gameplay_player = gameplay.get("player") or {}
+    gameplay_route = gameplay.get("route") or {}
+    gameplay_combat = gameplay.get("combat") or {}
+    gameplay_pickup = gameplay.get("pickup") or {}
     return [
         {
             "kind": "runtime_backend",
@@ -662,6 +977,60 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "path": str(summary_path),
         },
         {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_outcome_sample_count",
+            "value": gameplay.get("sample_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_total_distance",
+            "value": gameplay_route.get("total_distance", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_max_displacement",
+            "value": gameplay_route.get("max_displacement_from_start", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_survived",
+            "value": gameplay_player.get("survived", False),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_damage_dealt_inferred",
+            "value": gameplay_combat.get("damage_dealt_inferred", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_damage_taken",
+            "value": gameplay_combat.get("damage_taken", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_kills",
+            "value": gameplay_combat.get("kills", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_visible_enemy_frames",
+            "value": gameplay_combat.get("visible_enemy_frames", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_pickups",
+            "value": gameplay_pickup.get("pickup_count", 0),
+            "path": str(summary_path),
+        },
+        {
             "kind": "artifact",
             "name": "noesis_actions_file",
             "value": (summary.get("inputs") or {}).get("actions", ""),
@@ -671,6 +1040,12 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "kind": "artifact",
             "name": "noesis_commands_file",
             "value": (summary.get("inputs") or {}).get("commands", ""),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "artifact",
+            "name": "noesis_gameplay_outcomes_file",
+            "value": (summary.get("inputs") or {}).get("gameplay_outcomes", ""),
             "path": str(summary_path),
         },
         {
@@ -695,6 +1070,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--actions", type=Path, required=True)
     parser.add_argument("--commands", type=Path, required=True)
     parser.add_argument("--log", type=Path, required=True)
+    parser.add_argument("--gameplay-outcomes", type=Path)
     parser.add_argument("--trace-summary", type=Path)
     parser.add_argument("--frames-dir", type=Path)
     parser.add_argument("--plan", default="")
@@ -704,6 +1080,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--min-frames", type=int, default=0)
     parser.add_argument("--min-frame-mae", type=float)
     parser.add_argument("--min-log-phases", type=int, default=0)
+    parser.add_argument("--min-gameplay-samples", type=int, default=0)
+    parser.add_argument("--min-route-distance", type=float, default=64.0)
     parser.add_argument("--require-phase-markers", action="store_true")
     parser.add_argument("--require-combat", action="store_true")
     parser.add_argument("--out", type=Path)

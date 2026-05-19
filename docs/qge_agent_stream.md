@@ -121,13 +121,16 @@ The stream directory is intentionally simple and tail-friendly:
 - `input/noesis_commands.cfg`: translated Quake console commands emitted by
   the Noesis player.
 - `noesis/qge_noesis_summary.json`: gameplay-quality reducer for Noesis runs,
-  combining action/command traces, log health, captured frame motion, and trace
-  evidence into a pass/blocked/not-requested status plus
-  `noesis_gameplay_quality_score`. The score is a live-smoke proxy for clean,
-  active, varied gameplay evidence; it is not yet an outcome score for kills,
-  damage, pickups, or level progress.
+  combining action/command traces, engine outcome telemetry, log health,
+  captured frame motion, and trace evidence into a pass/blocked/not-requested
+  status plus `noesis_gameplay_quality_score`.
 - `noesis/qge_noesis_icc_evidence.json`: ICC evidence generated from the
   Noesis summary, including `agent_stream_noesis_status` inputs.
+- `noesis/gameplay_outcomes.ndjson`: engine-owned Noesis outcome sidecar
+  written once per host frame when `-qgestreamdir` is present. It records player
+  health, armor, ammo, weapon, origin/view angles, route distance, leaf
+  transitions, inferred damage dealt/taken, kills, pickups, attack presses, and
+  enemy proximity/visibility.
 - `logs/quantum_quake.log`: runtime console log mirrored into the stream.
 - `logs/open.log`: LaunchServices notes for macOS `open` mode.
 - `trace/qge_trace_summary.json`: JSON summary of `qge_trace.bin`, including
@@ -343,18 +346,23 @@ performance sidecar as evidence-only rather than
 `qge_publication_artifact_pack_complete`.
 
 `tools/qge_noesis_summary.py` reads the stream manifest, Noesis action trace,
-translated command buffer, runtime log, captured frames, and optional trace
-summary. The stream harness runs it after frame, performance, and trace
-collection, writes `qge_noesis_summary.json` and
+translated command buffer, runtime log, `noesis/gameplay_outcomes.ndjson`,
+captured frames, and optional trace summary. The stream harness runs it after
+frame, performance, trace, and gameplay-outcome collection, writes
+`qge_noesis_summary.json` and
 `qge_noesis_icc_evidence.json` under the capture directory, mirrors both files
 into `agent_stream/noesis/`, and records the result as
 `agent_stream_noesis_status` in the JSONL ICC sidecar. It also emits
 `noesis_route_action_count`, `noesis_gameplay_quality_score`,
-`noesis_gameplay_quality_grade`, `noesis_log_phase_count`, and
-`noesis_log_policy_done` ICC evidence. Set `QGE_NOESIS_MIN_LOG_PHASES` to
+`noesis_gameplay_quality_grade`, `noesis_log_phase_count`,
+`noesis_log_policy_done`, `noesis_gameplay_outcome_sample_count`,
+`noesis_gameplay_total_distance`, survival, damage, kill, pickup, and visible
+enemy evidence. Set `QGE_NOESIS_MIN_LOG_PHASES` to
 require that many `QGE_NOESIS_PHASE` markers to appear in the engine log, which
 is useful when proving that a longer route plan actually executed rather than
-only being generated. This reducer is evidence-only: a blocked Noesis quality
+only being generated. Set `QGE_NOESIS_MIN_GAMEPLAY_SAMPLES` and
+`QGE_NOESIS_MIN_ROUTE_DISTANCE` to require engine-owned state samples and route
+movement evidence. This reducer is evidence-only: a blocked Noesis quality
 summary does not turn a completed media stream into a process failure.
 
 `tools/quake_crash_watch.sh` uses the same Noesis player/provider contract for
@@ -520,6 +528,12 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   records the normalized cap as `input.noesis_max_wait`.
 - `QGE_NOESIS_MIN_LOG_PHASES`: minimum Noesis phase markers that must appear in
   the runtime log for the Noesis summary to pass, default `0`.
+- `QGE_NOESIS_MIN_GAMEPLAY_SAMPLES`: minimum engine-owned
+  `gameplay_outcomes.ndjson` samples required for the Noesis summary to pass,
+  default `2` in the stream harness.
+- `QGE_NOESIS_MIN_ROUTE_DISTANCE`: minimum route distance or displacement, in
+  Quake units, required for route-heavy Noesis plans once gameplay telemetry is
+  present, default `64`.
 - `QGE_NOESIS_CMD`: optional Noesis action provider command. When set, the
   harness runs it from `QGE_NOESIS_DIR` and translates its stdout action lines;
   this takes precedence over `QGE_NOESIS_ACTIONS_FILE` and the default

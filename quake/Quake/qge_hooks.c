@@ -133,6 +133,36 @@ static qboolean qge_vis_last_decision_valid = false;
 
 static qboolean qge_initialized = false;
 
+static FILE *qge_gameplay_outcome_file = NULL;
+static qboolean qge_gameplay_outcome_tried = false;
+static qboolean qge_gameplay_prev_valid = false;
+static char qge_gameplay_outcome_path[MAX_OSPATH];
+static char qge_gameplay_map[64];
+static vec3_t qge_gameplay_start_origin;
+static vec3_t qge_gameplay_prev_origin;
+static int qge_gameplay_prev_leaf = -1;
+static int qge_gameplay_samples = 0;
+static double qge_gameplay_total_distance = 0.0;
+static double qge_gameplay_max_displacement = 0.0;
+static int qge_gameplay_leaf_transitions = 0;
+static int qge_gameplay_damage_taken_total = 0;
+static int qge_gameplay_damage_dealt_total = 0;
+static int qge_gameplay_kills_total = 0;
+static int qge_gameplay_pickups_total = 0;
+static int qge_gameplay_weapon_changes_total = 0;
+static int qge_gameplay_attack_presses_total = 0;
+static int qge_gameplay_prev_health = 0;
+static int qge_gameplay_prev_armor = 0;
+static int qge_gameplay_prev_ammo_total = 0;
+static int qge_gameplay_prev_items = 0;
+static int qge_gameplay_prev_weapon = 0;
+static int qge_gameplay_prev_frags = 0;
+static int qge_gameplay_prev_killed_monsters = 0;
+static int qge_gameplay_prev_attack_active = 0;
+static int qge_gameplay_prev_damageable_alive = 0;
+static float *qge_gameplay_prev_edict_health = NULL;
+static int qge_gameplay_prev_edict_capacity = 0;
+
 static int QGE_RenderUpdateInterval(void);
 static qboolean QGE_RenderShouldUpdateFrame(void);
 
@@ -653,6 +683,400 @@ static int QGE_ServerTimeMsec(void)
 static qge_quantum_runtime_t *QGE_Runtime(void)
 {
 	return qge_get_quantum_runtime(qge_ctx);
+}
+
+static const char *QGE_GameplayStreamDir(void)
+{
+	int arg;
+	const char *env;
+
+	arg = COM_CheckParm("-qgestreamdir");
+	if (arg && arg < com_argc - 1 && com_argv[arg + 1] &&
+		com_argv[arg + 1][0])
+		return com_argv[arg + 1];
+
+	env = getenv("QGE_AGENT_STREAM_DIR");
+	if (env && env[0])
+		return env;
+	return NULL;
+}
+
+static void QGE_GameplayOutcomeResetState(void)
+{
+	qge_gameplay_prev_valid = false;
+	qge_gameplay_prev_leaf = -1;
+	qge_gameplay_samples = 0;
+	qge_gameplay_total_distance = 0.0;
+	qge_gameplay_max_displacement = 0.0;
+	qge_gameplay_leaf_transitions = 0;
+	qge_gameplay_damage_taken_total = 0;
+	qge_gameplay_damage_dealt_total = 0;
+	qge_gameplay_kills_total = 0;
+	qge_gameplay_pickups_total = 0;
+	qge_gameplay_weapon_changes_total = 0;
+	qge_gameplay_attack_presses_total = 0;
+	qge_gameplay_prev_health = 0;
+	qge_gameplay_prev_armor = 0;
+	qge_gameplay_prev_ammo_total = 0;
+	qge_gameplay_prev_items = 0;
+	qge_gameplay_prev_weapon = 0;
+	qge_gameplay_prev_frags = 0;
+	qge_gameplay_prev_killed_monsters = 0;
+	qge_gameplay_prev_attack_active = 0;
+	qge_gameplay_prev_damageable_alive = 0;
+}
+
+static qboolean QGE_GameplayEnsureEdictCapacity(int capacity)
+{
+	float *health;
+	size_t old_bytes;
+	size_t new_bytes;
+
+	if (capacity <= qge_gameplay_prev_edict_capacity)
+		return true;
+	if (capacity <= 0)
+		return false;
+
+	old_bytes = (size_t)qge_gameplay_prev_edict_capacity *
+				sizeof(qge_gameplay_prev_edict_health[0]);
+	new_bytes = (size_t)capacity *
+				sizeof(qge_gameplay_prev_edict_health[0]);
+	health = (float *)realloc(qge_gameplay_prev_edict_health, new_bytes);
+	if (!health)
+		return false;
+	qge_gameplay_prev_edict_health = health;
+	memset((byte *)qge_gameplay_prev_edict_health + old_bytes, 0,
+		   new_bytes - old_bytes);
+	qge_gameplay_prev_edict_capacity = capacity;
+	return true;
+}
+
+static void QGE_GameplayOutcomeInit(void)
+{
+	const char *stream_dir;
+	char path[MAX_OSPATH];
+
+	if (qge_gameplay_outcome_tried)
+		return;
+	qge_gameplay_outcome_tried = true;
+
+	stream_dir = QGE_GameplayStreamDir();
+	if (!stream_dir || !stream_dir[0])
+		return;
+
+	q_snprintf(qge_gameplay_outcome_path, sizeof(qge_gameplay_outcome_path),
+			   "%s/noesis/gameplay_outcomes.ndjson", stream_dir);
+	q_strlcpy(path, qge_gameplay_outcome_path, sizeof(path));
+	COM_CreatePath(path);
+	qge_gameplay_outcome_file = fopen(qge_gameplay_outcome_path, "w");
+	if (!qge_gameplay_outcome_file) {
+		Con_Printf("QGE gameplay outcome stream: failed to open %s\n",
+				   qge_gameplay_outcome_path);
+		return;
+	}
+
+	QGE_GameplayOutcomeResetState();
+	Con_Printf("QGE gameplay outcome stream: %s\n",
+			   qge_gameplay_outcome_path);
+}
+
+static qboolean QGE_GameplayIsDamageable(edict_t *ent, int entnum)
+{
+	if (!ent || ent->free || entnum <= 1 || ent->v.health <= 0.0f)
+		return false;
+	return (((int)ent->v.flags & FL_MONSTER) ||
+			ent->v.takedamage != DAMAGE_NO) ? true : false;
+}
+
+static int QGE_GameplayPlayerLeaf(edict_t *player)
+{
+	mleaf_t *leaf;
+
+	if (!player || !sv.worldmodel)
+		return -1;
+	leaf = Mod_PointInLeaf(player->v.origin, sv.worldmodel);
+	if (!leaf)
+		return -1;
+	return (int)(leaf - sv.worldmodel->leafs) - 1;
+}
+
+static qboolean QGE_GameplayEnemyVisible(edict_t *player, edict_t *enemy)
+{
+	trace_t trace;
+	vec3_t start;
+	vec3_t end;
+
+	if (!player || !enemy)
+		return false;
+
+	VectorAdd(player->v.origin, player->v.view_ofs, start);
+	end[0] = enemy->v.origin[0] + 0.5f * (enemy->v.mins[0] + enemy->v.maxs[0]);
+	end[1] = enemy->v.origin[1] + 0.5f * (enemy->v.mins[1] + enemy->v.maxs[1]);
+	end[2] = enemy->v.origin[2] + 0.5f * (enemy->v.mins[2] + enemy->v.maxs[2]);
+
+	trace = SV_Move(start, vec3_origin, vec3_origin, end, MOVE_NOMONSTERS,
+					player);
+	return (!trace.allsolid && !trace.startsolid &&
+			trace.fraction >= 0.99f) ? true : false;
+}
+
+static void QGE_GameplayOutcomeSample(void)
+{
+	edict_t *player;
+	vec3_t delta;
+	vec3_t from_start;
+	double frame_distance = 0.0;
+	double displacement = 0.0;
+	int health, armor, ammo, shells, nails, rockets, cells;
+	int items, weapon, frags, killed_monsters;
+	int leaf, damage_taken_delta, damage_dealt_delta, kills_delta;
+	int pickup_delta, item_bits_added, weapon_changed_delta;
+	int attack_active, attack_press_delta;
+	int ammo_total, combined, prev_combined;
+	int damageable_alive = 0;
+	int visible_enemy_count = 0;
+	int nearest_enemy_id = 0;
+	int nearest_enemy_visible = 0;
+	float nearest_enemy_distance = -1.0f;
+	float damageable_health;
+
+	if (!qge_initialized)
+		return;
+	QGE_GameplayOutcomeInit();
+	if (!qge_gameplay_outcome_file)
+		return;
+	if (!sv.active || sv.num_edicts <= 1)
+		return;
+
+	player = EDICT_NUM(1);
+	if (!player || player->free) {
+		QGE_GameplayOutcomeResetState();
+		return;
+	}
+	if (strcmp(qge_gameplay_map, sv.name) != 0) {
+		q_strlcpy(qge_gameplay_map, sv.name, sizeof(qge_gameplay_map));
+		QGE_GameplayOutcomeResetState();
+	}
+
+	health = (int)player->v.health;
+	armor = (int)player->v.armorvalue;
+	ammo = (int)player->v.currentammo;
+	shells = (int)player->v.ammo_shells;
+	nails = (int)player->v.ammo_nails;
+	rockets = (int)player->v.ammo_rockets;
+	cells = (int)player->v.ammo_cells;
+	items = (int)player->v.items;
+	weapon = (int)player->v.weapon;
+	frags = (int)player->v.frags;
+	if (!qge_gameplay_prev_valid && health <= 0 && items == 0 &&
+		weapon == 0)
+		return;
+	if (!QGE_GameplayEnsureEdictCapacity(sv.max_edicts + 1))
+		return;
+
+	killed_monsters = pr_global_struct ?
+		(int)pr_global_struct->killed_monsters : 0;
+	leaf = QGE_GameplayPlayerLeaf(player);
+	ammo_total = shells + nails + rockets + cells;
+	attack_active = player->v.button0 != 0.0f ? 1 : 0;
+
+	damage_dealt_delta = 0;
+	for (int i = 2; i < sv.num_edicts; i++) {
+		edict_t *ent = EDICT_NUM(i);
+		if (!QGE_GameplayIsDamageable(ent, i)) {
+			if (i < qge_gameplay_prev_edict_capacity)
+				qge_gameplay_prev_edict_health[i] = 0.0f;
+			continue;
+		}
+
+		damageable_alive++;
+		damageable_health = ent->v.health;
+		if (qge_gameplay_prev_valid &&
+			i < qge_gameplay_prev_edict_capacity &&
+			qge_gameplay_prev_edict_health[i] > damageable_health)
+			damage_dealt_delta +=
+				(int)(qge_gameplay_prev_edict_health[i] -
+					  damageable_health + 0.5f);
+		qge_gameplay_prev_edict_health[i] = damageable_health;
+
+		if (((int)ent->v.flags & FL_MONSTER) && ent->v.health > 0.0f) {
+			float dist;
+
+			VectorSubtract(ent->v.origin, player->v.origin, delta);
+			dist = VectorLength(delta);
+			if (nearest_enemy_distance < 0.0f ||
+				dist < nearest_enemy_distance) {
+				nearest_enemy_distance = dist;
+				nearest_enemy_id = i;
+				nearest_enemy_visible =
+					QGE_GameplayEnemyVisible(player, ent) ? 1 : 0;
+			}
+			if (QGE_GameplayEnemyVisible(player, ent))
+				visible_enemy_count++;
+		}
+	}
+
+	damage_taken_delta = 0;
+	pickup_delta = 0;
+	item_bits_added = 0;
+	weapon_changed_delta = 0;
+	attack_press_delta = 0;
+	kills_delta = 0;
+	if (qge_gameplay_prev_valid) {
+		VectorSubtract(player->v.origin, qge_gameplay_prev_origin, delta);
+		frame_distance = VectorLength(delta);
+		qge_gameplay_total_distance += frame_distance;
+		if (leaf >= 0 && qge_gameplay_prev_leaf >= 0 &&
+			leaf != qge_gameplay_prev_leaf)
+			qge_gameplay_leaf_transitions++;
+
+		prev_combined = qge_gameplay_prev_health + qge_gameplay_prev_armor;
+		combined = health + armor;
+		if (combined < prev_combined)
+			damage_taken_delta = prev_combined - combined;
+		if (health > qge_gameplay_prev_health ||
+			armor > qge_gameplay_prev_armor ||
+			ammo_total > qge_gameplay_prev_ammo_total ||
+			(items & ~qge_gameplay_prev_items) != 0) {
+			pickup_delta = 1;
+			qge_gameplay_pickups_total++;
+		}
+		item_bits_added = items & ~qge_gameplay_prev_items;
+		if (weapon != qge_gameplay_prev_weapon) {
+			weapon_changed_delta = 1;
+			qge_gameplay_weapon_changes_total++;
+		}
+		if (attack_active && !qge_gameplay_prev_attack_active) {
+			attack_press_delta = 1;
+			qge_gameplay_attack_presses_total++;
+		}
+		if (killed_monsters > qge_gameplay_prev_killed_monsters)
+			kills_delta = killed_monsters - qge_gameplay_prev_killed_monsters;
+		else if (damageable_alive < qge_gameplay_prev_damageable_alive)
+			kills_delta = qge_gameplay_prev_damageable_alive -
+						  damageable_alive;
+	}
+	else {
+		VectorCopy(player->v.origin, qge_gameplay_start_origin);
+	}
+
+	VectorSubtract(player->v.origin, qge_gameplay_start_origin, from_start);
+	displacement = VectorLength(from_start);
+	if (displacement > qge_gameplay_max_displacement)
+		qge_gameplay_max_displacement = displacement;
+
+	qge_gameplay_damage_taken_total += damage_taken_delta;
+	qge_gameplay_damage_dealt_total += damage_dealt_delta;
+	qge_gameplay_kills_total += kills_delta;
+	qge_gameplay_samples++;
+
+	fprintf(qge_gameplay_outcome_file,
+		"{\"schema\":\"qge.gameplay_outcome.v0\",\"type\":\"sample\","
+		"\"frame\":%d,\"time_msec\":%d,\"map\":\"%s\","
+		"\"player\":{\"health\":%d,\"armor\":%d,\"armortype\":%.3f,"
+		"\"ammo\":%d,\"shells\":%d,\"nails\":%d,\"rockets\":%d,"
+		"\"cells\":%d,\"items\":%d,\"weapon\":%d,\"frags\":%d,"
+		"\"origin\":[%.3f,%.3f,%.3f],"
+		"\"angles\":[%.3f,%.3f,%.3f],"
+		"\"v_angle\":[%.3f,%.3f,%.3f],"
+		"\"onground\":%s,\"attack_active\":%s},"
+		"\"route\":{\"leaf\":%d,\"frame_distance\":%.3f,"
+		"\"total_distance\":%.3f,\"displacement_from_start\":%.3f,"
+		"\"max_displacement_from_start\":%.3f,"
+		"\"leaf_transition_count\":%d},"
+		"\"combat\":{\"damage_taken_delta\":%d,"
+		"\"damage_taken_total\":%d,"
+		"\"damage_dealt_inferred_delta\":%d,"
+		"\"damage_dealt_inferred_total\":%d,"
+		"\"kills_delta\":%d,\"kills_total\":%d,"
+		"\"killed_monsters\":%d,\"damageable_alive\":%d,"
+		"\"nearest_enemy_id\":%d,\"nearest_enemy_distance\":%.3f,"
+		"\"nearest_enemy_visible\":%s,\"visible_enemy_count\":%d,"
+		"\"attack_press_delta\":%d,\"attack_presses_total\":%d},"
+		"\"pickup\":{\"pickup_delta\":%d,\"pickups_total\":%d,"
+		"\"item_bits_added\":%d,\"weapon_changed_delta\":%d,"
+		"\"weapon_changes_total\":%d}}\n",
+		qge_frame_count, QGE_ServerTimeMsec(), sv.name,
+		health, armor, player->v.armortype,
+		ammo, shells, nails, rockets, cells, items, weapon, frags,
+		player->v.origin[0], player->v.origin[1], player->v.origin[2],
+		player->v.angles[0], player->v.angles[1], player->v.angles[2],
+		player->v.v_angle[0], player->v.v_angle[1], player->v.v_angle[2],
+		((int)player->v.flags & FL_ONGROUND) ? "true" : "false",
+		attack_active ? "true" : "false",
+		leaf, frame_distance, qge_gameplay_total_distance, displacement,
+		qge_gameplay_max_displacement, qge_gameplay_leaf_transitions,
+		damage_taken_delta, qge_gameplay_damage_taken_total,
+		damage_dealt_delta, qge_gameplay_damage_dealt_total,
+		kills_delta, qge_gameplay_kills_total,
+		killed_monsters, damageable_alive, nearest_enemy_id,
+		nearest_enemy_distance,
+		nearest_enemy_visible ? "true" : "false", visible_enemy_count,
+		attack_press_delta, qge_gameplay_attack_presses_total,
+		pickup_delta, qge_gameplay_pickups_total, item_bits_added,
+		weapon_changed_delta, qge_gameplay_weapon_changes_total);
+
+	if (damage_taken_delta > 0)
+		fprintf(qge_gameplay_outcome_file,
+			"{\"schema\":\"qge.gameplay_outcome.v0\",\"type\":\"event\","
+			"\"kind\":\"damage_taken\",\"frame\":%d,\"amount\":%d,"
+			"\"total\":%d}\n",
+			qge_frame_count, damage_taken_delta,
+			qge_gameplay_damage_taken_total);
+	if (damage_dealt_delta > 0)
+		fprintf(qge_gameplay_outcome_file,
+			"{\"schema\":\"qge.gameplay_outcome.v0\",\"type\":\"event\","
+			"\"kind\":\"damage_dealt_inferred\",\"frame\":%d,"
+			"\"amount\":%d,\"total\":%d}\n",
+			qge_frame_count, damage_dealt_delta,
+			qge_gameplay_damage_dealt_total);
+	if (kills_delta > 0)
+		fprintf(qge_gameplay_outcome_file,
+			"{\"schema\":\"qge.gameplay_outcome.v0\",\"type\":\"event\","
+			"\"kind\":\"kill_inferred\",\"frame\":%d,\"count\":%d,"
+			"\"total\":%d}\n",
+			qge_frame_count, kills_delta, qge_gameplay_kills_total);
+	if (pickup_delta > 0)
+		fprintf(qge_gameplay_outcome_file,
+			"{\"schema\":\"qge.gameplay_outcome.v0\",\"type\":\"event\","
+			"\"kind\":\"pickup_inferred\",\"frame\":%d,"
+			"\"item_bits_added\":%d,\"total\":%d}\n",
+			qge_frame_count, item_bits_added, qge_gameplay_pickups_total);
+	if (weapon_changed_delta > 0)
+		fprintf(qge_gameplay_outcome_file,
+			"{\"schema\":\"qge.gameplay_outcome.v0\",\"type\":\"event\","
+			"\"kind\":\"weapon_changed\",\"frame\":%d,"
+			"\"weapon\":%d,\"total\":%d}\n",
+			qge_frame_count, weapon, qge_gameplay_weapon_changes_total);
+	fflush(qge_gameplay_outcome_file);
+
+	VectorCopy(player->v.origin, qge_gameplay_prev_origin);
+	qge_gameplay_prev_leaf = leaf;
+	qge_gameplay_prev_health = health;
+	qge_gameplay_prev_armor = armor;
+	qge_gameplay_prev_ammo_total = ammo_total;
+	qge_gameplay_prev_items = items;
+	qge_gameplay_prev_weapon = weapon;
+	qge_gameplay_prev_frags = frags;
+	qge_gameplay_prev_killed_monsters = killed_monsters;
+	qge_gameplay_prev_attack_active = attack_active;
+	qge_gameplay_prev_damageable_alive = damageable_alive;
+	qge_gameplay_prev_valid = true;
+}
+
+static void QGE_GameplayOutcomeShutdown(void)
+{
+	if (qge_gameplay_outcome_file) {
+		fclose(qge_gameplay_outcome_file);
+		qge_gameplay_outcome_file = NULL;
+	}
+	free(qge_gameplay_prev_edict_health);
+	qge_gameplay_prev_edict_health = NULL;
+	qge_gameplay_prev_edict_capacity = 0;
+	qge_gameplay_outcome_tried = false;
+	qge_gameplay_outcome_path[0] = 0;
+	qge_gameplay_map[0] = 0;
+	QGE_GameplayOutcomeResetState();
 }
 
 static void QGE_TraceBackendGate(const char *phase)
@@ -2752,6 +3176,8 @@ void QGE_Shutdown(void)
 		Con_Printf("QGE: Average quantum render time: %.2f ms (%d frames)\n",
 				   qge_avg_frame_ms, qge_frame_count);
 
+	QGE_GameplayOutcomeShutdown();
+
 	if (qge_texture) {
 		glDeleteTextures(1, &qge_texture);
 		qge_texture = 0;
@@ -2913,6 +3339,7 @@ void QGE_FrameEnd(void)
 	QGE_PhysicsRefreshStats();
 	QGE_PhysicsUpdateProjectileAuthorityGate();
 	QGE_FrameSnapshotFinalize();
+	QGE_GameplayOutcomeSample();
 	qge_quantum_runtime_t *rt = QGE_Runtime();
 	if (rt) {
 		qge_state_probe_t probe;

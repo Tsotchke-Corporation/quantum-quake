@@ -43,6 +43,8 @@ noesis_actions_file="${QGE_NOESIS_ACTIONS_FILE:-}"
 noesis_start_wait="${QGE_NOESIS_START_WAIT:-16}"
 noesis_max_wait="${QGE_NOESIS_MAX_WAIT:-600}"
 noesis_min_log_phases="${QGE_NOESIS_MIN_LOG_PHASES:-0}"
+noesis_min_gameplay_samples="${QGE_NOESIS_MIN_GAMEPLAY_SAMPLES:-2}"
+noesis_min_route_distance="${QGE_NOESIS_MIN_ROUTE_DISTANCE:-64}"
 noesis_cmd="${QGE_NOESIS_CMD:-}"
 default_noesis_cmd="$repo_root/tools/noesis_quake_policy.sh"
 noesis_cmd_default=0
@@ -128,10 +130,14 @@ height="$(normalize_positive_int "$height" 600)"
 noesis_start_wait="$(normalize_nonnegative_int "$noesis_start_wait" 16)"
 noesis_max_wait="$(normalize_positive_int "$noesis_max_wait" 600)"
 noesis_min_log_phases="$(normalize_nonnegative_int "$noesis_min_log_phases" 0)"
+noesis_min_gameplay_samples="$(normalize_nonnegative_int "$noesis_min_gameplay_samples" 2)"
 fire_min_start_wait="$(normalize_nonnegative_int "$fire_min_start_wait" 48)"
 fire_min_frames="$(normalize_nonnegative_int "$fire_min_frames" 8)"
 frames="$(normalize_positive_int "$frames" 12)"
 waits_per_frame="$(normalize_positive_int "$waits_per_frame" 20)"
+case "$noesis_min_route_distance" in
+  ''|*[!0-9.]*|*.*.*|'.') noesis_min_route_distance="64" ;;
+esac
 case "$capture_wait_override" in
   ''|*[!0-9]*) capture_wait_override="" ;;
 esac
@@ -206,10 +212,12 @@ noesis_summary_file="$outdir/qge_noesis_summary.json"
 noesis_icc_file="$outdir/qge_noesis_icc_evidence.json"
 noesis_stdout_file="$outdir/qge_noesis_summary.txt"
 noesis_stderr_file="$outdir/qge_noesis_summary.err"
+noesis_gameplay_file="$outdir/gameplay_outcomes.ndjson"
 agent_perf_summary_file="$agent_perf_dir/qge_perf_summary.json"
 agent_perf_icc_file="$agent_perf_dir/qge_perf_icc_evidence.json"
 agent_noesis_summary_file="$agent_noesis_dir/qge_noesis_summary.json"
 agent_noesis_icc_file="$agent_noesis_dir/qge_noesis_icc_evidence.json"
+agent_noesis_gameplay_file="$agent_noesis_dir/gameplay_outcomes.ndjson"
 agent_trace_summary_file="$agent_trace_dir/qge_trace_summary.json"
 agent_trace_summary_stderr_file="$agent_trace_dir/qge_trace_summary.err"
 agent_input_actions_file="$agent_input_dir/noesis_actions.txt"
@@ -347,6 +355,8 @@ write_agent_manifest() {
     "noesis_start_wait": $noesis_start_wait,
     "noesis_max_wait": $noesis_max_wait,
     "noesis_min_log_phases": $noesis_min_log_phases,
+    "noesis_min_gameplay_samples": $noesis_min_gameplay_samples,
+    "noesis_min_route_distance": $(json_string "$noesis_min_route_distance"),
     "fire_test": $fire_test,
     "fire_min_start_wait": $fire_min_start_wait,
     "fire_min_frames": $fire_min_frames,
@@ -414,8 +424,10 @@ write_agent_manifest() {
     "status": $(json_string "$noesis_summary_status"),
     "summary_file": $(json_string "$agent_noesis_summary_file"),
     "icc_evidence_file": $(json_string "$agent_noesis_icc_file"),
+    "gameplay_outcomes_file": $(json_string "$agent_noesis_gameplay_file"),
     "capture_summary_file": $(json_string "$noesis_summary_file"),
-    "capture_icc_evidence_file": $(json_string "$noesis_icc_file")
+    "capture_icc_evidence_file": $(json_string "$noesis_icc_file"),
+    "capture_gameplay_outcomes_file": $(json_string "$noesis_gameplay_file")
   },
   "icc_evidence": $(json_string "$agent_icc_file"),
   "trace": $(json_string "$manifest_trace_file"),
@@ -483,6 +495,7 @@ write_agent_icc_evidence() {
     printf '{"kind":"artifact","name":"agent_perf_icc_evidence_file","value":%s,"path":%s}\n' "$(json_string "$agent_perf_icc_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_noesis_summary_file","value":%s,"path":%s}\n' "$(json_string "$agent_noesis_summary_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_noesis_icc_evidence_file","value":%s,"path":%s}\n' "$(json_string "$agent_noesis_icc_file")" "$(json_string "$agent_icc_file")"
+    printf '{"kind":"artifact","name":"agent_noesis_gameplay_outcomes_file","value":%s,"path":%s}\n' "$(json_string "$agent_noesis_gameplay_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_input_actions_file","value":%s,"path":%s}\n' "$(json_string "$agent_input_actions_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_input_commands_file","value":%s,"path":%s}\n' "$(json_string "$agent_input_commands_file")" "$(json_string "$agent_icc_file")"
     printf '{"kind":"artifact","name":"agent_video_frame_file","value":%s,"path":%s}\n' "$(json_string "$last_agent_frame")" "$(json_string "$agent_icc_file")"
@@ -533,6 +546,7 @@ write_noesis_summary() {
     --actions "$agent_input_actions_file"
     --commands "$agent_input_commands_file"
     --log "$agent_log_file"
+    --gameplay-outcomes "$agent_noesis_gameplay_file"
     --frames-dir "$agent_video_dir"
     --plan "$noesis_plan"
     --player "$stream_player"
@@ -541,6 +555,8 @@ write_noesis_summary() {
     --min-frames "$frames"
     --min-frame-mae 2.0
     --min-log-phases "$noesis_min_log_phases"
+    --min-gameplay-samples "$noesis_min_gameplay_samples"
+    --min-route-distance "$noesis_min_route_distance"
     --require-phase-markers
     --require-combat
     --out "$noesis_summary_file"
@@ -755,7 +771,7 @@ echo "Streaming Quantum Quake graphics diagnostics"
 echo "  outdir=$outdir"
 echo "  agent_stream=$agent_stream"
 echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter update_interval=$render_update_interval sprite_test=$sprite_test quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_physics_authoritative=$physics_authoritative quantum_particles=$particles_value quantum_ai=$ai_value quantum_vis=$vis_value"
-echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound snd_quantum=$sound_quantum_mode snd_quantum_source_authority=$sound_source_authority trace=$trace replay=$replay_trace replay_strict=$replay_strict fire_test=$fire_test fire_min_start_wait=$fire_min_start_wait fire_min_frames=$fire_min_frames scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_max_wait=$noesis_max_wait noesis_min_log_phases=$noesis_min_log_phases"
+echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound snd_quantum=$sound_quantum_mode snd_quantum_source_authority=$sound_source_authority trace=$trace replay=$replay_trace replay_strict=$replay_strict fire_test=$fire_test fire_min_start_wait=$fire_min_start_wait fire_min_frames=$fire_min_frames scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_max_wait=$noesis_max_wait noesis_min_log_phases=$noesis_min_log_phases noesis_min_gameplay_samples=$noesis_min_gameplay_samples noesis_min_route_distance=$noesis_min_route_distance"
 echo "QGE_AGENT_STREAM $agent_stream"
 
 print_log_updates() {
@@ -773,6 +789,7 @@ print_log_updates() {
 	      -e '/QGE registry /p' \
 	      -e '/QGE snapshot /p' \
 	      -e '/QGE physics frame=/p' \
+	      -e '/QGE gameplay outcome stream/p' \
 	      -e '/QGE trace /p' \
 	      -e '/QGE_NOESIS_/p' \
 	      -e '/Sound Initialization/p' \
@@ -1092,6 +1109,12 @@ sync_agent_frame_state
 collect_new_frames
 poll_agent_audio
 sync_agent_frame_state
+if [[ "$stream_player" == "noesis" && -s "$agent_noesis_gameplay_file" ]]; then
+  cp "$agent_noesis_gameplay_file" "$noesis_gameplay_file"
+  noesis_gameplay_line_count="$(wc -l < "$agent_noesis_gameplay_file" | tr -d ' ')"
+  agent_event "noesis_gameplay_outcomes" "$agent_noesis_gameplay_file" \
+    "lines=$noesis_gameplay_line_count"
+fi
 
 if [[ "$trace" == "1" ]]; then
   if [[ -s "$trace_file" ]]; then
@@ -1145,8 +1168,11 @@ Performance ICC evidence: $perf_icc_file
 Performance status: $perf_status
 Noesis summary: $noesis_summary_file
 Noesis ICC evidence: $noesis_icc_file
+Noesis gameplay outcomes: $noesis_gameplay_file
 Noesis status: $noesis_summary_status
 Noesis min log phases: $noesis_min_log_phases
+Noesis min gameplay samples: $noesis_min_gameplay_samples
+Noesis min route distance: $noesis_min_route_distance
 Agent stream: $agent_stream
 Agent manifest: $agent_manifest_file
 Agent events: $agent_events_file

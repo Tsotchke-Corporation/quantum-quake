@@ -383,6 +383,7 @@ class NoesisSummaryTests(unittest.TestCase):
             commands_path = input_dir / "noesis_commands.cfg"
             log_path = log_dir / "quantum_quake.log"
             trace_path = trace_dir / "qge_trace_summary.json"
+            gameplay_path = tmpdir / "gameplay_outcomes.ndjson"
             manifest_path = tmpdir / "manifest.json"
 
             actions_path.write_text(
@@ -459,6 +460,80 @@ class NoesisSummaryTests(unittest.TestCase):
                 "QGE_NOESIS_PHASE phase=e1m1_entry_clear\n",
                 encoding="utf-8",
             )
+            gameplay_path.write_text(
+                "\n".join(
+                    [
+                        json.dumps({
+                            "schema": "qge.gameplay_outcome.v0",
+                            "type": "sample",
+                            "frame": 1,
+                            "player": {
+                                "health": 100,
+                                "armor": 0,
+                                "origin": [0, 0, 0],
+                            },
+                            "route": {
+                                "total_distance": 0.0,
+                                "displacement_from_start": 0.0,
+                                "max_displacement_from_start": 0.0,
+                                "leaf_transition_count": 0,
+                            },
+                            "combat": {
+                                "damage_taken_total": 0,
+                                "damage_dealt_inferred_total": 0,
+                                "kills_total": 0,
+                                "attack_presses_total": 0,
+                                "visible_enemy_count": 0,
+                                "nearest_enemy_distance": 320.0,
+                                "nearest_enemy_visible": False,
+                            },
+                            "pickup": {
+                                "pickups_total": 0,
+                                "weapon_changes_total": 0,
+                            },
+                        }),
+                        json.dumps({
+                            "schema": "qge.gameplay_outcome.v0",
+                            "type": "sample",
+                            "frame": 6,
+                            "player": {
+                                "health": 94,
+                                "armor": 0,
+                                "origin": [128, 12, 0],
+                            },
+                            "route": {
+                                "total_distance": 148.0,
+                                "displacement_from_start": 128.6,
+                                "max_displacement_from_start": 128.6,
+                                "leaf_transition_count": 2,
+                            },
+                            "combat": {
+                                "damage_taken_total": 6,
+                                "damage_dealt_inferred_total": 18,
+                                "kills_total": 0,
+                                "attack_presses_total": 1,
+                                "visible_enemy_count": 1,
+                                "nearest_enemy_distance": 280.0,
+                                "nearest_enemy_visible": True,
+                            },
+                            "pickup": {
+                                "pickups_total": 1,
+                                "weapon_changes_total": 1,
+                            },
+                        }),
+                        json.dumps({
+                            "schema": "qge.gameplay_outcome.v0",
+                            "type": "event",
+                            "kind": "damage_dealt_inferred",
+                            "frame": 6,
+                            "amount": 18,
+                            "total": 18,
+                        }),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
             trace_path.write_text(
                 json.dumps({
                     "runtime_evidence": {
@@ -491,6 +566,9 @@ class NoesisSummaryTests(unittest.TestCase):
                         "player": "noesis",
                         "noesis_plan": "adaptive",
                     },
+                    "noesis": {
+                        "gameplay_outcomes_file": str(gameplay_path),
+                    },
                 }),
                 encoding="utf-8",
             )
@@ -500,6 +578,7 @@ class NoesisSummaryTests(unittest.TestCase):
                 actions=actions_path,
                 commands=commands_path,
                 log=log_path,
+                gameplay_outcomes=gameplay_path,
                 trace_summary=trace_path,
                 frames_dir=None,
                 plan="",
@@ -509,6 +588,8 @@ class NoesisSummaryTests(unittest.TestCase):
                 min_frames=0,
                 min_frame_mae=None,
                 min_log_phases=1,
+                min_gameplay_samples=2,
+                min_route_distance=64.0,
                 require_phase_markers=True,
                 require_combat=True,
             )
@@ -529,12 +610,19 @@ class NoesisSummaryTests(unittest.TestCase):
             self.assertTrue(summary["commands"]["player_done_present"])
             self.assertEqual(summary["commands"]["wait_clamped_count"], 1)
             self.assertEqual(summary["log"]["phase_count"], 1)
+            self.assertEqual(summary["gameplay"]["sample_count"], 2)
+            self.assertEqual(
+                summary["gameplay"]["route"]["total_distance"],
+                148.0,
+            )
+            self.assertTrue(summary["gameplay"]["player"]["survived"])
+            self.assertTrue(summary["quality_gates"]["route_progress_required"])
             self.assertEqual(summary["trace"]["ai_decision_count"], 7)
             self.assertGreaterEqual(summary["gameplay_score"]["score"], 35.0)
             self.assertEqual(summary["gameplay_score"]["executed_phase_count"], 1)
             self.assertEqual(
                 summary["gameplay_score"]["outcome_telemetry_present"],
-                False,
+                True,
             )
 
             icc = noesis_summary.build_icc_evidence(
@@ -553,6 +641,9 @@ class NoesisSummaryTests(unittest.TestCase):
             self.assertEqual(by_name["noesis_route_action_count"], 4)
             self.assertGreaterEqual(by_name["noesis_gameplay_quality_score"], 35.0)
             self.assertEqual(by_name["noesis_log_phase_count"], 1)
+            self.assertEqual(by_name["noesis_gameplay_outcome_sample_count"], 2)
+            self.assertEqual(by_name["noesis_gameplay_total_distance"], 148.0)
+            self.assertTrue(by_name["noesis_gameplay_survived"])
 
             commands_path.unlink()
             blocked = noesis_summary.build_summary(args)
