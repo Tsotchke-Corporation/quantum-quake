@@ -64,6 +64,33 @@ REP_NAMES = {
     11: "hybrid",
 }
 
+MEASURE_NAMES = {
+    0: "none",
+    1: "render_sample",
+    2: "vis_surface_set",
+    3: "projectile_impact",
+    4: "particle_position",
+    5: "audio_block",
+    6: "ai_action",
+    7: "rng_batch",
+    8: "material_phase",
+    9: "physics_collision",
+    10: "entanglement_collapse",
+}
+
+BOUNDARY_NAMES = {
+    0: "none",
+    1: "player_visible",
+    2: "collision",
+    3: "damage",
+    4: "audio_mix",
+    5: "ai_decision",
+    6: "network_serialize",
+    7: "save_or_demo",
+    8: "debug_measure",
+    9: "frame_boundary",
+}
+
 AI_ACTION_NAMES = {
     0: "idle",
     1: "patrol",
@@ -77,6 +104,7 @@ AI_ACTION_NAMES = {
 HEADER = struct.Struct("<IHHIIQQQQ")
 RECORD = struct.Struct("<HHIQ")
 ENTROPY = struct.Struct("<iiIIiIQQ")
+MEASUREMENT = struct.Struct("<IIIiiiI4xQddQQ")
 STATE_PROBE = struct.Struct("<iiIIiIQddddiiQ32s")
 FALLBACK = struct.Struct("<iiIIiid96s")
 AI_DECISION = struct.Struct("<iiiiiIIIQQQQiiddddd")
@@ -112,6 +140,12 @@ PROJECTILE_FLAGS = {
     "fallback_selected": 0x4000,
     "rollback_required": 0x8000,
     "physics_authoritative_cvar": 0x10000,
+    "branch_state": 0x20000,
+    "branch_observed": 0x40000,
+    "impact_measured": 0x80000,
+    "branch_selected_qge": 0x100000,
+    "branch_selected_impact": 0x200000,
+    "branch_decohered": 0x400000,
 }
 
 PROJECTILE_OFF_REASONS = {
@@ -181,6 +215,7 @@ def build_runtime_evidence(summary: dict) -> dict:
     projectile_gate = probe_by_label(probes, "projectile_authority_gate")
     projectile_writeback = probe_by_label(
         probes, "projectile_writeback_decision")
+    projectile_branch = probe_by_label(probes, "projectile_branch_state")
 
     audio_source_spatial_count = probe_count(
         probes, "audio_source_spatial", "audio")
@@ -198,6 +233,14 @@ def build_runtime_evidence(summary: dict) -> dict:
         probes, "projectile_authority_gate", "projectile")
     projectile_writeback_count = probe_count(
         probes, "projectile_writeback_decision", "projectile")
+    projectile_branch_count = probe_count(
+        probes, "projectile_branch_state", "projectile")
+    projectile_impact_measurement_count = sum(
+        int(measurement.get("count", 0) or 0)
+        for measurement in summary.get("measurements", [])
+        if measurement.get("domain") == "projectile"
+        and measurement.get("kind") == "projectile_impact"
+    )
 
     audio_flags = 0
     for probe in (audio_source_spatial, audio_source_frame,
@@ -216,6 +259,10 @@ def build_runtime_evidence(summary: dict) -> dict:
     if projectile_writeback:
         projectile_flags |= (
             int(projectile_writeback.get("flags_or", 0) or 0) & ~0xff
+        )
+    if projectile_branch:
+        projectile_flags |= (
+            int(projectile_branch.get("flags_or", 0) or 0) & ~0xff
         )
     projectile_off_reason_code = projectile_flags & 0xff
 
@@ -265,6 +312,8 @@ def build_runtime_evidence(summary: dict) -> dict:
             "ready": projectile_ready,
             "authority_gate_count": projectile_gate_count,
             "writeback_decision_count": projectile_writeback_count,
+            "branch_state_count": projectile_branch_count,
+            "impact_measurement_count": projectile_impact_measurement_count,
             "flags": flags_summary(projectile_flags, PROJECTILE_FLAGS),
             "flags_or": projectile_flags,
             "off_reason_code": projectile_off_reason_code,
@@ -280,6 +329,22 @@ def build_runtime_evidence(summary: dict) -> dict:
                 int(projectile_gate.get("active_basis_max", 0) or 0)
                 if projectile_gate else 0
             ),
+            "branch_basis_max": (
+                int(projectile_branch.get("active_basis_max", 0) or 0)
+                if projectile_branch else 0
+            ),
+            "branch_selected_probability_max": (
+                float(projectile_branch.get("max_probability_max", 0.0) or 0.0)
+                if projectile_branch else 0.0
+            ),
+            "branch_coherence_min": (
+                float(projectile_branch.get("coherence_min", 0.0) or 0.0)
+                if projectile_branch else 0.0
+            ),
+            "branch_coherence_max": (
+                float(projectile_branch.get("coherence_max", 0.0) or 0.0)
+                if projectile_branch else 0.0
+            ),
         },
     }
 
@@ -288,6 +353,7 @@ def parse_trace(path: str) -> dict:
     record_counts: Counter[str] = Counter()
     probe_groups: dict[tuple[str, str, str], dict] = {}
     entropy_groups: dict[tuple[str, str], dict] = {}
+    measurement_groups: dict[tuple[str, str, str], dict] = {}
     fallback_groups: dict[tuple[str, int, str], dict] = {}
     ai_decision_groups: dict[tuple[int, str], dict] = {}
     replay_health = {
@@ -360,6 +426,47 @@ def parse_trace(path: str) -> dict:
                 group["value_xor"] ^= value
                 if source_name == "replay":
                     replay_health["entropy_replay_events"] += 1
+                continue
+
+            if kind == 4 and payload_size == MEASUREMENT.size:
+                unpacked = MEASUREMENT.unpack(payload)
+                domain, measure_kind, boundary = unpacked[:3]
+                frame, _server_time, subject_id, flags = unpacked[3:7]
+                basis_index, probability, phase, entropy_offset, trace_id = unpacked[7:12]
+                domain_name = DOMAIN_NAMES.get(domain, f"domain_{domain}")
+                kind_name = MEASURE_NAMES.get(
+                    measure_kind, f"measure_{measure_kind}")
+                boundary_name = BOUNDARY_NAMES.get(
+                    boundary, f"boundary_{boundary}")
+                group = increment_group(
+                    measurement_groups,
+                    (domain_name, kind_name, boundary_name),
+                    {
+                        "domain": domain_name,
+                        "kind": kind_name,
+                        "boundary": boundary_name,
+                        "last_subject_id": subject_id,
+                        "flags_or": 0,
+                        "basis_xor": 0,
+                        "probability_max": probability,
+                        "phase_max": phase,
+                        "first_entropy_offset": entropy_offset,
+                        "last_entropy_offset": entropy_offset,
+                        "trace_id_xor": 0,
+                    },
+                    frame,
+                )
+                group["last_subject_id"] = subject_id
+                group["flags_or"] |= flags
+                group["basis_xor"] ^= basis_index
+                group["probability_max"] = max(
+                    group["probability_max"], probability)
+                group["phase_max"] = max(group["phase_max"], phase)
+                group["first_entropy_offset"] = min(
+                    group["first_entropy_offset"], entropy_offset)
+                group["last_entropy_offset"] = max(
+                    group["last_entropy_offset"], entropy_offset)
+                group["trace_id_xor"] ^= trace_id
                 continue
 
             if kind == 6 and payload_size == FALLBACK.size:
@@ -521,6 +628,7 @@ def parse_trace(path: str) -> dict:
         "records": dict(sorted(record_counts.items())),
         "sequence_errors": sequence_errors,
         "entropy_events": sorted(entropy_groups.values(), key=lambda item: (item["domain"], item["source"])),
+        "measurements": sorted(measurement_groups.values(), key=lambda item: (item["domain"], item["kind"], item["boundary"])),
         "fallback_events": sorted(fallback_groups.values(), key=lambda item: (item["domain"], item["reason_code"], item["message"])),
         "ai_decisions": sorted(ai_decision_groups.values(), key=lambda item: (item["enemy_id"], item["action"])),
         "replay_health": replay_health,
@@ -546,6 +654,17 @@ def print_text(summary: dict) -> None:
             f"requests={entropy['first_request_id']}..{entropy['last_request_id']} "
             f"offsets={entropy['first_entropy_offset']}..{entropy['last_entropy_offset']} "
             f"subject={entropy['last_subject_id']} value_xor=0x{entropy['value_xor']:x}"
+        )
+    for measurement in summary["measurements"]:
+        print(
+            "Measurement "
+            f"domain={measurement['domain']} kind={measurement['kind']} "
+            f"boundary={measurement['boundary']} count={measurement['count']} "
+            f"frames={measurement['first_frame']}..{measurement['last_frame']} "
+            f"subject={measurement['last_subject_id']} "
+            f"flags=0x{measurement['flags_or']:x} "
+            f"basis_xor=0x{measurement['basis_xor']:x} "
+            f"prob={measurement['probability_max']:.3f}"
         )
     for fallback in summary["fallback_events"]:
         print(

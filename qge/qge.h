@@ -706,6 +706,7 @@ void qge_transducer_free(qge_transducer_t* trans);
 #define QGE_PROJECTILE_AUTHORITY_DEFAULT_MIN_SHADOW_SAMPLES 3
 #define QGE_PROJECTILE_AUTHORITY_DEFAULT_AVG_SHADOW_ERROR_MAX 1.0f
 #define QGE_PROJECTILE_AUTHORITY_DEFAULT_MAX_SHADOW_ERROR_MAX 4.0f
+#define QGE_PROJECTILE_BRANCH_MAX 3
 
 typedef enum {
     QGE_PROJECTILE_AUTHORITY_OFF_NONE = 0,
@@ -746,6 +747,68 @@ typedef enum {
     QGE_PROJECTILE_WRITEBACK_CLASSIC = 0,
     QGE_PROJECTILE_WRITEBACK_QGE
 } qge_projectile_writeback_source_t;
+
+typedef enum {
+    QGE_PROJECTILE_BRANCH_CLASSIC_SHADOW = 0,
+    QGE_PROJECTILE_BRANCH_QGE_PREDICTION,
+    QGE_PROJECTILE_BRANCH_IMPACT_OBSERVATION
+} qge_projectile_branch_id_t;
+
+typedef enum {
+    QGE_PROJECTILE_BRANCH_FLAG_CLASSIC = 0x0001u,
+    QGE_PROJECTILE_BRANCH_FLAG_QGE = 0x0002u,
+    QGE_PROJECTILE_BRANCH_FLAG_IMPACT = 0x0004u,
+    QGE_PROJECTILE_BRANCH_FLAG_SELECTED = 0x0008u,
+    QGE_PROJECTILE_BRANCH_FLAG_OBSERVED = 0x0010u,
+    QGE_PROJECTILE_BRANCH_FLAG_DECOHERED = 0x0020u
+} qge_projectile_branch_flag_t;
+
+typedef struct {
+    qge_projectile_branch_id_t id;
+    uint32_t flags;
+    qge_vec3_t origin;
+    qge_vec3_t velocity;
+    float weight;
+    float phase;
+    float decoherence;
+    qge_observation_boundary_t boundary;
+    int impact_entity_id;
+    float impact_fraction;
+} qge_projectile_branch_t;
+
+typedef struct {
+    int entity_id;
+    qge_projectile_authority_telemetry_t telemetry;
+    qge_vec3_t classic_origin;
+    qge_vec3_t classic_velocity;
+    qge_vec3_t qge_origin;
+    qge_vec3_t qge_velocity;
+    qge_vec3_t impact_origin;
+    qge_vec3_t impact_normal;
+    int impact_entity_id;
+    float impact_fraction;
+    bool has_impact;
+    qge_observation_boundary_t boundary;
+} qge_projectile_branch_request_t;
+
+typedef struct {
+    int entity_id;
+    int branch_count;
+    int selected_branch_index;
+    qge_projectile_branch_id_t selected_branch_id;
+    qge_projectile_branch_t branches[QGE_PROJECTILE_BRANCH_MAX];
+    qge_vec3_t selected_origin;
+    qge_vec3_t selected_velocity;
+    float total_weight;
+    float max_weight;
+    float selected_probability;
+    float coherence;
+    float decoherence;
+    bool observed;
+    bool impact_measured;
+    uint64_t state_hash;
+    qge_observation_boundary_t boundary;
+} qge_projectile_branch_state_t;
 
 typedef struct {
     int entity_id;
@@ -797,6 +860,15 @@ qge_projectile_authority_state_t qge_projectile_authority_evaluate(
 qge_projectile_writeback_decision_t qge_projectile_writeback_evaluate(
     const qge_projectile_authority_gate_t* gate,
     const qge_projectile_writeback_request_t* request);
+
+/**
+ * Evaluate a bounded projectile branch state without mutating Quake state. The
+ * state exposes classic shadow, QGE prediction, and optional impact-observation
+ * branches with normalized weights and deterministic selection metadata.
+ */
+qge_projectile_branch_state_t qge_projectile_branch_state_evaluate(
+    const qge_projectile_authority_gate_t* gate,
+    const qge_projectile_branch_request_t* request);
 
 /**
  * Stable string for a projectile authority-off reason.

@@ -224,6 +224,277 @@ static float qge_vec3_length(qge_vec3_t v) {
     return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
 }
 
+static float qge_clamp_unit_float(float value) {
+    if (!isfinite(value) || value < 0.0f) {
+        return 0.0f;
+    }
+    if (value > 1.0f) {
+        return 1.0f;
+    }
+    return value;
+}
+
+static float qge_safe_positive_float(float value, float fallback) {
+    if (!isfinite(value) || value <= 0.0f) {
+        return fallback;
+    }
+    return value;
+}
+
+static uint64_t qge_projectile_hash_step(uint64_t hash, uint64_t value) {
+    hash ^= value + 0x9e3779b97f4a7c15ULL + (hash << 6) + (hash >> 2);
+    return hash;
+}
+
+static uint64_t qge_projectile_hash_float(uint64_t hash, float value) {
+    uint32_t bits;
+
+    if (!isfinite(value)) {
+        value = 0.0f;
+    }
+    memcpy(&bits, &value, sizeof(bits));
+    return qge_projectile_hash_step(hash, (uint64_t)bits);
+}
+
+static uint64_t qge_projectile_hash_vec3(uint64_t hash, qge_vec3_t value) {
+    hash = qge_projectile_hash_float(hash, value.x);
+    hash = qge_projectile_hash_float(hash, value.y);
+    hash = qge_projectile_hash_float(hash, value.z);
+    return hash;
+}
+
+static qge_vec3_t qge_reflect_velocity(qge_vec3_t velocity,
+                                       qge_vec3_t normal) {
+    qge_vec3_t reflected = velocity;
+    float normal_length = qge_vec3_length(normal);
+    float dot;
+
+    if (normal_length <= 0.0001f) {
+        return reflected;
+    }
+
+    normal.x /= normal_length;
+    normal.y /= normal_length;
+    normal.z /= normal_length;
+    dot = velocity.x * normal.x + velocity.y * normal.y + velocity.z * normal.z;
+    reflected.x = velocity.x - 2.0f * dot * normal.x;
+    reflected.y = velocity.y - 2.0f * dot * normal.y;
+    reflected.z = velocity.z - 2.0f * dot * normal.z;
+    return reflected;
+}
+
+static void qge_projectile_branch_add(
+    qge_projectile_branch_state_t* state,
+    qge_projectile_branch_id_t id,
+    uint32_t flags,
+    qge_vec3_t origin,
+    qge_vec3_t velocity,
+    float weight,
+    float phase,
+    float decoherence,
+    qge_observation_boundary_t boundary,
+    int impact_entity_id,
+    float impact_fraction) {
+    qge_projectile_branch_t* branch;
+
+    if (!state || state->branch_count >= QGE_PROJECTILE_BRANCH_MAX) {
+        return;
+    }
+
+    branch = &state->branches[state->branch_count++];
+    memset(branch, 0, sizeof(*branch));
+    branch->id = id;
+    branch->flags = flags;
+    branch->origin = origin;
+    branch->velocity = velocity;
+    branch->weight = qge_safe_positive_float(weight, 0.0f);
+    branch->phase = isfinite(phase) ? phase : 0.0f;
+    branch->decoherence = qge_clamp_unit_float(decoherence);
+    branch->boundary = boundary;
+    branch->impact_entity_id = impact_entity_id;
+    branch->impact_fraction = isfinite(impact_fraction) ? impact_fraction : 0.0f;
+}
+
+qge_projectile_branch_state_t qge_projectile_branch_state_evaluate(
+    const qge_projectile_authority_gate_t* gate,
+    const qge_projectile_branch_request_t* request) {
+    qge_projectile_authority_gate_t normalized_gate =
+        normalize_projectile_authority_gate(gate);
+    qge_projectile_branch_state_t state;
+    qge_projectile_authority_state_t authority_state;
+    qge_projectile_authority_telemetry_t telemetry;
+    float avg_limit;
+    float max_limit;
+    float avg_error_norm;
+    float max_error_norm;
+    float warmup_confidence;
+    float sample_confidence;
+    float classic_weight;
+    float qge_weight;
+    float impact_weight;
+    float total_weight;
+    int selected_index;
+    uint64_t hash;
+
+    memset(&state, 0, sizeof(state));
+    state.selected_branch_index = -1;
+    state.selected_branch_id = QGE_PROJECTILE_BRANCH_CLASSIC_SHADOW;
+    state.coherence = 0.0f;
+    state.decoherence = 1.0f;
+    state.total_weight = 0.0f;
+    state.max_weight = 0.0f;
+
+    if (!request) {
+        return state;
+    }
+
+    telemetry = request->telemetry;
+    authority_state = qge_projectile_authority_evaluate(
+        &normalized_gate, &telemetry);
+    state.entity_id = request->entity_id;
+    state.boundary = request->boundary;
+    state.observed = request->boundary != QGE_OBSERVE_NONE;
+    state.impact_measured =
+        request->has_impact &&
+        (request->boundary == QGE_OBSERVE_COLLISION ||
+         request->boundary == QGE_OBSERVE_DAMAGE);
+
+    avg_limit = qge_safe_positive_float(normalized_gate.avg_shadow_error_max,
+                                        1.0f);
+    max_limit = qge_safe_positive_float(normalized_gate.max_shadow_error_max,
+                                        1.0f);
+    avg_error_norm = qge_clamp_unit_float(telemetry.avg_shadow_error /
+                                          avg_limit);
+    max_error_norm = qge_clamp_unit_float(telemetry.max_shadow_error /
+                                          max_limit);
+    warmup_confidence = normalized_gate.warmup_frames_required > 0 ?
+        qge_clamp_unit_float((float)telemetry.warmup_frames /
+                             (float)normalized_gate.warmup_frames_required) :
+        1.0f;
+    sample_confidence = normalized_gate.min_shadow_samples > 0 ?
+        qge_clamp_unit_float((float)telemetry.shadow_samples /
+                             (float)normalized_gate.min_shadow_samples) :
+        1.0f;
+
+    state.coherence = qge_clamp_unit_float(
+        1.0f - (avg_error_norm * 0.35f) - (max_error_norm * 0.65f));
+    state.decoherence = 1.0f - state.coherence;
+
+    classic_weight = 1.0f + state.decoherence;
+    qge_weight = 0.0f;
+    if (telemetry.requested) {
+        qge_weight = 0.15f * state.coherence *
+                     (0.25f + 0.75f * warmup_confidence) *
+                     (0.25f + 0.75f * sample_confidence);
+        if (authority_state.ready) {
+            qge_weight = 1.5f + state.coherence +
+                         (0.5f * sample_confidence);
+            classic_weight = 0.5f + state.decoherence;
+        }
+    }
+
+    qge_projectile_branch_add(
+        &state,
+        QGE_PROJECTILE_BRANCH_CLASSIC_SHADOW,
+        QGE_PROJECTILE_BRANCH_FLAG_CLASSIC,
+        request->classic_origin,
+        request->classic_velocity,
+        classic_weight,
+        0.0f,
+        state.decoherence,
+        request->boundary,
+        request->impact_entity_id,
+        request->impact_fraction);
+    qge_projectile_branch_add(
+        &state,
+        QGE_PROJECTILE_BRANCH_QGE_PREDICTION,
+        QGE_PROJECTILE_BRANCH_FLAG_QGE,
+        request->qge_origin,
+        request->qge_velocity,
+        qge_weight,
+        state.coherence,
+        state.decoherence,
+        request->boundary,
+        request->impact_entity_id,
+        request->impact_fraction);
+
+    if (request->has_impact) {
+        impact_weight = state.impact_measured ? 4.0f : 1.0f;
+        qge_projectile_branch_add(
+            &state,
+            QGE_PROJECTILE_BRANCH_IMPACT_OBSERVATION,
+            QGE_PROJECTILE_BRANCH_FLAG_IMPACT,
+            request->impact_origin,
+            qge_reflect_velocity(request->qge_velocity,
+                                 request->impact_normal),
+            impact_weight,
+            1.0f,
+            state.impact_measured ? 1.0f : state.decoherence,
+            request->boundary,
+            request->impact_entity_id,
+            request->impact_fraction);
+    }
+
+    total_weight = 0.0f;
+    for (int i = 0; i < state.branch_count; i++) {
+        total_weight += state.branches[i].weight;
+    }
+    if (total_weight <= 0.0f) {
+        total_weight = 1.0f;
+        if (state.branch_count > 0) {
+            state.branches[0].weight = 1.0f;
+        }
+    }
+
+    selected_index = 0;
+    for (int i = 0; i < state.branch_count; i++) {
+        state.branches[i].weight /= total_weight;
+        if (state.branches[i].weight > state.max_weight) {
+            state.max_weight = state.branches[i].weight;
+            selected_index = i;
+        }
+    }
+
+    if (state.impact_measured) {
+        for (int i = 0; i < state.branch_count; i++) {
+            if (state.branches[i].id ==
+                QGE_PROJECTILE_BRANCH_IMPACT_OBSERVATION) {
+                selected_index = i;
+                break;
+            }
+        }
+    }
+
+    state.selected_branch_index = selected_index;
+    if (selected_index >= 0 && selected_index < state.branch_count) {
+        qge_projectile_branch_t* selected = &state.branches[selected_index];
+        selected->flags |= QGE_PROJECTILE_BRANCH_FLAG_SELECTED;
+        if (state.observed) {
+            selected->flags |= QGE_PROJECTILE_BRANCH_FLAG_OBSERVED;
+        }
+        if (state.decoherence > 0.25f) {
+            selected->flags |= QGE_PROJECTILE_BRANCH_FLAG_DECOHERED;
+        }
+        state.selected_branch_id = selected->id;
+        state.selected_origin = selected->origin;
+        state.selected_velocity = selected->velocity;
+        state.selected_probability = selected->weight;
+    }
+    state.total_weight = 1.0f;
+
+    hash = 0x5151455f50524a31ULL; /* QQE_PRJ1 */
+    hash = qge_projectile_hash_step(hash, (uint64_t)(uint32_t)state.entity_id);
+    hash = qge_projectile_hash_step(hash, (uint64_t)state.branch_count);
+    hash = qge_projectile_hash_step(hash, (uint64_t)state.selected_branch_id);
+    hash = qge_projectile_hash_step(hash, (uint64_t)state.boundary);
+    hash = qge_projectile_hash_vec3(hash, state.selected_origin);
+    hash = qge_projectile_hash_vec3(hash, state.selected_velocity);
+    hash = qge_projectile_hash_float(hash, state.selected_probability);
+    hash = qge_projectile_hash_float(hash, state.coherence);
+    state.state_hash = hash;
+    return state;
+}
+
 qge_projectile_writeback_decision_t qge_projectile_writeback_evaluate(
     const qge_projectile_authority_gate_t* gate,
     const qge_projectile_writeback_request_t* request) {

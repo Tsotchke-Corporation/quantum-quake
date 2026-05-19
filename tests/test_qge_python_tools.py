@@ -570,6 +570,20 @@ class TraceSummaryTests(unittest.TestCase):
             )
             payloads = [
                 (8, ai_payload),
+                (4, trace_summary.MEASUREMENT.pack(
+                    2,
+                    3,
+                    2,
+                    8,
+                    108,
+                    313,
+                    0x6F0600,
+                    2,
+                    0.875,
+                    1.0,
+                    0x55,
+                    0x12345678,
+                )),
                 (5, state_probe_payload(
                     2, 4, 9, 3, 0x0A, b"audio_source_spatial")),
                 (5, state_probe_payload(
@@ -583,6 +597,9 @@ class TraceSummaryTests(unittest.TestCase):
                 (5, state_probe_payload(
                     7, 2, 7, 313, 0x13F00, b"projectile_writeback_decision",
                     0, 0)),
+                (5, state_probe_payload(
+                    8, 2, 4, 313, 0x6F0600, b"projectile_branch_state",
+                    3, 2)),
             ]
             data = trace_summary.HEADER.pack(
                 trace_summary.TRACE_MAGIC,
@@ -607,6 +624,7 @@ class TraceSummaryTests(unittest.TestCase):
 
             parsed = trace_summary.parse_trace(str(trace_path))
             evidence = parsed["runtime_evidence"]
+            self.assertEqual(parsed["records"]["measurement"], 1)
             self.assertTrue(evidence["single_trace_ready"])
             self.assertEqual(evidence["ai"]["decision_count"], 1)
             self.assertEqual(evidence["audio"]["source_spatial_count"], 1)
@@ -635,6 +653,11 @@ class TraceSummaryTests(unittest.TestCase):
                 evidence["projectile"]["writeback_decision_count"],
                 1,
             )
+            self.assertEqual(evidence["projectile"]["branch_state_count"], 1)
+            self.assertEqual(
+                evidence["projectile"]["impact_measurement_count"],
+                1,
+            )
             self.assertTrue(
                 evidence["projectile"]["flags"]["authority_ready"]
             )
@@ -649,6 +672,18 @@ class TraceSummaryTests(unittest.TestCase):
             )
             self.assertTrue(
                 evidence["projectile"]["flags"]["physics_authoritative_cvar"]
+            )
+            self.assertTrue(evidence["projectile"]["flags"]["branch_state"])
+            self.assertTrue(evidence["projectile"]["flags"]["branch_observed"])
+            self.assertTrue(evidence["projectile"]["flags"]["impact_measured"])
+            self.assertTrue(
+                evidence["projectile"]["flags"]["branch_selected_impact"]
+            )
+            self.assertTrue(evidence["projectile"]["flags"]["branch_decohered"])
+            self.assertEqual(evidence["projectile"]["branch_basis_max"], 3)
+            self.assertEqual(
+                evidence["projectile"]["branch_selected_probability_max"],
+                1.0,
             )
             self.assertEqual(evidence["projectile"]["off_reason"], "none")
 

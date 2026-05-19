@@ -291,6 +291,8 @@ typedef struct {
 	vec3_t last_impact_normal;
 	float shadow_error;
 	float max_shadow_error;
+	qboolean branch_state_valid;
+	qge_projectile_branch_state_t branch_state;
 } qge_phys_object_t;
 
 static qge_scene_surface_t qge_scene_surfaces[QGE_MAX_SCENE_SURFACES];
@@ -359,14 +361,28 @@ static int qge_phys_projectile_writeback_decisions = 0;
 static int qge_phys_projectile_writeback_selected = 0;
 static int qge_phys_projectile_writeback_fallback = 0;
 static int qge_phys_projectile_writeback_rollback = 0;
+static int qge_phys_projectile_branch_states = 0;
+static int qge_phys_projectile_impact_measurements = 0;
 
 static void QGE_PhysicsRefreshStats(void);
 static qboolean QGE_PhysicsProjectileAuthorityRequested(void);
 static void QGE_PhysicsUpdateProjectileAuthorityGate(void);
+static void QGE_TraceProjectileBranchState(
+	qge_quantum_runtime_t *rt,
+	const qge_projectile_branch_state_t *state);
+static void QGE_TraceProjectileImpactMeasurement(
+	qge_quantum_runtime_t *rt,
+	const qge_projectile_branch_state_t *state);
 static void QGE_TraceProjectileAuthorityGate(qge_quantum_runtime_t *rt);
 static void QGE_TraceProjectileWritebackDecision(
 	qge_quantum_runtime_t *rt,
 	const qge_projectile_writeback_decision_t *decision);
+static qboolean QGE_PhysicsBuildProjectileBranchRequest(
+	qge_phys_object_t *obj,
+	edict_t *ent,
+	qge_observation_boundary_t boundary,
+	const trace_t *trace,
+	qge_projectile_branch_request_t *request);
 static qboolean QGE_PhysicsBuildProjectileWritebackRequest(
 	qge_phys_object_t *obj,
 	edict_t *ent,
@@ -2538,6 +2554,8 @@ void QGE_FrameBegin(void)
 	qge_phys_projectile_writeback_selected = 0;
 	qge_phys_projectile_writeback_fallback = 0;
 	qge_phys_projectile_writeback_rollback = 0;
+	qge_phys_projectile_branch_states = 0;
+	qge_phys_projectile_impact_measurements = 0;
 }
 
 static void QGE_TraceWorldSurfaceSubmissionProbe(qge_quantum_runtime_t *rt)
@@ -2643,6 +2661,7 @@ void QGE_FrameEnd(void)
 				"projectile_authority=%s reason=%s requested=%d authoritative_cvar=%d warmup=%d samples=%d "
 				"pshadow_avg=%.2f pshadow_max=%.2f ready_frames=%d off_frames=%d "
 				"pwriteback decisions=%d selected=%d fallback=%d rollback=%d "
+				"branch_states=%d impact_measurements=%d "
 				"qparticle_spawns=%d active_qparticles=%d frame_ms=%.2f\n",
 				qge_frame_count, qge_phys_toss_count, qge_phys_projectile_count,
 				qge_phys_impact_count, qge_phys_active_objects,
@@ -2665,6 +2684,8 @@ void QGE_FrameEnd(void)
 				qge_phys_projectile_writeback_selected,
 				qge_phys_projectile_writeback_fallback,
 				qge_phys_projectile_writeback_rollback,
+				qge_phys_projectile_branch_states,
+				qge_phys_projectile_impact_measurements,
 				qge_phys_particle_spawns,
 				active_particles, elapsed);
 	}
@@ -7705,6 +7726,93 @@ static uint32_t QGE_PhysicsProjectileWritebackFlags(
 	return flags;
 }
 
+static uint32_t QGE_PhysicsProjectileBranchFlags(
+	const qge_projectile_branch_state_t *state)
+{
+	uint32_t flags = 0u;
+
+	if (!state)
+		return flags;
+
+	if (quantum_physics.value >= 0.5f)
+		flags |= 0x200u;
+	if (quantum_projectiles.value >= 0.5f)
+		flags |= 0x400u;
+	if (quantum_physics_authoritative.value >= 0.5f)
+		flags |= 0x10000u;
+	if (state->branch_count > 0)
+		flags |= 0x20000u;
+	if (state->observed)
+		flags |= 0x40000u;
+	if (state->impact_measured)
+		flags |= 0x80000u;
+	if (state->selected_branch_id == QGE_PROJECTILE_BRANCH_QGE_PREDICTION)
+		flags |= 0x100000u;
+	if (state->selected_branch_id == QGE_PROJECTILE_BRANCH_IMPACT_OBSERVATION)
+		flags |= 0x200000u;
+	if (state->decoherence > 0.25f)
+		flags |= 0x400000u;
+	return flags;
+}
+
+static void QGE_TraceProjectileBranchState(
+	qge_quantum_runtime_t *rt,
+	const qge_projectile_branch_state_t *state)
+{
+	qge_state_probe_t probe;
+
+	if (!rt || !state || state->branch_count <= 0)
+		return;
+
+	memset(&probe, 0, sizeof(probe));
+	probe.frame = qge_frame_count;
+	probe.server_time_msec = QGE_ServerTimeMsec();
+	probe.domain = QGE_DOMAIN_PROJECTILE;
+	probe.representation = QGE_REP_CA_MPS;
+	probe.subject_id = state->entity_id;
+	probe.flags = QGE_PhysicsProjectileBranchFlags(state);
+	probe.state_hash = state->state_hash;
+	probe.entropy = state->decoherence;
+	probe.coherence = state->coherence;
+	probe.max_probability = state->selected_probability;
+	probe.total_probability = state->total_weight;
+	probe.active_basis_count = state->branch_count;
+	probe.qubit_count =
+		qge_quantum_qubits_for_basis_count((uint64_t)state->branch_count);
+	probe.memory_bytes = sizeof(*state);
+	strlcpy(probe.label, "projectile_branch_state", sizeof(probe.label));
+	qge_quantum_record_probe(rt, &probe);
+}
+
+static void QGE_TraceProjectileImpactMeasurement(
+	qge_quantum_runtime_t *rt,
+	const qge_projectile_branch_state_t *state)
+{
+	qge_measurement_event_t event;
+	const qge_projectile_branch_t *branch = NULL;
+
+	if (!rt || !state || !state->impact_measured ||
+		state->selected_branch_index < 0 ||
+		state->selected_branch_index >= state->branch_count)
+		return;
+
+	branch = &state->branches[state->selected_branch_index];
+	memset(&event, 0, sizeof(event));
+	event.domain = QGE_DOMAIN_PROJECTILE;
+	event.kind = QGE_MEASURE_PROJECTILE_IMPACT;
+	event.boundary = state->boundary;
+	event.frame = qge_frame_count;
+	event.server_time_msec = QGE_ServerTimeMsec();
+	event.subject_id = state->entity_id;
+	event.flags = QGE_PhysicsProjectileBranchFlags(state);
+	event.basis_index = (uint64_t)state->selected_branch_id;
+	event.probability = state->selected_probability;
+	event.phase = branch->phase;
+	event.entropy_offset = state->state_hash;
+	event.trace_id = state->state_hash;
+	qge_quantum_record_measurement(rt, &event);
+}
+
 static void QGE_TraceProjectileWritebackDecision(
 	qge_quantum_runtime_t *rt,
 	const qge_projectile_writeback_decision_t *decision)
@@ -7898,10 +8006,12 @@ static void QGE_PhysicsMirrorEdictState(qge_phys_object_t *obj,
 		qge_phys_mirrored_water++;
 }
 
-static qboolean QGE_PhysicsBuildProjectileWritebackRequest(
+static qboolean QGE_PhysicsBuildProjectileBranchRequest(
 	qge_phys_object_t *obj,
 	edict_t *ent,
-	qge_projectile_writeback_request_t *request)
+	qge_observation_boundary_t boundary,
+	const trace_t *trace,
+	qge_projectile_branch_request_t *request)
 {
 	if (!request || !ent || (int)ent->v.movetype != MOVETYPE_FLYMISSILE)
 		return false;
@@ -7928,6 +8038,48 @@ static qboolean QGE_PhysicsBuildProjectileWritebackRequest(
 		request->qge_origin = request->classic_origin;
 		request->qge_velocity = request->classic_velocity;
 	}
+	request->boundary = boundary;
+	if (trace) {
+		request->has_impact = true;
+		request->impact_origin = QGE_VecFromQuake(trace->endpos);
+		request->impact_normal = QGE_VecFromQuake(trace->plane.normal);
+		request->impact_entity_id =
+			trace->ent ? NUM_FOR_EDICT(trace->ent) : 0;
+		request->impact_fraction = trace->fraction;
+	}
+	return true;
+}
+
+static qboolean QGE_PhysicsBuildProjectileWritebackRequest(
+	qge_phys_object_t *obj,
+	edict_t *ent,
+	qge_projectile_writeback_request_t *request)
+{
+	qge_projectile_branch_request_t branch_request;
+	qge_projectile_branch_state_t branch_state;
+
+	if (!request || !ent || (int)ent->v.movetype != MOVETYPE_FLYMISSILE)
+		return false;
+	if (!QGE_PhysicsBuildProjectileBranchRequest(
+			obj, ent, QGE_OBSERVE_FRAME_BOUNDARY, NULL, &branch_request))
+		return false;
+
+	branch_state =
+		qge_projectile_branch_state_evaluate(NULL, &branch_request);
+	if (obj) {
+		obj->branch_state = branch_state;
+		obj->branch_state_valid = true;
+	}
+	qge_phys_projectile_branch_states++;
+	QGE_TraceProjectileBranchState(QGE_Runtime(), &branch_state);
+
+	memset(request, 0, sizeof(*request));
+	request->entity_id = branch_request.entity_id;
+	request->telemetry = branch_request.telemetry;
+	request->classic_origin = branch_request.classic_origin;
+	request->classic_velocity = branch_request.classic_velocity;
+	request->qge_origin = branch_state.selected_origin;
+	request->qge_velocity = branch_state.selected_velocity;
 	return true;
 }
 
@@ -8006,6 +8158,8 @@ void QGE_PhysicsTrackToss(edict_t *ent, float dt)
 void QGE_PhysicsTrackImpact(edict_t *ent, const trace_t *trace)
 {
 	qge_phys_object_t *obj;
+	qge_projectile_branch_request_t branch_request;
+	qge_projectile_branch_state_t branch_state;
 
 	if (!trace || !QGE_PhysicsShouldTrack(ent))
 		return;
@@ -8025,6 +8179,24 @@ void QGE_PhysicsTrackImpact(edict_t *ent, const trace_t *trace)
 		VectorCopy(trace->endpos, obj->last_impact_origin);
 		VectorCopy(trace->plane.normal, obj->last_impact_normal);
 		qge_phys_mirrored_impacts++;
+	}
+
+	if ((int)ent->v.movetype == MOVETYPE_FLYMISSILE &&
+		QGE_PhysicsBuildProjectileBranchRequest(
+			obj, ent, QGE_OBSERVE_COLLISION, trace, &branch_request)) {
+		branch_state =
+			qge_projectile_branch_state_evaluate(NULL, &branch_request);
+		if (obj) {
+			obj->branch_state = branch_state;
+			obj->branch_state_valid = true;
+		}
+		qge_phys_projectile_branch_states++;
+		QGE_TraceProjectileBranchState(QGE_Runtime(), &branch_state);
+		if (branch_state.impact_measured) {
+			qge_phys_projectile_impact_measurements++;
+			QGE_TraceProjectileImpactMeasurement(QGE_Runtime(),
+												 &branch_state);
+		}
 	}
 
 	if (qge_particles && quantum_particles.value >= 0.5f) {

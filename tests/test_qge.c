@@ -2933,6 +2933,141 @@ static int test_physics_projectile_writeback_ready(void) {
            fabsf(decision.velocity_delta_length - sqrtf(21.0f)) < 0.001f;
 }
 
+static qge_projectile_branch_request_t
+make_projectile_branch_request(bool requested) {
+    qge_projectile_writeback_request_t writeback =
+        make_projectile_writeback_request(requested);
+    qge_projectile_branch_request_t request;
+
+    memset(&request, 0, sizeof(request));
+    request.entity_id = writeback.entity_id;
+    request.telemetry = writeback.telemetry;
+    request.classic_origin = writeback.classic_origin;
+    request.classic_velocity = writeback.classic_velocity;
+    request.qge_origin = writeback.qge_origin;
+    request.qge_velocity = writeback.qge_velocity;
+    request.boundary = QGE_OBSERVE_FRAME_BOUNDARY;
+    return request;
+}
+
+static float projectile_branch_weight_sum(
+    const qge_projectile_branch_state_t* state) {
+    float sum = 0.0f;
+
+    for (int i = 0; i < state->branch_count; i++) {
+        sum += state->branches[i].weight;
+    }
+    return sum;
+}
+
+static int test_physics_projectile_branch_disabled_classic(void) {
+    qge_projectile_authority_gate_t gate = make_projectile_writeback_gate();
+    qge_projectile_branch_request_t request =
+        make_projectile_branch_request(false);
+    qge_projectile_branch_state_t state =
+        qge_projectile_branch_state_evaluate(&gate, &request);
+
+    printf("\n    Projectile branch disabled: branches=%d selected=%d p=%.3f\n    ",
+           state.branch_count,
+           (int)state.selected_branch_id,
+           state.selected_probability);
+
+    return state.branch_count == 2 &&
+           state.selected_branch_id ==
+               QGE_PROJECTILE_BRANCH_CLASSIC_SHADOW &&
+           state.selected_branch_index == 0 &&
+           fabsf(projectile_branch_weight_sum(&state) - 1.0f) < 0.001f &&
+           fabsf(state.branches[0].weight - 1.0f) < 0.001f &&
+           fabsf(state.branches[1].weight) < 0.001f &&
+           state.selected_probability > 0.999f &&
+           !state.impact_measured;
+}
+
+static int test_physics_projectile_branch_ready_selects_qge(void) {
+    qge_projectile_authority_gate_t gate = make_projectile_writeback_gate();
+    qge_projectile_branch_request_t request =
+        make_projectile_branch_request(true);
+    qge_projectile_branch_state_t state =
+        qge_projectile_branch_state_evaluate(&gate, &request);
+
+    printf("\n    Projectile branch ready: branches=%d selected=%d p=%.3f c=%.3f\n    ",
+           state.branch_count,
+           (int)state.selected_branch_id,
+           state.selected_probability,
+           state.coherence);
+
+    return state.branch_count == 2 &&
+           state.selected_branch_id ==
+               QGE_PROJECTILE_BRANCH_QGE_PREDICTION &&
+           fabsf(projectile_branch_weight_sum(&state) - 1.0f) < 0.001f &&
+           state.selected_probability > 0.5f &&
+           state.coherence > 0.5f &&
+           fabsf(state.selected_origin.x - request.qge_origin.x) < 0.001f &&
+           fabsf(state.selected_origin.y - request.qge_origin.y) < 0.001f &&
+           fabsf(state.selected_velocity.y - request.qge_velocity.y) < 0.001f;
+}
+
+static int test_physics_projectile_branch_decoherence_classic(void) {
+    qge_projectile_authority_gate_t gate = make_projectile_writeback_gate();
+    qge_projectile_branch_request_t request =
+        make_projectile_branch_request(true);
+    qge_projectile_branch_state_t state;
+
+    request.telemetry.avg_shadow_error = 2.0f;
+    request.telemetry.max_shadow_error = 8.0f;
+    state = qge_projectile_branch_state_evaluate(&gate, &request);
+
+    printf("\n    Projectile branch decoherence: selected=%d d=%.3f c=%.3f\n    ",
+           (int)state.selected_branch_id,
+           state.decoherence,
+           state.coherence);
+
+    return state.branch_count == 2 &&
+           state.selected_branch_id ==
+               QGE_PROJECTILE_BRANCH_CLASSIC_SHADOW &&
+           state.decoherence > 0.9f &&
+           state.coherence < 0.1f &&
+           fabsf(projectile_branch_weight_sum(&state) - 1.0f) < 0.001f &&
+           state.branches[0].weight > state.branches[1].weight;
+}
+
+static int test_physics_projectile_branch_collision_observation(void) {
+    qge_projectile_authority_gate_t gate = make_projectile_writeback_gate();
+    qge_projectile_branch_request_t request =
+        make_projectile_branch_request(true);
+    qge_projectile_branch_state_t state;
+
+    request.boundary = QGE_OBSERVE_COLLISION;
+    request.has_impact = true;
+    request.impact_entity_id = 7;
+    request.impact_fraction = 0.625f;
+    request.impact_origin.x = 12.0f;
+    request.impact_origin.y = 22.0f;
+    request.impact_origin.z = 32.0f;
+    request.impact_normal.x = 0.0f;
+    request.impact_normal.y = 0.0f;
+    request.impact_normal.z = 1.0f;
+
+    state = qge_projectile_branch_state_evaluate(&gate, &request);
+
+    printf("\n    Projectile branch impact: branches=%d selected=%d p=%.3f\n    ",
+           state.branch_count,
+           (int)state.selected_branch_id,
+           state.selected_probability);
+
+    return state.branch_count == 3 &&
+           state.observed &&
+           state.impact_measured &&
+           state.boundary == QGE_OBSERVE_COLLISION &&
+           state.selected_branch_id ==
+               QGE_PROJECTILE_BRANCH_IMPACT_OBSERVATION &&
+           fabsf(projectile_branch_weight_sum(&state) - 1.0f) < 0.001f &&
+           fabsf(state.selected_origin.x - request.impact_origin.x) < 0.001f &&
+           fabsf(state.selected_origin.y - request.impact_origin.y) < 0.001f &&
+           fabsf(state.selected_velocity.z + request.qge_velocity.z) < 0.001f &&
+           state.state_hash != 0;
+}
+
 /* ============================================================================
  * Main
  * ============================================================================ */
@@ -3049,6 +3184,10 @@ int main(void) {
     TEST(physics_projectile_writeback_warmup);
     TEST(physics_projectile_writeback_threshold_failure);
     TEST(physics_projectile_writeback_ready);
+    TEST(physics_projectile_branch_disabled_classic);
+    TEST(physics_projectile_branch_ready_selects_qge);
+    TEST(physics_projectile_branch_decoherence_classic);
+    TEST(physics_projectile_branch_collision_observation);
     printf("\n");
 
     /* Cleanup modules */

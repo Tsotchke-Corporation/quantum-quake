@@ -247,7 +247,44 @@ Verified with:
 
 ## Next Worker Tasks
 
-- Start the next implementation slice from the swarm review: replace the
-  classical previous-prediction projectile writeback source with a real
-  projectile branch-state authority module that tracks branch weights,
-  decoherence, observation boundaries, and projectile impact measurements.
+## Wave 9 Checkpoint
+
+- Projectile branch-state module: QGE now has a pure projectile branch-state
+  evaluator with explicit classic-shadow, QGE-prediction, and
+  impact-observation branches. The evaluator normalizes branch weights,
+  computes coherence/decoherence from shadow error telemetry, records the
+  observation boundary, and returns selected branch origin/velocity metadata
+  without mutating Quake state.
+- Writeback source upgrade: projectile writeback now fills its QGE candidate
+  from the selected branch-state output instead of directly replaying the
+  previous prediction slot. Authority still requires the conservative
+  projectile gate plus the explicit authority request.
+- Runtime evidence: projectile traces now include `projectile_branch_state`
+  probes with CA-MPS representation, branch basis count, selected probability,
+  coherence/decoherence, and branch-selection flags. Collision observations
+  record `QGE_MEASURE_PROJECTILE_IMPACT` measurement events at the collision
+  boundary.
+- Summary coverage: `qge_trace_summary.py` now decodes generic measurement
+  records and exposes projectile branch-state counts plus projectile impact
+  measurement counts in `runtime_evidence.projectile`.
+
+Verified with:
+
+- `python3 -m py_compile tools/qge_trace_summary.py tests/test_qge_python_tools.py`
+- `python3 tests/test_qge_python_tools.py`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B qge_hooks.o`
+- `make test_qge`
+- `./bin/test_qge`
+- `bash tests/test_qge_trace_summary.sh`
+- `make test_qge_python_tools`
+
+## Next Worker Tasks
+
+- Move projectile branch selection to the pre-impact boundary inside
+  `SV_PushEntity()`, after `SV_Move()` returns and before `trace.endpos` is
+  copied into the entity or `SV_Impact()` runs. This is the point where QGE can
+  select the measured collision branch before classic touch/damage/free side
+  effects execute.
+- Add an audited pre-impact hook that can adjust the selected branch endpos and
+  velocity only when `quantum_physics_authoritative` is enabled, branch-state
+  confidence is ready, and trace evidence records the selected branch.
