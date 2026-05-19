@@ -247,6 +247,9 @@ Verified with:
 
 ## Next Worker Tasks
 
+- No Wave 12 projectile/runtime evidence task remains in this queue. Use
+  `icc assistant-status` for the next cross-task goal suggestion.
+
 ## Wave 9 Checkpoint
 
 - Projectile branch-state module: QGE now has a pure projectile branch-state
@@ -361,6 +364,11 @@ Verified with:
   telemetry now reaches `classic2d=0`, `own_hud=1`, `own_console=1`,
   `suppressed2d>0`, and `fallback_reason=none` after the first completed 2D
   frame, with `render_2d_overlay` trace probes.
+- Replay/demo boundary evidence: projectile branch, writeback, and
+  collision-oracle choices now emit `save_or_demo` measurement records with
+  selected basis/source, probability, and stable trace hashes. The trace summary
+  exposes per-kind save/demo counts so saved runs can prove which projectile
+  choices must be replayed deterministically.
 
 Verified with:
 
@@ -377,6 +385,3 @@ Verified with:
 - `QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=4 QGE_STREAM_WAIT_FRAMES=12 QGE_STREAM_TRACE=1 QGE_STREAM_SOUND=0 QGE_STREAM_AI=1 QGE_STREAM_VIS=2 QGE_RENDER=2 QGE_RENDER_UPDATE_INTERVAL=1 QGE_PHYSICS=1 QGE_PROJECTILES=1 QGE_PHYSICS_AUTHORITATIVE=1 QGE_STREAM_TIMEOUT_SECONDS=90 QGE_STREAM_LAUNCH=direct bash tools/quake_graphics_stream.sh`
 
 ## Next Worker Tasks
-
-- Add replay/demo boundary evidence for projectile branch and collision-oracle
-  choices so selected traces are deterministic across saved runs.

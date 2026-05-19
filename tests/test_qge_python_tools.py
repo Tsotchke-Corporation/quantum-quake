@@ -584,6 +584,48 @@ class TraceSummaryTests(unittest.TestCase):
                     0x55,
                     0x12345678,
                 )),
+                (4, trace_summary.MEASUREMENT.pack(
+                    2,
+                    11,
+                    7,
+                    7,
+                    109,
+                    313,
+                    0x50013F00,
+                    1,
+                    1.0,
+                    1.0,
+                    0x101,
+                    0x202,
+                )),
+                (4, trace_summary.MEASUREMENT.pack(
+                    2,
+                    12,
+                    7,
+                    8,
+                    110,
+                    313,
+                    0x106F0600,
+                    1,
+                    1.0,
+                    1.0,
+                    0x303,
+                    0x404,
+                )),
+                (4, trace_summary.MEASUREMENT.pack(
+                    2,
+                    13,
+                    7,
+                    9,
+                    111,
+                    313,
+                    0x33933F00,
+                    1,
+                    1.0,
+                    1.0,
+                    0x505,
+                    0x606,
+                )),
                 (5, state_probe_payload(
                     2, 4, 9, 3, 0x0A, b"audio_source_spatial")),
                 (5, state_probe_payload(
@@ -629,7 +671,7 @@ class TraceSummaryTests(unittest.TestCase):
 
             parsed = trace_summary.parse_trace(str(trace_path))
             evidence = parsed["runtime_evidence"]
-            self.assertEqual(parsed["records"]["measurement"], 1)
+            self.assertEqual(parsed["records"]["measurement"], 4)
             self.assertTrue(evidence["single_trace_ready"])
             self.assertEqual(evidence["ai"]["decision_count"], 1)
             self.assertEqual(evidence["audio"]["source_spatial_count"], 1)
@@ -705,6 +747,28 @@ class TraceSummaryTests(unittest.TestCase):
             self.assertTrue(evidence["projectile"]["flags"]["oracle_qge_trace"])
             self.assertTrue(evidence["projectile"]["flags"]["oracle_no_impact"])
             self.assertEqual(evidence["projectile"]["preimpact_oracle_count"], 1)
+            self.assertEqual(
+                evidence["projectile"]["save_demo_boundary_count"],
+                3,
+            )
+            self.assertEqual(
+                evidence["projectile"]["save_demo_writeback_count"],
+                1,
+            )
+            self.assertEqual(evidence["projectile"]["save_demo_branch_count"], 1)
+            self.assertEqual(
+                evidence["projectile"]["save_demo_collision_oracle_count"],
+                1,
+            )
+            self.assertTrue(
+                evidence["projectile"]["flags"]["save_demo_boundary"]
+            )
+            self.assertTrue(
+                evidence["projectile"]["flags"]["save_demo_writeback"]
+            )
+            self.assertTrue(
+                evidence["projectile"]["flags"]["save_demo_collision_oracle"]
+            )
             self.assertEqual(
                 evidence["projectile"]["preimpact_no_impact_count"],
                 1,

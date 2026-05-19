@@ -76,6 +76,9 @@ MEASURE_NAMES = {
     8: "material_phase",
     9: "physics_collision",
     10: "entanglement_collapse",
+    11: "projectile_writeback",
+    12: "projectile_branch",
+    13: "projectile_collision_oracle",
 }
 
 BOUNDARY_NAMES = {
@@ -153,6 +156,9 @@ PROJECTILE_FLAGS = {
     "oracle_no_impact": 0x2000000,
     "oracle_alternate_impact": 0x4000000,
     "oracle_classic_trace": 0x8000000,
+    "save_demo_boundary": 0x10000000,
+    "save_demo_collision_oracle": 0x20000000,
+    "save_demo_writeback": 0x40000000,
 }
 
 PROJECTILE_OFF_REASONS = {
@@ -253,6 +259,36 @@ def build_runtime_evidence(summary: dict) -> dict:
         if measurement.get("domain") == "projectile"
         and measurement.get("kind") == "projectile_impact"
     )
+    projectile_save_demo_measurements = [
+        measurement for measurement in summary.get("measurements", [])
+        if measurement.get("domain") == "projectile"
+        and measurement.get("boundary") == "save_or_demo"
+    ]
+    projectile_save_demo_count = sum(
+        int(measurement.get("count", 0) or 0)
+        for measurement in projectile_save_demo_measurements
+    )
+    projectile_save_demo_flags = 0
+    projectile_save_demo_trace_xor = 0
+    for measurement in projectile_save_demo_measurements:
+        projectile_save_demo_flags |= int(measurement.get("flags_or", 0) or 0)
+        projectile_save_demo_trace_xor ^= int(
+            measurement.get("trace_id_xor", 0) or 0)
+    projectile_writeback_save_demo_count = sum(
+        int(measurement.get("count", 0) or 0)
+        for measurement in projectile_save_demo_measurements
+        if measurement.get("kind") == "projectile_writeback"
+    )
+    projectile_branch_save_demo_count = sum(
+        int(measurement.get("count", 0) or 0)
+        for measurement in projectile_save_demo_measurements
+        if measurement.get("kind") == "projectile_branch"
+    )
+    projectile_collision_oracle_save_demo_count = sum(
+        int(measurement.get("count", 0) or 0)
+        for measurement in projectile_save_demo_measurements
+        if measurement.get("kind") == "projectile_collision_oracle"
+    )
 
     audio_flags = 0
     for probe in (audio_source_spatial, audio_source_frame,
@@ -281,6 +317,7 @@ def build_runtime_evidence(summary: dict) -> dict:
         projectile_flags |= (
             int(projectile_preimpact.get("flags_or", 0) or 0) & ~0xff
         )
+    projectile_flags |= projectile_save_demo_flags & ~0xff
     projectile_off_reason_flags = (
         int(projectile_gate.get("last_flags", projectile_flags) or 0)
         if projectile_gate else projectile_flags
@@ -355,6 +392,13 @@ def build_runtime_evidence(summary: dict) -> dict:
                 else 0
             ),
             "impact_measurement_count": projectile_impact_measurement_count,
+            "save_demo_boundary_count": projectile_save_demo_count,
+            "save_demo_writeback_count": projectile_writeback_save_demo_count,
+            "save_demo_branch_count": projectile_branch_save_demo_count,
+            "save_demo_collision_oracle_count": (
+                projectile_collision_oracle_save_demo_count
+            ),
+            "save_demo_trace_id_xor": projectile_save_demo_trace_xor,
             "flags": flags_summary(projectile_flags, PROJECTILE_FLAGS),
             "flags_or": projectile_flags,
             "off_reason_code": projectile_off_reason_code,

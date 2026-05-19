@@ -61,6 +61,12 @@ enough for projectile authority warmup, writeback, and pre-impact oracle trace
 records. Set either minimum to `0` only when intentionally testing a shorter
 input or capture path.
 
+Projectile branch, writeback, and collision-oracle selections also emit
+`save_or_demo` measurement records. These records carry the selected branch or
+oracle source, probability, and stable trace hash so a captured `qge_trace.bin`
+has explicit persistence-boundary evidence for replay/demo verification, not
+only frame-boundary probes.
+
 To exercise the sprite billboard encoder without relying on a hand-played scene:
 
 ```sh
@@ -103,7 +109,9 @@ The stream directory is intentionally simple and tail-friendly:
 - `trace/qge_trace_summary.json`: JSON summary of `qge_trace.bin`, including
   `runtime_evidence.single_trace_ready` and per-domain AI, audio, visibility,
   and projectile evidence counts. Visibility readiness requires an applied
-  `vis_authority_apply` record, not only shadow/gate telemetry.
+  `vis_authority_apply` record, not only shadow/gate telemetry. Projectile
+  evidence includes `save_demo_boundary_count` and per-kind save/demo counts
+  for writeback, branch, and collision-oracle persistence boundaries.
 - `qge_agent_stream_icc_evidence.jsonl`: ICC-native evidence entries for the
   manifest, events file, Noesis input traces, latest video frame, raw audio,
   audio metadata, trace artifact, trace summary, frame count, run outcome,

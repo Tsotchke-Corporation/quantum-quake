@@ -3256,6 +3256,33 @@ static int test_physics_projectile_branch_hash_includes_impact(void) {
            first_state.state_hash != second_state.state_hash;
 }
 
+static int test_physics_projectile_branch_hash_includes_save_demo_boundary(void) {
+    qge_projectile_authority_gate_t gate = make_projectile_writeback_gate();
+    qge_projectile_branch_request_t frame_request =
+        make_projectile_branch_request(true);
+    qge_projectile_branch_request_t save_request;
+    qge_projectile_branch_state_t frame_state;
+    qge_projectile_branch_state_t save_state;
+
+    frame_request.boundary = QGE_OBSERVE_FRAME_BOUNDARY;
+    save_request = frame_request;
+    save_request.boundary = QGE_OBSERVE_SAVE_OR_DEMO;
+
+    frame_state =
+        qge_projectile_branch_state_evaluate(&gate, &frame_request);
+    save_state =
+        qge_projectile_branch_state_evaluate(&gate, &save_request);
+
+    printf("\n    Projectile save/demo hash: frame=0x%llx save=0x%llx\n    ",
+           (unsigned long long)frame_state.state_hash,
+           (unsigned long long)save_state.state_hash);
+
+    return save_state.observed &&
+           save_state.boundary == QGE_OBSERVE_SAVE_OR_DEMO &&
+           frame_state.selected_branch_id == save_state.selected_branch_id &&
+           frame_state.state_hash != save_state.state_hash;
+}
+
 static qge_projectile_collision_oracle_request_t
 make_projectile_collision_oracle_request(bool requested) {
     qge_projectile_writeback_request_t writeback =
@@ -3537,6 +3564,7 @@ int main(void) {
     TEST(physics_projectile_branch_decoherence_classic);
     TEST(physics_projectile_branch_collision_observation);
     TEST(physics_projectile_branch_hash_includes_impact);
+    TEST(physics_projectile_branch_hash_includes_save_demo_boundary);
     TEST(physics_projectile_collision_oracle_disabled_classic);
     TEST(physics_projectile_collision_oracle_qge_noimpact);
     TEST(physics_projectile_collision_oracle_alternate_impact);

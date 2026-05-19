@@ -378,7 +378,10 @@ enum {
 	QGE_PROJECTILE_TRACE_FLAG_ORACLE_QGE_TRACE = 0x01000000u,
 	QGE_PROJECTILE_TRACE_FLAG_ORACLE_NO_IMPACT = 0x02000000u,
 	QGE_PROJECTILE_TRACE_FLAG_ORACLE_ALT_IMPACT = 0x04000000u,
-	QGE_PROJECTILE_TRACE_FLAG_ORACLE_CLASSIC = 0x08000000u
+	QGE_PROJECTILE_TRACE_FLAG_ORACLE_CLASSIC = 0x08000000u,
+	QGE_PROJECTILE_TRACE_FLAG_SAVE_DEMO_BOUNDARY = 0x10000000u,
+	QGE_PROJECTILE_TRACE_FLAG_SAVE_DEMO_ORACLE = 0x20000000u,
+	QGE_PROJECTILE_TRACE_FLAG_SAVE_DEMO_WRITEBACK = 0x40000000u
 };
 
 static void QGE_PhysicsRefreshStats(void);
@@ -392,6 +395,13 @@ static void QGE_TraceProjectilePreimpactSelection(
 	const qge_projectile_branch_state_t *state,
 	const qge_projectile_writeback_decision_t *decision,
 	const qge_projectile_collision_oracle_decision_t *oracle);
+static void QGE_TraceProjectileSaveDemoBoundary(
+	qge_quantum_runtime_t *rt,
+	const qge_projectile_branch_state_t *state,
+	const qge_projectile_writeback_decision_t *decision,
+	const qge_projectile_collision_oracle_decision_t *oracle,
+	uint64_t decision_hash,
+	qboolean writeback_boundary);
 static void QGE_TraceProjectileImpactMeasurement(
 	qge_quantum_runtime_t *rt,
 	const qge_projectile_branch_state_t *state);
@@ -7981,6 +7991,77 @@ static uint32_t QGE_PhysicsProjectileBranchFlags(
 	return flags;
 }
 
+static void QGE_TraceProjectileSaveDemoBoundary(
+	qge_quantum_runtime_t *rt,
+	const qge_projectile_branch_state_t *state,
+	const qge_projectile_writeback_decision_t *decision,
+	const qge_projectile_collision_oracle_decision_t *oracle,
+	uint64_t decision_hash,
+	qboolean writeback_boundary)
+{
+	qge_measurement_event_t event;
+	uint32_t flags = QGE_PROJECTILE_TRACE_FLAG_SAVE_DEMO_BOUNDARY;
+	uint64_t trace_id = decision_hash;
+	int entity_id = 0;
+
+	if (!state && !decision && !oracle)
+		return;
+	if (!rt)
+		return;
+
+	if (state) {
+		flags |= QGE_PhysicsProjectileBranchFlags(state);
+		trace_id = state->state_hash;
+		entity_id = state->entity_id;
+	}
+	if (decision) {
+		flags |= QGE_PhysicsProjectileWritebackFlags(decision);
+		entity_id = decision->entity_id;
+		if (writeback_boundary)
+			flags |= QGE_PROJECTILE_TRACE_FLAG_SAVE_DEMO_WRITEBACK;
+	}
+	if (oracle) {
+		flags |= QGE_PROJECTILE_TRACE_FLAG_COLLISION_ORACLE |
+				 QGE_PROJECTILE_TRACE_FLAG_SAVE_DEMO_ORACLE;
+		entity_id = oracle->entity_id;
+		if (oracle->source == QGE_PROJECTILE_COLLISION_TRACE_QGE)
+			flags |= QGE_PROJECTILE_TRACE_FLAG_ORACLE_QGE_TRACE;
+		else
+			flags |= QGE_PROJECTILE_TRACE_FLAG_ORACLE_CLASSIC;
+		if (oracle->selected_no_impact)
+			flags |= QGE_PROJECTILE_TRACE_FLAG_ORACLE_NO_IMPACT;
+		if (oracle->selected_alternate_impact)
+			flags |= QGE_PROJECTILE_TRACE_FLAG_ORACLE_ALT_IMPACT;
+		if (oracle->state_hash)
+			trace_id = oracle->state_hash;
+	}
+
+	memset(&event, 0, sizeof(event));
+	event.domain = QGE_DOMAIN_PROJECTILE;
+	event.kind = oracle ? QGE_MEASURE_PROJECTILE_COLLISION_ORACLE :
+		(writeback_boundary ? QGE_MEASURE_PROJECTILE_WRITEBACK :
+		 QGE_MEASURE_PROJECTILE_BRANCH);
+	event.boundary = QGE_OBSERVE_SAVE_OR_DEMO;
+	event.frame = qge_frame_count;
+	event.server_time_msec = QGE_ServerTimeMsec();
+	event.subject_id = entity_id;
+	event.flags = flags;
+	if (state)
+		event.basis_index = (uint64_t)state->selected_branch_id;
+	else if (decision)
+		event.basis_index = (uint64_t)decision->source;
+	if (oracle)
+		event.basis_index |= (uint64_t)oracle->source << 32;
+	event.probability = oracle ? oracle->selected_probability :
+		(state ? state->selected_probability :
+		 (decision && decision->writeback_allowed ? 1.0 : 0.0));
+	event.phase = state ? state->coherence :
+		(decision && decision->authority_ready ? 1.0 : 0.0);
+	event.entropy_offset = trace_id;
+	event.trace_id = trace_id;
+	qge_quantum_record_measurement(rt, &event);
+}
+
 static void QGE_TraceProjectileBranchState(
 	qge_quantum_runtime_t *rt,
 	const qge_projectile_branch_state_t *state)
@@ -8008,6 +8089,7 @@ static void QGE_TraceProjectileBranchState(
 	probe.memory_bytes = sizeof(*state);
 	strlcpy(probe.label, "projectile_branch_state", sizeof(probe.label));
 	qge_quantum_record_probe(rt, &probe);
+	QGE_TraceProjectileSaveDemoBoundary(rt, state, NULL, NULL, 0, false);
 }
 
 static void QGE_TraceProjectilePreimpactSelection(
@@ -8062,6 +8144,7 @@ static void QGE_TraceProjectilePreimpactSelection(
 	strlcpy(probe.label, "projectile_preimpact_selection",
 			sizeof(probe.label));
 	qge_quantum_record_probe(rt, &probe);
+	QGE_TraceProjectileSaveDemoBoundary(rt, state, decision, oracle, 0, false);
 }
 
 static void QGE_TraceProjectileImpactMeasurement(
@@ -8136,6 +8219,7 @@ static void QGE_TraceProjectileWritebackDecision(
 	strlcpy(probe.label, "projectile_writeback_decision",
 			sizeof(probe.label));
 	qge_quantum_record_probe(rt, &probe);
+	QGE_TraceProjectileSaveDemoBoundary(rt, NULL, decision, NULL, hash, true);
 
 	if (!decision->authority_requested || !decision->fallback_selected)
 		return;

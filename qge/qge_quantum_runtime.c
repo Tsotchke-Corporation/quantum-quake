@@ -683,7 +683,10 @@ const char *qge_measurement_kind_name(qge_measurement_kind_t kind)
         "rng_batch",
         "material_phase",
         "physics_collision",
-        "entanglement_collapse"
+        "entanglement_collapse",
+        "projectile_writeback",
+        "projectile_branch",
+        "projectile_collision_oracle"
     };
     if (kind < 0 || kind >= QGE_MEASURE_MAX) {
         return "unknown";
