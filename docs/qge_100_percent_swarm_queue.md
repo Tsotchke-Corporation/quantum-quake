@@ -280,11 +280,40 @@ Verified with:
 
 ## Next Worker Tasks
 
-- Move projectile branch selection to the pre-impact boundary inside
-  `SV_PushEntity()`, after `SV_Move()` returns and before `trace.endpos` is
-  copied into the entity or `SV_Impact()` runs. This is the point where QGE can
-  select the measured collision branch before classic touch/damage/free side
-  effects execute.
-- Add an audited pre-impact hook that can adjust the selected branch endpos and
-  velocity only when `quantum_physics_authoritative` is enabled, branch-state
-  confidence is ready, and trace evidence records the selected branch.
+## Wave 10 Checkpoint
+
+- Pre-impact boundary hook: `SV_PushEntity()` now calls
+  `QGE_PhysicsSelectProjectileBranch()` immediately after `SV_Move()` produces
+  the candidate trace and before `trace.endpos` is copied into the edict or
+  `SV_Impact()` runs. This gives QGE a pre-side-effect branch-selection
+  boundary for missiles.
+- Guarded selection: the hook reuses the wave9 branch-state evaluator and the
+  existing projectile authority/writeback gate. It only adjusts trace endpos
+  and projectile velocity when authority is allowed, the selected branch is
+  `QGE_PROJECTILE_BRANCH_QGE_PREDICTION`, and the candidate is not an impact
+  observation. Collision candidates remain mutually consistent and are traced
+  as measured impact branches.
+- Evidence: traces now include `projectile_preimpact_selection` probes, and
+  `qge_trace_summary.py` reports
+  `runtime_evidence.projectile.preimpact_selection_count` plus selected
+  probability. The branch-state hash now includes selected impact entity,
+  fraction, origin, and normal so pre-impact measurements are deterministic.
+
+Verified with:
+
+- `python3 -m py_compile tools/qge_trace_summary.py tests/test_qge_python_tools.py`
+- `make test_qge`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B qge_hooks.o`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B sv_phys.o`
+- `python3 tests/test_qge_python_tools.py`
+- `bash tests/test_qge_trace_summary.sh`
+- `./bin/test_qge`
+
+## Next Worker Tasks
+
+- Build a collision-oracle layer for pre-impact authority that can safely
+  select no-impact or alternate-impact branches by keeping `trace.endpos`,
+  `trace.ent`, `trace.fraction`, and `trace.plane` mutually consistent before
+  `SV_Impact()` runs.
+- Fix the current macOS/SDL live-smoke launch blocker so wave9/wave10 runtime
+  evidence can be captured from an actual `e1m1` authority run again.

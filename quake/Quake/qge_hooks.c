@@ -293,6 +293,7 @@ typedef struct {
 	float max_shadow_error;
 	qboolean branch_state_valid;
 	qge_projectile_branch_state_t branch_state;
+	int preimpact_selection_frame;
 } qge_phys_object_t;
 
 static qge_scene_surface_t qge_scene_surfaces[QGE_MAX_SCENE_SURFACES];
@@ -363,6 +364,9 @@ static int qge_phys_projectile_writeback_fallback = 0;
 static int qge_phys_projectile_writeback_rollback = 0;
 static int qge_phys_projectile_branch_states = 0;
 static int qge_phys_projectile_impact_measurements = 0;
+static int qge_phys_projectile_preimpact_decisions = 0;
+static int qge_phys_projectile_preimpact_selected = 0;
+static int qge_phys_projectile_preimpact_collisions = 0;
 
 static void QGE_PhysicsRefreshStats(void);
 static qboolean QGE_PhysicsProjectileAuthorityRequested(void);
@@ -370,6 +374,10 @@ static void QGE_PhysicsUpdateProjectileAuthorityGate(void);
 static void QGE_TraceProjectileBranchState(
 	qge_quantum_runtime_t *rt,
 	const qge_projectile_branch_state_t *state);
+static void QGE_TraceProjectilePreimpactSelection(
+	qge_quantum_runtime_t *rt,
+	const qge_projectile_branch_state_t *state,
+	const qge_projectile_writeback_decision_t *decision);
 static void QGE_TraceProjectileImpactMeasurement(
 	qge_quantum_runtime_t *rt,
 	const qge_projectile_branch_state_t *state);
@@ -2556,6 +2564,9 @@ void QGE_FrameBegin(void)
 	qge_phys_projectile_writeback_rollback = 0;
 	qge_phys_projectile_branch_states = 0;
 	qge_phys_projectile_impact_measurements = 0;
+	qge_phys_projectile_preimpact_decisions = 0;
+	qge_phys_projectile_preimpact_selected = 0;
+	qge_phys_projectile_preimpact_collisions = 0;
 }
 
 static void QGE_TraceWorldSurfaceSubmissionProbe(qge_quantum_runtime_t *rt)
@@ -2662,6 +2673,7 @@ void QGE_FrameEnd(void)
 				"pshadow_avg=%.2f pshadow_max=%.2f ready_frames=%d off_frames=%d "
 				"pwriteback decisions=%d selected=%d fallback=%d rollback=%d "
 				"branch_states=%d impact_measurements=%d "
+				"preimpact decisions=%d selected=%d collisions=%d "
 				"qparticle_spawns=%d active_qparticles=%d frame_ms=%.2f\n",
 				qge_frame_count, qge_phys_toss_count, qge_phys_projectile_count,
 				qge_phys_impact_count, qge_phys_active_objects,
@@ -2686,6 +2698,9 @@ void QGE_FrameEnd(void)
 				qge_phys_projectile_writeback_rollback,
 				qge_phys_projectile_branch_states,
 				qge_phys_projectile_impact_measurements,
+				qge_phys_projectile_preimpact_decisions,
+				qge_phys_projectile_preimpact_selected,
+				qge_phys_projectile_preimpact_collisions,
 				qge_phys_particle_spawns,
 				active_particles, elapsed);
 	}
@@ -7784,6 +7799,41 @@ static void QGE_TraceProjectileBranchState(
 	qge_quantum_record_probe(rt, &probe);
 }
 
+static void QGE_TraceProjectilePreimpactSelection(
+	qge_quantum_runtime_t *rt,
+	const qge_projectile_branch_state_t *state,
+	const qge_projectile_writeback_decision_t *decision)
+{
+	qge_state_probe_t probe;
+	uint32_t flags;
+
+	if (!rt || !state || !decision || state->branch_count <= 0)
+		return;
+
+	flags = QGE_PhysicsProjectileBranchFlags(state);
+	flags |= QGE_PhysicsProjectileWritebackFlags(decision) & ~0xffu;
+
+	memset(&probe, 0, sizeof(probe));
+	probe.frame = qge_frame_count;
+	probe.server_time_msec = QGE_ServerTimeMsec();
+	probe.domain = QGE_DOMAIN_PROJECTILE;
+	probe.representation = QGE_REP_CA_MPS;
+	probe.subject_id = state->entity_id;
+	probe.flags = flags;
+	probe.state_hash = state->state_hash;
+	probe.entropy = state->decoherence;
+	probe.coherence = decision->writeback_allowed ? 1.0 : state->coherence;
+	probe.max_probability = state->selected_probability;
+	probe.total_probability = state->total_weight;
+	probe.active_basis_count = state->branch_count;
+	probe.qubit_count =
+		qge_quantum_qubits_for_basis_count((uint64_t)state->branch_count);
+	probe.memory_bytes = sizeof(*state) + sizeof(*decision);
+	strlcpy(probe.label, "projectile_preimpact_selection",
+			sizeof(probe.label));
+	qge_quantum_record_probe(rt, &probe);
+}
+
 static void QGE_TraceProjectileImpactMeasurement(
 	qge_quantum_runtime_t *rt,
 	const qge_projectile_branch_state_t *state)
@@ -8081,6 +8131,75 @@ static qboolean QGE_PhysicsBuildProjectileWritebackRequest(
 	request->qge_origin = branch_state.selected_origin;
 	request->qge_velocity = branch_state.selected_velocity;
 	return true;
+}
+
+qboolean QGE_PhysicsSelectProjectileBranch(edict_t *ent,
+										   const vec3_t push,
+										   trace_t *trace)
+{
+	qge_phys_object_t *obj;
+	qge_projectile_branch_request_t branch_request;
+	qge_projectile_branch_state_t branch_state;
+	qge_projectile_writeback_request_t writeback_request;
+	qge_projectile_writeback_decision_t decision;
+	qboolean collision_observed;
+	qboolean adjusted = false;
+
+	(void)push;
+
+	if (!trace || !QGE_PhysicsShouldTrack(ent) ||
+		(int)ent->v.movetype != MOVETYPE_FLYMISSILE)
+		return false;
+
+	obj = QGE_PhysicsFindObject(NUM_FOR_EDICT(ent), true);
+	collision_observed = (trace->fraction < 1.0f || trace->ent != NULL);
+	if (!QGE_PhysicsBuildProjectileBranchRequest(
+			obj,
+			ent,
+			collision_observed ? QGE_OBSERVE_COLLISION :
+								 QGE_OBSERVE_FRAME_BOUNDARY,
+			collision_observed ? trace : NULL,
+			&branch_request))
+		return false;
+
+	branch_state =
+		qge_projectile_branch_state_evaluate(NULL, &branch_request);
+	memset(&writeback_request, 0, sizeof(writeback_request));
+	writeback_request.entity_id = branch_request.entity_id;
+	writeback_request.telemetry = branch_request.telemetry;
+	writeback_request.classic_origin = branch_request.classic_origin;
+	writeback_request.classic_velocity = branch_request.classic_velocity;
+	writeback_request.qge_origin = branch_state.selected_origin;
+	writeback_request.qge_velocity = branch_state.selected_velocity;
+	decision = qge_projectile_writeback_evaluate(NULL, &writeback_request);
+
+	if (obj) {
+		obj->branch_state = branch_state;
+		obj->branch_state_valid = true;
+		obj->preimpact_selection_frame = qge_frame_count;
+	}
+
+	qge_phys_projectile_preimpact_decisions++;
+	if (collision_observed)
+		qge_phys_projectile_preimpact_collisions++;
+
+	if (decision.writeback_allowed &&
+		branch_state.selected_branch_id ==
+			QGE_PROJECTILE_BRANCH_QGE_PREDICTION &&
+		!branch_state.impact_measured) {
+		trace->endpos[0] = branch_state.selected_origin.x;
+		trace->endpos[1] = branch_state.selected_origin.y;
+		trace->endpos[2] = branch_state.selected_origin.z;
+		ent->v.velocity[0] = branch_state.selected_velocity.x;
+		ent->v.velocity[1] = branch_state.selected_velocity.y;
+		ent->v.velocity[2] = branch_state.selected_velocity.z;
+		qge_phys_projectile_preimpact_selected++;
+		adjusted = true;
+	}
+
+	QGE_TraceProjectilePreimpactSelection(QGE_Runtime(), &branch_state,
+										  &decision);
+	return adjusted;
 }
 
 void QGE_PhysicsTrackToss(edict_t *ent, float dt)

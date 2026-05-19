@@ -216,6 +216,8 @@ def build_runtime_evidence(summary: dict) -> dict:
     projectile_writeback = probe_by_label(
         probes, "projectile_writeback_decision")
     projectile_branch = probe_by_label(probes, "projectile_branch_state")
+    projectile_preimpact = probe_by_label(
+        probes, "projectile_preimpact_selection")
 
     audio_source_spatial_count = probe_count(
         probes, "audio_source_spatial", "audio")
@@ -235,6 +237,8 @@ def build_runtime_evidence(summary: dict) -> dict:
         probes, "projectile_writeback_decision", "projectile")
     projectile_branch_count = probe_count(
         probes, "projectile_branch_state", "projectile")
+    projectile_preimpact_count = probe_count(
+        probes, "projectile_preimpact_selection", "projectile")
     projectile_impact_measurement_count = sum(
         int(measurement.get("count", 0) or 0)
         for measurement in summary.get("measurements", [])
@@ -263,6 +267,10 @@ def build_runtime_evidence(summary: dict) -> dict:
     if projectile_branch:
         projectile_flags |= (
             int(projectile_branch.get("flags_or", 0) or 0) & ~0xff
+        )
+    if projectile_preimpact:
+        projectile_flags |= (
+            int(projectile_preimpact.get("flags_or", 0) or 0) & ~0xff
         )
     projectile_off_reason_code = projectile_flags & 0xff
 
@@ -313,6 +321,7 @@ def build_runtime_evidence(summary: dict) -> dict:
             "authority_gate_count": projectile_gate_count,
             "writeback_decision_count": projectile_writeback_count,
             "branch_state_count": projectile_branch_count,
+            "preimpact_selection_count": projectile_preimpact_count,
             "impact_measurement_count": projectile_impact_measurement_count,
             "flags": flags_summary(projectile_flags, PROJECTILE_FLAGS),
             "flags_or": projectile_flags,
@@ -344,6 +353,10 @@ def build_runtime_evidence(summary: dict) -> dict:
             "branch_coherence_max": (
                 float(projectile_branch.get("coherence_max", 0.0) or 0.0)
                 if projectile_branch else 0.0
+            ),
+            "preimpact_selected_probability_max": (
+                float(projectile_preimpact.get("max_probability_max", 0.0) or 0.0)
+                if projectile_preimpact else 0.0
             ),
         },
     }

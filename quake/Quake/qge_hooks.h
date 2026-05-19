@@ -122,6 +122,9 @@ void QGE_CaptureClassicParticles(qge_frame_snapshot_t *snapshot);
  * These hooks are observational today: they register authoritative Quake state
  * and quantum particle effects without changing collision/gameplay outcomes. */
 void QGE_PhysicsTrackToss(edict_t *ent, float dt);
+qboolean QGE_PhysicsSelectProjectileBranch(edict_t *ent,
+										   const vec3_t push,
+										   trace_t *trace);
 void QGE_PhysicsTrackImpact(edict_t *ent, const trace_t *trace);
 
 /* ============================================================================

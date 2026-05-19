@@ -479,6 +479,14 @@ qge_projectile_branch_state_t qge_projectile_branch_state_evaluate(
         state.selected_origin = selected->origin;
         state.selected_velocity = selected->velocity;
         state.selected_probability = selected->weight;
+        if (request->has_impact &&
+            selected->id == QGE_PROJECTILE_BRANCH_IMPACT_OBSERVATION) {
+            state.selected_has_impact = true;
+            state.selected_impact_entity_id = request->impact_entity_id;
+            state.selected_impact_fraction = request->impact_fraction;
+            state.selected_impact_origin = request->impact_origin;
+            state.selected_impact_normal = request->impact_normal;
+        }
     }
     state.total_weight = 1.0f;
 
@@ -491,6 +499,16 @@ qge_projectile_branch_state_t qge_projectile_branch_state_evaluate(
     hash = qge_projectile_hash_vec3(hash, state.selected_velocity);
     hash = qge_projectile_hash_float(hash, state.selected_probability);
     hash = qge_projectile_hash_float(hash, state.coherence);
+    if (state.selected_has_impact) {
+        hash = qge_projectile_hash_step(
+            hash, (uint64_t)(uint32_t)state.selected_impact_entity_id);
+        hash = qge_projectile_hash_float(
+            hash, state.selected_impact_fraction);
+        hash = qge_projectile_hash_vec3(
+            hash, state.selected_impact_origin);
+        hash = qge_projectile_hash_vec3(
+            hash, state.selected_impact_normal);
+    }
     state.state_hash = hash;
     return state;
 }

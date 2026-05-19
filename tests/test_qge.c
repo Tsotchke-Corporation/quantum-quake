@@ -3058,14 +3058,53 @@ static int test_physics_projectile_branch_collision_observation(void) {
     return state.branch_count == 3 &&
            state.observed &&
            state.impact_measured &&
+           state.selected_has_impact &&
+           state.selected_impact_entity_id == 7 &&
+           fabsf(state.selected_impact_fraction - 0.625f) < 0.001f &&
            state.boundary == QGE_OBSERVE_COLLISION &&
            state.selected_branch_id ==
                QGE_PROJECTILE_BRANCH_IMPACT_OBSERVATION &&
            fabsf(projectile_branch_weight_sum(&state) - 1.0f) < 0.001f &&
            fabsf(state.selected_origin.x - request.impact_origin.x) < 0.001f &&
            fabsf(state.selected_origin.y - request.impact_origin.y) < 0.001f &&
+           fabsf(state.selected_impact_origin.z -
+                 request.impact_origin.z) < 0.001f &&
+           fabsf(state.selected_impact_normal.z -
+                 request.impact_normal.z) < 0.001f &&
            fabsf(state.selected_velocity.z + request.qge_velocity.z) < 0.001f &&
            state.state_hash != 0;
+}
+
+static int test_physics_projectile_branch_hash_includes_impact(void) {
+    qge_projectile_authority_gate_t gate = make_projectile_writeback_gate();
+    qge_projectile_branch_request_t first =
+        make_projectile_branch_request(true);
+    qge_projectile_branch_request_t second;
+    qge_projectile_branch_state_t first_state;
+    qge_projectile_branch_state_t second_state;
+
+    first.boundary = QGE_OBSERVE_COLLISION;
+    first.has_impact = true;
+    first.impact_entity_id = 7;
+    first.impact_fraction = 0.25f;
+    first.impact_origin.x = 12.0f;
+    first.impact_origin.y = 22.0f;
+    first.impact_origin.z = 32.0f;
+    first.impact_normal.z = 1.0f;
+    second = first;
+    second.impact_entity_id = 8;
+    second.impact_fraction = 0.75f;
+
+    first_state = qge_projectile_branch_state_evaluate(&gate, &first);
+    second_state = qge_projectile_branch_state_evaluate(&gate, &second);
+
+    printf("\n    Projectile impact hash: first=0x%llx second=0x%llx\n    ",
+           (unsigned long long)first_state.state_hash,
+           (unsigned long long)second_state.state_hash);
+
+    return first_state.selected_has_impact &&
+           second_state.selected_has_impact &&
+           first_state.state_hash != second_state.state_hash;
 }
 
 /* ============================================================================
@@ -3188,6 +3227,7 @@ int main(void) {
     TEST(physics_projectile_branch_ready_selects_qge);
     TEST(physics_projectile_branch_decoherence_classic);
     TEST(physics_projectile_branch_collision_observation);
+    TEST(physics_projectile_branch_hash_includes_impact);
     printf("\n");
 
     /* Cleanup modules */

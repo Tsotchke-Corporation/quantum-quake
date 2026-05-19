@@ -502,6 +502,9 @@ trace_t SV_PushEntity (edict_t *ent, vec3_t push)
 	else
 		trace = SV_Move (ent->v.origin, ent->v.mins, ent->v.maxs, end, MOVE_NORMAL, ent);
 
+	if (ent->v.movetype == MOVETYPE_FLYMISSILE)
+		QGE_PhysicsSelectProjectileBranch (ent, push, &trace);
+
 	VectorCopy (trace.endpos, ent->v.origin);
 	SV_LinkEdict (ent, true);
 

@@ -600,6 +600,9 @@ class TraceSummaryTests(unittest.TestCase):
                 (5, state_probe_payload(
                     8, 2, 4, 313, 0x6F0600, b"projectile_branch_state",
                     3, 2)),
+                (5, state_probe_payload(
+                    9, 2, 4, 313, 0x133F00,
+                    b"projectile_preimpact_selection", 2, 1)),
             ]
             data = trace_summary.HEADER.pack(
                 trace_summary.TRACE_MAGIC,
@@ -655,6 +658,10 @@ class TraceSummaryTests(unittest.TestCase):
             )
             self.assertEqual(evidence["projectile"]["branch_state_count"], 1)
             self.assertEqual(
+                evidence["projectile"]["preimpact_selection_count"],
+                1,
+            )
+            self.assertEqual(
                 evidence["projectile"]["impact_measurement_count"],
                 1,
             )
@@ -677,12 +684,19 @@ class TraceSummaryTests(unittest.TestCase):
             self.assertTrue(evidence["projectile"]["flags"]["branch_observed"])
             self.assertTrue(evidence["projectile"]["flags"]["impact_measured"])
             self.assertTrue(
+                evidence["projectile"]["flags"]["branch_selected_qge"]
+            )
+            self.assertTrue(
                 evidence["projectile"]["flags"]["branch_selected_impact"]
             )
             self.assertTrue(evidence["projectile"]["flags"]["branch_decohered"])
             self.assertEqual(evidence["projectile"]["branch_basis_max"], 3)
             self.assertEqual(
                 evidence["projectile"]["branch_selected_probability_max"],
+                1.0,
+            )
+            self.assertEqual(
+                evidence["projectile"]["preimpact_selected_probability_max"],
                 1.0,
             )
             self.assertEqual(evidence["projectile"]["off_reason"], "none")

@@ -806,6 +806,11 @@ typedef struct {
     float decoherence;
     bool observed;
     bool impact_measured;
+    bool selected_has_impact;
+    int selected_impact_entity_id;
+    float selected_impact_fraction;
+    qge_vec3_t selected_impact_origin;
+    qge_vec3_t selected_impact_normal;
     uint64_t state_hash;
     qge_observation_boundary_t boundary;
 } qge_projectile_branch_state_t;
