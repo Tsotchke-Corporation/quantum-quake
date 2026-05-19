@@ -185,7 +185,9 @@ and copied into the frame snapshot.
 platforms it selects direct binary execution.
 
 All stream launches pass the app's `-nolauncher` argument so automation cannot
-stall behind the click-through launcher window. On macOS `open` mode, the
+stall behind the click-through launcher window. The macOS launcher parses this
+argument before probing display modes, skips launcher UI argument rewriting, and
+hands the original command line to Quake directly. On macOS `open` mode, the
 harness also uses `open -W -n -F` plus `-ApplePersistenceIgnoreState YES`: it
 waits for the app, starts a new instance, asks LaunchServices to ignore
 restored window state, and does not require a manual click. The generated app

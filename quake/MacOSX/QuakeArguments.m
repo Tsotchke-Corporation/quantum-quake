@@ -150,7 +150,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 }
 
 - (void)removeArgument:(NSString *)arg {
-	[quakeArgs removeObject:arg];
+    int i;
+
+    for (i = (int)[quakeArgs count] - 1; i >= 0; i--) {
+        QuakeArgument *argument = [quakeArgs objectAtIndex:i];
+        if ([arg isEqualToString:[argument name]])
+            [quakeArgs removeObjectAtIndex:i];
+    }
 }
 
 - (QuakeArgument *)argument:(NSString *)name {

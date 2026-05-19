@@ -34,6 +34,10 @@ NSString *FQPrefCommandLineKey = @"CommandLine";
 NSString *FQPrefFullscreenKey = @"Fullscreen";
 NSString *FQPrefScreenModeKey = @"ScreenMode";
 
+@interface AppController ()
+- (void)launchQuakeUsingLauncherControls:(BOOL)useLauncherControls;
+@end
+
 @implementation AppController
 
 +(void) initialize {
@@ -78,8 +82,12 @@ NSString *FQPrefScreenModeKey = @"ScreenMode";
     if (!self)
         return nil;
 
+    arguments = [[QuakeArguments alloc] initWithArguments:gArgv + 1 count:gArgc - 1];
     screenModes = [[NSMutableArray alloc] init];
     [screenModes addObject:@"Default or command line arguments"];
+
+    if ([arguments argument:@"-nolauncher"] != nil)
+        return self;
 
     if (SDL_InitSubSystem(SDL_INIT_VIDEO) == -1)
         return self;
@@ -118,8 +126,6 @@ NSString *FQPrefScreenModeKey = @"ScreenMode";
 #endif
 
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
-    
-    arguments = [[QuakeArguments alloc] initWithArguments:gArgv + 1 count:gArgc - 1];
     return self;
 }
 
@@ -153,7 +159,7 @@ NSString *FQPrefScreenModeKey = @"ScreenMode";
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
 	if ([arguments argument:@"-nolauncher"] != nil) {
 		[arguments removeArgument:@"-nolauncher"];
-		[self launchQuake:self];
+		[self launchQuakeUsingLauncherControls:NO];
 	} else {
         [launcherWindow center];
 		[launcherWindow makeKeyAndOrderFront:self];
@@ -166,28 +172,37 @@ NSString *FQPrefScreenModeKey = @"ScreenMode";
 }
 
 - (IBAction)launchQuake:(id)sender {
-    [arguments parseArguments:[paramTextField stringValue]];
-    
-    int index = [screenModePopUp indexOfSelectedItem];
-    if (index > 0) {
-        ScreenInfo *info = [screenModes objectAtIndex:index];
-        
-        int width = [info width];
-        int height = [info height];
-        int bpp = [info bpp];
+    (void)sender;
+    [self launchQuakeUsingLauncherControls:YES];
+}
 
-        [arguments addArgument:@"-width" withValue:[NSString stringWithFormat:@"%d", width]];
-        [arguments addArgument:@"-height" withValue:[NSString stringWithFormat:@"%d", height]];
-        [arguments addArgument:@"-bpp" withValue:[NSString stringWithFormat:@"%d", bpp]];
+- (void)launchQuakeUsingLauncherControls:(BOOL)useLauncherControls {
+    int index = 0;
+
+    if (useLauncherControls) {
+        [arguments parseArguments:[paramTextField stringValue]];
+
+        index = [screenModePopUp indexOfSelectedItem];
+        if (index > 0) {
+            ScreenInfo *info = [screenModes objectAtIndex:index];
+
+            int width = [info width];
+            int height = [info height];
+            int bpp = [info bpp];
+
+            [arguments addArgument:@"-width" withValue:[NSString stringWithFormat:@"%d", width]];
+            [arguments addArgument:@"-height" withValue:[NSString stringWithFormat:@"%d", height]];
+            [arguments addArgument:@"-bpp" withValue:[NSString stringWithFormat:@"%d", bpp]];
+        }
+
+        [arguments removeArgument:@"-fullscreen"];
+        [arguments removeArgument:@"-window"];
+        BOOL fullscreen = [fullscreenCheckBox state] == NSControlStateValueOn;
+        if (fullscreen)
+            [arguments addArgument:@"-fullscreen"];
+        else
+            [arguments addArgument:@"-window"];
     }
-    
-    [arguments removeArgument:@"-fullscreen"];
-    [arguments removeArgument:@"-window"];
-    BOOL fullscreen = [fullscreenCheckBox state] == NSControlStateValueOn;
-    if (fullscreen)
-        [arguments addArgument:@"-fullscreen"];
-    else
-        [arguments addArgument:@"-window"];
 
     NSString *path = [NSString stringWithCString:gArgv[0] encoding:NSASCIIStringEncoding];
     
@@ -206,12 +221,14 @@ NSString *FQPrefScreenModeKey = @"ScreenMode";
 
     [launcherWindow close];
 
-    // update the defaults
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    [defaults setObject:[paramTextField stringValue] forKey:FQPrefCommandLineKey];
-    [defaults setObject:[NSNumber numberWithBool:[fullscreenCheckBox state] == NSControlStateValueOn] forKey:FQPrefFullscreenKey];
-    [defaults setObject:[NSNumber numberWithInt:index] forKey:FQPrefScreenModeKey];
-    [defaults synchronize];
+    if (useLauncherControls) {
+        // update the defaults
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        [defaults setObject:[paramTextField stringValue] forKey:FQPrefCommandLineKey];
+        [defaults setObject:[NSNumber numberWithBool:[fullscreenCheckBox state] == NSControlStateValueOn] forKey:FQPrefFullscreenKey];
+        [defaults setObject:[NSNumber numberWithInt:index] forKey:FQPrefScreenModeKey];
+        [defaults synchronize];
+    }
 
     int status = SDL_main (argc, argv);
     exit(status);
