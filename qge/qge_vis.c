@@ -37,6 +37,7 @@
 #define VIS_QUBITS 20           /* Support up to 2^20 = 1M surfaces */
 #define MAX_VISIBLE_SURFACES 4096
 #define MAX_OCCLUDERS 256
+#define VIS_SHADOW_MIN_PROBABILITY 0.001f
 
 /* ============================================================================
  * State
@@ -1017,7 +1018,10 @@ bool qge_vis_shadow_finish(qge_vis_shadow_stats_t* stats) {
         if (vis_subspace_size > 0) {
             threshold = 0.5f / (float)vis_subspace_size;
         } else {
-            threshold = 0.001f;
+            threshold = VIS_SHADOW_MIN_PROBABILITY;
+        }
+        if (threshold < VIS_SHADOW_MIN_PROBABILITY) {
+            threshold = VIS_SHADOW_MIN_PROBABILITY;
         }
     }
 

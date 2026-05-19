@@ -40,7 +40,9 @@ QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=2 QGE_STREAM_WAIT_FRAMES=40 \
 Use `QGE_STREAM_VIS=2` for the raw Grover/PVS parity path. Raw mode repairs
 classic-visible surfaces that QGE missed and records
 `false_negative_repaired`, but it still falls back while false positives or
-other parity mismatches remain. Use `QGE_STREAM_VIS=3` only for the controlled
+other parity mismatches remain. The raw shadow gate also applies a conservative
+probability floor so diffuse low-amplitude masks do not over-include most of
+the BSP as authority candidates. Use `QGE_STREAM_VIS=3` only for the controlled
 authority smoke that proves the renderer can consume an audited QGE visibility
 mask.
 
@@ -405,7 +407,8 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   is forced to match the classic accepted surface set so the renderer handoff
   can prove `vis_authority_apply` independently of raw Grover/PVS parity. In
   raw mode `2`, QGE-visible masks are conservatively repaired for false
-  negatives against the audited classic set and still fall back on any remaining
+  negatives against the audited classic set, use a confidence floor to suppress
+  diffuse low-amplitude over-inclusion, and still fall back on any remaining
   parity mismatch.
 - `QGE_STREAM_FIRE_TEST`: run the scripted weapon smoke when set to `1`.
   With the default Noesis player this selects the Noesis `fire` plan unless

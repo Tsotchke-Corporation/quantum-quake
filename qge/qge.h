@@ -527,7 +527,9 @@ void qge_vis_get_stats(int* total_surfaces, int* visible_count,
 
 /**
  * Begin shadow comparison against a classic visible surface set.
- * A threshold of 0.0 selects an adaptive per-frame probability threshold.
+ * A threshold of 0.0 selects an adaptive per-frame probability threshold with
+ * a conservative confidence floor so diffuse low-amplitude masks do not become
+ * visibility-authority candidates.
  */
 void qge_vis_shadow_begin(int total_surfaces, float visibility_threshold);
 

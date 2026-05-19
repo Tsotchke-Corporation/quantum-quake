@@ -353,7 +353,8 @@ Verified with:
 - Raw visibility safety: `QGE_STREAM_VIS=2` now repairs QGE false negatives
   against the audited classic visible set and marks
   `false_negative_repaired`; raw authority still falls back on remaining
-  false positives or parity mismatch instead of applying an unsafe mask.
+  false positives, repaired misses, or parity mismatch instead of applying an
+  unsafe mask.
 
 Verified with:
 
@@ -370,8 +371,9 @@ Verified with:
 
 ## Next Worker Tasks
 
-- Reduce raw visibility false-positive over-inclusion so `QGE_STREAM_VIS=2`
-  can approach clean parity without relying on the controlled smoke path.
+- Increase raw visibility concentration so `QGE_STREAM_VIS=2` can produce
+  classic-visible surfaces above the confidence floor without relying on
+  false-negative repair or the controlled smoke path.
 - Add replay/demo boundary evidence for projectile branch and collision-oracle
   choices so selected traces are deterministic across saved runs.
 - Continue render ownership work for HUD and console surfaces, which still
