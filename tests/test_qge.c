@@ -1500,6 +1500,7 @@ extern void qge_dwt_encode_spatial_inplace(dwt_framebuffer_t* fb,
                                            float* pixels,
                                            int width,
                                            int height);
+extern qge_dwt_render_backend_t qge_dwt_last_render_backend(dwt_framebuffer_t* fb);
 
 static int test_dwt_framebuffer_create(void) {
     /* Create DWT framebuffer with default config */
@@ -1874,6 +1875,88 @@ static int test_dwt_spatial_inplace_matches_copy(void) {
     free(copy_coeffs);
     free(inplace_coeffs);
     return copy_active == inplace_active && max_delta < 0.000001f && sum_delta < 0.001f;
+}
+
+static int test_dwt_native_bridge_matches_cpu(void) {
+    const int res = 64;
+    dwt_config_t cpu_config = {
+        .mode = DWT_MODE_HAAR,
+        .num_levels = 4,
+        .base_resolution = res,
+        .gpu_reconstruct = false,
+        .sparsity_threshold = 0.001f
+    };
+    dwt_config_t native_config = cpu_config;
+    native_config.gpu_reconstruct = true;
+
+    qge_context_t* ctx = qge_init_with_config(
+        QGE_TIER_MEDIUM,
+        QGE_RENDER_DWT,
+        QGE_RES_640x480
+    );
+    if (!ctx) return 0;
+    if (qge_get_backend(ctx) != QGE_BACKEND_METAL) {
+        qge_shutdown(ctx);
+        return 1;
+    }
+
+    dwt_framebuffer_t* cpu_fb = qge_dwt_framebuffer_create(NULL, &cpu_config);
+    dwt_framebuffer_t* native_fb =
+        qge_dwt_framebuffer_create(ctx, &native_config);
+    float* input = calloc(res * res, sizeof(float));
+    float* cpu_output = calloc(res * res, sizeof(float));
+    float* native_output = calloc(res * res, sizeof(float));
+    if (!cpu_fb || !native_fb || !input || !cpu_output || !native_output) {
+        qge_dwt_framebuffer_free(cpu_fb);
+        qge_dwt_framebuffer_free(native_fb);
+        free(input);
+        free(cpu_output);
+        free(native_output);
+        qge_shutdown(ctx);
+        return 0;
+    }
+
+    for (int y = 0; y < res; y++) {
+        for (int x = 0; x < res; x++) {
+            float v = 0.03f + 0.20f * ((float)x / (float)(res - 1));
+            if (x >= 8 && x <= 23 && y >= 10 && y <= 34) {
+                v += 0.55f;
+            }
+            if (x >= 38 && x <= 53 && y >= 24 && y <= 50) {
+                v += 0.35f;
+            }
+            input[y * res + x] = v;
+        }
+    }
+
+    qge_dwt_encode_spatial(cpu_fb, input, res, res);
+    qge_dwt_encode_spatial(native_fb, input, res, res);
+    qge_dwt_render(cpu_fb, cpu_output);
+    qge_dwt_render(native_fb, native_output);
+
+    float max_delta = 0.0f;
+    float sum_delta = 0.0f;
+    for (int i = 0; i < res * res; i++) {
+        float delta = fabsf(cpu_output[i] - native_output[i]);
+        if (delta > max_delta) max_delta = delta;
+        sum_delta += delta;
+    }
+
+    qge_dwt_render_backend_t native_backend =
+        qge_dwt_last_render_backend(native_fb);
+    printf("\n    Native DWT bridge parity: backend=%d max_delta=%.6f sum_delta=%.6f\n    ",
+           (int)native_backend, max_delta, sum_delta);
+
+    qge_dwt_framebuffer_free(cpu_fb);
+    qge_dwt_framebuffer_free(native_fb);
+    free(input);
+    free(cpu_output);
+    free(native_output);
+    qge_shutdown(ctx);
+
+    return native_backend == QGE_DWT_RENDER_BACKEND_NATIVE &&
+           max_delta < 0.0005f &&
+           sum_delta < 0.05f;
 }
 
 static int test_dwt_sparsity(void) {
@@ -3563,6 +3646,7 @@ int main(void) {
     TEST(dwt_render);
     TEST(dwt_spatial_rectangle_roundtrip);
     TEST(dwt_spatial_inplace_matches_copy);
+    TEST(dwt_native_bridge_matches_cpu);
     TEST(dwt_gradient_low_frequency_retention);
     TEST(dwt_sparsity);
     printf("\n");

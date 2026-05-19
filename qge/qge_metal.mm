@@ -163,19 +163,24 @@ kernel void haar_inverse_level(
     float lh = input[(half_h + y) * stride + x];          /* LH */
     float hh = input[(half_h + y) * stride + (half_w + x)]; /* HH */
 
-    /* Haar inverse: reconstruct 2×2 block */
+    /* Haar inverse: reconstruct 2x2 block. This mirrors qge_render.c's
+     * non-orthonormal lifting convention: forward stores averages in LL,
+     * raw differences in high bands, and inverse applies high * 0.5 per 1D
+     * pass. The top-right band is horizontal detail and the bottom-left band
+     * is vertical detail.
+     */
     uint out_x = x * 2;
     uint out_y = y * 2;
     uint out_w = stride;
 
-    /* 2D inverse Haar:
-     * [a b]   [ll+hl+lh+hh  ll-hl+lh-hh]
-     * [c d] = [ll+hl-lh-hh  ll-hl-lh+hh] × 0.5
-     */
-    output[out_y * out_w + out_x]         = (ll + hl + lh + hh) * 0.5f;
-    output[out_y * out_w + out_x + 1]     = (ll - hl + lh - hh) * 0.5f;
-    output[(out_y + 1) * out_w + out_x]   = (ll + hl - lh - hh) * 0.5f;
-    output[(out_y + 1) * out_w + out_x + 1] = (ll - hl - lh + hh) * 0.5f;
+    output[out_y * out_w + out_x] =
+        ll + 0.5f * hl + 0.5f * lh + 0.25f * hh;
+    output[out_y * out_w + out_x + 1] =
+        ll - 0.5f * hl + 0.5f * lh - 0.25f * hh;
+    output[(out_y + 1) * out_w + out_x] =
+        ll + 0.5f * hl - 0.5f * lh - 0.25f * hh;
+    output[(out_y + 1) * out_w + out_x + 1] =
+        ll - 0.5f * hl - 0.5f * lh + 0.25f * hh;
 }
 
 /* ============================================================================

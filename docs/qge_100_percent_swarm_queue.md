@@ -419,7 +419,31 @@ Verified with:
 - `make quake`
 - `QGE_STREAM_TRACE=1 QGE_STREAM_VIS=3 QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=8 QGE_STREAM_WAIT_FRAMES=12 QGE_STREAM_LAUNCH=direct QGE_STREAM_SOUND=0 QGE_STREAM_TIMEOUT_SECONDS=90 QGE_RENDER=2 QGE_RENDER_UPDATE_INTERVAL=1 bash tools/quake_graphics_stream.sh`
 
+## Wave 14 Checkpoint
+
+- Native sparse-DWT parity: the Metal `haar_inverse_level` kernel now mirrors
+  the CPU lifting-scale convention and coefficient orientation exactly. The
+  bridge no longer reports native success while reconstructing a different
+  image from the same sparse DWT coefficients.
+- Regression coverage: `test_dwt_native_bridge_matches_cpu` compares CPU and
+  native 64x64 render output on Metal-capable hosts and requires native backend
+  selection with near-zero pixel delta. Non-Metal hosts skip the Metal-only
+  assertion so the portable test suite remains usable.
+- Live proof: `diagnostics/quake_stream/20260519-165107` captured eight e1m1
+  frames after the parity fix with `native_idwt_sum=93`,
+  `idwt_fallback_sum=0`, trace `render.flags.native_idwt=true`,
+  `native_bridge_count=29`, and `native_fallback_count=0`.
+
+Verified with:
+
+- `make -B build/qge/qge_metal.o`
+- `python3 -m py_compile tests/test_qge_python_tools.py tools/qge_trace_summary.py tools/qge_perf_summary.py`
+- `git diff --check`
+- `make test`
+- `make quake`
+- `QGE_STREAM_TRACE=1 QGE_STREAM_VIS=3 QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=8 QGE_STREAM_WAIT_FRAMES=12 QGE_STREAM_LAUNCH=direct QGE_STREAM_SOUND=0 QGE_STREAM_TIMEOUT_SECONDS=90 QGE_RENDER=2 QGE_RENDER_UPDATE_INTERVAL=1 bash tools/quake_graphics_stream.sh`
+
 ## Next Worker Tasks
 
-- No Wave 13 native-render bridge task remains in this queue. Use
+- No Wave 14 native-render parity task remains in this queue. Use
   `icc assistant-status` for the next cross-task goal suggestion.
