@@ -107,6 +107,10 @@ PROJECTILE_FLAGS = {
     "quantum_physics_enabled": 0x0200,
     "quantum_projectiles_enabled": 0x0400,
     "min_shadow_samples": 0x0800,
+    "authority_requested": 0x1000,
+    "writeback_selected": 0x2000,
+    "fallback_selected": 0x4000,
+    "rollback_required": 0x8000,
 }
 
 PROJECTILE_OFF_REASONS = {
@@ -174,6 +178,8 @@ def build_runtime_evidence(summary: dict) -> dict:
     vis_gate = probe_by_label(probes, "vis_authority_gate")
     vis_apply = probe_by_label(probes, "vis_authority_apply")
     projectile_gate = probe_by_label(probes, "projectile_authority_gate")
+    projectile_writeback = probe_by_label(
+        probes, "projectile_writeback_decision")
 
     audio_source_spatial_count = probe_count(
         probes, "audio_source_spatial", "audio")
@@ -189,6 +195,8 @@ def build_runtime_evidence(summary: dict) -> dict:
         probes, "vis_authority_apply", "visibility")
     projectile_gate_count = probe_count(
         probes, "projectile_authority_gate", "projectile")
+    projectile_writeback_count = probe_count(
+        probes, "projectile_writeback_decision", "projectile")
 
     audio_flags = 0
     for probe in (audio_source_spatial, audio_source_frame,
@@ -204,6 +212,10 @@ def build_runtime_evidence(summary: dict) -> dict:
         int(projectile_gate.get("flags_or", 0) or 0)
         if projectile_gate else 0
     )
+    if projectile_writeback:
+        projectile_flags |= (
+            int(projectile_writeback.get("flags_or", 0) or 0) & ~0xff
+        )
     projectile_off_reason_code = projectile_flags & 0xff
 
     ai_ready = ai_decision_count > 0 and int(records.get("ai_decision", 0)) > 0
@@ -251,6 +263,7 @@ def build_runtime_evidence(summary: dict) -> dict:
         "projectile": {
             "ready": projectile_ready,
             "authority_gate_count": projectile_gate_count,
+            "writeback_decision_count": projectile_writeback_count,
             "flags": flags_summary(projectile_flags, PROJECTILE_FLAGS),
             "flags_or": projectile_flags,
             "off_reason_code": projectile_off_reason_code,

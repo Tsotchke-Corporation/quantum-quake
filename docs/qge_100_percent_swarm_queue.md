@@ -185,25 +185,31 @@ Verified with:
 - `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B qge_hooks.o`
 - `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B r_world.o`
 
+## Wave 7 Checkpoint
+
+- Projectile hook writeback: `QGE_PhysicsTrackToss()` now evaluates the pure
+  projectile writeback helper for `MOVETYPE_FLYMISSILE` entities and applies
+  the previous QGE prediction only when `quantum_projectiles >= 1.5` explicitly
+  requests authority and the conservative gate is ready.
+- Projectile safety: `quantum_projectiles 0.5..1.49` remains shadow telemetry
+  only, gate failure leaves classic Quake physics authoritative, and threshold
+  failures record rollback/fallback decisions instead of silently mutating
+  entities.
+- Projectile traceability: QGE records `projectile_writeback_decision` probes
+  with entity id, source selection, origin/velocity deltas, and fallback or
+  rollback reason. `qge_trace_summary.py` reports
+  `runtime_evidence.projectile.writeback_decision_count` and writeback flags.
+
+Verified with:
+
+- `python3 -m py_compile tools/qge_trace_summary.py tests/test_qge_python_tools.py`
+- `python3 tests/test_qge_python_tools.py`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B qge_hooks.o`
+- `make test_qge`
+- `./bin/test_qge`
+
 ## Next Worker Tasks
 
-### Projectile Hook Writeback V2
-
-Owned files:
-
-- `quake/Quake/qge_hooks.c`
-- `qge/qge_physics.c`
-- `qge/qge.h`
-- `tests/test_qge.c`
-
-Goal:
-
-Connect the pure projectile writeback decision to Quake hook telemetry and an
-opt-in writeback path. Classic physics must remain authoritative unless the
-gate is ready and explicit authority is requested.
-
-Gate:
-
-- Gate failure leaves classic Quake physics authoritative.
-- Writeback records entity, origin/velocity delta, and rollback/fallback reason.
-- Tests cover disabled, warmup, threshold failure, and ready authority paths.
+- Run a compact live `e1m1` authority smoke with `QGE_PROJECTILES=2`,
+  `QGE_PHYSICS=1`, and `QGE_STREAM_TRACE=1`, then verify
+  `projectile_writeback_decision` appears in `qge_trace_summary.json`.

@@ -354,10 +354,21 @@ static qboolean qge_phys_projectile_authority_ready = false;
 static qge_projectile_authority_off_reason_t qge_phys_projectile_authority_off_reason =
 	QGE_PROJECTILE_AUTHORITY_OFF_DISABLED;
 static qge_projectile_authority_state_t qge_phys_projectile_authority_state;
+static int qge_phys_projectile_writeback_decisions = 0;
+static int qge_phys_projectile_writeback_selected = 0;
+static int qge_phys_projectile_writeback_fallback = 0;
+static int qge_phys_projectile_writeback_rollback = 0;
 
 static void QGE_PhysicsRefreshStats(void);
 static void QGE_PhysicsUpdateProjectileAuthorityGate(void);
 static void QGE_TraceProjectileAuthorityGate(qge_quantum_runtime_t *rt);
+static void QGE_TraceProjectileWritebackDecision(
+	qge_quantum_runtime_t *rt,
+	const qge_projectile_writeback_decision_t *decision);
+static qboolean QGE_PhysicsBuildProjectileWritebackRequest(
+	qge_phys_object_t *obj,
+	edict_t *ent,
+	qge_projectile_writeback_request_t *request);
 static unsigned int QGE_SurfaceLightSignal(const msurface_t *surf,
 										   float *energy,
 										   float *contrast);
@@ -2519,6 +2530,10 @@ void QGE_FrameBegin(void)
 	qge_phys_mirrored_owner = 0;
 	qge_phys_mirrored_water = 0;
 	qge_phys_mirrored_impacts = 0;
+	qge_phys_projectile_writeback_decisions = 0;
+	qge_phys_projectile_writeback_selected = 0;
+	qge_phys_projectile_writeback_fallback = 0;
+	qge_phys_projectile_writeback_rollback = 0;
 }
 
 static void QGE_TraceWorldSurfaceSubmissionProbe(qge_quantum_runtime_t *rt)
@@ -2623,6 +2638,7 @@ void QGE_FrameEnd(void)
 				"shadow_avg=%.2f shadow_max=%.2f "
 				"projectile_authority=%s reason=%s warmup=%d samples=%d "
 				"pshadow_avg=%.2f pshadow_max=%.2f ready_frames=%d off_frames=%d "
+				"pwriteback decisions=%d selected=%d fallback=%d rollback=%d "
 				"qparticle_spawns=%d active_qparticles=%d frame_ms=%.2f\n",
 				qge_frame_count, qge_phys_toss_count, qge_phys_projectile_count,
 				qge_phys_impact_count, qge_phys_active_objects,
@@ -2639,6 +2655,10 @@ void QGE_FrameEnd(void)
 				qge_phys_projectile_max_shadow_error,
 				qge_phys_projectile_authority_ready_frames,
 				qge_phys_projectile_authority_off_frames,
+				qge_phys_projectile_writeback_decisions,
+				qge_phys_projectile_writeback_selected,
+				qge_phys_projectile_writeback_fallback,
+				qge_phys_projectile_writeback_rollback,
 				qge_phys_particle_spawns,
 				active_particles, elapsed);
 	}
@@ -7636,6 +7656,102 @@ static uint32_t QGE_PhysicsProjectileAuthorityFlags(void)
 	return flags;
 }
 
+static uint32_t QGE_PhysicsProjectileWritebackFlags(
+	const qge_projectile_writeback_decision_t *decision)
+{
+	uint32_t flags;
+
+	if (!decision)
+		return 0u;
+
+	flags = (uint32_t)decision->off_reason & 0xffu;
+	if (decision->authority_ready)
+		flags |= 0x100u;
+	if (quantum_physics.value >= 0.5f)
+		flags |= 0x200u;
+	if (quantum_projectiles.value >= 0.5f)
+		flags |= 0x400u;
+	if (decision->gate_state.shadow_samples_remaining <= 0)
+		flags |= 0x800u;
+	if (decision->authority_requested)
+		flags |= 0x1000u;
+	if (decision->writeback_allowed)
+		flags |= 0x2000u;
+	if (decision->fallback_selected)
+		flags |= 0x4000u;
+	if (decision->rollback_required)
+		flags |= 0x8000u;
+	return flags;
+}
+
+static void QGE_TraceProjectileWritebackDecision(
+	qge_quantum_runtime_t *rt,
+	const qge_projectile_writeback_decision_t *decision)
+{
+	qge_state_probe_t probe;
+	qge_fallback_event_t fallback;
+	uint64_t hash;
+
+	if (!rt || !decision)
+		return;
+
+	hash = QGE_RegistryHashStep((uint64_t)(uint32_t)decision->entity_id,
+								(uint64_t)decision->source);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)decision->off_reason);
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)decision->fallback_reason);
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)decision->rollback_reason);
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)(decision->origin_delta_length *
+										   1000.0f));
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)(decision->velocity_delta_length *
+										   1000.0f));
+
+	memset(&probe, 0, sizeof(probe));
+	probe.frame = qge_frame_count;
+	probe.server_time_msec = QGE_ServerTimeMsec();
+	probe.domain = QGE_DOMAIN_PROJECTILE;
+	probe.representation = QGE_REP_CLASSICAL_ORACLE;
+	probe.subject_id = decision->entity_id;
+	probe.flags = QGE_PhysicsProjectileWritebackFlags(decision);
+	probe.state_hash = hash;
+	probe.entropy = decision->writeback_allowed ? 1.0 : 0.0;
+	probe.coherence = decision->authority_ready ? 1.0 : 0.0;
+	probe.max_probability = decision->origin_delta_length;
+	probe.total_probability = decision->velocity_delta_length;
+	probe.active_basis_count = decision->gate_state.shadow_samples_remaining;
+	probe.qubit_count = decision->gate_state.warmup_frames_remaining;
+	probe.memory_bytes = sizeof(*decision);
+	strlcpy(probe.label, "projectile_writeback_decision",
+			sizeof(probe.label));
+	qge_quantum_record_probe(rt, &probe);
+
+	if (!decision->authority_requested || !decision->fallback_selected)
+		return;
+
+	memset(&fallback, 0, sizeof(fallback));
+	fallback.frame = qge_frame_count;
+	fallback.server_time_msec = QGE_ServerTimeMsec();
+	fallback.domain = QGE_DOMAIN_PROJECTILE;
+	fallback.representation = QGE_REP_CLASSICAL_ORACLE;
+	fallback.subject_id = decision->entity_id;
+	fallback.reason_code = (int32_t)decision->fallback_reason;
+	fallback.metric_value = decision->rollback_required ?
+		decision->origin_delta_length : decision->velocity_delta_length;
+	q_snprintf(fallback.message, sizeof(fallback.message),
+			   "projectile_writeback source=classic reason=%s rollback=%s ent=%d origin_delta=%.3f velocity_delta=%.3f",
+			   qge_projectile_authority_off_reason_name(
+				   decision->fallback_reason),
+			   qge_projectile_authority_off_reason_name(
+				   decision->rollback_reason),
+			   decision->entity_id,
+			   decision->origin_delta_length,
+			   decision->velocity_delta_length);
+	qge_quantum_record_fallback(rt, &fallback);
+}
+
 static void QGE_TraceProjectileAuthorityGate(qge_quantum_runtime_t *rt)
 {
 	qge_state_probe_t probe;
@@ -7761,11 +7877,46 @@ static void QGE_PhysicsMirrorEdictState(qge_phys_object_t *obj,
 		qge_phys_mirrored_water++;
 }
 
+static qboolean QGE_PhysicsBuildProjectileWritebackRequest(
+	qge_phys_object_t *obj,
+	edict_t *ent,
+	qge_projectile_writeback_request_t *request)
+{
+	if (!request || !ent || (int)ent->v.movetype != MOVETYPE_FLYMISSILE)
+		return false;
+
+	memset(request, 0, sizeof(*request));
+	request->entity_id = NUM_FOR_EDICT(ent);
+	request->telemetry.requested =
+		quantum_physics.value >= 0.5f && quantum_projectiles.value >= 1.5f;
+	request->telemetry.active_projectiles =
+		qge_phys_active_projectiles > 0 ? qge_phys_active_projectiles : 1;
+	request->telemetry.frame_projectiles = qge_phys_projectile_count + 1;
+	request->telemetry.warmup_frames =
+		qge_phys_projectile_authority_warmup_frames;
+	request->telemetry.shadow_samples =
+		(obj && obj->seen_count > 1) ? obj->seen_count - 1 : 0;
+	request->telemetry.avg_shadow_error = obj ? obj->shadow_error : 0.0f;
+	request->telemetry.max_shadow_error = obj ? obj->max_shadow_error : 0.0f;
+	request->classic_origin = QGE_VecFromQuake(ent->v.origin);
+	request->classic_velocity = QGE_VecFromQuake(ent->v.velocity);
+	if (obj && obj->seen_count > 0) {
+		request->qge_origin = QGE_VecFromQuake(obj->predicted_origin);
+		request->qge_velocity = QGE_VecFromQuake(obj->velocity);
+	} else {
+		request->qge_origin = request->classic_origin;
+		request->qge_velocity = request->classic_velocity;
+	}
+	return true;
+}
+
 void QGE_PhysicsTrackToss(edict_t *ent, float dt)
 {
 	int movetype;
 	int entnum;
 	qge_phys_object_t *obj;
+	qge_projectile_writeback_request_t writeback_request;
+	qge_projectile_writeback_decision_t writeback_decision;
 
 	if (!QGE_PhysicsShouldTrack(ent))
 		return;
@@ -7781,6 +7932,29 @@ void QGE_PhysicsTrackToss(edict_t *ent, float dt)
 			obj->shadow_error = VectorLength(delta);
 			if (obj->shadow_error > obj->max_shadow_error)
 				obj->max_shadow_error = obj->shadow_error;
+		}
+
+		if (movetype == MOVETYPE_FLYMISSILE &&
+			QGE_PhysicsBuildProjectileWritebackRequest(obj, ent,
+													   &writeback_request)) {
+			writeback_decision =
+				qge_projectile_writeback_evaluate(NULL, &writeback_request);
+			qge_phys_projectile_writeback_decisions++;
+			if (writeback_decision.writeback_allowed) {
+				ent->v.origin[0] = writeback_request.qge_origin.x;
+				ent->v.origin[1] = writeback_request.qge_origin.y;
+				ent->v.origin[2] = writeback_request.qge_origin.z;
+				ent->v.velocity[0] = writeback_request.qge_velocity.x;
+				ent->v.velocity[1] = writeback_request.qge_velocity.y;
+				ent->v.velocity[2] = writeback_request.qge_velocity.z;
+				qge_phys_projectile_writeback_selected++;
+			} else if (writeback_decision.authority_requested) {
+				qge_phys_projectile_writeback_fallback++;
+				if (writeback_decision.rollback_required)
+					qge_phys_projectile_writeback_rollback++;
+			}
+			QGE_TraceProjectileWritebackDecision(QGE_Runtime(),
+												 &writeback_decision);
 		}
 
 		obj->last_seen_frame = qge_frame_count;

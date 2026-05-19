@@ -580,6 +580,9 @@ class TraceSummaryTests(unittest.TestCase):
                     5, 1, 7, 2, 0x0E0, b"vis_authority_apply", 5, 4)),
                 (5, state_probe_payload(
                     6, 2, 7, 1, 0x0F00, b"projectile_authority_gate", 4, 3)),
+                (5, state_probe_payload(
+                    7, 2, 7, 313, 0x3300, b"projectile_writeback_decision",
+                    0, 0)),
             ]
             data = trace_summary.HEADER.pack(
                 trace_summary.TRACE_MAGIC,
@@ -628,8 +631,18 @@ class TraceSummaryTests(unittest.TestCase):
                 evidence["projectile"]["authority_gate_count"],
                 1,
             )
+            self.assertEqual(
+                evidence["projectile"]["writeback_decision_count"],
+                1,
+            )
             self.assertTrue(
                 evidence["projectile"]["flags"]["authority_ready"]
+            )
+            self.assertTrue(
+                evidence["projectile"]["flags"]["authority_requested"]
+            )
+            self.assertTrue(
+                evidence["projectile"]["flags"]["writeback_selected"]
             )
             self.assertEqual(evidence["projectile"]["off_reason"], "none")
 
