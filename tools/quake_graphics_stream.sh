@@ -48,7 +48,7 @@ noesis_cmd_default=0
 noesis_player_tool="$repo_root/tools/noesis_quake_player.sh"
 width="${QGE_STREAM_WIDTH:-800}"
 height="${QGE_STREAM_HEIGHT:-600}"
-stream_display="${QGE_STREAM_DISPLAY:-1}"
+stream_display="${QGE_STREAM_DISPLAY:-}"
 fullscreen="${QGE_STREAM_FULLSCREEN:-0}"
 fire_test="${QGE_STREAM_FIRE_TEST:-0}"
 sound="${QGE_STREAM_SOUND:-0}"
@@ -142,6 +142,7 @@ else
 fi
 game_status=0
 game_timed_out=0
+open_status=0
 startup_issue=""
 
 if [[ ! -f "$gamedir/pak0.pak" ]]; then
@@ -290,7 +291,7 @@ write_agent_manifest() {
   "launch": {
     "mode": $(json_string "$launch_mode"),
     "macos_bundle_id": $(json_string "$app_bundle_id"),
-    "macos_nolauncher": $([[ "$launch_mode" == "open" ]] && printf '1' || printf '0'),
+    "macos_nolauncher": 1,
     "macos_fresh_instance": $([[ "$launch_mode" == "open" ]] && printf '1' || printf '0'),
     "macos_persistence_ignore": $([[ "$launch_mode" == "open" ]] && printf '1' || printf '0'),
     "macos_activate": $([[ "$launch_mode" == "open" && "$stream_activate" == "1" ]] && printf '1' || printf '0'),
@@ -845,7 +846,7 @@ if [[ -n "$stream_display" ]]; then
   video_args+=(-display "$stream_display")
 fi
 
-run_args=(-basedir "$basedir" "${video_args[@]}")
+run_args=(-nolauncher -basedir "$basedir" "${video_args[@]}")
 if [[ "$stream_mouse" != "1" ]]; then
   run_args+=(-nomouse)
 fi
@@ -878,10 +879,9 @@ if [[ "$trace" == "1" ]]; then
   run_args+=(-qgetrace "$trace_file")
 fi
 if [[ "$launch_mode" == "open" ]]; then
-  run_args=(-nolauncher "${run_args[@]}")
   runtime_log_file="$qconsole_file"
   : > "$runtime_log_file"
-  echo "open output is not redirected; qconsole.log is captured as the runtime log." > "$open_log_file"
+  echo "open output follows; qconsole.log is captured as the runtime log." > "$open_log_file"
   echo "QGE_OPEN_NOLAUNCHER enabled" >> "$open_log_file"
   cp "$open_log_file" "$agent_open_log_file"
   open_args=(-W -n -F)
@@ -899,8 +899,7 @@ if [[ "$launch_mode" == "open" ]]; then
 	    fi
 	  ) &
   watchdog_pid=$!
-  open_status=0
-  open "${open_args[@]}" --args -ApplePersistenceIgnoreState YES "${run_args[@]}" -condebug || open_status=$?
+  open "${open_args[@]}" --args -ApplePersistenceIgnoreState YES "${run_args[@]}" -condebug >>"$open_log_file" 2>&1 || open_status=$?
   touch "$watch_stop_file"
   kill "$activator_pid" 2>/dev/null || true
   kill "$watchdog_pid" 2>/dev/null || true
@@ -909,6 +908,7 @@ if [[ "$launch_mode" == "open" ]]; then
   wait "$watch_pid" 2>/dev/null || true
   sync_agent_frame_state
   if (( open_status != 0 )); then
+    game_status="$open_status"
     echo "QGE_OPEN_FAILED status=$open_status" >> "$open_log_file"
     echo "QGE_OPEN_FAILED status=$open_status" >&2
     agent_event "open_failed" "$app_bundle" "status=$open_status"
@@ -968,8 +968,6 @@ fi
 
 if [[ "$launch_mode" != "open" && "$game_timed_out" == "1" ]]; then
   startup_issue="process_timeout"
-elif [[ "$launch_mode" != "open" && "$game_status" != "0" ]]; then
-  startup_issue="process_exit_$game_status"
 elif [[ "$trace" == "1" && ! -s "$trace_file" ]]; then
   if grep -q "Couldn't create GL context" "$log_file" 2>/dev/null; then
     startup_issue="gl_context_failed"
@@ -978,6 +976,11 @@ elif [[ "$trace" == "1" && ! -s "$trace_file" ]]; then
   elif ! grep -q "QGE: Trace recording" "$log_file" 2>/dev/null; then
     startup_issue="trace_init_missing"
   fi
+fi
+if [[ "$launch_mode" == "open" && "$open_status" != "0" && -z "$startup_issue" ]]; then
+  startup_issue="open_failed_$open_status"
+elif [[ "$launch_mode" != "open" && "$game_status" != "0" && -z "$startup_issue" ]]; then
+  startup_issue="process_exit_$game_status"
 fi
 if [[ -n "$startup_issue" ]]; then
   agent_event "startup_failed" "$log_file" "$startup_issue"

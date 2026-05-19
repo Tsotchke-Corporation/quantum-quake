@@ -175,13 +175,15 @@ and copied into the frame snapshot.
 `QGE_STREAM_LAUNCH=auto` is the default. On macOS it selects `open`; on other
 platforms it selects direct binary execution.
 
-In macOS `open` mode, the harness uses `open -W -n -F` plus
-`-ApplePersistenceIgnoreState YES` and the app's `-nolauncher` argument: it
-waits for the app, starts a new instance, bypasses the click-through launcher
-window, asks LaunchServices to ignore restored window state, and does not
-require a manual click. The generated app bundle also opts the launcher window
-out of AppKit state restoration. The harness passes `-nomouse` by default so
-SDL does not enter relative mouse mode or warp/capture the user cursor. Set
+All stream launches pass the app's `-nolauncher` argument so automation cannot
+stall behind the click-through launcher window. On macOS `open` mode, the
+harness also uses `open -W -n -F` plus `-ApplePersistenceIgnoreState YES`: it
+waits for the app, starts a new instance, asks LaunchServices to ignore
+restored window state, and does not require a manual click. The generated app
+bundle also opts the launcher window out of AppKit state restoration. The
+harness passes `-nomouse` by default so SDL does not enter relative mouse mode
+or warp/capture the user cursor. It lets SDL choose the display by default;
+set `QGE_STREAM_DISPLAY` only when a specific display index is required. Set
 `QGE_STREAM_ACTIVATE=1` only if the local window manager requires a foreground
 app for capture. A side watcher tails `qconsole.log`, mirrors screenshots, and
 refreshes audio byte counts while the app is still running. After the run, the
