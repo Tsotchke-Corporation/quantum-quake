@@ -714,7 +714,8 @@ typedef enum {
     QGE_PROJECTILE_AUTHORITY_OFF_NO_PROJECTILES,
     QGE_PROJECTILE_AUTHORITY_OFF_WARMUP,
     QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_MAX,
-    QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_AVG
+    QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_AVG,
+    QGE_PROJECTILE_AUTHORITY_OFF_TRACE_INVALID
 } qge_projectile_authority_off_reason_t;
 
 typedef struct {
@@ -842,6 +843,56 @@ typedef struct {
     float velocity_delta_length;
 } qge_projectile_writeback_decision_t;
 
+typedef enum {
+    QGE_PROJECTILE_COLLISION_TRACE_CLASSIC = 0,
+    QGE_PROJECTILE_COLLISION_TRACE_QGE
+} qge_projectile_collision_trace_source_t;
+
+typedef struct {
+    int entity_id;
+    qge_projectile_authority_telemetry_t telemetry;
+    qge_vec3_t classic_origin;
+    qge_vec3_t classic_velocity;
+    bool classic_has_impact;
+    int classic_impact_entity_id;
+    float classic_impact_fraction;
+    qge_vec3_t classic_impact_origin;
+    qge_vec3_t classic_impact_normal;
+    qge_vec3_t qge_origin;
+    qge_vec3_t qge_velocity;
+    bool qge_trace_valid;
+    bool qge_has_impact;
+    int qge_impact_entity_id;
+    float qge_impact_fraction;
+    qge_vec3_t qge_impact_origin;
+    qge_vec3_t qge_impact_normal;
+} qge_projectile_collision_oracle_request_t;
+
+typedef struct {
+    int entity_id;
+    bool authority_requested;
+    bool authority_ready;
+    bool authority_applied;
+    bool fallback_selected;
+    bool rollback_required;
+    bool selected_has_impact;
+    bool selected_no_impact;
+    bool selected_alternate_impact;
+    qge_projectile_collision_trace_source_t source;
+    qge_projectile_authority_off_reason_t off_reason;
+    qge_projectile_authority_off_reason_t fallback_reason;
+    qge_projectile_authority_off_reason_t rollback_reason;
+    qge_projectile_authority_state_t gate_state;
+    qge_vec3_t selected_origin;
+    qge_vec3_t selected_velocity;
+    int selected_impact_entity_id;
+    float selected_impact_fraction;
+    qge_vec3_t selected_impact_origin;
+    qge_vec3_t selected_impact_normal;
+    float selected_probability;
+    uint64_t state_hash;
+} qge_projectile_collision_oracle_decision_t;
+
 /**
  * Default conservative projectile authority gate. This only reports readiness;
  * callers must still decide whether to apply any authority.
@@ -874,6 +925,17 @@ qge_projectile_writeback_decision_t qge_projectile_writeback_evaluate(
 qge_projectile_branch_state_t qge_projectile_branch_state_evaluate(
     const qge_projectile_authority_gate_t* gate,
     const qge_projectile_branch_request_t* request);
+
+/**
+ * Select a mutually consistent projectile collision trace. The request carries
+ * the classic trace candidate and a QGE-retraced candidate; the decision only
+ * grants authority to the QGE candidate when projectile authority is requested
+ * and ready.
+ */
+qge_projectile_collision_oracle_decision_t
+qge_projectile_collision_oracle_evaluate(
+    const qge_projectile_authority_gate_t* gate,
+    const qge_projectile_collision_oracle_request_t* request);
 
 /**
  * Stable string for a projectile authority-off reason.

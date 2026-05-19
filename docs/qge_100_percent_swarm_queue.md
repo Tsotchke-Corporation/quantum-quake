@@ -311,9 +311,38 @@ Verified with:
 
 ## Next Worker Tasks
 
-- Build a collision-oracle layer for pre-impact authority that can safely
-  select no-impact or alternate-impact branches by keeping `trace.endpos`,
-  `trace.ent`, `trace.fraction`, and `trace.plane` mutually consistent before
-  `SV_Impact()` runs.
-- Fix the current macOS/SDL live-smoke launch blocker so wave9/wave10 runtime
+## Wave 11 Checkpoint
+
+- Collision-oracle authority: pre-impact projectile selection now retraces the
+  QGE-selected projectile endpoint through Quake `SV_Move()` and selects either
+  the original classic trace or the whole QGE candidate trace. No-impact and
+  alternate-impact authority therefore copy a mutually consistent `trace_t`
+  tuple (`endpos`, `ent`, `fraction`, `plane`) before `SV_Impact()` runs.
+- Invalid trace guard: QGE candidates that start in solid or remain all-solid
+  are rejected and fall back to the classic trace with explicit
+  `trace_invalid` authority reason evidence.
+- Evidence: `projectile_preimpact_selection` probes now include collision
+  oracle flags for QGE trace selection, no-impact selection, alternate-impact
+  selection, and classic fallback. `qge_trace_summary.py` exposes matching
+  `runtime_evidence.projectile` counters.
+- Pure coverage: `test_qge` now covers disabled classic fallback, QGE
+  no-impact authority, alternate-impact authority, invalid-trace fallback, and
+  trace-hash sensitivity for the collision oracle.
+
+Verified with:
+
+- `python3 -m py_compile tools/qge_trace_summary.py tests/test_qge_python_tools.py`
+- `make test_qge`
+- `make -C quake/Quake -f Makefile.darwin USE_SDL2=1 -B qge_hooks.o`
+- `python3 tests/test_qge_python_tools.py`
+- `bash tests/test_qge_trace_summary.sh`
+- `./bin/test_qge`
+
+## Next Worker Tasks
+
+- Fix the current macOS/SDL live-smoke launch blocker so wave9/wave11 runtime
   evidence can be captured from an actual `e1m1` authority run again.
+- Build the next bounded visibility authority slice with `authority_apply_count
+  > 0`, zero false negatives, and explicit fallback evidence on mismatch.
+- Add replay/demo boundary evidence for projectile branch and collision-oracle
+  choices so selected traces are deterministic across saved runs.

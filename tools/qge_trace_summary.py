@@ -146,6 +146,11 @@ PROJECTILE_FLAGS = {
     "branch_selected_qge": 0x100000,
     "branch_selected_impact": 0x200000,
     "branch_decohered": 0x400000,
+    "collision_oracle": 0x800000,
+    "oracle_qge_trace": 0x1000000,
+    "oracle_no_impact": 0x2000000,
+    "oracle_alternate_impact": 0x4000000,
+    "oracle_classic_trace": 0x8000000,
 }
 
 PROJECTILE_OFF_REASONS = {
@@ -155,6 +160,7 @@ PROJECTILE_OFF_REASONS = {
     3: "warmup",
     4: "shadow_max",
     5: "shadow_avg",
+    6: "trace_invalid",
 }
 
 
@@ -322,6 +328,21 @@ def build_runtime_evidence(summary: dict) -> dict:
             "writeback_decision_count": projectile_writeback_count,
             "branch_state_count": projectile_branch_count,
             "preimpact_selection_count": projectile_preimpact_count,
+            "preimpact_oracle_count": (
+                projectile_preimpact_count
+                if projectile_flags & PROJECTILE_FLAGS["collision_oracle"]
+                else 0
+            ),
+            "preimpact_no_impact_count": (
+                projectile_preimpact_count
+                if projectile_flags & PROJECTILE_FLAGS["oracle_no_impact"]
+                else 0
+            ),
+            "preimpact_alternate_impact_count": (
+                projectile_preimpact_count
+                if projectile_flags & PROJECTILE_FLAGS["oracle_alternate_impact"]
+                else 0
+            ),
             "impact_measurement_count": projectile_impact_measurement_count,
             "flags": flags_summary(projectile_flags, PROJECTILE_FLAGS),
             "flags_or": projectile_flags,

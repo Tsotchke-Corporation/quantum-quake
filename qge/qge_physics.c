@@ -139,6 +139,8 @@ const char* qge_projectile_authority_off_reason_name(
         return "shadow_max";
     case QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_AVG:
         return "shadow_avg";
+    case QGE_PROJECTILE_AUTHORITY_OFF_TRACE_INVALID:
+        return "trace_invalid";
     default:
         return "unknown";
     }
@@ -511,6 +513,133 @@ qge_projectile_branch_state_t qge_projectile_branch_state_evaluate(
     }
     state.state_hash = hash;
     return state;
+}
+
+static bool qge_projectile_impacts_differ(
+    const qge_projectile_collision_oracle_request_t* request) {
+    if (!request) {
+        return false;
+    }
+    if (request->classic_has_impact != request->qge_has_impact) {
+        return true;
+    }
+    if (!request->classic_has_impact || !request->qge_has_impact) {
+        return false;
+    }
+    if (request->classic_impact_entity_id != request->qge_impact_entity_id) {
+        return true;
+    }
+    if (fabsf(request->classic_impact_fraction -
+              request->qge_impact_fraction) > 0.001f) {
+        return true;
+    }
+    if (qge_vec3_length(qge_vec3_delta(request->classic_impact_origin,
+                                       request->qge_impact_origin)) >
+        0.001f) {
+        return true;
+    }
+    if (qge_vec3_length(qge_vec3_delta(request->classic_impact_normal,
+                                       request->qge_impact_normal)) >
+        0.001f) {
+        return true;
+    }
+    return false;
+}
+
+qge_projectile_collision_oracle_decision_t
+qge_projectile_collision_oracle_evaluate(
+    const qge_projectile_authority_gate_t* gate,
+    const qge_projectile_collision_oracle_request_t* request) {
+    qge_projectile_collision_oracle_decision_t decision;
+    qge_projectile_authority_state_t authority_state;
+    qge_projectile_authority_telemetry_t telemetry;
+    uint64_t hash;
+
+    memset(&decision, 0, sizeof(decision));
+    decision.source = QGE_PROJECTILE_COLLISION_TRACE_CLASSIC;
+    decision.off_reason = QGE_PROJECTILE_AUTHORITY_OFF_DISABLED;
+    decision.fallback_reason = QGE_PROJECTILE_AUTHORITY_OFF_DISABLED;
+    decision.rollback_reason = QGE_PROJECTILE_AUTHORITY_OFF_NONE;
+
+    memset(&telemetry, 0, sizeof(telemetry));
+    if (request) {
+        telemetry = request->telemetry;
+        decision.entity_id = request->entity_id;
+        decision.authority_requested = telemetry.requested;
+        decision.selected_origin = request->classic_origin;
+        decision.selected_velocity = request->classic_velocity;
+        decision.selected_has_impact = request->classic_has_impact;
+        decision.selected_impact_entity_id = request->classic_impact_entity_id;
+        decision.selected_impact_fraction = request->classic_impact_fraction;
+        decision.selected_impact_origin = request->classic_impact_origin;
+        decision.selected_impact_normal = request->classic_impact_normal;
+    }
+
+    authority_state = qge_projectile_authority_evaluate(gate, &telemetry);
+    decision.gate_state = authority_state;
+    decision.authority_ready = authority_state.ready;
+    decision.off_reason = authority_state.off_reason;
+    decision.fallback_reason = authority_state.off_reason;
+    decision.fallback_selected = true;
+    decision.selected_probability = decision.selected_has_impact ? 1.0f : 0.5f;
+
+    if (request && telemetry.requested && authority_state.ready &&
+        request->qge_trace_valid) {
+        decision.source = QGE_PROJECTILE_COLLISION_TRACE_QGE;
+        decision.authority_applied = true;
+        decision.fallback_selected = false;
+        decision.off_reason = QGE_PROJECTILE_AUTHORITY_OFF_NONE;
+        decision.fallback_reason = QGE_PROJECTILE_AUTHORITY_OFF_NONE;
+        decision.selected_origin = request->qge_origin;
+        decision.selected_velocity = request->qge_velocity;
+        decision.selected_has_impact = request->qge_has_impact;
+        decision.selected_impact_entity_id = request->qge_impact_entity_id;
+        decision.selected_impact_fraction = request->qge_impact_fraction;
+        decision.selected_impact_origin = request->qge_impact_origin;
+        decision.selected_impact_normal = request->qge_impact_normal;
+        decision.selected_no_impact =
+            request->classic_has_impact && !request->qge_has_impact;
+        decision.selected_alternate_impact =
+            request->qge_has_impact &&
+            qge_projectile_impacts_differ(request);
+        decision.selected_probability = 1.0f;
+    } else if (request && telemetry.requested && authority_state.ready &&
+               !request->qge_trace_valid) {
+        decision.off_reason = QGE_PROJECTILE_AUTHORITY_OFF_TRACE_INVALID;
+        decision.fallback_reason = QGE_PROJECTILE_AUTHORITY_OFF_TRACE_INVALID;
+    } else if (telemetry.requested &&
+               (authority_state.off_reason ==
+                    QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_MAX ||
+                authority_state.off_reason ==
+                    QGE_PROJECTILE_AUTHORITY_OFF_SHADOW_AVG)) {
+        decision.rollback_required = true;
+        decision.rollback_reason = authority_state.off_reason;
+    }
+
+    hash = 0x5151455f434f4c31ULL; /* QQE_COL1 */
+    hash = qge_projectile_hash_step(hash, (uint64_t)(uint32_t)decision.entity_id);
+    hash = qge_projectile_hash_step(hash, (uint64_t)decision.source);
+    hash = qge_projectile_hash_step(hash,
+                                    decision.authority_applied ? 1ULL : 0ULL);
+    hash = qge_projectile_hash_step(hash, (uint64_t)decision.off_reason);
+    hash = qge_projectile_hash_step(hash, (uint64_t)decision.fallback_reason);
+    hash = qge_projectile_hash_step(hash, (uint64_t)decision.rollback_reason);
+    hash = qge_projectile_hash_step(hash,
+                                    decision.selected_has_impact ? 1ULL : 0ULL);
+    hash = qge_projectile_hash_step(hash,
+                                    decision.selected_no_impact ? 1ULL : 0ULL);
+    hash = qge_projectile_hash_step(
+        hash, decision.selected_alternate_impact ? 1ULL : 0ULL);
+    hash = qge_projectile_hash_vec3(hash, decision.selected_origin);
+    hash = qge_projectile_hash_vec3(hash, decision.selected_velocity);
+    hash = qge_projectile_hash_step(
+        hash, (uint64_t)(uint32_t)decision.selected_impact_entity_id);
+    hash = qge_projectile_hash_float(hash, decision.selected_impact_fraction);
+    hash = qge_projectile_hash_vec3(hash, decision.selected_impact_origin);
+    hash = qge_projectile_hash_vec3(hash, decision.selected_impact_normal);
+    decision.state_hash = hash;
+
+    return decision;
 }
 
 qge_projectile_writeback_decision_t qge_projectile_writeback_evaluate(

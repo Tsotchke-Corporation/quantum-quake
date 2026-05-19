@@ -3107,6 +3107,163 @@ static int test_physics_projectile_branch_hash_includes_impact(void) {
            first_state.state_hash != second_state.state_hash;
 }
 
+static qge_projectile_collision_oracle_request_t
+make_projectile_collision_oracle_request(bool requested) {
+    qge_projectile_writeback_request_t writeback =
+        make_projectile_writeback_request(requested);
+    qge_projectile_collision_oracle_request_t request;
+
+    memset(&request, 0, sizeof(request));
+    request.entity_id = writeback.entity_id;
+    request.telemetry = writeback.telemetry;
+    request.classic_origin = writeback.classic_origin;
+    request.classic_velocity = writeback.classic_velocity;
+    request.classic_has_impact = true;
+    request.classic_impact_entity_id = 7;
+    request.classic_impact_fraction = 0.625f;
+    request.classic_impact_origin.x = 12.0f;
+    request.classic_impact_origin.y = 22.0f;
+    request.classic_impact_origin.z = 32.0f;
+    request.classic_impact_normal.z = 1.0f;
+    request.qge_origin = writeback.qge_origin;
+    request.qge_velocity = writeback.qge_velocity;
+    request.qge_trace_valid = true;
+    return request;
+}
+
+static int test_physics_projectile_collision_oracle_disabled_classic(void) {
+    qge_projectile_authority_gate_t gate = make_projectile_writeback_gate();
+    qge_projectile_collision_oracle_request_t request =
+        make_projectile_collision_oracle_request(false);
+    qge_projectile_collision_oracle_decision_t decision =
+        qge_projectile_collision_oracle_evaluate(&gate, &request);
+
+    printf("\n    Projectile collision oracle disabled: source=%d reason=%s\n    ",
+           (int)decision.source,
+           qge_projectile_authority_off_reason_name(decision.off_reason));
+
+    return !decision.authority_requested &&
+           !decision.authority_applied &&
+           decision.fallback_selected &&
+           decision.source == QGE_PROJECTILE_COLLISION_TRACE_CLASSIC &&
+           decision.off_reason == QGE_PROJECTILE_AUTHORITY_OFF_DISABLED &&
+           decision.selected_has_impact &&
+           !decision.selected_no_impact &&
+           decision.selected_impact_entity_id == 7 &&
+           fabsf(decision.selected_impact_fraction - 0.625f) < 0.001f &&
+           fabsf(decision.selected_origin.x - request.classic_origin.x) <
+               0.001f &&
+           decision.state_hash != 0;
+}
+
+static int test_physics_projectile_collision_oracle_qge_noimpact(void) {
+    qge_projectile_authority_gate_t gate = make_projectile_writeback_gate();
+    qge_projectile_collision_oracle_request_t request =
+        make_projectile_collision_oracle_request(true);
+    qge_projectile_collision_oracle_decision_t decision =
+        qge_projectile_collision_oracle_evaluate(&gate, &request);
+
+    printf("\n    Projectile collision oracle no-impact: source=%d noimpact=%d\n    ",
+           (int)decision.source,
+           decision.selected_no_impact ? 1 : 0);
+
+    return decision.authority_requested &&
+           decision.authority_ready &&
+           decision.authority_applied &&
+           !decision.fallback_selected &&
+           decision.source == QGE_PROJECTILE_COLLISION_TRACE_QGE &&
+           !decision.selected_has_impact &&
+           decision.selected_no_impact &&
+           !decision.selected_alternate_impact &&
+           fabsf(decision.selected_origin.x - request.qge_origin.x) <
+               0.001f &&
+           fabsf(decision.selected_velocity.y - request.qge_velocity.y) <
+               0.001f;
+}
+
+static int test_physics_projectile_collision_oracle_alternate_impact(void) {
+    qge_projectile_authority_gate_t gate = make_projectile_writeback_gate();
+    qge_projectile_collision_oracle_request_t request =
+        make_projectile_collision_oracle_request(true);
+    qge_projectile_collision_oracle_decision_t decision;
+
+    request.qge_has_impact = true;
+    request.qge_impact_entity_id = 8;
+    request.qge_impact_fraction = 0.25f;
+    request.qge_impact_origin = request.qge_origin;
+    request.qge_impact_normal.x = 1.0f;
+
+    decision = qge_projectile_collision_oracle_evaluate(&gate, &request);
+
+    printf("\n    Projectile collision oracle alternate: source=%d ent=%d\n    ",
+           (int)decision.source,
+           decision.selected_impact_entity_id);
+
+    return decision.authority_applied &&
+           decision.source == QGE_PROJECTILE_COLLISION_TRACE_QGE &&
+           decision.selected_has_impact &&
+           decision.selected_alternate_impact &&
+           !decision.selected_no_impact &&
+           decision.selected_impact_entity_id == 8 &&
+           fabsf(decision.selected_impact_fraction - 0.25f) < 0.001f &&
+           fabsf(decision.selected_impact_normal.x - 1.0f) < 0.001f;
+}
+
+static int test_physics_projectile_collision_oracle_invalid_trace_fallback(void) {
+    qge_projectile_authority_gate_t gate = make_projectile_writeback_gate();
+    qge_projectile_collision_oracle_request_t request =
+        make_projectile_collision_oracle_request(true);
+    qge_projectile_collision_oracle_decision_t decision;
+
+    request.qge_trace_valid = false;
+    decision = qge_projectile_collision_oracle_evaluate(&gate, &request);
+
+    printf("\n    Projectile collision oracle invalid: source=%d reason=%s\n    ",
+           (int)decision.source,
+           qge_projectile_authority_off_reason_name(decision.off_reason));
+
+    return decision.authority_requested &&
+           decision.authority_ready &&
+           !decision.authority_applied &&
+           decision.fallback_selected &&
+           decision.source == QGE_PROJECTILE_COLLISION_TRACE_CLASSIC &&
+           decision.off_reason ==
+               QGE_PROJECTILE_AUTHORITY_OFF_TRACE_INVALID &&
+           decision.selected_has_impact &&
+           decision.selected_impact_entity_id == 7;
+}
+
+static int test_physics_projectile_collision_oracle_hash_includes_trace(void) {
+    qge_projectile_authority_gate_t gate = make_projectile_writeback_gate();
+    qge_projectile_collision_oracle_request_t first =
+        make_projectile_collision_oracle_request(true);
+    qge_projectile_collision_oracle_request_t second;
+    qge_projectile_collision_oracle_decision_t first_decision;
+    qge_projectile_collision_oracle_decision_t second_decision;
+
+    first.qge_has_impact = true;
+    first.qge_impact_entity_id = 8;
+    first.qge_impact_fraction = 0.25f;
+    first.qge_impact_origin = first.qge_origin;
+    first.qge_impact_normal.x = 1.0f;
+    second = first;
+    second.qge_impact_entity_id = 9;
+    second.qge_impact_fraction = 0.5f;
+
+    first_decision =
+        qge_projectile_collision_oracle_evaluate(&gate, &first);
+    second_decision =
+        qge_projectile_collision_oracle_evaluate(&gate, &second);
+
+    printf("\n    Projectile collision oracle hash: first=0x%llx second=0x%llx\n    ",
+           (unsigned long long)first_decision.state_hash,
+           (unsigned long long)second_decision.state_hash);
+
+    return first_decision.selected_alternate_impact &&
+           second_decision.selected_alternate_impact &&
+           first_decision.state_hash != second_decision.state_hash;
+}
+
 /* ============================================================================
  * Main
  * ============================================================================ */
@@ -3228,6 +3385,11 @@ int main(void) {
     TEST(physics_projectile_branch_decoherence_classic);
     TEST(physics_projectile_branch_collision_observation);
     TEST(physics_projectile_branch_hash_includes_impact);
+    TEST(physics_projectile_collision_oracle_disabled_classic);
+    TEST(physics_projectile_collision_oracle_qge_noimpact);
+    TEST(physics_projectile_collision_oracle_alternate_impact);
+    TEST(physics_projectile_collision_oracle_invalid_trace_fallback);
+    TEST(physics_projectile_collision_oracle_hash_includes_trace);
     printf("\n");
 
     /* Cleanup modules */

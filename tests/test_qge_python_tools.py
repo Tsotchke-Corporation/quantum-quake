@@ -601,7 +601,7 @@ class TraceSummaryTests(unittest.TestCase):
                     8, 2, 4, 313, 0x6F0600, b"projectile_branch_state",
                     3, 2)),
                 (5, state_probe_payload(
-                    9, 2, 4, 313, 0x133F00,
+                    9, 2, 4, 313, 0x3933F00,
                     b"projectile_preimpact_selection", 2, 1)),
             ]
             data = trace_summary.HEADER.pack(
@@ -690,6 +690,14 @@ class TraceSummaryTests(unittest.TestCase):
                 evidence["projectile"]["flags"]["branch_selected_impact"]
             )
             self.assertTrue(evidence["projectile"]["flags"]["branch_decohered"])
+            self.assertTrue(evidence["projectile"]["flags"]["collision_oracle"])
+            self.assertTrue(evidence["projectile"]["flags"]["oracle_qge_trace"])
+            self.assertTrue(evidence["projectile"]["flags"]["oracle_no_impact"])
+            self.assertEqual(evidence["projectile"]["preimpact_oracle_count"], 1)
+            self.assertEqual(
+                evidence["projectile"]["preimpact_no_impact_count"],
+                1,
+            )
             self.assertEqual(evidence["projectile"]["branch_basis_max"], 3)
             self.assertEqual(
                 evidence["projectile"]["branch_selected_probability_max"],
