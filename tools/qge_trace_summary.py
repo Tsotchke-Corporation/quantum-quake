@@ -120,6 +120,7 @@ VIS_FLAGS = {
     "authority_selected": 0x0080,
     "fallback_selected": 0x0100,
     "warmup_pending": 0x0200,
+    "controlled_authority_smoke": 0x0400,
 }
 
 AUDIO_FLAGS = {
@@ -259,9 +260,10 @@ def build_runtime_evidence(summary: dict) -> dict:
             audio_flags |= int(probe.get("flags_or", 0) or 0)
 
     visibility_flags = 0
-    for probe in (vis_gate, vis_apply):
-        if probe:
-            visibility_flags |= int(probe.get("flags_or", 0) or 0)
+    if vis_apply:
+        visibility_flags = int(vis_apply.get("last_flags", 0) or 0)
+    elif vis_gate:
+        visibility_flags = int(vis_gate.get("last_flags", 0) or 0)
     projectile_flags = (
         int(projectile_gate.get("flags_or", 0) or 0)
         if projectile_gate else 0
@@ -286,7 +288,11 @@ def build_runtime_evidence(summary: dict) -> dict:
 
     ai_ready = ai_decision_count > 0 and int(records.get("ai_decision", 0)) > 0
     audio_ready = audio_source_spatial_count > 0
-    visibility_ready = vis_shadow_count > 0 and vis_gate_count > 0
+    visibility_ready = (
+        vis_shadow_count > 0 and
+        vis_gate_count > 0 and
+        vis_apply_count > 0
+    )
     projectile_ready = projectile_gate_count > 0
 
     return {

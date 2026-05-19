@@ -93,7 +93,8 @@ The stream directory is intentionally simple and tail-friendly:
 - `logs/open.log`: LaunchServices notes for macOS `open` mode.
 - `trace/qge_trace_summary.json`: JSON summary of `qge_trace.bin`, including
   `runtime_evidence.single_trace_ready` and per-domain AI, audio, visibility,
-  and projectile evidence counts.
+  and projectile evidence counts. Visibility readiness requires an applied
+  `vis_authority_apply` record, not only shadow/gate telemetry.
 - `qge_agent_stream_icc_evidence.jsonl`: ICC-native evidence entries for the
   manifest, events file, Noesis input traces, latest video frame, raw audio,
   audio metadata, trace artifact, trace summary, frame count, run outcome,
@@ -390,7 +391,10 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
 - `QGE_STREAM_TRACE`: write `qge_trace.bin` when set to `1`.
 - `QGE_STREAM_SOUND`: run with game sound enabled when set to `1`.
 - `QGE_STREAM_AI`: emitted as `quantum_ai`, default `1`.
-- `QGE_STREAM_VIS`: emitted as `quantum_vis`, default `2`.
+- `QGE_STREAM_VIS`: emitted as `quantum_vis`, default `2`. Mode `3` enables
+  the controlled visibility-authority smoke path: the audited QGE writeback mask
+  is forced to match the classic accepted surface set so the renderer handoff
+  can prove `vis_authority_apply` independently of raw Grover/PVS parity.
 - `QGE_STREAM_FIRE_TEST`: run the scripted weapon smoke when set to `1`.
   With the default Noesis player this selects the Noesis `fire` plan unless
   `QGE_NOESIS_PLAN` is set explicitly.

@@ -587,11 +587,11 @@ class TraceSummaryTests(unittest.TestCase):
                 (5, state_probe_payload(
                     2, 4, 9, 3, 0x0A, b"audio_source_spatial")),
                 (5, state_probe_payload(
-                    3, 1, 8, 12, 0x061, b"vis_shadow_parity", 6, 4)),
+                    3, 1, 8, 12, 0x461, b"vis_shadow_parity", 6, 4)),
                 (5, state_probe_payload(
-                    4, 1, 7, 1, 0x0E0, b"vis_authority_gate", 5, 4)),
+                    4, 1, 7, 1, 0x7E0, b"vis_authority_gate", 5, 4)),
                 (5, state_probe_payload(
-                    5, 1, 7, 2, 0x0E0, b"vis_authority_apply", 5, 4)),
+                    5, 1, 7, 2, 0x4E0, b"vis_authority_apply", 5, 4)),
                 (5, state_probe_payload(
                     6, 2, 7, 1, 0x0F03, b"projectile_authority_gate", 2, 1)),
                 (5, state_probe_payload(
@@ -649,6 +649,15 @@ class TraceSummaryTests(unittest.TestCase):
             self.assertTrue(evidence["visibility"]["flags"]["authority_ready"])
             self.assertTrue(
                 evidence["visibility"]["flags"]["authority_selected"]
+            )
+            self.assertTrue(
+                evidence["visibility"]["flags"]["controlled_authority_smoke"]
+            )
+            self.assertFalse(
+                evidence["visibility"]["flags"]["fallback_selected"]
+            )
+            self.assertFalse(
+                evidence["visibility"]["flags"]["warmup_pending"]
             )
             self.assertEqual(
                 evidence["projectile"]["authority_gate_count"],

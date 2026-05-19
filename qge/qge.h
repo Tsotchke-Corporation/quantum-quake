@@ -429,6 +429,7 @@ typedef struct {
     int cumulative_false_negative_count;
     bool authority_ready;
     bool fallback_required;
+    bool controlled_authority_smoke;
     qge_vis_gate_reason_t authority_reason;
     qge_vis_gate_reason_t fallback_reason;
 } qge_vis_shadow_stats_t;
@@ -474,6 +475,13 @@ bool qge_vis_get_audited_visible_mask(
     const qge_vis_writeback_decision_t* decision,
     const unsigned char** visible_mask,
     int* surface_count);
+
+/**
+ * Enable a controlled visibility-authority smoke mode. This copies the
+ * classic accepted surface mask into the audited QGE writeback mask so the
+ * renderer authority path can be tested independently of raw Grover/PVS parity.
+ */
+void qge_vis_shadow_set_controlled_authority_smoke(bool enabled);
 
 /**
  * Set up viewpoint for visibility queries.

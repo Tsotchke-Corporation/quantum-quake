@@ -2265,6 +2265,70 @@ static int test_vis_audited_mask_ready_visible_set(void) {
            visible_mask[2] == 0;
 }
 
+static int test_vis_controlled_authority_smoke_writeback(void) {
+    qge_vis_shadow_stats_t stats;
+    qge_vis_writeback_decision_t decision;
+    const unsigned char *visible_mask = NULL;
+    int surface_count = 0;
+    int required;
+    int ok = 1;
+
+    qge_vis_shutdown();
+    qge_vis_shadow_set_controlled_authority_smoke(true);
+    memset(&stats, 0, sizeof(stats));
+
+    if (!finish_vis_authority_gate_frame(1, &stats)) {
+        ok = 0;
+        goto done;
+    }
+
+    required = stats.clean_frames_required;
+    if (!stats.controlled_authority_smoke ||
+        stats.false_positive_count != 0 ||
+        stats.false_negative_count != 0 ||
+        stats.mismatch_count != 0 ||
+        stats.fallback_reason != QGE_VIS_GATE_REASON_WARMUP_PENDING) {
+        ok = 0;
+        goto done;
+    }
+
+    for (int i = 1; i < required; i++) {
+        if (!finish_vis_authority_gate_frame(1, &stats)) {
+            ok = 0;
+            goto done;
+        }
+    }
+
+    if (!stats.authority_ready ||
+        stats.fallback_required ||
+        stats.fallback_reason != QGE_VIS_GATE_REASON_NONE ||
+        !qge_vis_get_writeback_decision(true, &decision) ||
+        !decision.writeback_allowed ||
+        decision.fallback_selected ||
+        !qge_vis_get_audited_visible_mask(&decision,
+                                          &visible_mask,
+                                          &surface_count)) {
+        ok = 0;
+        goto done;
+    }
+
+    printf("\n    Controlled visibility smoke: clean=%d/%d mask=%d/%d/%d\n    ",
+           stats.consecutive_clean_frames,
+           stats.clean_frames_required,
+           visible_mask[0],
+           visible_mask[1],
+           visible_mask[2]);
+
+    ok = surface_count == 3 &&
+         visible_mask[0] == 1 &&
+         visible_mask[1] == 1 &&
+         visible_mask[2] == 1;
+
+done:
+    qge_vis_shadow_set_controlled_authority_smoke(false);
+    return ok;
+}
+
 /* ============================================================================
  * Quantum Audio Tests
  * ============================================================================ */
@@ -3353,6 +3417,7 @@ int main(void) {
     TEST(vis_writeback_decision_ready);
     TEST(vis_audited_mask_requires_ready_decision);
     TEST(vis_audited_mask_ready_visible_set);
+    TEST(vis_controlled_authority_smoke_writeback);
     printf("\n");
 
     printf("Quantum Audio Tests:\n");

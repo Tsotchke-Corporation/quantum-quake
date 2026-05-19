@@ -126,6 +126,7 @@ static qboolean qge_vis_last_decision_valid = false;
 #define QGE_VIS_TRACE_FLAG_AUTHORITY_SELECTED  0x0080u
 #define QGE_VIS_TRACE_FLAG_FALLBACK_SELECTED   0x0100u
 #define QGE_VIS_TRACE_FLAG_WARMUP_PENDING      0x0200u
+#define QGE_VIS_TRACE_FLAG_CONTROLLED_SMOKE    0x0400u
 
 #define QGE_CLASSIC_2D_VISIBLE 1
 
@@ -7185,6 +7186,12 @@ static qboolean QGE_VisAuthorityRequested(void)
 	return qge_initialized && quantum_vis.value >= 1.5f;
 }
 
+static qboolean QGE_VisControlledAuthoritySmoke(void)
+{
+	/* Mode 3 is a controlled smoke path for the authority handoff only. */
+	return qge_initialized && quantum_vis.value >= 2.5f;
+}
+
 qboolean QGE_VisShadowBegin(qmodel_t *model)
 {
 	int i;
@@ -7195,6 +7202,8 @@ qboolean QGE_VisShadowBegin(qmodel_t *model)
 	qge_vis_authority_requested = QGE_VisAuthorityRequested() ? 1 : 0;
 	qge_vis_authority_selected = 0;
 	qge_vis_fallback_selected = 1;
+	qge_vis_shadow_set_controlled_authority_smoke(
+		QGE_VisControlledAuthoritySmoke() ? true : false);
 	qge_vis_authority_model = NULL;
 	qge_vis_authority_mask = NULL;
 	qge_vis_authority_mask_count = 0;
@@ -7296,6 +7305,8 @@ static void QGE_TraceVisShadowParity(const qge_vis_shadow_stats_t *stats)
 	if (stats->fallback_reason == QGE_VIS_GATE_REASON_WARMUP_PENDING ||
 		stats->fallback_reason == QGE_VIS_GATE_REASON_SURFACE_COUNT_CHANGED)
 		flags |= QGE_VIS_TRACE_FLAG_WARMUP_PENDING;
+	if (stats->controlled_authority_smoke)
+		flags |= QGE_VIS_TRACE_FLAG_CONTROLLED_SMOKE;
 
 	hash = QGE_RegistryHashStep(stats->classic_fingerprint,
 								stats->qge_fingerprint);
@@ -7392,7 +7403,8 @@ static void QGE_TraceVisShadowParity(const qge_vis_shadow_stats_t *stats)
 				"mismatch_fp=0x%llx clean=%d/%d frames=%d "
 				"total_mismatch=%d total_fn=%d authority_ready=%d "
 				"authority_requested=%d authority_selected=%d "
-				"fallback_selected=%d authority_reason=%s "
+				"fallback_selected=%d controlled_smoke=%d "
+				"authority_reason=%s "
 				"fallback_reason=%s\n",
 				qge_frame_count, stats->total_surfaces,
 				stats->classic_visible_count, stats->qge_visible_count,
@@ -7414,6 +7426,7 @@ static void QGE_TraceVisShadowParity(const qge_vis_shadow_stats_t *stats)
 				qge_vis_authority_requested,
 				qge_vis_authority_selected,
 				qge_vis_fallback_selected,
+				stats->controlled_authority_smoke ? 1 : 0,
 				qge_vis_authority_reason,
 				qge_vis_fallback_reason);
 	}
@@ -7497,6 +7510,8 @@ void QGE_VisAuthorityTraceApply(qmodel_t *model, int applied_surfaces)
 		qge_vis_last_decision.fallback_reason ==
 		QGE_VIS_GATE_REASON_SURFACE_COUNT_CHANGED)
 		flags |= QGE_VIS_TRACE_FLAG_WARMUP_PENDING;
+	if (QGE_VisControlledAuthoritySmoke())
+		flags |= QGE_VIS_TRACE_FLAG_CONTROLLED_SMOKE;
 
 	hash = QGE_RegistryHashStep(1469598103934665603ULL,
 								(uint64_t)(uint32_t)model->numsurfaces);

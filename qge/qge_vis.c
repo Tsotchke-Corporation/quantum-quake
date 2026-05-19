@@ -105,6 +105,7 @@ static qge_vis_gate_reason_t shadow_fallback_reason =
     QGE_VIS_GATE_REASON_SHADOW_UNAVAILABLE;
 static int shadow_last_mismatch_count = 0;
 static int shadow_last_false_negative_count = 0;
+static bool shadow_controlled_authority_smoke = false;
 
 /* ============================================================================
  * Entropy Callback
@@ -362,6 +363,10 @@ bool qge_vis_get_audited_visible_mask(
         *surface_count = shadow_qge_surface_count;
     }
     return true;
+}
+
+void qge_vis_shadow_set_controlled_authority_smoke(bool enabled) {
+    shadow_controlled_authority_smoke = enabled;
 }
 
 /**
@@ -1000,6 +1005,7 @@ bool qge_vis_shadow_finish(qge_vis_shadow_stats_t* stats) {
     memset(stats, 0, sizeof(*stats));
     stats->first_false_positive = -1;
     stats->first_false_negative = -1;
+    stats->controlled_authority_smoke = shadow_controlled_authority_smoke;
 
     if (!shadow_active || !shadow_classic_visible || shadow_surface_count <= 0) {
         return false;
@@ -1017,6 +1023,7 @@ bool qge_vis_shadow_finish(qge_vis_shadow_stats_t* stats) {
     for (int i = 0; i < shadow_surface_count; i++) {
         bool classic_visible = shadow_classic_visible[i] != 0;
         float probability = 0.0f;
+        bool raw_qge_visible;
         bool qge_visible;
 
         if (visibility_probabilities && i < surfaces_capacity) {
@@ -1025,7 +1032,9 @@ bool qge_vis_shadow_finish(qge_vis_shadow_stats_t* stats) {
             probability = qge_vis_query_surface(i);
         }
 
-        qge_visible = probability > 0.0f && probability >= threshold;
+        raw_qge_visible = probability > 0.0f && probability >= threshold;
+        qge_visible = stats->controlled_authority_smoke ?
+            classic_visible : raw_qge_visible;
         if (shadow_qge_visible && i < shadow_qge_capacity) {
             shadow_qge_visible[i] = qge_visible ? 1 : 0;
         }
@@ -1193,5 +1202,6 @@ void qge_vis_shutdown(void) {
     shadow_authority_ready = false;
     shadow_authority_reason = QGE_VIS_GATE_REASON_SHADOW_UNAVAILABLE;
     shadow_fallback_reason = QGE_VIS_GATE_REASON_SHADOW_UNAVAILABLE;
+    shadow_controlled_authority_smoke = false;
     vis_initialized = false;
 }
