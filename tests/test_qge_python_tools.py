@@ -370,6 +370,114 @@ class PerformanceSummaryTests(unittest.TestCase):
 
 
 class NoesisSummaryTests(unittest.TestCase):
+    def test_phase_clear_without_enemy_contact_is_not_combat_blocked(self) -> None:
+        phase_events = [
+            {
+                "type": "event",
+                "kind": "noesis_phase",
+                "phase": "e1m1_entry_clear",
+                "frame": 1,
+                "state": {
+                    "route": {
+                        "total_distance": 0.0,
+                        "max_displacement_from_start": 0.0,
+                        "leaf_transition_count": 0,
+                    },
+                    "combat": {
+                        "damage_dealt_inferred_total": 0,
+                        "kills_total": 0,
+                        "attack_visible_total": 0,
+                        "attack_aligned_total": 0,
+                    },
+                },
+            }
+        ]
+        samples = [
+            {
+                "type": "sample",
+                "frame": 4,
+                "route": {
+                    "total_distance": 80.0,
+                    "max_displacement_from_start": 70.0,
+                    "leaf_transition_count": 1,
+                },
+                "combat": {
+                    "visible_enemy_count": 0,
+                    "nearest_enemy_distance": 1024.0,
+                    "nearest_enemy_visible": False,
+                    "damage_dealt_inferred_total": 0,
+                    "kills_total": 0,
+                    "attack_visible_total": 0,
+                    "attack_aligned_total": 0,
+                },
+                "player": {
+                    "attack_active": True,
+                },
+            }
+        ]
+
+        phase = noesis_summary.summarize_phase_progress(phase_events, samples)
+
+        self.assertEqual(phase["progress_blocked_count"], 0)
+        self.assertEqual(phase["combat_blocked_count"], 0)
+        self.assertEqual(phase["blocked_phases"], [])
+        self.assertFalse(phase["intervals"][0]["combat_required"])
+        self.assertFalse(phase["intervals"][0]["combat_opportunity"])
+
+    def test_phase_clear_with_enemy_contact_requires_combat(self) -> None:
+        phase_events = [
+            {
+                "type": "event",
+                "kind": "noesis_phase",
+                "phase": "e1m1_entry_clear",
+                "frame": 1,
+                "state": {
+                    "route": {
+                        "total_distance": 0.0,
+                        "max_displacement_from_start": 0.0,
+                        "leaf_transition_count": 0,
+                    },
+                    "combat": {
+                        "damage_dealt_inferred_total": 0,
+                        "kills_total": 0,
+                        "attack_visible_total": 0,
+                        "attack_aligned_total": 0,
+                    },
+                },
+            }
+        ]
+        samples = [
+            {
+                "type": "sample",
+                "frame": 4,
+                "route": {
+                    "total_distance": 80.0,
+                    "max_displacement_from_start": 70.0,
+                    "leaf_transition_count": 1,
+                },
+                "combat": {
+                    "visible_enemy_count": 0,
+                    "nearest_enemy_distance": 256.0,
+                    "nearest_enemy_visible": False,
+                    "damage_dealt_inferred_total": 0,
+                    "kills_total": 0,
+                    "attack_visible_total": 0,
+                    "attack_aligned_total": 0,
+                },
+                "player": {
+                    "attack_active": False,
+                },
+            }
+        ]
+
+        phase = noesis_summary.summarize_phase_progress(phase_events, samples)
+
+        self.assertEqual(phase["progress_blocked_count"], 1)
+        self.assertEqual(phase["combat_blocked_count"], 1)
+        self.assertEqual(phase["blocked_phases"], ["e1m1_entry_clear"])
+        self.assertTrue(phase["intervals"][0]["combat_required"])
+        self.assertTrue(phase["intervals"][0]["combat_opportunity"])
+
     def test_build_summary_and_icc_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmpdir = Path(tmp)

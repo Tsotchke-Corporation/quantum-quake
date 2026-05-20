@@ -378,7 +378,11 @@ executes `qge_noesis_phase`, which queues an engine-owned `noesis_phase` event
 in `gameplay_outcomes.ndjson` with the next gameplay sample's player, route,
 combat, pickup, and assist state. Required combat progress needs damage, a kill,
 or an attack while the player is aligned to a visible enemy; pressing fire near
-an enemy is not enough. The gameplay score discounts attack-press credit when
+an enemy is not enough. Phase names such as `*_clear` only require combat
+progress when the interval also contains a combat opportunity: visible enemy
+samples, enemy-contact samples, damage, kills, or visible/aligned attack
+telemetry. Blind fire by itself does not turn a route-only interval into a
+blocked combat phase. The gameplay score discounts attack-press credit when
 attack frames are blind or visible-but-unaligned, and applies a small combat
 penalty when observed ammo spend is unproductive. Route telemetry also reports
 movement efficiency, stationary fraction, maximum stationary run, and

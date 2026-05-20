@@ -461,8 +461,6 @@ def summarize_phase_progress(
             end_state, event, "combat", "damage_dealt_inferred_total")
         kill_delta = metric_delta(end_state, event, "combat", "kills_total")
         pickup_delta = metric_delta(end_state, event, "pickup", "pickups_total")
-        route_required = phase_requires(phase, ROUTE_PHASE_HINTS)
-        combat_required = phase_requires(phase, COMBAT_PHASE_HINTS)
         route_progress = (
             distance_delta >= 8.0 or displacement_delta >= 8.0 or
             leaf_delta > 0.0 or pickup_delta > 0.0
@@ -470,6 +468,17 @@ def summarize_phase_progress(
         combat_progress = (
             damage_delta > 0.0 or kill_delta > 0.0 or
             attack_aligned_delta > 0.0 or attack_aligned_samples > 0
+        )
+        combat_opportunity = (
+            visible_enemy_samples > 0 or enemy_contact_samples > 0 or
+            damage_delta > 0.0 or kill_delta > 0.0 or
+            attack_visible_delta > 0.0 or attack_aligned_delta > 0.0 or
+            attack_visible_samples > 0 or attack_aligned_samples > 0
+        )
+        route_required = phase_requires(phase, ROUTE_PHASE_HINTS)
+        combat_required = (
+            phase_requires(phase, COMBAT_PHASE_HINTS) and
+            combat_opportunity
         )
         route_pass = not route_required or route_progress
         combat_pass = not combat_required or combat_progress
@@ -499,6 +508,7 @@ def summarize_phase_progress(
             "sample_count": len(interval_samples),
             "route_required": route_required,
             "combat_required": combat_required,
+            "combat_opportunity": combat_opportunity,
             "distance_delta": round(distance_delta, 3),
             "displacement_delta": round(displacement_delta, 3),
             "leaf_transition_delta": int(leaf_delta),
