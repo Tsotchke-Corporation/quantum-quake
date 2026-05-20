@@ -8126,6 +8126,29 @@ static const char *QGE_RenderOwnershipFallbackReason(void)
 	return "none";
 }
 
+static const char *QGE_RenderIDWTBackendName(int native_idwt_success,
+											 int native_idwt_fallback,
+											 int cpu_idwt)
+{
+	int backend_count = 0;
+
+	if (native_idwt_success > 0)
+		backend_count++;
+	if (native_idwt_fallback > 0)
+		backend_count++;
+	if (cpu_idwt > 0)
+		backend_count++;
+	if (backend_count > 1)
+		return "mixed";
+	if (native_idwt_success > 0)
+		return qge_dwt_render_backend_name(QGE_DWT_RENDER_BACKEND_NATIVE);
+	if (native_idwt_fallback > 0)
+		return qge_dwt_render_backend_name(QGE_DWT_RENDER_BACKEND_NATIVE_FALLBACK);
+	if (cpu_idwt > 0)
+		return qge_dwt_render_backend_name(QGE_DWT_RENDER_BACKEND_CPU);
+	return qge_dwt_render_backend_name(QGE_DWT_RENDER_BACKEND_NONE);
+}
+
 void QGE_RenderScene(void)
 {
 	int active = 0;
@@ -8149,6 +8172,9 @@ void QGE_RenderScene(void)
 	int native_idwt_success = 0;
 	int native_idwt_fallback = 0;
 	int cpu_idwt = 0;
+	const char *idwt_backend;
+	const char *idwt_path;
+	const char *idwt_reason;
 	uint32_t render_trace_flags;
 
 	if (!qge_initialized ||
@@ -8198,6 +8224,11 @@ void QGE_RenderScene(void)
 			break;
 		}
 	}
+	idwt_backend = QGE_RenderIDWTBackendName(native_idwt_success,
+											 native_idwt_fallback,
+											 cpu_idwt);
+	idwt_path = qge_ctx ? qge_context_backend_runtime_path(qge_ctx) : "uninitialized";
+	idwt_reason = qge_ctx ? qge_context_backend_reason(qge_ctx) : "uninitialized";
 	after_dwt = Sys_DoubleTime();
 
 	/* Step 3: Convert float pixels to RGB display buffer. */
@@ -8299,6 +8330,7 @@ void QGE_RenderScene(void)
 						   "viewmodel=%d entity_miss=%d particles=%d pcoeff=%d gates=%d shots=%d "
 						   "readout=%.3f edgeq=%.3f ggain=%.3f egain=%.3f "
 						   "native_idwt=%d idwt_fallback=%d cpu_idwt=%d "
+						   "idwt_backend=%s idwt_path=%s idwt_reason=%s "
 						   "nonzero=%d/%d primary_fb=%d classic2d=%d suppressed2d=%d "
 						   "own_world=%d own_textures=%d own_lightmaps=%d own_entities=%d own_sprites=%d own_particles=%d own_viewmodel=%d "
 						   "own_hud=%d own_console=%d "
@@ -8338,6 +8370,7 @@ void QGE_RenderScene(void)
 						   qge_render_gate_gain, qge_render_gate_edge_gain,
 						   native_idwt_success, native_idwt_fallback,
 						   cpu_idwt,
+						   idwt_backend, idwt_path, idwt_reason,
 						   nonzero_pixels, total_pixels,
 						   primary_fb, classic2d, suppressed2d,
 						   own_world, own_textures, own_lightmaps,
@@ -8360,6 +8393,7 @@ void QGE_RenderScene(void)
 					"gate_p=%.6f gate_edge=%.6f gate_gain=%.6f edge_gain=%.6f material_gain=%.6f "
 					"gate_rgb=%.4f/%.4f/%.4f gate_entropy=%.3f gate_coh=%.3f "
 					"native_idwt=%d idwt_fallback=%d cpu_idwt=%d "
+					"idwt_backend=%s idwt_path=%s idwt_reason=%s "
 					"tone_floor=%.6f tone_white=%.6f tone_clip=%d levels=%d gl_upload=0x%x gl_draw=0x%x "
 					"primary_fb=%d classic2d=%d suppressed2d=%d "
 					"own_world=%d own_textures=%d own_lightmaps=%d own_entities=%d own_sprites=%d own_particles=%d own_viewmodel=%d "
@@ -8413,6 +8447,7 @@ void QGE_RenderScene(void)
 					qge_render_gate_color_gain[QGE_DWT_B],
 					qge_render_gate_entropy, qge_render_gate_coherence,
 					native_idwt_success, native_idwt_fallback, cpu_idwt,
+					idwt_backend, idwt_path, idwt_reason,
 					qge_last_tone_floor, qge_last_tone_white,
 					qge_last_tone_clipped, qge_dwt_levels,
 					(unsigned)qge_last_gl_upload_error,

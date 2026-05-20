@@ -1232,6 +1232,20 @@ qge_dwt_render_backend_t qge_dwt_last_render_backend(dwt_framebuffer_t* fb) {
     return fb ? fb->last_render_backend : QGE_DWT_RENDER_BACKEND_NONE;
 }
 
+const char* qge_dwt_render_backend_name(qge_dwt_render_backend_t backend) {
+    switch (backend) {
+        case QGE_DWT_RENDER_BACKEND_CPU:
+            return "cpu";
+        case QGE_DWT_RENDER_BACKEND_NATIVE:
+            return "native";
+        case QGE_DWT_RENDER_BACKEND_NATIVE_FALLBACK:
+            return "native_fallback";
+        case QGE_DWT_RENDER_BACKEND_NONE:
+        default:
+            return "none";
+    }
+}
+
 /* ============================================================================
  * Direct Probability Rendering (Fallback)
  * ============================================================================ */

@@ -2289,8 +2289,11 @@ class TraceSummaryTests(unittest.TestCase):
             self.assertFalse(
                 evidence["render"]["flags"]["native_idwt_fallback"]
             )
+            self.assertFalse(evidence["render"]["flags"]["cpu_idwt"])
+            self.assertEqual(evidence["render"]["idwt_backend"], "native")
             self.assertEqual(evidence["render"]["native_bridge_count"], 1)
             self.assertEqual(evidence["render"]["native_fallback_count"], 0)
+            self.assertEqual(evidence["render"]["cpu_idwt_count"], 0)
             self.assertEqual(
                 evidence["visibility"]["authority_gate_count"],
                 1,
@@ -2397,6 +2400,61 @@ class TraceSummaryTests(unittest.TestCase):
                 1.0,
             )
             self.assertEqual(evidence["projectile"]["off_reason"], "none")
+
+    def test_runtime_evidence_tracks_cpu_render_backend(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            trace_path = Path(tmp) / "qge_trace.bin"
+            label = b"render_sparse_dwt"
+            payload = trace_summary.STATE_PROBE.pack(
+                4,
+                104,
+                0,
+                2,
+                64,
+                0x80000,
+                0xCAFE,
+                0.125,
+                0.875,
+                0.75,
+                256.0,
+                512,
+                10,
+                4096,
+                label + b"\0" * (32 - len(label)),
+            )
+            trace_path.write_bytes(
+                trace_summary.HEADER.pack(
+                    trace_summary.TRACE_MAGIC,
+                    trace_summary.TRACE_VERSION,
+                    trace_summary.HEADER.size,
+                    0x1,
+                    0,
+                    0x5151455F52554E31,
+                    0x2,
+                    0x3,
+                    0x4,
+                )
+                + trace_summary.RECORD.pack(
+                    5,
+                    trace_summary.TRACE_VERSION,
+                    len(payload),
+                    0,
+                )
+                + payload
+            )
+
+            parsed = trace_summary.parse_trace(str(trace_path))
+            evidence = parsed["runtime_evidence"]
+            self.assertEqual(evidence["render"]["sparse_dwt_count"], 1)
+            self.assertEqual(evidence["render"]["idwt_backend"], "cpu")
+            self.assertFalse(evidence["render"]["flags"]["native_idwt"])
+            self.assertFalse(
+                evidence["render"]["flags"]["native_idwt_fallback"]
+            )
+            self.assertTrue(evidence["render"]["flags"]["cpu_idwt"])
+            self.assertEqual(evidence["render"]["native_bridge_count"], 0)
+            self.assertEqual(evidence["render"]["native_fallback_count"], 0)
+            self.assertEqual(evidence["render"]["cpu_idwt_count"], 1)
 
 
 class VanillaCaptureMatrixTests(unittest.TestCase):

@@ -1739,6 +1739,8 @@ static int test_dwt_render(void) {
     }
 
     qge_dwt_render(fb, output);
+    qge_dwt_render_backend_t backend = qge_dwt_last_render_backend(fb);
+    const char *backend_name = qge_dwt_render_backend_name(backend);
 
     /* Check that output has non-zero values */
     int non_zero = 0;
@@ -1750,12 +1752,15 @@ static int test_dwt_render(void) {
         }
     }
 
-    printf("\n    Render: %d non-zero pixels, sum=%.2f\n    ", non_zero, sum);
+    printf("\n    Render: %d non-zero pixels, sum=%.2f backend=%s\n    ",
+           non_zero, sum, backend_name);
 
     free(output);
     qge_dwt_framebuffer_free(fb);
 
-    return non_zero > 0;
+    return non_zero > 0 &&
+           backend == QGE_DWT_RENDER_BACKEND_CPU &&
+           strcmp(backend_name, "cpu") == 0;
 }
 
 static int test_dwt_spatial_rectangle_roundtrip(void) {
@@ -2011,8 +2016,8 @@ static int test_dwt_native_bridge_matches_cpu(void) {
 
     qge_dwt_render_backend_t native_backend =
         qge_dwt_last_render_backend(native_fb);
-    printf("\n    Native DWT bridge parity: backend=%d max_delta=%.6f sum_delta=%.6f\n    ",
-           (int)native_backend, max_delta, sum_delta);
+    printf("\n    Native DWT bridge parity: backend=%s max_delta=%.6f sum_delta=%.6f\n    ",
+           qge_dwt_render_backend_name(native_backend), max_delta, sum_delta);
 
     qge_dwt_framebuffer_free(cpu_fb);
     qge_dwt_framebuffer_free(native_fb);
@@ -2022,6 +2027,7 @@ static int test_dwt_native_bridge_matches_cpu(void) {
     qge_shutdown(ctx);
 
     return native_backend == QGE_DWT_RENDER_BACKEND_NATIVE &&
+           strcmp(qge_dwt_render_backend_name(native_backend), "native") == 0 &&
            max_delta < 0.0005f &&
            sum_delta < 0.05f;
 }

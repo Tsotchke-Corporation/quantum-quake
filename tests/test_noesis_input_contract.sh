@@ -7,6 +7,8 @@ trap 'rm -rf "$tmpdir"' EXIT
 
 grep -q 'stream_mouse="${QGE_STREAM_MOUSE:-0}"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -q 'stream_display="${QGE_STREAM_DISPLAY:-}"' "$repo_root/tools/quake_graphics_stream.sh"
+grep -Fq 'app_bin="${QGE_STREAM_APP_BIN:-$repo_root/QuantumQuake.app/Contents/MacOS/quantum_quake}"' "$repo_root/tools/quake_graphics_stream.sh"
+grep -Fq '"app_bin": $(json_string "$app_bin")' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'run_args+=(-nomouse)' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'run_args=(-nolauncher -basedir "$basedir" "${video_args[@]}")' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'arguments = [[QuakeArguments alloc] initWithArguments:gArgv + 1 count:gArgc - 1];' "$repo_root/quake/MacOSX/AppController.m"

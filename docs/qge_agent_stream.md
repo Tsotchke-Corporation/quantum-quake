@@ -204,7 +204,9 @@ high-resolution CPU timing split:
   Native bridge runs also emit `native_idwt`, `idwt_fallback`, and `cpu_idwt`
   counts. `native_idwt>0` with `idwt_fallback=0` proves the sparse DWT
   framebuffer reconstructed through the native Metal bridge instead of the CPU
-  inverse-DWT path.
+  inverse-DWT path. The same line includes `idwt_backend`, `idwt_path`, and
+  `idwt_reason` so CPU, native, mixed, and intentional fallback paths remain
+  machine-readable in `qge_perf_summary.py` and trace-derived runtime evidence.
 - `convert`: tone mapping and RGB display-buffer conversion.
 - `blit`: OpenGL texture upload and screen draw.
 
@@ -518,6 +520,10 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
 - `QGE_STREAM_WAIT_FRAMES`: default engine capture wait, default `20`.
 - `QGE_STREAM_CAPTURE_WAIT`: explicit engine capture frame.
 - `QGE_STREAM_TIMEOUT_SECONDS`: explicit launch/watchdog timeout.
+- `QGE_STREAM_APP_BIN`: optional direct-launch executable override. This keeps
+  the same harness, `-nomouse`, and stream manifest path when macOS
+  LaunchServices refuses the app bundle but the standalone build product is
+  usable.
 - `QGE_STREAM_TRACE`: write `qge_trace.bin` when set to `1`.
 - `QGE_STREAM_REPLAY_TRACE`: load an existing QGE trace with `-qgereplay`.
 - `QGE_STREAM_REPLAY_STRICT`: strict replay metadata checks, default `1`.

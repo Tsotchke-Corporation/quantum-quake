@@ -4,8 +4,8 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
-app_bin="$repo_root/QuantumQuake.app/Contents/MacOS/quantum_quake"
-app_bundle="$repo_root/QuantumQuake.app"
+app_bin="${QGE_STREAM_APP_BIN:-$repo_root/QuantumQuake.app/Contents/MacOS/quantum_quake}"
+app_bundle="${QGE_STREAM_APP_BUNDLE:-$repo_root/QuantumQuake.app}"
 app_bundle_id="com.quantumquake.QuantumQuake"
 basedir="$repo_root/assets"
 gamedir="$basedir/id1"
@@ -313,6 +313,7 @@ write_agent_manifest() {
   "status": $(json_string "$status"),
   "stream_dir": $(json_string "$agent_stream"),
   "capture_dir": $(json_string "$outdir"),
+  "app_bin": $(json_string "$app_bin"),
   "map": $(json_string "$map_name"),
   "frames_requested": $frames,
   "frames_captured": $manifest_frame_count,

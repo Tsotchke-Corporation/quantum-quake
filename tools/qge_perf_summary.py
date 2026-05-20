@@ -19,6 +19,18 @@ AVG_RE = re.compile(
     r"(?P<ms>[0-9]+(?:\.[0-9]+)?) ms "
     r"\((?P<frames>[0-9]+) frames\)"
 )
+BACKEND_GATE_RE = re.compile(
+    r"^QGE: Backend gate "
+    r"phase=(?P<phase>\S+) "
+    r"backend=(?P<backend>\S+) "
+    r"status=(?P<status>.+?) "
+    r"native=(?P<native>[0-9]+) "
+    r"active=(?P<active>[0-9]+) "
+    r"flags=(?P<flags>0x[0-9a-fA-F]+|[0-9]+) "
+    r"path=(?P<path>\S+) "
+    r"reason=(?P<reason>\S+) "
+    r"probe=(?P<probe>\S+)"
+)
 NUMBER_RE = re.compile(r"^-?[0-9]+(?:\.[0-9]+)?$")
 
 
@@ -48,12 +60,24 @@ def parse_render_line(line: str) -> dict[str, Any] | None:
     return fields if fields else None
 
 
+def parse_backend_gate_line(line: str) -> dict[str, Any] | None:
+    match = BACKEND_GATE_RE.match(line)
+    if not match:
+        return None
+    fields: dict[str, Any] = dict(match.groupdict())
+    fields["native"] = int(fields["native"])
+    fields["active"] = int(fields["active"])
+    fields["flags_int"] = int(str(fields["flags"]), 0)
+    return fields
+
+
 def parse_log(path: Path) -> dict[str, Any]:
     log_path = resolve_log_path(path)
     render_frames: list[dict[str, Any]] = []
     average_ms: float | None = None
     average_frames: int | None = None
     backend_gate_lines: list[str] = []
+    backend_gate_events: list[dict[str, Any]] = []
     exists = log_path.is_file()
     if exists:
         with log_path.open("r", encoding="utf-8", errors="replace") as f:
@@ -70,6 +94,9 @@ def parse_log(path: Path) -> dict[str, Any]:
                     continue
                 if line.startswith("QGE: Backend gate "):
                     backend_gate_lines.append(line)
+                    backend_gate = parse_backend_gate_line(line)
+                    if backend_gate is not None:
+                        backend_gate_events.append(backend_gate)
 
     render_times = [
         float(frame["time"])
@@ -105,6 +132,19 @@ def parse_log(path: Path) -> dict[str, Any]:
         for frame in render_frames
         if isinstance(frame.get("cpu_idwt"), int)
     ]
+    idwt_backend_values = [
+        str(frame["idwt_backend"])
+        for frame in render_frames
+        if isinstance(frame.get("idwt_backend"), str)
+    ]
+    idwt_backend_counts = {
+        backend: idwt_backend_values.count(backend)
+        for backend in sorted(set(idwt_backend_values))
+    }
+    render_bridge_events = [
+        event for event in backend_gate_events
+        if event.get("phase") == "render_bridge"
+    ]
 
     return {
         "input_path": str(path),
@@ -134,11 +174,26 @@ def parse_log(path: Path) -> dict[str, Any]:
             "max": max(cpu_idwt_values) if cpu_idwt_values else None,
             "sum": sum(cpu_idwt_values) if cpu_idwt_values else 0,
         },
+        "idwt_backend": {
+            "last": idwt_backend_values[-1] if idwt_backend_values else None,
+            "values": sorted(set(idwt_backend_values)),
+            "counts": idwt_backend_counts,
+        },
         "last_render_frame": render_frames[-1] if render_frames else None,
         "backend_gate_count": len(backend_gate_lines),
         "backend_gate_init": backend_gate_lines[0] if backend_gate_lines else None,
         "backend_gate_shutdown": (
             backend_gate_lines[-1] if len(backend_gate_lines) > 1 else None
+        ),
+        "backend_gate_events": backend_gate_events,
+        "backend_gate_init_event": (
+            backend_gate_events[0] if backend_gate_events else None
+        ),
+        "backend_gate_render_bridge_event": (
+            render_bridge_events[0] if render_bridge_events else None
+        ),
+        "backend_gate_shutdown_event": (
+            backend_gate_events[-1] if len(backend_gate_events) > 1 else None
         ),
     }
 
@@ -168,6 +223,11 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
         int((log.get("cpu_idwt") or {}).get("sum") or 0)
         for log in logs
     ]
+    idwt_backend_values = sorted({
+        value
+        for log in logs
+        for value in (log.get("idwt_backend") or {}).get("values", [])
+    })
     missing_logs = [log["log_path"] for log in logs if not log["exists"]]
     metric_evidence_present = bool(average_values or render_max_values)
     threshold_failures: list[dict[str, Any]] = []
@@ -209,6 +269,7 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
             "native_idwt_sum": sum(native_idwt_sums),
             "idwt_fallback_sum": sum(idwt_fallback_sums),
             "cpu_idwt_sum": sum(cpu_idwt_sums),
+            "idwt_backend_values": idwt_backend_values,
             "threshold_failures": threshold_failures,
             "max_average_ms": args.max_average_ms,
             "max_render_ms": args.max_render_ms,
@@ -244,6 +305,7 @@ def build_icc_evidence(summary: dict[str, Any],
         "native_idwt_sum": aggregate["native_idwt_sum"],
         "idwt_fallback_sum": aggregate["idwt_fallback_sum"],
         "cpu_idwt_sum": aggregate["cpu_idwt_sum"],
+        "idwt_backend_values": aggregate["idwt_backend_values"],
         "max_average_ms": aggregate["max_average_ms"],
         "max_render_ms": aggregate["max_render_ms"],
         "threshold_failures": aggregate["threshold_failures"],
@@ -277,7 +339,8 @@ def print_text(summary: dict[str, Any]) -> None:
             f"render_max={log['render_time_ms']['max']} "
             f"native_idwt={log['native_idwt']['sum']} "
             f"idwt_fallback={log['idwt_fallback']['sum']} "
-            f"cpu_idwt={log['cpu_idwt']['sum']}"
+            f"cpu_idwt={log['cpu_idwt']['sum']} "
+            f"idwt_backend={log['idwt_backend']['last']}"
         )
     for failure in aggregate["threshold_failures"]:
         print(

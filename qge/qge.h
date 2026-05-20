@@ -399,6 +399,11 @@ void qge_dwt_render(dwt_framebuffer_t* fb, float* output);
 qge_dwt_render_backend_t qge_dwt_last_render_backend(dwt_framebuffer_t* fb);
 
 /**
+ * Stable machine-readable name for a DWT reconstruction backend.
+ */
+const char* qge_dwt_render_backend_name(qge_dwt_render_backend_t backend);
+
+/**
  * Get count of active (non-zero) coefficients.
  */
 int qge_dwt_get_active_count(dwt_framebuffer_t* fb);

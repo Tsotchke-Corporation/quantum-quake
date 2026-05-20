@@ -1159,6 +1159,7 @@ def summarize_trace(path: Path) -> dict[str, Any]:
         "render_sparse_dwt_count": int(render.get("sparse_dwt_count") or 0),
         "render_native_bridge_count": int(render.get("native_bridge_count") or 0),
         "render_native_fallback_count": int(render.get("native_fallback_count") or 0),
+        "render_cpu_idwt_count": int(render.get("cpu_idwt_count") or 0),
         "visibility_authority_apply_count": int(
             visibility.get("authority_apply_count") or 0
         ),
