@@ -722,6 +722,11 @@ class NoesisSummaryTests(unittest.TestCase):
                                 "attack_injected": True,
                                 "attack_suppressed": False,
                                 "fire_gate_passed": True,
+                                "target_locked": True,
+                                "target_switched": False,
+                                "target_switches_total": 1,
+                                "locked_frames_total": 7,
+                                "switch_fire_suppressed": True,
                             },
                         }),
                         json.dumps({
@@ -943,6 +948,28 @@ class NoesisSummaryTests(unittest.TestCase):
                 1,
             )
             self.assertEqual(
+                summary["gameplay"]["assist"][
+                    "target_locked_sample_count"],
+                1,
+            )
+            self.assertEqual(
+                summary["gameplay"]["assist"]["target_locked_fraction"],
+                0.5,
+            )
+            self.assertEqual(
+                summary["gameplay"]["assist"]["target_switch_count"],
+                1,
+            )
+            self.assertEqual(
+                summary["gameplay"]["assist"]["locked_frames_total"],
+                7,
+            )
+            self.assertEqual(
+                summary["gameplay"]["assist"][
+                    "switch_fire_suppressed_sample_count"],
+                1,
+            )
+            self.assertEqual(
                 summary["gameplay"]["assist"]["pre_assist_aim_error_min"],
                 4.5,
             )
@@ -1159,6 +1186,27 @@ class NoesisSummaryTests(unittest.TestCase):
             )
             self.assertEqual(
                 by_name["noesis_assist_fire_gate_passed_sample_count"],
+                1,
+            )
+            self.assertEqual(
+                by_name["noesis_assist_target_locked_sample_count"],
+                1,
+            )
+            self.assertEqual(
+                by_name["noesis_assist_target_locked_fraction"],
+                0.5,
+            )
+            self.assertEqual(
+                by_name["noesis_assist_target_switch_count"],
+                1,
+            )
+            self.assertEqual(
+                by_name["noesis_assist_locked_frames_total"],
+                7,
+            )
+            self.assertEqual(
+                by_name[
+                    "noesis_assist_switch_fire_suppressed_sample_count"],
                 1,
             )
             self.assertEqual(

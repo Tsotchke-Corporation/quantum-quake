@@ -135,7 +135,9 @@ The stream directory is intentionally simple and tail-friendly:
   these samples. When `QGE_NOESIS_ASSIST` is enabled, samples also include assist
   mode, target visibility/distance, aim yaw/pitch, steering commands,
   wall-probe distances, pre-assist aim error, and whether the assist injected
-  view, movement, or attack state.
+  view, movement, or attack state. Mode `2` also keeps a bounded target lock and
+  suppresses fire on large first-frame target switches so Noesis can finish one
+  viable monster instead of oscillating between nearby candidates.
 - `logs/quantum_quake.log`: runtime console log mirrored into the stream.
 - `logs/open.log`: LaunchServices notes for macOS `open` mode.
 - `trace/qge_trace_summary.json`: JSON summary of `qge_trace.bin`, including
@@ -392,8 +394,9 @@ wedged cannot pass as clean progress while a short post-plan idle tail does not
 poison a long successful route. Assist runs additionally emit requested mode,
 active sample count, visible-target sample count, steering sample count,
 attack-visible frames, target-distance evidence, view/movement/attack injection
-sample counts, pre-assist aim-error min/average, and a claim scope. Assisted
-runs are marked `server_assisted` so they cannot be
+sample counts, target-lock/switch counts, pre-assist aim-error min/average,
+switch-fire suppression counts, and a claim scope. Assisted runs are marked
+`server_assisted` so they cannot be
 mistaken for unassisted play evidence. Set `QGE_NOESIS_MIN_LOG_PHASES` to
 require that many `QGE_NOESIS_PHASE` markers to appear in the engine log and
 matching engine-owned `noesis_phase` outcome events to appear in gameplay
@@ -606,9 +609,9 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   scripted movement command. For mode `1`, visible targets are ranked by
   current aim error first and distance second, so a scan does not abandon the
   enemy closest to the crosshair for a merely nearer side target. Mode `2` also
-  steers the server usercmd toward the nearest monster with a small
-  wall-avoidance probe and kites visible close targets instead of walking into
-  them. When hidden-target chase hits a wall, its sidestep follows the clearer
+  steers the server usercmd toward a short-lived locked monster target with a
+  small wall-avoidance probe and kites visible close targets instead of walking
+  into them. When hidden-target chase hits a wall, its sidestep follows the clearer
   probe side using Quake's sidemove sign convention. Hidden distant targets do not override
   scripted view or route movement; once the scripted route gets near enough,
   hidden-target chase can help finish the approach, while assist still

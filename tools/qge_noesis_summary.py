@@ -1025,6 +1025,27 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
         1 for sample in playable_samples
         if bool(value_at(sample, "assist", "fire_gate_passed", default=False))
     )
+    assist_locked_frames = sum(
+        1 for sample in playable_samples
+        if bool(value_at(sample, "assist", "target_locked", default=False))
+    )
+    assist_target_switch_samples = sum(
+        1 for sample in playable_samples
+        if bool(value_at(sample, "assist", "target_switched", default=False))
+    )
+    assist_switch_fire_suppressed_frames = sum(
+        1 for sample in playable_samples
+        if bool(value_at(
+            sample, "assist", "switch_fire_suppressed", default=False))
+    )
+    assist_target_switch_totals = [
+        as_number(value_at(sample, "assist", "target_switches_total"), 0.0)
+        for sample in playable_samples
+    ]
+    assist_locked_frame_totals = [
+        as_number(value_at(sample, "assist", "locked_frames_total"), 0.0)
+        for sample in playable_samples
+    ]
     assist_pre_aim_errors = [
         as_number(value_at(
             sample, "assist", "pre_assist_aim_error_deg"), -1.0)
@@ -1162,6 +1183,20 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
             "attack_injected_sample_count": assist_attack_injected_frames,
             "attack_suppressed_sample_count": assist_attack_suppressed_frames,
             "fire_gate_passed_sample_count": assist_fire_gate_passed_frames,
+            "target_locked_sample_count": assist_locked_frames,
+            "target_locked_fraction": round(
+                assist_locked_frames / len(playable_samples), 4
+            ) if playable_samples else 0.0,
+            "target_switch_sample_count": assist_target_switch_samples,
+            "target_switch_count": int(max(
+                assist_target_switch_totals
+            )) if assist_target_switch_totals else assist_target_switch_samples,
+            "locked_frames_total": int(max(
+                assist_locked_frame_totals
+            )) if assist_locked_frame_totals else assist_locked_frames,
+            "switch_fire_suppressed_sample_count": (
+                assist_switch_fire_suppressed_frames
+            ),
             "pre_assist_aim_error_min": (
                 min(assist_pre_aim_errors)
                 if assist_pre_aim_errors else None
@@ -2285,6 +2320,37 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "kind": "runtime_state",
             "name": "noesis_assist_fire_gate_passed_sample_count",
             "value": gameplay_assist.get("fire_gate_passed_sample_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_target_locked_sample_count",
+            "value": gameplay_assist.get("target_locked_sample_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_target_locked_fraction",
+            "value": gameplay_assist.get("target_locked_fraction", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_target_switch_count",
+            "value": gameplay_assist.get("target_switch_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_locked_frames_total",
+            "value": gameplay_assist.get("locked_frames_total", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_switch_fire_suppressed_sample_count",
+            "value": gameplay_assist.get(
+                "switch_fire_suppressed_sample_count", 0),
             "path": str(summary_path),
         },
         {
