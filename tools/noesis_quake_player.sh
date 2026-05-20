@@ -209,6 +209,12 @@ emit_action() {
     retreat-fire|kite-back)
       hold_command_set "${arg:-1}" "back" "attack"
       ;;
+    scan-fire-left|sweep-fire-left|turn-fire-left)
+      hold_command_set "${arg:-1}" "left" "attack"
+      ;;
+    scan-fire-right|sweep-fire-right|turn-fire-right)
+      hold_command_set "${arg:-1}" "right" "attack"
+      ;;
     strafe-fire-left|fire-strafe-left)
       hold_command_set "${arg:-1}" "moveleft" "attack"
       ;;
@@ -307,6 +313,9 @@ emit_builtin_plan() {
     combat|combat-scout|combat-explore|adaptive)
       emit_action "weapon 2"
       emit_action "wait 4"
+      emit_action "scan-fire-left 5"
+      emit_action "scan-fire-right 10"
+      emit_action "scan-fire-left 5"
       emit_action "advance-fire 10"
       emit_action "circle-fire-left 8"
       emit_action "circle-fire-right 8"
@@ -314,6 +323,7 @@ emit_builtin_plan() {
       emit_action "wall-slide-left 8"
       emit_action "speed-jump-forward 4"
       emit_action "turn-right 5"
+      emit_action "scan-fire-right 6"
       emit_action "advance-fire 12"
       emit_action "strafe-fire-left 6"
       emit_action "strafe-fire-right 6"
@@ -323,9 +333,13 @@ emit_builtin_plan() {
       emit_action "weapon 2"
       emit_action "center-view"
       emit_action "wait 6"
+      emit_action "scan-fire-left 5"
+      emit_action "scan-fire-right 10"
+      emit_action "scan-fire-left 5"
       emit_action "advance-fire 12"
       emit_action "wall-slide-right 12"
       emit_action "circle-fire-left 6"
+      emit_action "scan-fire-right 6"
       emit_action "run-forward 10"
       emit_action "wall-slide-left 12"
       emit_action "speed-jump-forward 4"
@@ -334,6 +348,7 @@ emit_builtin_plan() {
       emit_action "wall-slide-right 10"
       emit_action "door-bump 8"
       emit_action "wall-slide-left 8"
+      emit_action "scan-fire-left 6"
       emit_action "advance-fire 14"
       emit_action "circle-fire-right 8"
       emit_action "clear-input 2"

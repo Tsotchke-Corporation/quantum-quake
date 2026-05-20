@@ -467,13 +467,15 @@ Supported movement/action verbs are `forward`, `back`, `turn-left`,
 `look-up`, `look-down`, `center-view`, `swim-up`, `swim-down`, `attack`,
 `wait`, `weapon`, `weapon-next`, `weapon-prev`, and `give`. Composite combat
 verbs include `run-forward`, `jump-forward`, `advance-fire`, `retreat-fire`,
-`strafe-fire-left`, `strafe-fire-right`, `circle-fire-left`,
+`scan-fire-left`, `scan-fire-right`, `strafe-fire-left`, `strafe-fire-right`, `circle-fire-left`,
 `circle-fire-right`, `wall-slide-left`, `wall-slide-right`,
 `speed-jump-forward`, `door-bump`, and `clear-input`. `door-bump` uses a timed
 forward bump plus recovery because classic Quake doors are route-touch targets
 rather than reliable `+use` targets in this command-buffer path. `cmd` or
 `quake` passes the remaining text through as a raw Quake console command for
 targeted probes.
+`scan-fire-left` and `scan-fire-right` hold keyboard yaw plus attack for a
+short target-acquisition sweep; they do not use mouse input or screen control.
 
 Action streams can come from either `QGE_NOESIS_ACTIONS_FILE` or
 `QGE_NOESIS_CMD`. The command provider runs from `QGE_NOESIS_DIR` and should
@@ -538,7 +540,8 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   the built-in plan. Supported actions include `forward`, `back`,
   `turn-left`, `turn-right`, `strafe-left`, `strafe-right`, `jump`,
   `center-view`, `advance-fire`, `circle-fire-left`, `circle-fire-right`,
-  `wall-slide-left`, `wall-slide-right`, `speed-jump-forward`, `door-bump`,
+  `scan-fire-left`, `scan-fire-right`, `wall-slide-left`, `wall-slide-right`,
+  `speed-jump-forward`, `door-bump`,
   `door-open`, `weapon-next`, `weapon-prev`, `attack`, `wait`, `weapon`, and
   `give`, with an optional wait-count argument.
 - `QGE_NOESIS_START_WAIT`: command-buffer waits emitted before Noesis actions,
