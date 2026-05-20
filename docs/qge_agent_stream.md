@@ -130,8 +130,10 @@ The stream directory is intentionally simple and tail-friendly:
   written once per host frame when `-qgestreamdir` is present. It records player
   health, armor, ammo, weapon, origin/view angles, route distance, leaf
   transitions, inferred damage dealt/taken, kills, pickups, attack presses, and
-  enemy proximity/visibility. When `QGE_NOESIS_ASSIST` is enabled, samples also
-  include assist mode, target visibility/distance, aim yaw/pitch, steering
+  enemy proximity/visibility. The summary derives ammo spent/gained,
+  unproductive ammo spent, ammo waste fraction, and damage per ammo spent from
+  these samples. When `QGE_NOESIS_ASSIST` is enabled, samples also include assist
+  mode, target visibility/distance, aim yaw/pitch, steering
   commands, and wall-probe distances.
 - `logs/quantum_quake.log`: runtime console log mirrored into the stream.
 - `logs/open.log`: LaunchServices notes for macOS `open` mode.
@@ -363,7 +365,8 @@ into `agent_stream/noesis/`, and records the result as
 survival, damage, kill, pickup, visible enemy evidence, attack-visible and
 attack-aligned frame counts, blind/unproductive attack frame counts,
 nearest-enemy aim-error evidence, damage per attack press, net damage per
-attack press, trace identity, replay health, and projectile save/demo boundary
+attack press, ammo spent/waste evidence, damage per ammo spent, trace identity,
+replay health, and projectile save/demo boundary
 evidence such as
 `noesis_projectile_save_demo_boundary_count` and
 `noesis_projectile_save_demo_trace_id_xor`. The Noesis player
@@ -373,7 +376,8 @@ in `gameplay_outcomes.ndjson` with the next gameplay sample's player, route,
 combat, pickup, and assist state. Required combat progress needs damage, a kill,
 or an attack while the player is aligned to a visible enemy; pressing fire near
 an enemy is not enough. The gameplay score discounts attack-press credit when
-attack frames are blind or visible-but-unaligned. Route telemetry also reports
+attack frames are blind or visible-but-unaligned, and applies a small combat
+penalty when observed ammo spend is unproductive. Route telemetry also reports
 movement efficiency, stationary fraction, maximum stationary run, and
 duration-aware terminal-stall evidence, so a route that moves early and ends
 wedged cannot pass as clean progress while a short post-plan idle tail does not

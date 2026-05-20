@@ -609,6 +609,64 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
         as_number(value_at(sample, "player", "armor"), 0.0)
         for sample in playable_samples
     ]
+    ammo_values = [
+        sum(
+            as_number(value_at(sample, "player", key), 0.0)
+            for key in ("shells", "nails", "rockets", "cells")
+        )
+        for sample in playable_samples
+    ]
+    ammo_spent_total = 0.0
+    ammo_gained_total = 0.0
+    unproductive_ammo_spent = 0.0
+    for index, sample in enumerate(playable_samples[1:], 1):
+        prev_sample = playable_samples[index - 1]
+        prev_ammo = ammo_values[index - 1]
+        ammo = ammo_values[index]
+        ammo_delta = ammo - prev_ammo
+        if ammo_delta > 0.0:
+            ammo_gained_total += ammo_delta
+            continue
+        if ammo_delta >= 0.0:
+            continue
+
+        spent = -ammo_delta
+        ammo_spent_total += spent
+        prev_damage = as_number(
+            value_at(
+                prev_sample, "combat", "damage_dealt_inferred_total"
+            ),
+            0.0,
+        )
+        damage_delta = as_number(
+            value_at(sample, "combat", "damage_dealt_inferred_delta"),
+            -1.0,
+        )
+        if damage_delta < 0.0:
+            damage_total = as_number(
+                value_at(sample, "combat", "damage_dealt_inferred_total"),
+                0.0,
+            )
+            damage_delta = max(0.0, damage_total - prev_damage)
+        attack_aligned_delta = as_number(
+            value_at(sample, "combat", "attack_aligned_delta"),
+            0.0,
+        )
+        aligned_visible_count = as_number(
+            value_at(sample, "combat", "aligned_visible_enemy_count"),
+            0.0,
+        )
+        nearest_enemy_aligned = bool(value_at(
+            sample, "combat", "nearest_enemy_aligned", default=False
+        ))
+        productive_context = (
+            damage_delta > 0.0 or
+            attack_aligned_delta > 0.0 or
+            aligned_visible_count > 0.0 or
+            nearest_enemy_aligned
+        )
+        if not productive_context:
+            unproductive_ammo_spent += spent
     damage_taken = max(
         as_number(value_at(sample, "combat", "damage_taken_total"), 0.0)
         for sample in playable_samples
@@ -860,6 +918,17 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
         (damage_dealt - damage_taken) / attack_presses
         if attack_presses > 0.0 else 0.0
     )
+    damage_per_ammo_spent = (
+        damage_dealt / ammo_spent_total if ammo_spent_total > 0.0 else 0.0
+    )
+    net_damage_per_ammo_spent = (
+        (damage_dealt - damage_taken) / ammo_spent_total
+        if ammo_spent_total > 0.0 else 0.0
+    )
+    ammo_waste_fraction = (
+        unproductive_ammo_spent / ammo_spent_total
+        if ammo_spent_total > 0.0 else 0.0
+    )
     enemy_contact_frames = sum(
         1 for sample in playable_samples
         if (
@@ -1004,6 +1073,17 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
             "damage_per_attack_press": round(damage_per_attack_press, 4),
             "net_damage_per_attack_press": round(
                 net_damage_per_attack_press, 4),
+            "ammo_start_total": ammo_values[0],
+            "ammo_end_total": ammo_values[-1],
+            "ammo_min_total": min(ammo_values),
+            "ammo_max_total": max(ammo_values),
+            "ammo_spent": ammo_spent_total,
+            "ammo_gained": ammo_gained_total,
+            "unproductive_ammo_spent": unproductive_ammo_spent,
+            "ammo_waste_fraction": round(ammo_waste_fraction, 4),
+            "damage_per_ammo_spent": round(damage_per_ammo_spent, 4),
+            "net_damage_per_ammo_spent": round(
+                net_damage_per_ammo_spent, 4),
         },
         "pickup": {
             "pickup_count": pickups,
@@ -1212,6 +1292,7 @@ def build_gameplay_score(
     else:
         phase_ratio = 1.0 if log.get("policy_done_present") else 0.0
 
+    ammo_efficiency_penalty = 0.0
     if gameplay_present:
         player = gameplay.get("player") or {}
         route = gameplay.get("route") or {}
@@ -1232,6 +1313,15 @@ def build_gameplay_score(
             min(float(combat.get("unproductive_attack_fraction") or 0.0), 1.0),
         )
         productive_attack_fraction = max(0.0, 1.0 - unproductive_attack_fraction)
+        ammo_spent = float(combat.get("ammo_spent") or 0.0)
+        ammo_waste_fraction = max(
+            0.0,
+            min(float(combat.get("ammo_waste_fraction") or 0.0), 1.0),
+        )
+        ammo_efficiency_penalty = (
+            round(ammo_waste_fraction * 2.0, 3)
+            if ammo_spent > 0.0 else 0.0
+        )
         visible_enemy_frames = float(combat.get("visible_enemy_frames") or 0.0)
         contact_frames = float(combat.get("enemy_contact_frames") or 0.0)
         pickups = float(pickup.get("pickup_count") or 0.0)
@@ -1243,6 +1333,18 @@ def build_gameplay_score(
                 total_distance >= min(48.0, min_distance) or
                 max_displacement >= min(32.0, min_distance)
             )
+        )
+        combat_effectiveness_score = max(
+            0.0,
+            score_component(attack_presses, 2.0, 3.0) *
+            productive_attack_fraction +
+            score_component(visible_enemy_frames, 4.0, 2.0) +
+            score_component(attack_visible_frames, 4.0, 2.0) +
+            score_component(attack_aligned_frames, 3.0, 3.0) +
+            score_component(contact_frames, 8.0, 1.0) +
+            score_component(damage_dealt, 40.0, 6.0) +
+            score_component(kills, 1.0, 3.0) -
+            ammo_efficiency_penalty,
         )
 
         breakdown = {
@@ -1278,14 +1380,7 @@ def build_gameplay_score(
                 3,
             ),
             "combat_effectiveness": round(
-                score_component(attack_presses, 2.0, 3.0) *
-                productive_attack_fraction +
-                score_component(visible_enemy_frames, 4.0, 2.0) +
-                score_component(attack_visible_frames, 4.0, 2.0) +
-                score_component(attack_aligned_frames, 3.0, 3.0) +
-                score_component(contact_frames, 8.0, 1.0) +
-                score_component(damage_dealt, 40.0, 6.0) +
-                score_component(kills, 1.0, 3.0),
+                combat_effectiveness_score,
                 3,
             ),
             "survival_no_stuck": round(
@@ -1361,6 +1456,7 @@ def build_gameplay_score(
         "phase_execution_ratio": round(phase_ratio, 4),
         "outcome_telemetry_present": gameplay_present,
         "assist_telemetry_present": assist_telemetry_present,
+        "ammo_efficiency_penalty": ammo_efficiency_penalty,
         "outcome_telemetry_missing": [] if gameplay_present else [
             "kills",
             "damage_dealt",
@@ -2008,6 +2104,36 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "kind": "runtime_state",
             "name": "noesis_gameplay_net_damage_per_attack_press",
             "value": gameplay_combat.get("net_damage_per_attack_press", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_ammo_spent",
+            "value": gameplay_combat.get("ammo_spent", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_unproductive_ammo_spent",
+            "value": gameplay_combat.get("unproductive_ammo_spent", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_ammo_waste_fraction",
+            "value": gameplay_combat.get("ammo_waste_fraction", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_damage_per_ammo_spent",
+            "value": gameplay_combat.get("damage_per_ammo_spent", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_net_damage_per_ammo_spent",
+            "value": gameplay_combat.get("net_damage_per_ammo_spent", 0),
             "path": str(summary_path),
         },
         {

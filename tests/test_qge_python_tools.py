@@ -1252,6 +1252,186 @@ class NoesisSummaryTests(unittest.TestCase):
                 0.0,
             )
 
+    def test_ammo_efficiency_tracks_spend_gain_and_waste(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gameplay_path = Path(tmp) / "gameplay_outcomes.ndjson"
+            samples = [
+                {
+                    "schema": "qge.gameplay_outcome.v0",
+                    "type": "sample",
+                    "frame": 1,
+                    "player": {
+                        "health": 100,
+                        "armor": 0,
+                        "weapon": 2,
+                        "shells": 25,
+                        "nails": 0,
+                        "rockets": 0,
+                        "cells": 0,
+                        "origin": [0, 0, 0],
+                    },
+                    "route": {
+                        "total_distance": 0.0,
+                        "displacement_from_start": 0.0,
+                        "max_displacement_from_start": 0.0,
+                        "leaf_transition_count": 0,
+                    },
+                    "combat": {
+                        "damage_taken_total": 0,
+                        "damage_dealt_inferred_total": 0,
+                        "kills_total": 0,
+                        "attack_presses_total": 0,
+                        "visible_enemy_count": 0,
+                        "nearest_enemy_distance": -1,
+                        "nearest_enemy_visible": False,
+                        "nearest_enemy_aligned": False,
+                    },
+                    "pickup": {
+                        "pickups_total": 0,
+                        "weapon_changes_total": 0,
+                    },
+                },
+                {
+                    "schema": "qge.gameplay_outcome.v0",
+                    "type": "sample",
+                    "frame": 2,
+                    "player": {
+                        "health": 100,
+                        "armor": 0,
+                        "weapon": 2,
+                        "shells": 24,
+                        "nails": 0,
+                        "rockets": 0,
+                        "cells": 0,
+                        "attack_active": True,
+                        "origin": [0, 0, 0],
+                    },
+                    "route": {
+                        "frame_distance": 0.0,
+                        "total_distance": 0.0,
+                        "displacement_from_start": 0.0,
+                        "max_displacement_from_start": 0.0,
+                        "leaf_transition_count": 0,
+                    },
+                    "combat": {
+                        "damage_taken_total": 0,
+                        "damage_dealt_inferred_total": 0,
+                        "kills_total": 0,
+                        "attack_presses_total": 1,
+                        "visible_enemy_count": 0,
+                        "nearest_enemy_distance": -1,
+                        "nearest_enemy_visible": False,
+                        "nearest_enemy_aligned": False,
+                        "attack_aligned_delta": 0,
+                    },
+                    "pickup": {
+                        "pickups_total": 0,
+                        "weapon_changes_total": 0,
+                    },
+                },
+                {
+                    "schema": "qge.gameplay_outcome.v0",
+                    "type": "sample",
+                    "frame": 3,
+                    "player": {
+                        "health": 100,
+                        "armor": 0,
+                        "weapon": 2,
+                        "shells": 26,
+                        "nails": 0,
+                        "rockets": 0,
+                        "cells": 0,
+                        "origin": [8, 0, 0],
+                    },
+                    "route": {
+                        "frame_distance": 8.0,
+                        "total_distance": 8.0,
+                        "displacement_from_start": 8.0,
+                        "max_displacement_from_start": 8.0,
+                        "leaf_transition_count": 0,
+                    },
+                    "combat": {
+                        "damage_taken_total": 0,
+                        "damage_dealt_inferred_total": 0,
+                        "kills_total": 0,
+                        "attack_presses_total": 1,
+                        "visible_enemy_count": 0,
+                        "nearest_enemy_distance": -1,
+                        "nearest_enemy_visible": False,
+                        "nearest_enemy_aligned": False,
+                    },
+                    "pickup": {
+                        "pickups_total": 1,
+                        "weapon_changes_total": 0,
+                    },
+                },
+                {
+                    "schema": "qge.gameplay_outcome.v0",
+                    "type": "sample",
+                    "frame": 4,
+                    "player": {
+                        "health": 100,
+                        "armor": 0,
+                        "weapon": 2,
+                        "shells": 25,
+                        "nails": 0,
+                        "rockets": 0,
+                        "cells": 0,
+                        "attack_active": True,
+                        "origin": [16, 0, 0],
+                    },
+                    "route": {
+                        "frame_distance": 8.0,
+                        "total_distance": 16.0,
+                        "displacement_from_start": 16.0,
+                        "max_displacement_from_start": 16.0,
+                        "leaf_transition_count": 0,
+                    },
+                    "combat": {
+                        "damage_taken_total": 0,
+                        "damage_dealt_inferred_delta": 18,
+                        "damage_dealt_inferred_total": 18,
+                        "kills_total": 0,
+                        "attack_presses_total": 2,
+                        "visible_enemy_count": 1,
+                        "nearest_enemy_distance": 180,
+                        "nearest_enemy_visible": True,
+                        "nearest_enemy_aligned": True,
+                        "aligned_visible_enemy_count": 1,
+                        "attack_aligned_delta": 1,
+                    },
+                    "pickup": {
+                        "pickups_total": 1,
+                        "weapon_changes_total": 0,
+                    },
+                },
+            ]
+            gameplay_path.write_text(
+                "\n".join(json.dumps(sample) for sample in samples) + "\n",
+                encoding="utf-8",
+            )
+
+            summary = noesis_summary.summarize_gameplay(gameplay_path)
+            self.assertEqual(summary["combat"]["ammo_start_total"], 25.0)
+            self.assertEqual(summary["combat"]["ammo_end_total"], 25.0)
+            self.assertEqual(summary["combat"]["ammo_min_total"], 24.0)
+            self.assertEqual(summary["combat"]["ammo_max_total"], 26.0)
+            self.assertEqual(summary["combat"]["ammo_spent"], 2.0)
+            self.assertEqual(summary["combat"]["ammo_gained"], 2.0)
+            self.assertEqual(
+                summary["combat"]["unproductive_ammo_spent"],
+                1.0,
+            )
+            self.assertEqual(summary["combat"]["ammo_waste_fraction"], 0.5)
+            self.assertEqual(
+                summary["combat"]["damage_per_ammo_spent"],
+                9.0,
+            )
+            self.assertEqual(
+                summary["combat"]["net_damage_per_ammo_spent"],
+                9.0,
+            )
+
     def test_blind_attack_frames_track_invisible_fire(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             gameplay_path = Path(tmp) / "gameplay_outcomes.ndjson"
@@ -1461,6 +1641,74 @@ class NoesisSummaryTests(unittest.TestCase):
             disciplined["breakdown"]["combat_effectiveness"] -
             wasteful["breakdown"]["combat_effectiveness"],
             3.0,
+        )
+
+    def test_gameplay_score_discounts_unproductive_ammo_spend(self) -> None:
+        actions = {
+            "line_count": 4,
+            "movement_action_count": 1,
+            "combat_action_count": 1,
+            "phase_count": 0,
+        }
+        commands = {
+            "line_count": 10,
+            "wait_count": 5,
+            "pressed_button_variety": 3,
+            "press_counts": {"forward": 1, "attack": 1},
+            "wait_clamped_count": 0,
+        }
+        log = {"policy_done_present": True, "phase_count": 0}
+        frames = {"frame_count": 0, "delta": {}}
+        trace = {"exists": False}
+        gates = {
+            "required_inputs_present": True,
+            "run_completed": True,
+            "frames_present": True,
+            "no_unknown_actions": True,
+            "no_unknown_commands": True,
+        }
+        base_gameplay = {
+            "sample_count": 2,
+            "player": {"survived": True},
+            "route": {
+                "total_distance": 72.0,
+                "max_displacement_from_start": 72.0,
+                "terminal_stall": False,
+                "leaf_transition_count": 1,
+            },
+            "pickup": {"pickup_count": 0},
+            "combat": {
+                "damage_dealt_inferred": 0,
+                "damage_taken": 0,
+                "kills": 0,
+                "attack_press_count": 0,
+                "attack_visible_frames": 0,
+                "attack_aligned_frames": 0,
+                "visible_enemy_frames": 4,
+                "enemy_contact_frames": 8,
+                "unproductive_attack_fraction": 0.0,
+            },
+        }
+        no_spend_gameplay = json.loads(json.dumps(base_gameplay))
+        no_spend_gameplay["combat"]["ammo_spent"] = 0.0
+        no_spend_gameplay["combat"]["ammo_waste_fraction"] = 0.0
+        wasted_gameplay = json.loads(json.dumps(base_gameplay))
+        wasted_gameplay["combat"]["ammo_spent"] = 4.0
+        wasted_gameplay["combat"]["ammo_waste_fraction"] = 1.0
+
+        no_spend = noesis_summary.build_gameplay_score(
+            actions, commands, log, frames, trace, no_spend_gameplay, gates
+        )
+        wasted = noesis_summary.build_gameplay_score(
+            actions, commands, log, frames, trace, wasted_gameplay, gates
+        )
+
+        self.assertEqual(no_spend["ammo_efficiency_penalty"], 0.0)
+        self.assertEqual(wasted["ammo_efficiency_penalty"], 2.0)
+        self.assertEqual(
+            no_spend["breakdown"]["combat_effectiveness"] -
+            wasted["breakdown"]["combat_effectiveness"],
+            2.0,
         )
 
     def test_terminal_stall_blocks_route_summary(self) -> None:
