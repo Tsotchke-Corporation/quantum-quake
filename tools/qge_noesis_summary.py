@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from collections import Counter
 from datetime import datetime, timezone
@@ -268,6 +269,17 @@ def as_number(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def vector_distance(a: Any, b: Any) -> float:
+    if not isinstance(a, list) or not isinstance(b, list):
+        return 0.0
+    if len(a) < 3 or len(b) < 3:
+        return 0.0
+    return math.sqrt(sum(
+        (as_number(a[i], 0.0) - as_number(b[i], 0.0)) ** 2
+        for i in range(3)
+    ))
+
+
 def summarize_gameplay(path: Path | None) -> dict[str, Any]:
     if not path:
         return {
@@ -371,6 +383,82 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
         as_number(value_at(sample, "route", "leaf_transition_count"), 0.0)
         for sample in playable_samples
     )
+    end_displacement = as_number(
+        value_at(last, "route", "displacement_from_start"), 0.0)
+    route_frame_distances: list[float] = []
+    route_progress_sample_count = 0
+    route_stationary_frame_count = 0
+    route_stationary_run = 0
+    route_stationary_run_max = 0
+    route_terminal_stationary_run = 0
+    route_progress_best = as_number(
+        value_at(first, "route", "displacement_from_start"), 0.0)
+    for index, sample in enumerate(playable_samples):
+        frame_distance = as_number(
+            value_at(sample, "route", "frame_distance"), -1.0)
+        if frame_distance < 0.0:
+            frame_distance = (
+                vector_distance(
+                    value_at(playable_samples[index - 1], "player", "origin"),
+                    value_at(sample, "player", "origin"),
+                )
+                if index > 0 else 0.0
+            )
+        route_frame_distances.append(frame_distance)
+        if index == 0:
+            continue
+        displacement_now = as_number(
+            value_at(sample, "route", "displacement_from_start"), 0.0)
+        if displacement_now >= route_progress_best + 8.0:
+            route_progress_sample_count += 1
+            route_progress_best = displacement_now
+        if frame_distance < 1.0:
+            route_stationary_frame_count += 1
+            route_stationary_run += 1
+            route_stationary_run_max = max(
+                route_stationary_run_max, route_stationary_run)
+        else:
+            route_stationary_run = 0
+    for frame_distance in reversed(route_frame_distances[1:]):
+        if frame_distance < 1.0:
+            route_terminal_stationary_run += 1
+        else:
+            break
+    route_interval_count = max(len(playable_samples) - 1, 1)
+    route_movement_efficiency = (
+        max_displacement / total_distance if total_distance > 0.0 else 0.0
+    )
+    route_end_progress_ratio = (
+        end_displacement / max_displacement if max_displacement > 0.0 else 0.0
+    )
+    terminal_start_index = max(
+        0, len(playable_samples) - route_terminal_stationary_run - 1)
+    terminal_base = playable_samples[terminal_start_index]
+    terminal_leaf_delta = max(0.0, leaf_transitions - as_number(
+        value_at(terminal_base, "route", "leaf_transition_count"), 0.0))
+    terminal_damage_delta = max(0.0, damage_dealt - as_number(value_at(
+        terminal_base, "combat", "damage_dealt_inferred_total"), 0.0))
+    terminal_kill_delta = max(0.0, kills - as_number(
+        value_at(terminal_base, "combat", "kills_total"), 0.0))
+    terminal_pickup_delta = max(0.0, pickups - as_number(
+        value_at(terminal_base, "pickup", "pickups_total"), 0.0))
+    terminal_visible_enemy_samples = sum(
+        1 for sample in playable_samples[terminal_start_index + 1:]
+        if as_number(value_at(sample, "combat", "visible_enemy_count"), 0.0) > 0
+        or bool(value_at(sample, "combat", "nearest_enemy_visible", default=False))
+    )
+    route_terminal_activity = (
+        terminal_leaf_delta > 0.0 or terminal_damage_delta > 0.0 or
+        terminal_kill_delta > 0.0 or terminal_pickup_delta > 0.0
+    )
+    route_terminal_stall = (
+        route_terminal_stationary_run >= 6 and not route_terminal_activity and
+        terminal_visible_enemy_samples == 0
+    )
+    route_recovered_after_stall = (
+        route_stationary_run_max >= 6 and not route_terminal_stall and
+        route_terminal_stationary_run < route_stationary_run_max
+    )
     visible_enemy_frames = sum(
         1 for sample in playable_samples
         if as_number(value_at(sample, "combat", "visible_enemy_count"), 0.0) > 0
@@ -468,9 +556,23 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
         "route": {
             "total_distance": total_distance,
             "max_displacement_from_start": max_displacement,
-            "end_displacement_from_start": as_number(
-                value_at(last, "route", "displacement_from_start"), 0.0),
+            "end_displacement_from_start": end_displacement,
             "leaf_transition_count": leaf_transitions,
+            "progress_sample_count": route_progress_sample_count,
+            "progress_fraction": round(
+                route_progress_sample_count / route_interval_count, 4),
+            "stationary_frame_count": route_stationary_frame_count,
+            "stationary_fraction": round(
+                route_stationary_frame_count / route_interval_count, 4),
+            "stationary_run_max": route_stationary_run_max,
+            "terminal_stationary_run": route_terminal_stationary_run,
+            "terminal_stall": route_terminal_stall,
+            "terminal_visible_enemy_samples": terminal_visible_enemy_samples,
+            "recovered_after_stall": route_recovered_after_stall,
+            "movement_efficiency": round(route_movement_efficiency, 4),
+            "end_progress_ratio": round(route_end_progress_ratio, 4),
+            "backtrack_distance": round(
+                max(0.0, max_displacement - end_displacement), 3),
         },
         "combat": {
             "damage_taken": damage_taken,
@@ -651,6 +753,7 @@ def build_gameplay_score(
         pickup = gameplay.get("pickup") or {}
         total_distance = float(route.get("total_distance") or 0.0)
         max_displacement = float(route.get("max_displacement_from_start") or 0.0)
+        terminal_stall = bool(route.get("terminal_stall", False))
         leaf_transitions = float(route.get("leaf_transition_count") or 0.0)
         damage_dealt = float(combat.get("damage_dealt_inferred") or 0.0)
         damage_taken = float(combat.get("damage_taken") or 0.0)
@@ -663,8 +766,10 @@ def build_gameplay_score(
         min_distance = max(float(min_route_distance), 1.0)
         not_stuck = (
             actions.get("movement_action_count", 0) <= 0 or
-            total_distance >= min(48.0, min_distance) or
-            max_displacement >= min(32.0, min_distance)
+            not terminal_stall and (
+                total_distance >= min(48.0, min_distance) or
+                max_displacement >= min(32.0, min_distance)
+            )
         )
 
         breakdown = {
@@ -894,6 +999,7 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
         total_distance = float(route_state.get("total_distance") or 0.0)
         max_displacement = float(
             route_state.get("max_displacement_from_start") or 0.0)
+        terminal_stall = bool(route_state.get("terminal_stall", False))
         gates["survived"] = bool(player_state.get("survived", False))
         if actions.get("route_action_count", 0) > 0 and args.min_route_distance > 0:
             gates["route_progress_required"] = (
@@ -902,9 +1008,12 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
             )
         if actions.get("movement_action_count", 0) > 0:
             gates["not_stuck"] = (
-                total_distance >= min(48.0, args.min_route_distance) or
-                max_displacement >= min(32.0, args.min_route_distance)
+                not terminal_stall and (
+                    total_distance >= min(48.0, args.min_route_distance) or
+                    max_displacement >= min(32.0, args.min_route_distance)
+                )
             )
+            gates["terminal_stall_absent"] = not terminal_stall
     gameplay_score = build_gameplay_score(
         actions,
         commands,
@@ -1110,6 +1219,36 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "kind": "runtime_state",
             "name": "noesis_gameplay_max_displacement",
             "value": gameplay_route.get("max_displacement_from_start", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_terminal_stall",
+            "value": gameplay_route.get("terminal_stall", False),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_max_stationary_run",
+            "value": gameplay_route.get("stationary_run_max", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_stationary_fraction",
+            "value": gameplay_route.get("stationary_fraction", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_movement_efficiency",
+            "value": gameplay_route.get("movement_efficiency", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_end_progress_ratio",
+            "value": gameplay_route.get("end_progress_ratio", 0),
             "path": str(summary_path),
         },
         {

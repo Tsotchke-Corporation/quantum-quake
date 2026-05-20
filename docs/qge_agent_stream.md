@@ -359,11 +359,13 @@ into `agent_stream/noesis/`, and records the result as
 `noesis_gameplay_quality_grade`, `noesis_log_phase_count`,
 `noesis_log_policy_done`, `noesis_gameplay_outcome_sample_count`,
 `noesis_gameplay_total_distance`, survival, damage, kill, pickup, and visible
-enemy evidence. Assist runs additionally emit requested mode, active sample
-count, visible-target sample count, steering sample count, attack-visible
-frames, target-distance evidence, and a claim scope. Assisted runs are marked
-`server_assisted` so they cannot be mistaken for unassisted play evidence. Set
-`QGE_NOESIS_MIN_LOG_PHASES` to
+enemy evidence. Route telemetry also reports movement efficiency, stationary
+fraction, maximum stationary run, and terminal-stall evidence, so a route that
+moves early and ends wedged cannot pass as clean progress. Assist runs
+additionally emit requested mode, active sample count, visible-target sample
+count, steering sample count, attack-visible frames, target-distance evidence,
+and a claim scope. Assisted runs are marked `server_assisted` so they cannot be
+mistaken for unassisted play evidence. Set `QGE_NOESIS_MIN_LOG_PHASES` to
 require that many `QGE_NOESIS_PHASE` markers to appear in the engine log, which
 is useful when proving that a longer route plan actually executed rather than
 only being generated. Set `QGE_NOESIS_MIN_GAMEPLAY_SAMPLES` and
