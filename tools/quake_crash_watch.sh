@@ -42,6 +42,8 @@ noesis_plan="${QGE_NOESIS_PLAN:-adaptive}"
 noesis_actions_file="${QGE_NOESIS_ACTIONS_FILE:-}"
 noesis_start_wait="${QGE_NOESIS_START_WAIT:-60}"
 noesis_max_wait="${QGE_NOESIS_MAX_WAIT:-600}"
+noesis_scripted="${QGE_NOESIS_SCRIPTED:-0}"
+noesis_autonomous="${QGE_NOESIS_AUTONOMOUS:-}"
 noesis_cmd="${QGE_NOESIS_CMD:-}"
 default_noesis_cmd="$repo_root/tools/noesis_quake_policy.sh"
 noesis_cmd_default=0
@@ -94,11 +96,23 @@ width="$(normalize_positive_int "$width" 800)"
 height="$(normalize_positive_int "$height" 600)"
 noesis_start_wait="$(normalize_nonnegative_int "$noesis_start_wait" 60)"
 noesis_max_wait="$(normalize_positive_int "$noesis_max_wait" 600)"
+noesis_scripted="$(normalize_bool "$noesis_scripted")"
+if [[ -n "$noesis_autonomous" ]]; then
+  noesis_autonomous="$(normalize_bool "$noesis_autonomous")"
+fi
 seconds="$(normalize_nonnegative_int "$seconds" 90)"
 script_waits="$(normalize_nonnegative_int "$script_waits" 3600)"
-if [[ "$stream_player" == "noesis" && -z "$noesis_cmd" && -z "$noesis_actions_file" && -x "$default_noesis_cmd" ]]; then
+if [[ "$stream_player" == "noesis" && "$noesis_scripted" == "1" &&
+      -z "$noesis_cmd" && -z "$noesis_actions_file" && -x "$default_noesis_cmd" ]]; then
   noesis_cmd="$default_noesis_cmd"
   noesis_cmd_default=1
+fi
+if [[ -z "$noesis_autonomous" ]]; then
+  noesis_autonomous=0
+  if [[ "$stream_player" == "noesis" && "$noesis_scripted" == "0" &&
+        -z "$noesis_cmd" && -z "$noesis_actions_file" ]]; then
+    noesis_autonomous=1
+  fi
 fi
 
 if [[ ! -x "$app_bin" ]]; then
@@ -139,6 +153,7 @@ emit_noesis_player_script() {
     QGE_NOESIS_ACTIONS_FILE="$noesis_actions_file" \
     QGE_NOESIS_START_WAIT="$noesis_start_wait" \
     QGE_NOESIS_MAX_WAIT="$noesis_max_wait" \
+    QGE_NOESIS_SCRIPTED="$noesis_scripted" \
     QGE_NOESIS_CMD="$noesis_cmd" \
     QGE_NOESIS_ACTION_TRACE_FILE="$input_actions_file" \
     QGE_NOESIS_COMMAND_TRACE_FILE="$input_commands_file" \
@@ -171,6 +186,7 @@ rm -f "$qconsole_file" "$qconsole_root_file"
   echo "quantum_projectiles $projectiles_value"
   echo "quantum_physics_authoritative $physics_authoritative"
   echo "quantum_particles $particles_value"
+  echo "qge_noesis_autonomous $noesis_autonomous"
   echo "map $map_name"
   if [[ "$stream_player" == "noesis" ]]; then
     emit_noesis_player_script
@@ -206,7 +222,7 @@ log_next_line=1
 
 echo "Watching Quantum Quake for crashes"
 echo "  outdir=$outdir"
-echo "  seconds=$seconds script_waits=$script_waits map=$map_name window=${width}x${height} display=$stream_display sound=$sound mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan"
+echo "  seconds=$seconds script_waits=$script_waits map=$map_name window=${width}x${height} display=$stream_display sound=$sound mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_scripted=$noesis_scripted noesis_autonomous=$noesis_autonomous"
 if [[ "$stream_player" == "noesis" ]]; then
   echo "  noesis_cmd=$noesis_cmd noesis_cmd_default=$noesis_cmd_default max_wait=$noesis_max_wait actions=$input_actions_file commands=$input_commands_file"
 fi

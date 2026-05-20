@@ -122,8 +122,10 @@ Partial or pending:
 Implemented:
 
 - Typed QGE AI decision traces and replay metadata.
-- Noesis scripted player actions through `tools/noesis_quake_policy.sh` and
+- Noesis no-script harness mode by default, with opt-in scripted player
+  fixtures through `tools/noesis_quake_policy.sh` and
   `tools/noesis_quake_player.sh`.
+- Engine-side autonomous assist hint for no-script Noesis runs.
 - Engine-side Noesis gameplay outcome telemetry.
 - Noesis summary reducer with route/combat/ammo/assist scoring.
 - Assist telemetry for target visibility, target locks, target switches, aim
@@ -133,7 +135,9 @@ Implemented:
 
 Partial or pending:
 
-- Noesis still depends on harnessed policy and engine assist for good play.
+- Noesis is not yet learning Quake from experience; current autonomous runs use
+  a reactive server-side controller, and scripted route policies are regression
+  fixtures rather than learned play.
 - It does not yet demonstrate robust, general Quake skill outside the bounded
   `e1m1` smoke.
 - Target selection, route recovery, and post-second-kill continuation remain

@@ -8,6 +8,7 @@ actions_file="${QGE_NOESIS_ACTIONS_FILE:-}"
 start_wait="${QGE_NOESIS_START_WAIT:-16}"
 max_wait="${QGE_NOESIS_MAX_WAIT:-600}"
 noesis_cmd="${QGE_NOESIS_CMD:-}"
+scripted="${QGE_NOESIS_SCRIPTED:-0}"
 action_trace_file="${QGE_NOESIS_ACTION_TRACE_FILE:-}"
 command_trace_file="${QGE_NOESIS_COMMAND_TRACE_FILE:-}"
 
@@ -460,6 +461,11 @@ max_wait="$((10#$max_wait))"
 if (( max_wait < 1 )); then
   max_wait=600
 fi
+if [[ "$scripted" == "1" ]]; then
+  scripted=1
+else
+  scripted=0
+fi
 
 if [[ -n "$noesis_cmd" ]]; then
   emit_start "cmd" "provider=QGE_NOESIS_CMD"
@@ -476,7 +482,9 @@ if [[ -n "$noesis_cmd" ]]; then
     emit_actions_from_file "$cmd_output"
   else
     emit_command "echo QGE_NOESIS_PLAYER empty_command_output"
-    emit_builtin_plan
+    if [[ "$scripted" == "1" ]]; then
+      emit_builtin_plan
+    fi
   fi
   rm -f "$cmd_output"
 elif [[ -n "$actions_file" ]]; then
@@ -485,8 +493,13 @@ elif [[ -n "$actions_file" ]]; then
     emit_actions_from_file "$actions_file"
   else
     emit_command "echo QGE_NOESIS_PLAYER missing_actions_file=$actions_file"
-    emit_builtin_plan
+    if [[ "$scripted" == "1" ]]; then
+      emit_builtin_plan
+    fi
   fi
+elif [[ "$scripted" != "1" ]]; then
+  emit_start "autonomous" "scripts=disabled provider=engine_assist"
+  emit_command "echo QGE_NOESIS_PLAYER autonomous scripts=disabled control=engine_assist"
 else
   emit_start "builtin"
   emit_builtin_plan

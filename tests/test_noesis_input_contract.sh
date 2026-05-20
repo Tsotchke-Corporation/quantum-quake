@@ -134,6 +134,21 @@ grep -Fq 'plan="${QGE_NOESIS_PLAN:-adaptive}"' "$repo_root/tools/noesis_quake_pl
 grep -Fq 'plan="${QGE_NOESIS_PLAN:-adaptive}"' "$repo_root/tools/noesis_quake_policy.sh"
 grep -Fq 'noesis_plan="${QGE_NOESIS_PLAN:-adaptive}"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'noesis_plan="${QGE_NOESIS_PLAN:-adaptive}"' "$repo_root/tools/quake_crash_watch.sh"
+grep -Fq 'scripted="${QGE_NOESIS_SCRIPTED:-0}"' "$repo_root/tools/noesis_quake_player.sh"
+grep -Fq 'noesis_scripted="${QGE_NOESIS_SCRIPTED:-0}"' "$repo_root/tools/quake_graphics_stream.sh"
+grep -Fq 'noesis_scripted="${QGE_NOESIS_SCRIPTED:-0}"' "$repo_root/tools/quake_crash_watch.sh"
+grep -Fq 'noesis_autonomous="${QGE_NOESIS_AUTONOMOUS:-}"' "$repo_root/tools/quake_graphics_stream.sh"
+grep -Fq 'noesis_autonomous="${QGE_NOESIS_AUTONOMOUS:-}"' "$repo_root/tools/quake_crash_watch.sh"
+grep -Fq 'noesis_require_combat="${QGE_NOESIS_REQUIRE_COMBAT:-}"' "$repo_root/tools/quake_graphics_stream.sh"
+grep -Fq 'QGE_NOESIS_SCRIPTED="$noesis_scripted"' "$repo_root/tools/quake_graphics_stream.sh"
+grep -Fq 'QGE_NOESIS_SCRIPTED="$noesis_scripted"' "$repo_root/tools/quake_crash_watch.sh"
+grep -Fq 'QGE_NOESIS_SCRIPTED+x' "$repo_root/tools/quake_graphics_stream.sh"
+grep -Fq 'qge_noesis_autonomous $noesis_autonomous' "$repo_root/tools/quake_graphics_stream.sh"
+grep -Fq 'qge_noesis_autonomous $noesis_autonomous' "$repo_root/tools/quake_crash_watch.sh"
+grep -q 'noesis_require_combat=$noesis_require_combat' "$repo_root/tools/quake_graphics_stream.sh"
+grep -q 'QGE_NOESIS_REQUIRE_COMBAT' "$repo_root/docs/qge_agent_stream.md"
+grep -q 'emit_start "autonomous"' "$repo_root/tools/noesis_quake_player.sh"
+grep -q 'QGE_NOESIS_SCRIPTED' "$repo_root/docs/qge_agent_stream.md"
 grep -Fq 'stream_activate="${QGE_STREAM_ACTIVATE:-0}"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -q 'SCR_QGEAutoCaptureSuppressOverlay' "$repo_root/quake/Quake/gl_screen.c"
 grep -q 'scr_qge_autocapture_quit_pending' "$repo_root/quake/Quake/gl_screen.c"
@@ -168,7 +183,7 @@ grep -q 'QGE_NOESIS_PHASE' "$repo_root/tools/noesis_quake_policy.sh"
 grep -q 'phase=e1m1_hunt_loop' "$repo_root/tools/noesis_quake_policy.sh"
 grep -q 'back 8' "$repo_root/tools/noesis_quake_policy.sh"
 grep -q 'speed-jump-forward 6' "$repo_root/tools/noesis_quake_policy.sh"
-grep -q 'bounded hunt loop with a keyboard-only' "$repo_root/docs/qge_agent_stream.md"
+grep -q 'a keyboard-only back/turn/jump unstick prelude' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'QGE_SCENE_SURFACE_BUDGET:-512' "$repo_root/tools/quake_graphics_stream.sh"
 grep -q 'quantum_scene_surface_budget", "512"' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'default `512`' "$repo_root/docs/qge_agent_stream.md"
@@ -182,6 +197,9 @@ grep -q 'speed-jump-forward' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'scan-fire-left' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'noesis_gameplay_quality_score' "$repo_root/tools/qge_noesis_summary.py"
 grep -q 'noesis_claim_scope' "$repo_root/tools/qge_noesis_summary.py"
+grep -q 'noesis_scripted' "$repo_root/tools/qge_noesis_summary.py"
+grep -q 'noesis_autonomous' "$repo_root/tools/qge_noesis_summary.py"
+grep -q 'noesis_autonomous_control' "$repo_root/tools/qge_noesis_summary.py"
 grep -q 'noesis_unassisted_claim_supported' "$repo_root/tools/qge_noesis_summary.py"
 grep -q 'noesis_gameplay_outcome_sample_count' "$repo_root/tools/qge_noesis_summary.py"
 grep -q 'noesis_gameplay_total_distance' "$repo_root/tools/qge_noesis_summary.py"
@@ -243,6 +261,7 @@ grep -Fq 'qge_noesis_assist $noesis_assist' "$repo_root/tools/quake_graphics_str
 grep -Fq -- '--min-log-phases "$noesis_min_log_phases"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq -- '--min-phase-outcomes "$noesis_min_log_phases"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq -- '--min-gameplay-samples "$noesis_min_gameplay_samples"' "$repo_root/tools/quake_graphics_stream.sh"
+grep -Fq 'noesis_args+=(--require-combat)' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'if (( frames >= 2 )); then' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'noesis_args+=(--min-frame-mae 2.0)' "$repo_root/tools/quake_graphics_stream.sh"
 grep -q 'QGE_NOESIS_MIN_LOG_PHASES' "$repo_root/docs/qge_agent_stream.md"
@@ -251,8 +270,8 @@ grep -q 'QGE_NOESIS_MIN_CAPTURE_WAIT' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'QGE_NOESIS_ASSIST' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'claim scope' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'attack-aligned frame counts' "$repo_root/docs/qge_agent_stream.md"
-grep -q 'left bridge side before a bounded `scan-fire-left` sweep' "$repo_root/docs/qge_agent_stream.md"
-grep -q 'remaining marked `server_assisted`' "$repo_root/docs/qge_agent_stream.md"
+grep -q 'closes farther along the left bridge side' "$repo_root/docs/qge_agent_stream.md"
+grep -q 'Scripted fixture runs remain marked `server_assisted`' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'kites visible close' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'Hidden distant targets do not override' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'QGE_NoesisAssistClientThink' "$repo_root/quake/Quake/qge_hooks.c"
@@ -266,6 +285,11 @@ grep -q 'target_locked' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'switch_fire_suppressed' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'QGE_NOESIS_TARGET_LOCK_FRAMES' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'QGE_NOESIS_VIEW_HOLD_DEG' "$repo_root/quake/Quake/qge_hooks.c"
+grep -q 'qge_noesis_autonomous' "$repo_root/quake/Quake/qge_hooks.c"
+grep -q 'QGE_NOESIS_AUTONOMOUS_CHASE_DISTANCE 1152.0f' "$repo_root/quake/Quake/qge_hooks.c"
+grep -q 'QGE_NOESIS_WALL_TRAP_CLEAR 16.0f' "$repo_root/quake/Quake/qge_hooks.c"
+grep -q 'relative_forward = -220.0f' "$repo_root/quake/Quake/qge_hooks.c"
+grep -q 'QGE_NOESIS_WALL_TRAP_CLEAR' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'pre_aim_error > QGE_NOESIS_VIEW_HOLD_DEG' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'QGE_NoesisAssistSetRelativeMove(move, movement_yaw, aim\[YAW\]' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'move->forwardmove = DotProduct(wish, basis_forward)' "$repo_root/quake/Quake/qge_hooks.c"
@@ -378,6 +402,7 @@ QGE_NOESIS_DIR="$repo_root" \
 QGE_NOESIS_PLAN=combat-explore \
 QGE_STREAM_MAP=start \
 QGE_NOESIS_START_WAIT=0 \
+QGE_NOESIS_SCRIPTED=1 \
 QGE_NOESIS_ACTION_TRACE_FILE="$builtin_recovery_actions" \
 QGE_NOESIS_COMMAND_TRACE_FILE="$builtin_recovery_commands" \
   "$repo_root/tools/noesis_quake_player.sh" > "$builtin_recovery_stdout"
@@ -391,6 +416,26 @@ grep -q '^run-forward 10$' "$builtin_recovery_actions"
 grep -q '^+back$' "$builtin_recovery_commands"
 grep -q '^+moveleft$' "$builtin_recovery_commands"
 grep -q '^+jump$' "$builtin_recovery_commands"
+
+autonomous_actions="$tmpdir/autonomous-actions.txt"
+autonomous_commands="$tmpdir/autonomous-commands.cfg"
+autonomous_stdout="$tmpdir/autonomous-stdout.cfg"
+
+QGE_NOESIS_DIR="$repo_root" \
+QGE_NOESIS_SCRIPTED=0 \
+QGE_NOESIS_START_WAIT=0 \
+QGE_NOESIS_ACTION_TRACE_FILE="$autonomous_actions" \
+QGE_NOESIS_COMMAND_TRACE_FILE="$autonomous_commands" \
+  "$repo_root/tools/noesis_quake_player.sh" > "$autonomous_stdout"
+
+cmp -s "$autonomous_stdout" "$autonomous_commands"
+[[ ! -s "$autonomous_actions" ]]
+grep -q '^echo QGE_NOESIS_PLAYER start .*source=autonomous' "$autonomous_commands"
+grep -q '^echo QGE_NOESIS_PLAYER autonomous scripts=disabled control=engine_assist$' "$autonomous_commands"
+if grep -Eq '^\+(forward|back|left|right|moveleft|moveright|attack|jump)|^impulse |^give ' "$autonomous_commands"; then
+  echo "default Noesis player emitted scripted movement in autonomous mode" >&2
+  exit 1
+fi
 
 adaptive_actions="$tmpdir/adaptive-actions.txt"
 adaptive_commands="$tmpdir/adaptive-commands.cfg"
@@ -484,6 +529,7 @@ QGE_NOESIS_DIR="$repo_root" \
 QGE_NOESIS_PLAN=e1m1-route-push \
 QGE_STREAM_MAP=e1m1 \
 QGE_NOESIS_START_WAIT=0 \
+QGE_NOESIS_SCRIPTED=1 \
 QGE_NOESIS_ACTION_TRACE_FILE="$builtin_route_actions" \
 QGE_NOESIS_COMMAND_TRACE_FILE="$builtin_route_commands" \
   "$repo_root/tools/noesis_quake_player.sh" > "$builtin_route_stdout"

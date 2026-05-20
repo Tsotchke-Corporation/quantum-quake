@@ -47,6 +47,9 @@ noesis_min_gameplay_samples="${QGE_NOESIS_MIN_GAMEPLAY_SAMPLES:-2}"
 noesis_min_route_distance="${QGE_NOESIS_MIN_ROUTE_DISTANCE:-64}"
 noesis_min_capture_wait="${QGE_NOESIS_MIN_CAPTURE_WAIT:-280}"
 noesis_assist="${QGE_NOESIS_ASSIST:-2}"
+noesis_scripted="${QGE_NOESIS_SCRIPTED:-0}"
+noesis_autonomous="${QGE_NOESIS_AUTONOMOUS:-}"
+noesis_require_combat="${QGE_NOESIS_REQUIRE_COMBAT:-}"
 noesis_cmd="${QGE_NOESIS_CMD:-}"
 default_noesis_cmd="$repo_root/tools/noesis_quake_policy.sh"
 noesis_cmd_default=0
@@ -135,6 +138,13 @@ noesis_min_log_phases="$(normalize_nonnegative_int "$noesis_min_log_phases" 0)"
 noesis_min_gameplay_samples="$(normalize_nonnegative_int "$noesis_min_gameplay_samples" 2)"
 noesis_min_capture_wait="$(normalize_nonnegative_int "$noesis_min_capture_wait" 280)"
 noesis_assist="$(normalize_nonnegative_int "$noesis_assist" 2)"
+noesis_scripted="$(normalize_bool "$noesis_scripted")"
+if [[ -n "$noesis_autonomous" ]]; then
+  noesis_autonomous="$(normalize_bool "$noesis_autonomous")"
+fi
+if [[ -n "$noesis_require_combat" ]]; then
+  noesis_require_combat="$(normalize_bool "$noesis_require_combat")"
+fi
 fire_min_start_wait="$(normalize_nonnegative_int "$fire_min_start_wait" 48)"
 fire_min_frames="$(normalize_nonnegative_int "$fire_min_frames" 8)"
 frames="$(normalize_positive_int "$frames" 12)"
@@ -148,6 +158,9 @@ esac
 if [[ "$fire_test" == "1" && "$stream_player" == "noesis" && -z "${QGE_NOESIS_PLAN+x}" ]]; then
   noesis_plan="fire"
 fi
+if [[ "$fire_test" == "1" && "$stream_player" == "noesis" && -z "${QGE_NOESIS_SCRIPTED+x}" ]]; then
+  noesis_scripted=1
+fi
 if [[ "$fire_test" == "1" && "$stream_player" == "noesis" &&
       "$fire_min_start_wait" -gt 0 &&
       "$noesis_start_wait" -lt "$fire_min_start_wait" ]]; then
@@ -158,9 +171,24 @@ if [[ "$fire_test" == "1" && "$engine_capture" == "1" &&
       "$frames" -lt "$fire_min_frames" ]]; then
   frames="$fire_min_frames"
 fi
-if [[ "$stream_player" == "noesis" && -z "$noesis_cmd" && -z "$noesis_actions_file" && -x "$default_noesis_cmd" ]]; then
+if [[ "$stream_player" == "noesis" && "$noesis_scripted" == "1" &&
+      -z "$noesis_cmd" && -z "$noesis_actions_file" && -x "$default_noesis_cmd" ]]; then
   noesis_cmd="$default_noesis_cmd"
   noesis_cmd_default=1
+fi
+noesis_requires_script_trace=0
+if [[ "$noesis_scripted" == "1" || -n "$noesis_cmd" || -n "$noesis_actions_file" ]]; then
+  noesis_requires_script_trace=1
+fi
+if [[ -z "$noesis_require_combat" ]]; then
+  noesis_require_combat="$noesis_requires_script_trace"
+fi
+if [[ -z "$noesis_autonomous" ]]; then
+  noesis_autonomous=0
+  if [[ "$stream_player" == "noesis" && "$noesis_requires_script_trace" == "0" &&
+        "$noesis_assist" -gt 0 ]]; then
+    noesis_autonomous=1
+  fi
 fi
 stream_activate_attempts="$(normalize_positive_int "$stream_activate_attempts" 8)"
 timeout_seconds="$(normalize_nonnegative_int "$timeout_seconds" 0)"
@@ -364,6 +392,9 @@ write_agent_manifest() {
     "noesis_min_route_distance": $(json_string "$noesis_min_route_distance"),
     "noesis_min_capture_wait": $noesis_min_capture_wait,
     "noesis_assist": $noesis_assist,
+    "noesis_scripted": $noesis_scripted,
+    "noesis_autonomous": $noesis_autonomous,
+    "noesis_require_combat": $noesis_require_combat,
     "fire_test": $fire_test,
     "fire_min_start_wait": $fire_min_start_wait,
     "fire_min_frames": $fire_min_frames,
@@ -557,18 +588,22 @@ write_noesis_summary() {
     --frames-dir "$agent_video_dir"
     --plan "$noesis_plan"
     --player "$stream_player"
-    --min-actions 1
+    --min-actions "$noesis_requires_script_trace"
     --min-commands 1
     --min-frames "$frames"
     --min-log-phases "$noesis_min_log_phases"
     --min-phase-outcomes "$noesis_min_log_phases"
     --min-gameplay-samples "$noesis_min_gameplay_samples"
     --min-route-distance "$noesis_min_route_distance"
-    --require-phase-markers
-    --require-combat
     --out "$noesis_summary_file"
     --icc-out "$noesis_icc_file"
   )
+  if [[ "$noesis_require_combat" == "1" ]]; then
+    noesis_args+=(--require-combat)
+  fi
+  if [[ "$noesis_requires_script_trace" == "1" ]]; then
+    noesis_args+=(--require-phase-markers)
+  fi
   if (( frames >= 2 )); then
     noesis_args+=(--min-frame-mae 2.0)
   fi
@@ -667,6 +702,7 @@ emit_noesis_player_script() {
     QGE_NOESIS_ACTIONS_FILE="$noesis_actions_file" \
     QGE_NOESIS_START_WAIT="$noesis_start_wait" \
     QGE_NOESIS_MAX_WAIT="$noesis_max_wait" \
+    QGE_NOESIS_SCRIPTED="$noesis_scripted" \
     QGE_NOESIS_CMD="$noesis_cmd" \
     QGE_NOESIS_ACTION_TRACE_FILE="$agent_input_actions_file" \
     QGE_NOESIS_COMMAND_TRACE_FILE="$agent_input_commands_file" \
@@ -714,6 +750,7 @@ trap restore_autoexec EXIT
   echo "quantum_ai $ai_value"
   echo "quantum_vis $vis_value"
   echo "qge_noesis_assist $noesis_assist"
+  echo "qge_noesis_autonomous $noesis_autonomous"
   if [[ "$sound" == "1" ]]; then
     echo "snd_quantum $sound_quantum_mode"
     echo "snd_quantum_source_authority $sound_source_authority"
@@ -782,7 +819,7 @@ echo "Streaming Quantum Quake graphics diagnostics"
 echo "  outdir=$outdir"
 echo "  agent_stream=$agent_stream"
 echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter update_interval=$render_update_interval sprite_test=$sprite_test quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_physics_authoritative=$physics_authoritative quantum_particles=$particles_value quantum_ai=$ai_value quantum_vis=$vis_value"
-echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound snd_quantum=$sound_quantum_mode snd_quantum_source_authority=$sound_source_authority trace=$trace replay=$replay_trace replay_strict=$replay_strict fire_test=$fire_test fire_min_start_wait=$fire_min_start_wait fire_min_frames=$fire_min_frames scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_max_wait=$noesis_max_wait noesis_min_log_phases=$noesis_min_log_phases noesis_min_gameplay_samples=$noesis_min_gameplay_samples noesis_min_route_distance=$noesis_min_route_distance noesis_min_capture_wait=$noesis_min_capture_wait noesis_assist=$noesis_assist"
+echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound snd_quantum=$sound_quantum_mode snd_quantum_source_authority=$sound_source_authority trace=$trace replay=$replay_trace replay_strict=$replay_strict fire_test=$fire_test fire_min_start_wait=$fire_min_start_wait fire_min_frames=$fire_min_frames scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_scripted=$noesis_scripted noesis_autonomous=$noesis_autonomous noesis_require_combat=$noesis_require_combat noesis_max_wait=$noesis_max_wait noesis_min_log_phases=$noesis_min_log_phases noesis_min_gameplay_samples=$noesis_min_gameplay_samples noesis_min_route_distance=$noesis_min_route_distance noesis_min_capture_wait=$noesis_min_capture_wait noesis_assist=$noesis_assist"
 echo "QGE_AGENT_STREAM $agent_stream"
 
 print_log_updates() {

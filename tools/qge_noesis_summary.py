@@ -1583,6 +1583,10 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
     player = args.player or str(input_manifest.get("player") or "noesis")
     noesis_assist_requested = int(as_number(
         input_manifest.get("noesis_assist"), 0.0))
+    noesis_scripted = int(as_number(
+        input_manifest.get("noesis_scripted"), 0.0))
+    noesis_autonomous = int(as_number(
+        input_manifest.get("noesis_autonomous"), 0.0))
     gameplay_path = args.gameplay_outcomes
     if gameplay_path is None:
         manifest_gameplay = noesis_manifest.get("gameplay_outcomes_file") or ""
@@ -1596,12 +1600,36 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
     movement_intent = movement_intent_present(actions, commands)
     assist_state = gameplay.get("assist") or {}
     assist_active = int(assist_state.get("active_frames") or 0) > 0
+    assist_movement_intent = (
+        int(assist_state.get("movement_injected_sample_count") or 0) > 0 or
+        int(assist_state.get("steering_sample_count") or 0) > 0
+    )
+    assist_combat_intent = (
+        int(assist_state.get("attack_injected_sample_count") or 0) > 0 or
+        int(assist_state.get("fire_gate_passed_sample_count") or 0) > 0
+    )
+    autonomous_control = (
+        (noesis_autonomous > 0 or noesis_scripted <= 0) and
+        noesis_assist_requested > 0 and
+        actions["line_count"] == 0
+    )
+    movement_intent_for_gate = (
+        movement_intent or (autonomous_control and assist_movement_intent)
+    )
+    combat_intent_for_gate = (
+        actions["combat_action_count"] > 0 or
+        (autonomous_control and assist_combat_intent) or
+        (autonomous_control and not bool(getattr(args, "require_combat", False)))
+    )
     unassisted_claim_supported = (
         noesis_assist_requested <= 0 and not assist_active
     )
-    claim_scope = (
-        "unassisted" if unassisted_claim_supported else "server_assisted"
-    )
+    if unassisted_claim_supported:
+        claim_scope = "unassisted"
+    elif autonomous_control:
+        claim_scope = "server_autonomous"
+    else:
+        claim_scope = "server_assisted"
     trace = summarize_trace(args.trace_summary) if args.trace_summary else {
         "path": "",
         "exists": False,
@@ -1633,11 +1661,13 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
         "commands_present": commands["line_count"] >= args.min_commands,
         "no_unknown_actions": commands["skipped_unknown_count"] == 0,
         "no_unknown_commands": log["unknown_command_count"] == 0,
-        "movement_actions_present": movement_intent,
-        "combat_actions_present": actions["combat_action_count"] > 0,
-        "phase_markers_present": actions["phase_count"] > 0,
+        "movement_actions_present": movement_intent_for_gate,
+        "combat_actions_present": combat_intent_for_gate,
+        "phase_markers_present": actions["phase_count"] > 0 or autonomous_control,
         "frames_present": frames["frame_count"] >= args.min_frames,
     }
+    if autonomous_control:
+        gates["no_script_action_trace_empty"] = actions["line_count"] == 0
     if args.manifest:
         gates["manifest_present"] = bool(manifest)
         gates["run_completed"] = (
@@ -1716,7 +1746,7 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
                 total_distance >= args.min_route_distance or
                 max_displacement >= args.min_route_distance
             )
-        if movement_intent:
+        if movement_intent_for_gate:
             gates["not_stuck"] = (
                 not terminal_stall and (
                     total_distance >= min(48.0, args.min_route_distance) or
@@ -1765,6 +1795,9 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
             "frames_dir": str(args.frames_dir) if args.frames_dir else "",
             "missing_inputs": missing_inputs,
             "noesis_assist_requested": noesis_assist_requested,
+            "noesis_scripted": noesis_scripted,
+            "noesis_autonomous": noesis_autonomous,
+            "autonomous_control": autonomous_control,
             "claim_scope": claim_scope,
         },
         "actions": actions,
@@ -1826,6 +1859,27 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "name": "noesis_claim_scope",
             "value": (summary.get("inputs") or {}).get(
                 "claim_scope", "unassisted"),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_scripted",
+            "value": bool((summary.get("inputs") or {}).get(
+                "noesis_scripted", 0)),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_autonomous",
+            "value": bool((summary.get("inputs") or {}).get(
+                "noesis_autonomous", 0)),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_autonomous_control",
+            "value": bool((summary.get("inputs") or {}).get(
+                "autonomous_control", False)),
             "path": str(summary_path),
         },
         {

@@ -46,6 +46,7 @@ cvar_t quantum_projectiles = {"quantum_projectiles", "1", CVAR_ARCHIVE};
 cvar_t quantum_physics_authoritative = {"quantum_physics_authoritative", "0", CVAR_ARCHIVE};
 cvar_t quantum_debug     = {"quantum_debug",     "0", CVAR_NONE};
 cvar_t qge_noesis_assist = {"qge_noesis_assist", "0", CVAR_NONE};
+cvar_t qge_noesis_autonomous = {"qge_noesis_autonomous", "0", CVAR_NONE};
 cvar_t quantum_overlay_alpha = {"quantum_overlay_alpha", "0.10", CVAR_ARCHIVE};
 cvar_t quantum_scene_surface_budget = {"quantum_scene_surface_budget", "512", CVAR_ARCHIVE};
 cvar_t quantum_render_res = {"quantum_render_res", "1024", CVAR_ARCHIVE};
@@ -203,6 +204,8 @@ static qboolean qge_noesis_assist_switch_fire_suppressed = false;
 #define QGE_NOESIS_AIM_ALIGNED_DEG 12.0f
 #define QGE_NOESIS_VIEW_HOLD_DEG 6.0f
 #define QGE_NOESIS_HIDDEN_CHASE_DISTANCE 768.0f
+#define QGE_NOESIS_AUTONOMOUS_CHASE_DISTANCE 1152.0f
+#define QGE_NOESIS_WALL_TRAP_CLEAR 16.0f
 #define QGE_NOESIS_TARGET_LOCK_FRAMES 45
 #define QGE_NOESIS_TARGET_LOCK_MAX_DISTANCE 1152.0f
 
@@ -1009,6 +1012,8 @@ static float QGE_NoesisAssistTraceDistance(edict_t *player, float yaw)
 
 static float QGE_NoesisAssistHiddenChaseDistance(void)
 {
+	if (qge_noesis_autonomous.value >= 0.5f)
+		return QGE_NOESIS_AUTONOMOUS_CHASE_DISTANCE;
 	if (strcmp(qge_noesis_current_phase, "e1m1_entry_clear") == 0 ||
 		strcmp(qge_noesis_current_phase, "e1m1_bridge_route") == 0 ||
 		strcmp(qge_noesis_current_phase, "e1m1_door_slide") == 0)
@@ -1307,8 +1312,16 @@ void QGE_NoesisAssistClientThink(client_t *client,
 		right_clear = QGE_NoesisAssistTraceDistance(player,
 													anglemod(aim[YAW] - 45.0f));
 		if (relative_forward > 0.0f && forward_clear < 56.0f) {
-			relative_side = left_clear >= right_clear ? -320.0f : 320.0f;
-			relative_forward = 180.0f;
+			if (forward_clear < QGE_NOESIS_WALL_TRAP_CLEAR &&
+				left_clear < QGE_NOESIS_WALL_TRAP_CLEAR &&
+				right_clear < QGE_NOESIS_WALL_TRAP_CLEAR) {
+				relative_forward = -220.0f;
+				relative_side = (qge_frame_count & 16) ? 320.0f : -320.0f;
+			}
+			else {
+				relative_side = left_clear >= right_clear ? -320.0f : 320.0f;
+				relative_forward = 180.0f;
+			}
 		}
 		else if (visible && distance < 512.0f && relative_side == 0.0f) {
 			relative_side = (qge_frame_count & 8) ? 220.0f : -220.0f;
@@ -3731,6 +3744,7 @@ void QGE_Init(void)
 	Cvar_RegisterVariable(&quantum_physics_authoritative);
 	Cvar_RegisterVariable(&quantum_debug);
 	Cvar_RegisterVariable(&qge_noesis_assist);
+	Cvar_RegisterVariable(&qge_noesis_autonomous);
 	Cvar_RegisterVariable(&quantum_overlay_alpha);
 	Cvar_RegisterVariable(&quantum_scene_surface_budget);
 	Cvar_RegisterVariable(&quantum_render_res);

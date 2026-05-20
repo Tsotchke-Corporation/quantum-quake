@@ -1066,6 +1066,9 @@ class NoesisSummaryTests(unittest.TestCase):
             self.assertEqual(by_name["noesis_route_action_count"], 5)
             self.assertGreaterEqual(by_name["noesis_gameplay_quality_score"], 35.0)
             self.assertEqual(by_name["noesis_claim_scope"], "server_assisted")
+            self.assertFalse(by_name["noesis_scripted"])
+            self.assertFalse(by_name["noesis_autonomous"])
+            self.assertFalse(by_name["noesis_autonomous_control"])
             self.assertFalse(by_name["noesis_unassisted_claim_supported"])
             self.assertEqual(by_name["noesis_log_phase_count"], 1)
             self.assertEqual(by_name["noesis_trace_run_id"], 0x5151455F52554E31)
@@ -1242,6 +1245,161 @@ class NoesisSummaryTests(unittest.TestCase):
             self.assertEqual(blocked["status"], "blocked")
             self.assertIn(str(commands_path), blocked["inputs"]["missing_inputs"])
             self.assertIn("commands_present", blocked["failures"])
+
+    def test_autonomous_assist_counts_as_no_script_intent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            actions_path = tmpdir / "actions.txt"
+            commands_path = tmpdir / "commands.cfg"
+            log_path = tmpdir / "quantum_quake.log"
+            gameplay_path = tmpdir / "gameplay_outcomes.ndjson"
+            manifest_path = tmpdir / "manifest.json"
+
+            actions_path.write_text("", encoding="utf-8")
+            commands_path.write_text(
+                "\n".join([
+                    "echo QGE_NOESIS_PLAYER start source=autonomous "
+                    "scripts=disabled provider=engine_assist start_wait=0",
+                    "echo QGE_NOESIS_PLAYER autonomous "
+                    "scripts=disabled control=engine_assist",
+                    "echo QGE_NOESIS_PLAYER done",
+                ]) + "\n",
+                encoding="utf-8",
+            )
+            log_path.write_text("", encoding="utf-8")
+            gameplay_path.write_text(
+                "\n".join([
+                    json.dumps({
+                        "schema": "qge.gameplay_outcome.v0",
+                        "type": "sample",
+                        "frame": 1,
+                        "player": {"health": 100, "origin": [0, 0, 0]},
+                        "route": {
+                            "total_distance": 0.0,
+                            "displacement_from_start": 0.0,
+                            "max_displacement_from_start": 0.0,
+                        },
+                        "combat": {
+                            "damage_dealt_inferred_total": 0,
+                            "kills_total": 0,
+                            "attack_presses_total": 0,
+                            "visible_enemy_count": 0,
+                            "attack_aligned_total": 0,
+                        },
+                        "assist": {
+                            "mode": 2,
+                            "active": False,
+                            "movement_injected": False,
+                            "attack_injected": False,
+                            "fire_gate_passed": False,
+                        },
+                    }),
+                    json.dumps({
+                        "schema": "qge.gameplay_outcome.v0",
+                        "type": "sample",
+                        "frame": 8,
+                        "player": {
+                            "health": 100,
+                            "attack_active": True,
+                            "origin": [90, 0, 0],
+                        },
+                        "route": {
+                            "total_distance": 96.0,
+                            "displacement_from_start": 90.0,
+                            "max_displacement_from_start": 90.0,
+                            "leaf_transition_count": 1,
+                        },
+                        "combat": {
+                            "damage_dealt_inferred_total": 12,
+                            "kills_total": 0,
+                            "attack_presses_total": 1,
+                            "visible_enemy_count": 1,
+                            "nearest_enemy_visible": True,
+                            "nearest_enemy_aligned": True,
+                            "attack_visible_total": 1,
+                            "attack_aligned_total": 1,
+                        },
+                        "assist": {
+                            "mode": 2,
+                            "active": True,
+                            "movement_injected": True,
+                            "attack_injected": True,
+                            "fire_gate_passed": True,
+                        },
+                    }),
+                ]) + "\n",
+                encoding="utf-8",
+            )
+            manifest_path.write_text(
+                json.dumps({
+                    "status": "complete",
+                    "map": "e1m1",
+                    "frames_requested": 0,
+                    "frames_captured": 0,
+                    "run": {
+                        "status": "ok",
+                        "success": 1,
+                        "timed_out": 0,
+                        "startup_issue": "",
+                    },
+                    "input": {
+                        "player": "noesis",
+                        "noesis_plan": "adaptive",
+                        "noesis_assist": 2,
+                        "noesis_scripted": 0,
+                        "noesis_autonomous": 1,
+                    },
+                    "noesis": {
+                        "gameplay_outcomes_file": str(gameplay_path),
+                    },
+                }),
+                encoding="utf-8",
+            )
+
+            args = SimpleNamespace(
+                manifest=manifest_path,
+                actions=actions_path,
+                commands=commands_path,
+                log=log_path,
+                gameplay_outcomes=gameplay_path,
+                trace_summary=None,
+                frames_dir=None,
+                plan="",
+                player="",
+                min_actions=0,
+                min_commands=1,
+                min_frames=0,
+                min_frame_mae=None,
+                min_log_phases=0,
+                min_phase_outcomes=0,
+                min_gameplay_samples=2,
+                min_route_distance=64.0,
+                require_phase_markers=False,
+                require_combat=True,
+            )
+            summary = noesis_summary.build_summary(args)
+            self.assertEqual(summary["status"], "pass")
+            self.assertEqual(summary["inputs"]["claim_scope"], "server_autonomous")
+            self.assertTrue(summary["inputs"]["autonomous_control"])
+            self.assertEqual(summary["actions"]["line_count"], 0)
+            self.assertTrue(summary["quality_gates"]["actions_present"])
+            self.assertTrue(
+                summary["quality_gates"]["no_script_action_trace_empty"]
+            )
+            self.assertTrue(summary["quality_gates"]["movement_actions_present"])
+            self.assertTrue(summary["quality_gates"]["combat_actions_present"])
+            self.assertTrue(summary["quality_gates"]["combat_required"])
+            self.assertTrue(summary["quality_gates"]["not_stuck"])
+
+            icc = noesis_summary.build_icc_evidence(
+                summary,
+                tmpdir / "qge_noesis_summary.json",
+            )
+            by_name = {entry["name"]: entry["value"] for entry in icc}
+            self.assertEqual(by_name["noesis_claim_scope"], "server_autonomous")
+            self.assertFalse(by_name["noesis_scripted"])
+            self.assertTrue(by_name["noesis_autonomous"])
+            self.assertTrue(by_name["noesis_autonomous_control"])
 
     def test_poor_aim_blocks_required_combat(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

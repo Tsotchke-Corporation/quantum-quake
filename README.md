@@ -29,8 +29,9 @@ Working and routinely verified:
   and persistence-boundary trace records.
 - QGE audio post-mix and source-mode telemetry, including source authority
   smoke checks.
-- Noesis harness play on `e1m1` with keyboard-style action plans, engine-side
-  assist telemetry, route/combat outcome summaries, and ICC evidence sidecars.
+- Noesis harness play on `e1m1` with no-script autonomous server control by
+  default, opt-in keyboard-style action-plan fixtures, engine-side assist
+  telemetry, route/combat outcome summaries, and ICC evidence sidecars.
 - Reproducible diagnostic streams under `diagnostics/agent_stream/` and
   `diagnostics/quake_stream/`.
 
@@ -40,6 +41,9 @@ Important known limitations:
   improved world-surface coverage, but floors, walls, and ceilings still show
   texture/raster artifacts, blockiness, seams, and debug-overlay contamination
   in some captures.
+- Noesis is not yet learning Quake from experience. Current no-script runs use
+  a reactive server-side controller with an explicit autonomous assist hint;
+  scripted route fixtures are opt-in regression tools.
 - QGE is not yet the sole owner of all vanilla Quake media. Sky, water/warp,
   full conformance lighting, particles, sprites, menus, and all edge cases are
   still in progress.

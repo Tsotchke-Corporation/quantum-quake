@@ -400,8 +400,9 @@ active sample count, visible-target sample count, steering sample count,
 attack-visible frames, target-distance evidence, view/movement/attack injection
 sample counts, target-lock/switch counts, pre-assist aim-error min/average,
 switch-fire suppression counts, and a claim scope. Assisted runs are marked
-`server_assisted` so they cannot be
-mistaken for unassisted play evidence. Set `QGE_NOESIS_MIN_LOG_PHASES` to
+`server_assisted` for scripted fixtures or `server_autonomous` for no-script
+engine-controlled runs, so they cannot be mistaken for unassisted play
+evidence. Set `QGE_NOESIS_MIN_LOG_PHASES` to
 require that many `QGE_NOESIS_PHASE` markers to appear in the engine log and
 matching engine-owned `noesis_phase` outcome events to appear in gameplay
 telemetry, which is useful when proving that a longer route plan actually
@@ -410,8 +411,8 @@ executed rather than only being generated. Set `QGE_NOESIS_MIN_GAMEPLAY_SAMPLES`
 movement evidence. This reducer is evidence-only: a blocked Noesis quality
 summary does not turn a completed media stream into a process failure.
 
-`tools/quake_crash_watch.sh` uses the same Noesis player/provider contract for
-its scripted movement by default, stores `input/noesis_actions.txt` and
+`tools/quake_crash_watch.sh` uses the same Noesis player/provider contract,
+keeps scripted movement disabled by default, stores `input/noesis_actions.txt` and
 `input/noesis_commands.cfg` under its crash-watch output directory, passes
 `-nomouse` unless `QGE_STREAM_MOUSE=1`, targets `QGE_STREAM_DISPLAY` like the
 stream harness, and pins the same high-resolution CPU render defaults: 1024
@@ -501,38 +502,47 @@ path. `cmd` or
 targeted probes.
 `scan-fire-left` and `scan-fire-right` hold keyboard yaw plus attack for a
 short target-acquisition sweep; they do not use mouse input or screen control.
-The default adaptive/E1M1 routes keep unassisted play disciplined by aiming and
-moving with keyboard-only turns and route actions, then using short attack taps
-or bounded scan-fire sweeps instead of long blind fire holds. The E1M1 adaptive
-route brackets its first acquisition block with a short keyboard `look-up` and
-`center-view` recenter so attacks sweep a more useful enemy sightline without
-taking over the user's mouse. The bridge block now closes farther along the
-left bridge side before a bounded `scan-fire-left` sweep, and the door block
-adds a short left/right scan after the door bump before its speed-jump-forward
-recovery, then begins the bounded hunt loop with a keyboard-only back/turn/jump
-unstick prelude before another controlled movement and acquisition pass. In
-unassisted mode this is still only route/input
-evidence unless the summary reports visible or aligned combat; with the default
-`QGE_NOESIS_ASSIST=2` stream assist it gives the server-side visible-target aim
-and chase assist a better acquisition window, with runs remaining marked `server_assisted`.
+The adaptive/E1M1 route plans are now explicit scripted fixtures, not the
+default Noesis behavior. Set `QGE_NOESIS_SCRIPTED=1`, `QGE_NOESIS_ACTIONS_FILE`,
+or `QGE_NOESIS_CMD` when you intentionally want command-buffer route playback.
+Those fixtures aim and move with keyboard-only turns and route actions, then
+use short attack taps or bounded scan-fire sweeps instead of long blind fire
+holds. The E1M1 adaptive route brackets its first acquisition block with a
+short keyboard `look-up` and `center-view` recenter so attacks sweep a more
+useful enemy sightline without taking over the user's mouse. The bridge block
+closes farther along the left bridge side before a bounded `scan-fire-left`
+sweep, and the door block adds a short left/right scan after the door bump
+before its speed-jump-forward recovery, then begins the bounded hunt loop with
+a keyboard-only back/turn/jump unstick prelude before another controlled
+movement and acquisition pass.
+
+With the default `QGE_NOESIS_SCRIPTED=0` and `QGE_NOESIS_ASSIST=2`, Noesis is a
+server-autonomous diagnostic controller: movement and combat evidence must come
+from engine-owned gameplay telemetry and assist injection counters, not from a
+cached route script. The harness also sets `qge_noesis_autonomous 1` in this
+mode so the engine can use a wider hidden-target chase window before any
+scripted route phase exists. This is not yet a learning loop; no model weights
+or policy parameters are trained during a run.
+Scripted fixture runs remain marked `server_assisted` when assist is enabled.
 Generic combat-exploration recovery backs out, side-slides, turns, and jumps
 forward before the second push so a terminal wall contact is less likely to
 leave the plan wedged.
 
 Action streams can come from either `QGE_NOESIS_ACTIONS_FILE` or
 `QGE_NOESIS_CMD`. The command provider runs from `QGE_NOESIS_DIR` and should
-print the same action lines to stdout; this is the hook for a Noesis policy
-runtime that writes actions instead of capturing the user's mouse. The provider
-is executed directly, so use a small wrapper script for shell pipelines,
-redirection, or other compound commands.
-Every run also mirrors the selected action stream and translated Quake command
-stream into `input/noesis_actions.txt` and `input/noesis_commands.cfg`.
+print the same action lines to stdout; this remains the hook for scripted
+policy fixtures that write actions instead of capturing the user's mouse. The
+provider is executed directly, so use a small wrapper script for shell
+pipelines, redirection, or other compound commands. Every run mirrors the
+selected action stream and translated Quake command stream into
+`input/noesis_actions.txt` and `input/noesis_commands.cfg`.
 
-When neither is set, the default Noesis player runs
-`tools/noesis_quake_policy.sh`, a repo-local cached-policy provider. It emits a
-`QGE_NOESIS_POLICY` marker into the Quake log, then writes action lines for the
-selected plan. `QGE_NOESIS_ACTIONS_FILE` still takes precedence over this
-default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
+When neither an action file nor a provider is set, `QGE_NOESIS_SCRIPTED=0`
+keeps the Noesis player in autonomous mode and emits only metadata commands;
+it does not run `tools/noesis_quake_policy.sh` or any built-in route plan. Set
+`QGE_NOESIS_SCRIPTED=1` to use `tools/noesis_quake_policy.sh`, the repo-local
+cached-policy provider. An explicit `QGE_NOESIS_CMD` still takes precedence over
+`QGE_NOESIS_ACTIONS_FILE`, and both take precedence over the scripted default.
 
 ## Common Environment Variables
 
@@ -560,7 +570,8 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   can prove `vis_authority_apply` independently of raw oracle quality.
 - `QGE_STREAM_FIRE_TEST`: run the scripted weapon smoke when set to `1`.
   With the default Noesis player this selects the Noesis `fire` plan unless
-  `QGE_NOESIS_PLAN` is set explicitly.
+  `QGE_NOESIS_PLAN` is set explicitly, and enables `QGE_NOESIS_SCRIPTED=1`
+  unless that variable is explicitly set.
 - `QGE_STREAM_SPRITE_TEST`: inject one QGE diagnostic sprite billboard when set
   to `1`, default `0`.
 - `QGE_STREAM_ENGINE_CAPTURE`: use engine auto-capture when set to `1`, default
@@ -572,18 +583,31 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
 - `QGE_STREAM_MOUSE`: pass through SDL mouse input when set to `1`. The default
   is `0`, which launches Quake with `-nomouse` so the harness never captures
   the user's cursor.
-- `QGE_STREAM_PLAYER`: scripted input owner, default `noesis`. Set to `none`
+- `QGE_STREAM_PLAYER`: harness player owner, default `noesis`. Set to `none`
   to disable harness-generated gameplay commands.
 - `QGE_NOESIS_DIR`: Noesis repo path used for player provenance, default
   `~/Desktop/noesis`.
-- `QGE_NOESIS_PLAN`: Noesis command-buffer plan, default `adaptive`;
+- `QGE_NOESIS_SCRIPTED`: opt in to repo-local scripted command-buffer playback,
+  default `0`. Normal `QGE_STREAM_PLAYER=noesis` runs leave this off so Noesis
+  does not use cached route scripts. Set it to `1` for regression fixtures that
+  intentionally use `tools/noesis_quake_policy.sh`.
+- `QGE_NOESIS_AUTONOMOUS`: optional override for the engine-side no-script
+  controller hint. When unset, the stream harness enables it for
+  `QGE_STREAM_PLAYER=noesis` runs that have no action file, no provider, and
+  `QGE_NOESIS_SCRIPTED=0`.
+- `QGE_NOESIS_REQUIRE_COMBAT`: optional Noesis summary combat gate override.
+  When unset, scripted fixture runs require combat evidence and no-script
+  autonomous runs first require movement/control evidence. Set it to `1` to
+  demand visible/aligned combat from a no-script run.
+- `QGE_NOESIS_PLAN`: Noesis command-buffer plan used only for scripted fixture
+  runs, default `adaptive`;
   supported plans are `patrol`, `scout`, `fire`, `map-scout`, `combat-scout`,
   `combat-explore`, `e1m1-route-push`, `weapon-cycle-smoke`, and `adaptive`.
   `adaptive` selects a map-aware route/combat plan when one exists, and
   otherwise falls back to the generic combat-exploration loop.
 - `QGE_NOESIS_ACTIONS_FILE`: optional Noesis action file. When present, the
   harness translates each line into Quake console commands instead of using
-  the built-in plan. Supported actions include `forward`, `back`,
+  autonomous control. Supported actions include `forward`, `back`,
   `turn-left`, `turn-right`, `strafe-left`, `strafe-right`, `jump`,
   `center-view`, `advance-fire`, `circle-fire-left`, `circle-fire-right`,
   `scan-fire-left`, `scan-fire-right`, `wall-slide-left`, `wall-slide-right`,
@@ -610,8 +634,14 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   when intentionally testing early capture or startup behavior.
 - `QGE_NOESIS_ASSIST`: server-state assist for Noesis automation. The stream
   harness defaults to mode `2`; set `QGE_NOESIS_ASSIST=0` for unassisted claim
-  runs. Mode `1` aims and fires at visible monsters while preserving the
-  scripted movement command. For mode `1`, visible targets are ranked by
+  runs. In no-script mode, this is the only current source of gameplay control.
+  When `qge_noesis_autonomous` is enabled, hidden-target chase can begin out to
+  `QGE_NOESIS_AUTONOMOUS_CHASE_DISTANCE`; scripted fixture phases keep the
+  narrower `QGE_NOESIS_HIDDEN_CHASE_DISTANCE` route-protection behavior. If
+  all target-facing wall probes are blocked under `QGE_NOESIS_WALL_TRAP_CLEAR`,
+  the controller backs out and strafes instead of continuing to push forward.
+  Mode `1` aims and fires at visible monsters while preserving any existing
+  movement command. For mode `1`, visible targets are ranked by
   current aim error first and distance second, so a scan does not abandon the
   enemy closest to the crosshair for a merely nearer side target. Mode `2` also
   steers the server usercmd toward a short-lived locked monster target with a
@@ -634,7 +664,7 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   acts during `-qgestreamdir` runs so normal local play is untouched.
 - `QGE_NOESIS_CMD`: optional Noesis action provider command. When set, the
   harness runs it from `QGE_NOESIS_DIR` and translates its stdout action lines;
-  this takes precedence over `QGE_NOESIS_ACTIONS_FILE` and the default
+  this takes precedence over `QGE_NOESIS_ACTIONS_FILE` and the opt-in
   `tools/noesis_quake_policy.sh` provider.
 - `QGE_STREAM_WIDTH`, `QGE_STREAM_HEIGHT`, `QGE_STREAM_FULLSCREEN`: window
   controls.
