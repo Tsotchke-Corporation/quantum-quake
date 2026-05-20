@@ -152,6 +152,8 @@ static int qge_gameplay_kills_total = 0;
 static int qge_gameplay_pickups_total = 0;
 static int qge_gameplay_weapon_changes_total = 0;
 static int qge_gameplay_attack_presses_total = 0;
+static int qge_gameplay_attack_visible_total = 0;
+static int qge_gameplay_attack_aligned_total = 0;
 static int qge_gameplay_prev_health = 0;
 static int qge_gameplay_prev_armor = 0;
 static int qge_gameplay_prev_ammo_total = 0;
@@ -183,6 +185,8 @@ static float qge_noesis_assist_sidemove = 0.0f;
 static float qge_noesis_assist_forward_clear = -1.0f;
 static float qge_noesis_assist_left_clear = -1.0f;
 static float qge_noesis_assist_right_clear = -1.0f;
+
+#define QGE_NOESIS_AIM_ALIGNED_DEG 12.0f
 
 static int QGE_RenderUpdateInterval(void);
 static qboolean QGE_RenderShouldUpdateFrame(void);
@@ -777,6 +781,8 @@ static void QGE_GameplayOutcomeResetState(void)
 	qge_gameplay_pickups_total = 0;
 	qge_gameplay_weapon_changes_total = 0;
 	qge_gameplay_attack_presses_total = 0;
+	qge_gameplay_attack_visible_total = 0;
+	qge_gameplay_attack_aligned_total = 0;
 	qge_gameplay_prev_health = 0;
 	qge_gameplay_prev_armor = 0;
 	qge_gameplay_prev_ammo_total = 0;
@@ -922,9 +928,33 @@ static qboolean QGE_GameplayEnemyAimPoint(edict_t *player,
 	return false;
 }
 
-static qboolean QGE_GameplayEnemyVisible(edict_t *player, edict_t *enemy)
+static float QGE_AngleDeltaDegrees(float a, float b)
 {
-	return QGE_GameplayEnemyAimPoint(player, enemy, NULL);
+	float delta = anglemod(a - b);
+
+	if (delta > 180.0f)
+		delta -= 360.0f;
+	return delta;
+}
+
+static float QGE_GameplayAimErrorDegrees(edict_t *player,
+										 const float *target)
+{
+	vec3_t eye;
+	vec3_t delta;
+	vec3_t aim;
+	float pitch_delta;
+	float yaw_delta;
+
+	if (!player || !target)
+		return -1.0f;
+
+	VectorAdd(player->v.origin, player->v.view_ofs, eye);
+	VectorSubtract(target, eye, delta);
+	VectorAngles(delta, aim);
+	pitch_delta = QGE_AngleDeltaDegrees(aim[PITCH], player->v.v_angle[PITCH]);
+	yaw_delta = QGE_AngleDeltaDegrees(aim[YAW], player->v.v_angle[YAW]);
+	return sqrtf(pitch_delta * pitch_delta + yaw_delta * yaw_delta);
 }
 
 static float QGE_NoesisAssistTraceDistance(edict_t *player, float yaw)
@@ -1078,8 +1108,18 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	chase_mode = qge_noesis_assist.value >= 1.5f ? 1 : 0;
 	forward_clear = left_clear = right_clear = -1.0f;
 	if (chase_mode) {
-		move->forwardmove = visible && distance < 384.0f ? 120.0f : 400.0f;
-		move->sidemove = 0.0f;
+		if (visible && distance < 192.0f) {
+			move->forwardmove = -220.0f;
+			move->sidemove = (qge_frame_count & 8) ? 260.0f : -260.0f;
+		}
+		else if (visible && distance < 384.0f) {
+			move->forwardmove = 0.0f;
+			move->sidemove = (qge_frame_count & 8) ? 260.0f : -260.0f;
+		}
+		else {
+			move->forwardmove = 400.0f;
+			move->sidemove = 0.0f;
+		}
 		move->upmove = 0.0f;
 
 		forward_clear = QGE_NoesisAssistTraceDistance(player, aim[YAW]);
@@ -1087,11 +1127,11 @@ void QGE_NoesisAssistClientThink(client_t *client,
 												   anglemod(aim[YAW] + 45.0f));
 		right_clear = QGE_NoesisAssistTraceDistance(player,
 													anglemod(aim[YAW] - 45.0f));
-		if (forward_clear < 56.0f) {
+		if (move->forwardmove > 0.0f && forward_clear < 56.0f) {
 			move->sidemove = left_clear >= right_clear ? 320.0f : -320.0f;
 			move->forwardmove = 180.0f;
 		}
-		else if (visible && distance < 512.0f) {
+		else if (visible && distance < 512.0f && move->sidemove == 0.0f) {
 			move->sidemove = (qge_frame_count & 8) ? 220.0f : -220.0f;
 		}
 	}
@@ -1194,10 +1234,15 @@ static void QGE_GameplayOutcomeSample(void)
 	int ammo_total, combined, prev_combined;
 	int damageable_alive = 0;
 	int visible_enemy_count = 0;
+	int aligned_visible_enemy_count = 0;
 	int nearest_enemy_id = 0;
 	int nearest_enemy_visible = 0;
+	int nearest_enemy_aligned = 0;
 	float nearest_enemy_distance = -1.0f;
+	float nearest_enemy_angle_error = -1.0f;
 	float damageable_health;
+	int attack_visible_delta = 0;
+	int attack_aligned_delta = 0;
 
 	if (!qge_initialized)
 		return;
@@ -1259,19 +1304,31 @@ static void QGE_GameplayOutcomeSample(void)
 		qge_gameplay_prev_edict_health[i] = damageable_health;
 
 		if (((int)ent->v.flags & FL_MONSTER) && ent->v.health > 0.0f) {
+			vec3_t candidate_aim;
 			float dist;
+			float aim_error;
+			qboolean visible;
 
 			VectorSubtract(ent->v.origin, player->v.origin, delta);
 			dist = VectorLength(delta);
+			visible = QGE_GameplayEnemyAimPoint(player, ent, candidate_aim);
+			aim_error = QGE_GameplayAimErrorDegrees(player, candidate_aim);
 			if (nearest_enemy_distance < 0.0f ||
 				dist < nearest_enemy_distance) {
 				nearest_enemy_distance = dist;
 				nearest_enemy_id = i;
-				nearest_enemy_visible =
-					QGE_GameplayEnemyVisible(player, ent) ? 1 : 0;
+				nearest_enemy_visible = visible ? 1 : 0;
+				nearest_enemy_angle_error = aim_error;
+				nearest_enemy_aligned =
+					visible && aim_error >= 0.0f &&
+					aim_error <= QGE_NOESIS_AIM_ALIGNED_DEG;
 			}
-			if (QGE_GameplayEnemyVisible(player, ent))
+			if (visible) {
 				visible_enemy_count++;
+				if (aim_error >= 0.0f &&
+					aim_error <= QGE_NOESIS_AIM_ALIGNED_DEG)
+					aligned_visible_enemy_count++;
+			}
 		}
 	}
 
@@ -1324,9 +1381,16 @@ static void QGE_GameplayOutcomeSample(void)
 	if (displacement > qge_gameplay_max_displacement)
 		qge_gameplay_max_displacement = displacement;
 
+	attack_visible_delta =
+		attack_active && visible_enemy_count > 0 ? 1 : 0;
+	attack_aligned_delta =
+		attack_active && aligned_visible_enemy_count > 0 ? 1 : 0;
+
 	qge_gameplay_damage_taken_total += damage_taken_delta;
 	qge_gameplay_damage_dealt_total += damage_dealt_delta;
 	qge_gameplay_kills_total += kills_delta;
+	qge_gameplay_attack_visible_total += attack_visible_delta;
+	qge_gameplay_attack_aligned_total += attack_aligned_delta;
 	qge_gameplay_samples++;
 
 	fprintf(qge_gameplay_outcome_file,
@@ -1350,8 +1414,14 @@ static void QGE_GameplayOutcomeSample(void)
 		"\"kills_delta\":%d,\"kills_total\":%d,"
 		"\"killed_monsters\":%d,\"damageable_alive\":%d,"
 		"\"nearest_enemy_id\":%d,\"nearest_enemy_distance\":%.3f,"
-		"\"nearest_enemy_visible\":%s,\"visible_enemy_count\":%d,"
-		"\"attack_press_delta\":%d,\"attack_presses_total\":%d},"
+		"\"nearest_enemy_visible\":%s,"
+		"\"nearest_enemy_angle_error_deg\":%.3f,"
+		"\"nearest_enemy_aligned\":%s,"
+		"\"visible_enemy_count\":%d,"
+		"\"aligned_visible_enemy_count\":%d,"
+		"\"attack_press_delta\":%d,\"attack_presses_total\":%d,"
+		"\"attack_visible_delta\":%d,\"attack_visible_total\":%d,"
+		"\"attack_aligned_delta\":%d,\"attack_aligned_total\":%d},"
 		"\"assist\":{\"mode\":%d,\"active\":%s,\"target_id\":%d,"
 		"\"target_visible\":%s,\"target_distance\":%.3f,"
 		"\"aim_pitch\":%.3f,\"aim_yaw\":%.3f,"
@@ -1376,8 +1446,13 @@ static void QGE_GameplayOutcomeSample(void)
 		kills_delta, qge_gameplay_kills_total,
 		killed_monsters, damageable_alive, nearest_enemy_id,
 		nearest_enemy_distance,
-		nearest_enemy_visible ? "true" : "false", visible_enemy_count,
+		nearest_enemy_visible ? "true" : "false",
+		nearest_enemy_angle_error,
+		nearest_enemy_aligned ? "true" : "false",
+		visible_enemy_count, aligned_visible_enemy_count,
 		attack_press_delta, qge_gameplay_attack_presses_total,
+		attack_visible_delta, qge_gameplay_attack_visible_total,
+		attack_aligned_delta, qge_gameplay_attack_aligned_total,
 		qge_noesis_assist_mode,
 		qge_noesis_assist_active ? "true" : "false",
 		qge_noesis_assist_target_id,
@@ -1418,8 +1493,14 @@ static void QGE_GameplayOutcomeSample(void)
 			"\"damage_dealt_inferred_total\":%d,"
 			"\"kills_total\":%d,\"damageable_alive\":%d,"
 			"\"nearest_enemy_id\":%d,\"nearest_enemy_distance\":%.3f,"
-			"\"nearest_enemy_visible\":%s,\"visible_enemy_count\":%d,"
-			"\"attack_presses_total\":%d},"
+			"\"nearest_enemy_visible\":%s,"
+			"\"nearest_enemy_angle_error_deg\":%.3f,"
+			"\"nearest_enemy_aligned\":%s,"
+			"\"visible_enemy_count\":%d,"
+			"\"aligned_visible_enemy_count\":%d,"
+			"\"attack_presses_total\":%d,"
+			"\"attack_visible_total\":%d,"
+			"\"attack_aligned_total\":%d},"
 			"\"assist\":{\"mode\":%d,\"active\":%s,\"target_id\":%d,"
 			"\"target_visible\":%s,\"target_distance\":%.3f,"
 			"\"forwardmove\":%.3f,\"sidemove\":%.3f,"
@@ -1438,8 +1519,13 @@ static void QGE_GameplayOutcomeSample(void)
 			qge_gameplay_damage_taken_total, qge_gameplay_damage_dealt_total,
 			qge_gameplay_kills_total, damageable_alive, nearest_enemy_id,
 			nearest_enemy_distance,
-			nearest_enemy_visible ? "true" : "false", visible_enemy_count,
+			nearest_enemy_visible ? "true" : "false",
+			nearest_enemy_angle_error,
+			nearest_enemy_aligned ? "true" : "false",
+			visible_enemy_count, aligned_visible_enemy_count,
 			qge_gameplay_attack_presses_total,
+			qge_gameplay_attack_visible_total,
+			qge_gameplay_attack_aligned_total,
 			qge_noesis_assist_mode,
 			qge_noesis_assist_active ? "true" : "false",
 			qge_noesis_assist_target_id,

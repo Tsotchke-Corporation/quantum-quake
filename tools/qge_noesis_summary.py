@@ -402,6 +402,33 @@ def summarize_phase_progress(
             1 for sample in interval_samples
             if bool(value_at(sample, "player", "attack_active", default=False))
         )
+        attack_visible_samples = sum(
+            1 for sample in interval_samples
+            if bool(value_at(sample, "player", "attack_active", default=False))
+            and (
+                as_number(
+                    value_at(sample, "combat", "visible_enemy_count"), 0.0
+                ) > 0
+                or bool(value_at(
+                    sample, "combat", "nearest_enemy_visible", default=False
+                ))
+            )
+        )
+        attack_aligned_samples = sum(
+            1 for sample in interval_samples
+            if bool(value_at(sample, "player", "attack_active", default=False))
+            and (
+                as_number(
+                    value_at(
+                        sample, "combat", "aligned_visible_enemy_count"
+                    ),
+                    0.0,
+                ) > 0
+                or bool(value_at(
+                    sample, "combat", "nearest_enemy_aligned", default=False
+                ))
+            )
+        )
         stationary_samples = sum(
             1 for sample in interval_samples
             if as_number(value_at(sample, "route", "frame_distance"), 0.0) < 1.0
@@ -414,6 +441,10 @@ def summarize_phase_progress(
             end_state, event, "route", "leaf_transition_count")
         attack_delta = metric_delta(
             end_state, event, "combat", "attack_presses_total")
+        attack_visible_delta = metric_delta(
+            end_state, event, "combat", "attack_visible_total")
+        attack_aligned_delta = metric_delta(
+            end_state, event, "combat", "attack_aligned_total")
         damage_delta = metric_delta(
             end_state, event, "combat", "damage_dealt_inferred_total")
         kill_delta = metric_delta(end_state, event, "combat", "kills_total")
@@ -425,9 +456,8 @@ def summarize_phase_progress(
             leaf_delta > 0.0 or pickup_delta > 0.0
         )
         combat_progress = (
-            (visible_enemy_samples > 0 or enemy_contact_samples > 0) and
-            (attack_delta > 0.0 or damage_delta > 0.0 or kill_delta > 0.0 or
-             attack_active_samples > 0)
+            damage_delta > 0.0 or kill_delta > 0.0 or
+            attack_aligned_delta > 0.0 or attack_aligned_samples > 0
         )
         route_pass = not route_required or route_progress
         combat_pass = not combat_required or combat_progress
@@ -461,11 +491,16 @@ def summarize_phase_progress(
             "displacement_delta": round(displacement_delta, 3),
             "leaf_transition_delta": int(leaf_delta),
             "attack_press_delta": int(attack_delta),
+            "attack_visible_delta": int(attack_visible_delta),
+            "attack_aligned_delta": int(attack_aligned_delta),
             "damage_dealt_delta": int(damage_delta),
             "kill_delta": int(kill_delta),
             "pickup_delta": int(pickup_delta),
             "visible_enemy_sample_count": visible_enemy_samples,
             "enemy_contact_sample_count": enemy_contact_samples,
+            "attack_active_sample_count": attack_active_samples,
+            "attack_visible_sample_count": attack_visible_samples,
+            "attack_aligned_sample_count": attack_aligned_samples,
             "stationary_fraction": round(stationary_fraction, 4),
             "route_progress_pass": route_pass,
             "combat_progress_pass": combat_pass,
@@ -581,6 +616,14 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
     )
     attack_presses = max(
         as_number(value_at(sample, "combat", "attack_presses_total"), 0.0)
+        for sample in playable_samples
+    )
+    attack_visible_total = max(
+        as_number(value_at(sample, "combat", "attack_visible_total"), -1.0)
+        for sample in playable_samples
+    )
+    attack_aligned_total = max(
+        as_number(value_at(sample, "combat", "attack_aligned_total"), -1.0)
         for sample in playable_samples
     )
     weapon_changes = max(
@@ -704,9 +747,10 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
         (terminal_attack_delta > 0.0 and terminal_visible_enemy_samples > 0)
     )
     route_terminal_activity = terminal_leaf_delta > 0.0 or terminal_pickup_delta > 0.0
+    route_terminal_stall_threshold = max(12, math.ceil(route_interval_count * 0.10))
     route_terminal_stall = (
-        route_terminal_stationary_run >= 6 and not route_terminal_activity and
-        not terminal_combat_activity
+        route_terminal_stationary_run >= route_terminal_stall_threshold and
+        not route_terminal_activity and not terminal_combat_activity
     )
     route_recovered_after_stall = (
         route_stationary_run_max >= 6 and not route_terminal_stall and
@@ -716,6 +760,57 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
         1 for sample in playable_samples
         if as_number(value_at(sample, "combat", "visible_enemy_count"), 0.0) > 0
         or bool(value_at(sample, "combat", "nearest_enemy_visible", default=False))
+    )
+    aligned_visible_enemy_frames = sum(
+        1 for sample in playable_samples
+        if as_number(
+            value_at(sample, "combat", "aligned_visible_enemy_count"), 0.0
+        ) > 0
+        or bool(value_at(sample, "combat", "nearest_enemy_aligned", default=False))
+    )
+    attack_visible_frames_fallback = sum(
+        1 for sample in playable_samples
+        if bool(value_at(sample, "player", "attack_active", default=False))
+        and (
+            as_number(value_at(sample, "combat", "visible_enemy_count"), 0.0) > 0
+            or bool(value_at(
+                sample, "combat", "nearest_enemy_visible", default=False
+            ))
+        )
+    )
+    attack_aligned_frames_fallback = sum(
+        1 for sample in playable_samples
+        if bool(value_at(sample, "player", "attack_active", default=False))
+        and (
+            as_number(
+                value_at(sample, "combat", "aligned_visible_enemy_count"), 0.0
+            ) > 0
+            or bool(value_at(
+                sample, "combat", "nearest_enemy_aligned", default=False
+            ))
+        )
+    )
+    attack_visible_frames = (
+        attack_visible_total
+        if attack_visible_total >= 0.0 else attack_visible_frames_fallback
+    )
+    attack_aligned_frames = (
+        attack_aligned_total
+        if attack_aligned_total >= 0.0 else attack_aligned_frames_fallback
+    )
+    aim_errors = [
+        as_number(
+            value_at(sample, "combat", "nearest_enemy_angle_error_deg"), -1.0
+        )
+        for sample in playable_samples
+    ]
+    aim_errors = [value for value in aim_errors if value >= 0.0]
+    attack_alignment_fraction = (
+        attack_aligned_frames / attack_visible_frames
+        if attack_visible_frames > 0.0 else 0.0
+    )
+    damage_per_attack_press = (
+        damage_dealt / attack_presses if attack_presses > 0.0 else 0.0
     )
     enemy_contact_frames = sum(
         1 for sample in playable_samples
@@ -819,6 +914,7 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
                 route_stationary_frame_count / route_interval_count, 4),
             "stationary_run_max": route_stationary_run_max,
             "terminal_stationary_run": route_terminal_stationary_run,
+            "terminal_stall_threshold": route_terminal_stall_threshold,
             "terminal_stall": route_terminal_stall,
             "terminal_visible_enemy_samples": terminal_visible_enemy_samples,
             "recovered_after_stall": route_recovered_after_stall,
@@ -832,11 +928,23 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
             "damage_dealt_inferred": damage_dealt,
             "kills": kills,
             "attack_press_count": attack_presses,
+            "attack_visible_frames": attack_visible_frames,
+            "attack_aligned_frames": attack_aligned_frames,
+            "attack_alignment_fraction": round(attack_alignment_fraction, 4),
             "visible_enemy_frames": visible_enemy_frames,
+            "aligned_visible_enemy_frames": aligned_visible_enemy_frames,
             "enemy_contact_frames": enemy_contact_frames,
             "nearest_enemy_distance_min": (
                 min(nearest_distances) if nearest_distances else None
             ),
+            "nearest_enemy_angle_error_min": (
+                min(aim_errors) if aim_errors else None
+            ),
+            "nearest_enemy_angle_error_avg": (
+                round(sum(aim_errors) / len(aim_errors), 4)
+                if aim_errors else None
+            ),
+            "damage_per_attack_press": round(damage_per_attack_press, 4),
         },
         "pickup": {
             "pickup_count": pickups,
@@ -1058,6 +1166,8 @@ def build_gameplay_score(
         damage_taken = float(combat.get("damage_taken") or 0.0)
         kills = float(combat.get("kills") or 0.0)
         attack_presses = float(combat.get("attack_press_count") or 0.0)
+        attack_visible_frames = float(combat.get("attack_visible_frames") or 0.0)
+        attack_aligned_frames = float(combat.get("attack_aligned_frames") or 0.0)
         visible_enemy_frames = float(combat.get("visible_enemy_frames") or 0.0)
         contact_frames = float(combat.get("enemy_contact_frames") or 0.0)
         pickups = float(pickup.get("pickup_count") or 0.0)
@@ -1104,9 +1214,11 @@ def build_gameplay_score(
                 3,
             ),
             "combat_effectiveness": round(
-                score_component(attack_presses, 2.0, 4.0) +
-                score_component(visible_enemy_frames, 4.0, 4.0) +
-                score_component(contact_frames, 8.0, 3.0) +
+                score_component(attack_presses, 2.0, 3.0) +
+                score_component(visible_enemy_frames, 4.0, 2.0) +
+                score_component(attack_visible_frames, 4.0, 2.0) +
+                score_component(attack_aligned_frames, 3.0, 3.0) +
+                score_component(contact_frames, 8.0, 1.0) +
                 score_component(damage_dealt, 40.0, 6.0) +
                 score_component(kills, 1.0, 3.0),
                 3,
@@ -1326,11 +1438,22 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
     if gameplay.get("sample_count", 0) >= 2:
         player_state = gameplay.get("player") or {}
         route_state = gameplay.get("route") or {}
+        combat_state = gameplay.get("combat") or {}
         total_distance = float(route_state.get("total_distance") or 0.0)
         max_displacement = float(
             route_state.get("max_displacement_from_start") or 0.0)
         terminal_stall = bool(route_state.get("terminal_stall", False))
+        damage_dealt = float(
+            combat_state.get("damage_dealt_inferred") or 0.0)
+        kills = float(combat_state.get("kills") or 0.0)
+        attack_aligned_frames = float(
+            combat_state.get("attack_aligned_frames") or 0.0)
         gates["survived"] = bool(player_state.get("survived", False))
+        if args.require_combat:
+            gates["combat_effectiveness_required"] = (
+                damage_dealt > 0.0 or kills > 0.0 or
+                attack_aligned_frames > 0.0
+            )
         if actions.get("route_action_count", 0) > 0 and args.min_route_distance > 0:
             gates["route_progress_required"] = (
                 total_distance >= args.min_route_distance or
@@ -1736,6 +1859,42 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "kind": "runtime_state",
             "name": "noesis_gameplay_visible_enemy_frames",
             "value": gameplay_combat.get("visible_enemy_frames", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_aligned_visible_enemy_frames",
+            "value": gameplay_combat.get("aligned_visible_enemy_frames", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_attack_visible_frames",
+            "value": gameplay_combat.get("attack_visible_frames", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_attack_aligned_frames",
+            "value": gameplay_combat.get("attack_aligned_frames", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_attack_alignment_fraction",
+            "value": gameplay_combat.get("attack_alignment_fraction", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_nearest_enemy_angle_error_min",
+            "value": gameplay_combat.get("nearest_enemy_angle_error_min"),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_damage_per_attack_press",
+            "value": gameplay_combat.get("damage_per_attack_press", 0),
             "path": str(summary_path),
         },
         {

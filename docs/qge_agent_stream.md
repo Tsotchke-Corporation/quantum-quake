@@ -360,20 +360,23 @@ into `agent_stream/noesis/`, and records the result as
 `noesis_log_policy_done`, `noesis_gameplay_phase_event_count`,
 `noesis_gameplay_phase_stuck_window_count`,
 `noesis_gameplay_outcome_sample_count`, `noesis_gameplay_total_distance`,
-survival, damage, kill, pickup, visible enemy evidence, trace identity, replay
-health, and projectile save/demo boundary evidence such as
+survival, damage, kill, pickup, visible enemy evidence, attack-visible and
+attack-aligned frame counts, nearest-enemy aim-error evidence, trace identity,
+replay health, and projectile save/demo boundary evidence such as
 `noesis_projectile_save_demo_boundary_count` and
 `noesis_projectile_save_demo_trace_id_xor`. The Noesis player
 keeps the console `QGE_NOESIS_PHASE` marker for log compatibility and also
 executes `qge_noesis_phase`, which queues an engine-owned `noesis_phase` event
 in `gameplay_outcomes.ndjson` with the next gameplay sample's player, route,
-combat, pickup, and assist state. Route telemetry also reports movement
-efficiency, stationary fraction, maximum stationary run, and terminal-stall
+combat, pickup, and assist state. Required combat progress needs damage, a kill,
+or an attack while the player is aligned to a visible enemy; pressing fire near
+an enemy is not enough. Route telemetry also reports movement efficiency,
+stationary fraction, maximum stationary run, and duration-aware terminal-stall
 evidence, so a route that moves early and ends wedged cannot pass as clean
-progress. Assist runs
-additionally emit requested mode, active sample count, visible-target sample
-count, steering sample count, attack-visible frames, target-distance evidence,
-and a claim scope. Assisted runs are marked `server_assisted` so they cannot be
+progress while a short post-plan idle tail does not poison a long successful
+route. Assist runs additionally emit requested mode, active sample count,
+visible-target sample count, steering sample count, attack-visible frames,
+target-distance evidence, and a claim scope. Assisted runs are marked `server_assisted` so they cannot be
 mistaken for unassisted play evidence. Set `QGE_NOESIS_MIN_LOG_PHASES` to
 require that many `QGE_NOESIS_PHASE` markers to appear in the engine log and
 matching engine-owned `noesis_phase` outcome events to appear in gameplay
@@ -556,11 +559,11 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
 - `QGE_NOESIS_ASSIST`: opt-in server-state assist for Noesis automation,
   default `0`. Mode `1` aims and fires at visible monsters while preserving the
   scripted movement command. Mode `2` also steers the server usercmd toward the
-  nearest monster with a small wall-avoidance probe. Visibility and aim use a
-  sampled monster bbox point, so partly exposed enemies are not limited to a
-  center-point trace. The engine-side cvar is `qge_noesis_assist`, remains off
-  by default, and only acts during `-qgestreamdir` runs so normal local play is
-  untouched.
+  nearest monster with a small wall-avoidance probe and kites visible close
+  targets instead of walking into them. Visibility and aim use a sampled monster
+  bbox point, so partly exposed enemies are not limited to a center-point trace.
+  The engine-side cvar is `qge_noesis_assist`, remains off by default, and only
+  acts during `-qgestreamdir` runs so normal local play is untouched.
 - `QGE_NOESIS_CMD`: optional Noesis action provider command. When set, the
   harness runs it from `QGE_NOESIS_DIR` and translates its stdout action lines;
   this takes precedence over `QGE_NOESIS_ACTIONS_FILE` and the default
