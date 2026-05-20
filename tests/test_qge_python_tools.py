@@ -750,6 +750,35 @@ class NoesisSummaryTests(unittest.TestCase):
                 1,
             )
             self.assertEqual(
+                summary["gameplay"]["combat"]["attack_active_frames"],
+                1,
+            )
+            self.assertEqual(
+                summary["gameplay"]["combat"]["blind_attack_frames"],
+                0,
+            )
+            self.assertEqual(
+                summary["gameplay"]["combat"][
+                    "visible_unaligned_attack_frames"],
+                0.0,
+            )
+            self.assertEqual(
+                summary["gameplay"]["combat"]["unproductive_attack_frames"],
+                0.0,
+            )
+            self.assertEqual(
+                summary["gameplay"]["combat"]["attack_visibility_fraction"],
+                1.0,
+            )
+            self.assertEqual(
+                summary["gameplay"]["combat"]["blind_attack_fraction"],
+                0.0,
+            )
+            self.assertEqual(
+                summary["gameplay"]["combat"]["unproductive_attack_fraction"],
+                0.0,
+            )
+            self.assertEqual(
                 summary["gameplay"]["combat"]["attack_aligned_frames"],
                 1,
             )
@@ -848,6 +877,34 @@ class NoesisSummaryTests(unittest.TestCase):
             self.assertEqual(
                 by_name["noesis_gameplay_attack_visible_frames"],
                 1,
+            )
+            self.assertEqual(
+                by_name["noesis_gameplay_attack_active_frames"],
+                1,
+            )
+            self.assertEqual(
+                by_name["noesis_gameplay_blind_attack_frames"],
+                0,
+            )
+            self.assertEqual(
+                by_name["noesis_gameplay_visible_unaligned_attack_frames"],
+                0.0,
+            )
+            self.assertEqual(
+                by_name["noesis_gameplay_unproductive_attack_frames"],
+                0.0,
+            )
+            self.assertEqual(
+                by_name["noesis_gameplay_attack_visibility_fraction"],
+                1.0,
+            )
+            self.assertEqual(
+                by_name["noesis_gameplay_blind_attack_fraction"],
+                0.0,
+            )
+            self.assertEqual(
+                by_name["noesis_gameplay_unproductive_attack_fraction"],
+                0.0,
             )
             self.assertEqual(
                 by_name["noesis_gameplay_attack_aligned_frames"],
@@ -1066,6 +1123,23 @@ class NoesisSummaryTests(unittest.TestCase):
                 1,
             )
             self.assertEqual(
+                summary["gameplay"]["combat"]["blind_attack_frames"],
+                0,
+            )
+            self.assertEqual(
+                summary["gameplay"]["combat"][
+                    "visible_unaligned_attack_frames"],
+                1,
+            )
+            self.assertEqual(
+                summary["gameplay"]["combat"]["unproductive_attack_frames"],
+                1,
+            )
+            self.assertEqual(
+                summary["gameplay"]["combat"]["unproductive_attack_fraction"],
+                1.0,
+            )
+            self.assertEqual(
                 summary["gameplay"]["combat"]["attack_aligned_frames"],
                 0,
             )
@@ -1177,6 +1251,153 @@ class NoesisSummaryTests(unittest.TestCase):
                 passive["combat"]["net_damage_per_attack_press"],
                 0.0,
             )
+
+    def test_blind_attack_frames_track_invisible_fire(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gameplay_path = Path(tmp) / "gameplay_outcomes.ndjson"
+            samples = [
+                {
+                    "schema": "qge.gameplay_outcome.v0",
+                    "type": "sample",
+                    "frame": 1,
+                    "player": {
+                        "health": 100,
+                        "armor": 0,
+                        "weapon": 2,
+                        "origin": [0, 0, 0],
+                    },
+                    "route": {
+                        "total_distance": 0.0,
+                        "displacement_from_start": 0.0,
+                        "max_displacement_from_start": 0.0,
+                        "leaf_transition_count": 0,
+                    },
+                    "combat": {
+                        "damage_taken_total": 0,
+                        "damage_dealt_inferred_total": 0,
+                        "kills_total": 0,
+                        "attack_presses_total": 0,
+                        "visible_enemy_count": 0,
+                        "nearest_enemy_distance": 512.0,
+                        "nearest_enemy_visible": False,
+                    },
+                    "pickup": {
+                        "pickups_total": 0,
+                        "weapon_changes_total": 0,
+                    },
+                },
+                {
+                    "schema": "qge.gameplay_outcome.v0",
+                    "type": "sample",
+                    "frame": 2,
+                    "player": {
+                        "health": 100,
+                        "armor": 0,
+                        "weapon": 2,
+                        "attack_active": True,
+                        "origin": [32, 0, 0],
+                    },
+                    "route": {
+                        "frame_distance": 32.0,
+                        "total_distance": 32.0,
+                        "displacement_from_start": 32.0,
+                        "max_displacement_from_start": 32.0,
+                        "leaf_transition_count": 0,
+                    },
+                    "combat": {
+                        "damage_taken_total": 0,
+                        "damage_dealt_inferred_total": 0,
+                        "kills_total": 0,
+                        "attack_presses_total": 1,
+                        "visible_enemy_count": 0,
+                        "nearest_enemy_distance": 500.0,
+                        "nearest_enemy_visible": False,
+                        "attack_visible_total": 0,
+                        "attack_aligned_total": 0,
+                    },
+                    "pickup": {
+                        "pickups_total": 0,
+                        "weapon_changes_total": 0,
+                    },
+                },
+            ]
+            gameplay_path.write_text(
+                "\n".join(json.dumps(sample) for sample in samples) + "\n",
+                encoding="utf-8",
+            )
+
+            summary = noesis_summary.summarize_gameplay(gameplay_path)
+            self.assertEqual(summary["combat"]["attack_active_frames"], 1)
+            self.assertEqual(summary["combat"]["attack_visible_frames"], 0)
+            self.assertEqual(summary["combat"]["blind_attack_frames"], 1)
+            self.assertEqual(
+                summary["combat"]["visible_unaligned_attack_frames"],
+                0.0,
+            )
+            self.assertEqual(
+                summary["combat"]["unproductive_attack_frames"],
+                1.0,
+            )
+            self.assertEqual(
+                summary["combat"]["attack_visibility_fraction"],
+                0.0,
+            )
+            self.assertEqual(summary["combat"]["blind_attack_fraction"], 1.0)
+            self.assertEqual(
+                summary["combat"]["unproductive_attack_fraction"],
+                1.0,
+            )
+
+    def test_route_recovery_after_stationary_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gameplay_path = Path(tmp) / "gameplay_outcomes.ndjson"
+            origins = [0, 64, 64, 64, 64, 64, 64, 64, 112, 128]
+            totals = [0, 64, 64, 64, 64, 64, 64, 64, 112, 128]
+            samples = []
+            for index, (origin_x, total) in enumerate(zip(origins, totals)):
+                prev_total = totals[index - 1] if index > 0 else total
+                frame_distance = max(0, total - prev_total)
+                samples.append({
+                    "schema": "qge.gameplay_outcome.v0",
+                    "type": "sample",
+                    "frame": index + 1,
+                    "player": {
+                        "health": 100,
+                        "armor": 0,
+                        "weapon": 2,
+                        "origin": [origin_x, 0, 0],
+                    },
+                    "route": {
+                        "frame_distance": frame_distance,
+                        "total_distance": total,
+                        "displacement_from_start": origin_x,
+                        "max_displacement_from_start": max(origins[:index + 1]),
+                        "leaf_transition_count": 1 if index >= 8 else 0,
+                    },
+                    "combat": {
+                        "damage_taken_total": 0,
+                        "damage_dealt_inferred_total": 0,
+                        "kills_total": 0,
+                        "attack_presses_total": 0,
+                        "visible_enemy_count": 0,
+                        "nearest_enemy_distance": -1,
+                        "nearest_enemy_visible": False,
+                    },
+                    "pickup": {
+                        "pickups_total": 0,
+                        "weapon_changes_total": 0,
+                    },
+                })
+            gameplay_path.write_text(
+                "\n".join(json.dumps(sample) for sample in samples) + "\n",
+                encoding="utf-8",
+            )
+
+            summary = noesis_summary.summarize_gameplay(gameplay_path)
+            self.assertFalse(summary["route"]["terminal_stall"])
+            self.assertTrue(summary["route"]["recovered_after_stall"])
+            self.assertEqual(summary["route"]["stationary_run_max"], 6)
+            self.assertEqual(summary["route"]["terminal_stationary_run"], 0)
 
     def test_terminal_stall_blocks_route_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

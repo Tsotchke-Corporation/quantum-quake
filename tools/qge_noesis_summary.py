@@ -810,6 +810,26 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
         attack_aligned_total
         if attack_aligned_total >= 0.0 else attack_aligned_frames_fallback
     )
+    attack_active_frames = sum(
+        1 for sample in playable_samples
+        if bool(value_at(sample, "player", "attack_active", default=False))
+    )
+    blind_attack_frames = sum(
+        1 for sample in playable_samples
+        if bool(value_at(sample, "player", "attack_active", default=False))
+        and not (
+            as_number(value_at(sample, "combat", "visible_enemy_count"), 0.0) > 0
+            or bool(value_at(
+                sample, "combat", "nearest_enemy_visible", default=False
+            ))
+        )
+    )
+    visible_unaligned_attack_frames = max(
+        0.0, attack_visible_frames - attack_aligned_frames
+    )
+    unproductive_attack_frames = max(
+        0.0, attack_active_frames - attack_aligned_frames
+    )
     aim_errors = [
         as_number(
             value_at(sample, "combat", "nearest_enemy_angle_error_deg"), -1.0
@@ -820,6 +840,18 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
     attack_alignment_fraction = (
         attack_aligned_frames / attack_visible_frames
         if attack_visible_frames > 0.0 else 0.0
+    )
+    attack_visibility_fraction = (
+        attack_visible_frames / attack_active_frames
+        if attack_active_frames > 0.0 else 0.0
+    )
+    blind_attack_fraction = (
+        blind_attack_frames / attack_active_frames
+        if attack_active_frames > 0.0 else 0.0
+    )
+    unproductive_attack_fraction = (
+        unproductive_attack_frames / attack_active_frames
+        if attack_active_frames > 0.0 else 0.0
     )
     damage_per_attack_press = (
         damage_dealt / attack_presses if attack_presses > 0.0 else 0.0
@@ -944,8 +976,17 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
             "damage_dealt_inferred": damage_dealt,
             "kills": kills,
             "attack_press_count": attack_presses,
+            "attack_active_frames": attack_active_frames,
             "attack_visible_frames": attack_visible_frames,
             "attack_aligned_frames": attack_aligned_frames,
+            "blind_attack_frames": blind_attack_frames,
+            "visible_unaligned_attack_frames": visible_unaligned_attack_frames,
+            "unproductive_attack_frames": unproductive_attack_frames,
+            "attack_visibility_fraction": round(
+                attack_visibility_fraction, 4),
+            "blind_attack_fraction": round(blind_attack_fraction, 4),
+            "unproductive_attack_fraction": round(
+                unproductive_attack_fraction, 4),
             "attack_alignment_fraction": round(attack_alignment_fraction, 4),
             "visible_enemy_frames": visible_enemy_frames,
             "aligned_visible_enemy_frames": aligned_visible_enemy_frames,
@@ -1889,6 +1930,48 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "kind": "runtime_state",
             "name": "noesis_gameplay_attack_visible_frames",
             "value": gameplay_combat.get("attack_visible_frames", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_attack_active_frames",
+            "value": gameplay_combat.get("attack_active_frames", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_blind_attack_frames",
+            "value": gameplay_combat.get("blind_attack_frames", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_visible_unaligned_attack_frames",
+            "value": gameplay_combat.get("visible_unaligned_attack_frames", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_unproductive_attack_frames",
+            "value": gameplay_combat.get("unproductive_attack_frames", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_attack_visibility_fraction",
+            "value": gameplay_combat.get("attack_visibility_fraction", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_blind_attack_fraction",
+            "value": gameplay_combat.get("blind_attack_fraction", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_unproductive_attack_fraction",
+            "value": gameplay_combat.get("unproductive_attack_fraction", 0),
             "path": str(summary_path),
         },
         {

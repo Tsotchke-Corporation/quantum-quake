@@ -349,6 +349,7 @@ emit_builtin_plan() {
       emit_action "clear-input 2"
       emit_action "wall-slide-right 10"
       emit_action "door-bump 8"
+      emit_action "jump-forward 3"
       emit_action "wall-slide-left 8"
       emit_action "look-up 2"
       emit_action "scan-fire-left 6"

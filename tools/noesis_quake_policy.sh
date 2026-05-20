@@ -146,6 +146,7 @@ emit_e1m1_route_push() {
   emit "wall-slide-right 10"
   emit "door-open 8"
   emit "door-bump 6"
+  emit "jump-forward 3"
   emit "wall-slide-left 8"
   emit_phase "phase=e1m1_exit_route"
   emit "center-view"

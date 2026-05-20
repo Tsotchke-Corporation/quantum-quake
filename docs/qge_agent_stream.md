@@ -361,9 +361,10 @@ into `agent_stream/noesis/`, and records the result as
 `noesis_gameplay_phase_stuck_window_count`,
 `noesis_gameplay_outcome_sample_count`, `noesis_gameplay_total_distance`,
 survival, damage, kill, pickup, visible enemy evidence, attack-visible and
-attack-aligned frame counts, nearest-enemy aim-error evidence, damage per
-attack press, net damage per attack press, trace identity, replay health, and
-projectile save/demo boundary evidence such as
+attack-aligned frame counts, blind/unproductive attack frame counts,
+nearest-enemy aim-error evidence, damage per attack press, net damage per
+attack press, trace identity, replay health, and projectile save/demo boundary
+evidence such as
 `noesis_projectile_save_demo_boundary_count` and
 `noesis_projectile_save_demo_trace_id_xor`. The Noesis player
 keeps the console `QGE_NOESIS_PHASE` marker for log compatibility and also
@@ -479,7 +480,8 @@ targeted probes.
 short target-acquisition sweep; they do not use mouse input or screen control.
 The E1M1 adaptive route brackets its first scan-fire block with a short
 keyboard `look-up` and `center-view` recenter so attacks sweep a more useful
-enemy sightline without taking over the user's mouse.
+enemy sightline without taking over the user's mouse. After the door bump it
+adds a short keyboard jump-forward recovery to reduce door-phase stalls.
 
 Action streams can come from either `QGE_NOESIS_ACTIONS_FILE` or
 `QGE_NOESIS_CMD`. The command provider runs from `QGE_NOESIS_DIR` and should
