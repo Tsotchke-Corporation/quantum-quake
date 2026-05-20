@@ -380,7 +380,7 @@ combat, pickup, and assist state. Required combat progress needs damage, a kill,
 or an attack while the player is aligned to a visible enemy; pressing fire near
 an enemy is not enough. Phase names such as `*_clear` only require combat
 progress when the interval also contains a combat opportunity: visible enemy
-samples, enemy-contact samples, damage, kills, or visible/aligned attack
+samples, close enemy-contact samples, damage, kills, or visible/aligned attack
 telemetry. Blind fire by itself does not turn a route-only interval into a
 blocked combat phase. The gameplay score discounts attack-press credit when
 attack frames are blind or visible-but-unaligned, and applies a small combat

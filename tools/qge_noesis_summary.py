@@ -410,6 +410,12 @@ def summarize_phase_progress(
                 ) <= 768.0
             )
         )
+        close_enemy_contact_samples = sum(
+            1 for sample in interval_samples
+            if 0.0 <= as_number(
+                value_at(sample, "combat", "nearest_enemy_distance"), -1.0
+            ) <= 384.0
+        )
         attack_active_samples = sum(
             1 for sample in interval_samples
             if bool(value_at(sample, "player", "attack_active", default=False))
@@ -470,7 +476,7 @@ def summarize_phase_progress(
             attack_aligned_delta > 0.0 or attack_aligned_samples > 0
         )
         combat_opportunity = (
-            visible_enemy_samples > 0 or enemy_contact_samples > 0 or
+            visible_enemy_samples > 0 or close_enemy_contact_samples > 0 or
             damage_delta > 0.0 or kill_delta > 0.0 or
             attack_visible_delta > 0.0 or attack_aligned_delta > 0.0 or
             attack_visible_samples > 0 or attack_aligned_samples > 0
@@ -520,6 +526,7 @@ def summarize_phase_progress(
             "pickup_delta": int(pickup_delta),
             "visible_enemy_sample_count": visible_enemy_samples,
             "enemy_contact_sample_count": enemy_contact_samples,
+            "close_enemy_contact_sample_count": close_enemy_contact_samples,
             "attack_active_sample_count": attack_active_samples,
             "attack_visible_sample_count": attack_visible_samples,
             "attack_aligned_sample_count": attack_aligned_samples,

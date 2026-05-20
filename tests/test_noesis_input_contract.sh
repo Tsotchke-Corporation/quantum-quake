@@ -182,6 +182,8 @@ grep -q 'noesis_gameplay_unproductive_ammo_spent' "$repo_root/tools/qge_noesis_s
 grep -q 'noesis_gameplay_ammo_waste_fraction' "$repo_root/tools/qge_noesis_summary.py"
 grep -q 'noesis_gameplay_damage_per_ammo_spent' "$repo_root/tools/qge_noesis_summary.py"
 grep -q 'combat_opportunity' "$repo_root/tools/qge_noesis_summary.py"
+grep -q 'close_enemy_contact_sample_count' "$repo_root/tools/qge_noesis_summary.py"
+grep -q 'close enemy-contact samples' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'Blind fire by itself does not turn a route-only interval into a' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'combat_effectiveness_required' "$repo_root/tools/qge_noesis_summary.py"
 grep -q 'terminal_stall_threshold' "$repo_root/tools/qge_noesis_summary.py"
