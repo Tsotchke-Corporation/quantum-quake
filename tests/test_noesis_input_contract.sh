@@ -132,6 +132,7 @@ grep -Fq 'plan="${QGE_NOESIS_PLAN:-adaptive}"' "$repo_root/tools/noesis_quake_pl
 grep -Fq 'plan="${QGE_NOESIS_PLAN:-adaptive}"' "$repo_root/tools/noesis_quake_policy.sh"
 grep -Fq 'noesis_plan="${QGE_NOESIS_PLAN:-adaptive}"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'noesis_plan="${QGE_NOESIS_PLAN:-adaptive}"' "$repo_root/tools/quake_crash_watch.sh"
+grep -Fq 'stream_activate="${QGE_STREAM_ACTIVATE:-0}"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -q 'advance-fire' "$repo_root/tools/noesis_quake_player.sh"
 grep -q 'wall-slide-right' "$repo_root/tools/noesis_quake_player.sh"
 grep -q 'door-bump' "$repo_root/tools/noesis_quake_player.sh"
@@ -139,8 +140,8 @@ grep -q 'door-open' "$repo_root/tools/noesis_quake_player.sh"
 grep -q 'speed-jump-forward' "$repo_root/tools/noesis_quake_player.sh"
 grep -q 'scan-fire-left' "$repo_root/tools/noesis_quake_player.sh"
 grep -q 'scan-fire-right' "$repo_root/tools/noesis_quake_player.sh"
-grep -q 'circle-fire-left' "$repo_root/tools/noesis_quake_policy.sh"
-grep -q 'scan-fire-left' "$repo_root/tools/noesis_quake_policy.sh"
+grep -q 'attack 1' "$repo_root/tools/noesis_quake_policy.sh"
+grep -q 'circle-left' "$repo_root/tools/noesis_quake_policy.sh"
 grep -q 'door-open' "$repo_root/tools/noesis_quake_policy.sh"
 grep -q 'e1m1-route-push' "$repo_root/tools/noesis_quake_policy.sh"
 grep -q 'QGE_NOESIS_PHASE' "$repo_root/tools/noesis_quake_policy.sh"
@@ -205,11 +206,15 @@ grep -q 'QGE_NOESIS_ASSIST' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'claim scope' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'attack-aligned frame counts' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'kites visible close' "$repo_root/docs/qge_agent_stream.md"
+grep -q 'Hidden distant targets do not override' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'QGE_NoesisAssistClientThink' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'QGE_GameplayEnemyAimPoint' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'QGE_NOESIS_AIM_ALIGNED_DEG' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'qge_gameplay_attack_aligned_total' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'distance < 192.0f' "$repo_root/quake/Quake/qge_hooks.c"
+grep -q 'engage_target = visible' "$repo_root/quake/Quake/qge_hooks.c"
+grep -q 'QGE_NOESIS_HIDDEN_CHASE_DISTANCE 768.0f' "$repo_root/quake/Quake/qge_hooks.c"
+grep -q 'player->v.button0 = 0.0f' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'Cmd_AddCommand("qge_noesis_phase", QGE_NoesisPhase_f)' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q '\\"kind\\":\\"noesis_phase\\"' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q '\\"assist\\"' "$repo_root/quake/Quake/qge_hooks.c"
@@ -343,12 +348,12 @@ grep -q '^cmd echo QGE_NOESIS_PHASE phase=e1m1_bridge_route$' "$adaptive_actions
 grep -q '^cmd echo QGE_NOESIS_PHASE phase=e1m1_door_slide$' "$adaptive_actions"
 grep -q '^cmd echo QGE_NOESIS_PHASE phase=e1m1_exit_route$' "$adaptive_actions"
 grep -q '^look-up 2$' "$adaptive_actions"
-grep -q '^scan-fire-left 5$' "$adaptive_actions"
-grep -q '^scan-fire-right 10$' "$adaptive_actions"
-grep -q '^scan-fire-right 6$' "$adaptive_actions"
-grep -q '^advance-fire 12$' "$adaptive_actions"
+grep -q '^turn-left 5$' "$adaptive_actions"
+grep -q '^turn-right 10$' "$adaptive_actions"
+grep -q '^attack 1$' "$adaptive_actions"
+grep -q '^run-forward 12$' "$adaptive_actions"
 grep -q '^wall-slide-right 12$' "$adaptive_actions"
-grep -q '^circle-fire-left 6$' "$adaptive_actions"
+grep -q '^circle-left 6$' "$adaptive_actions"
 grep -q '^wall-slide-left 12$' "$adaptive_actions"
 grep -q '^door-open 8$' "$adaptive_actions"
 grep -q '^door-bump 6$' "$adaptive_actions"
@@ -358,6 +363,15 @@ grep -q '^cmd echo QGE_NOESIS_POLICY done$' "$adaptive_actions"
 adaptive_speed_jump_count="$(grep -c '^speed-jump-forward 4$' "$adaptive_actions" | tr -d ' ')"
 if (( adaptive_speed_jump_count < 2 )); then
   echo "expected E1M1 adaptive route to include bridge and post-door speed jumps" >&2
+  exit 1
+fi
+adaptive_attack_tap_count="$(grep -c '^attack 1$' "$adaptive_actions" | tr -d ' ')"
+if (( adaptive_attack_tap_count < 5 )); then
+  echo "expected E1M1 adaptive route to use disciplined attack taps" >&2
+  exit 1
+fi
+if grep -Eq '^(scan-fire|advance-fire|circle-fire|strafe-fire)' "$adaptive_actions"; then
+  echo "E1M1 adaptive route kept long default fire holds" >&2
   exit 1
 fi
 
@@ -406,8 +420,13 @@ cmp -s "$builtin_route_stdout" "$builtin_route_commands"
 grep -q '^door-open 8$' "$builtin_route_actions"
 grep -q '^door-bump 6$' "$builtin_route_actions"
 grep -q '^speed-jump-forward 4$' "$builtin_route_actions"
+grep -q '^attack 1$' "$builtin_route_actions"
 if grep -q '^jump-forward 3$' "$builtin_route_actions"; then
   echo "built-in E1M1 route kept weak post-door jump-forward recovery" >&2
+  exit 1
+fi
+if grep -Eq '^(scan-fire|advance-fire|circle-fire|strafe-fire)' "$builtin_route_actions"; then
+  echo "built-in E1M1 route kept long default fire holds" >&2
   exit 1
 fi
 grep -q '^+use$' "$builtin_route_commands"

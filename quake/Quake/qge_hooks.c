@@ -187,6 +187,7 @@ static float qge_noesis_assist_left_clear = -1.0f;
 static float qge_noesis_assist_right_clear = -1.0f;
 
 #define QGE_NOESIS_AIM_ALIGNED_DEG 12.0f
+#define QGE_NOESIS_HIDDEN_CHASE_DISTANCE 768.0f
 
 static int QGE_RenderUpdateInterval(void);
 static qboolean QGE_RenderShouldUpdateFrame(void);
@@ -1075,6 +1076,7 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	vec3_t aim;
 	vec3_t aim_point;
 	qboolean visible = false;
+	qboolean engage_target;
 	float distance = -1.0f;
 	float forward_clear;
 	float left_clear;
@@ -1099,15 +1101,19 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	aim[YAW] = anglemod(aim[YAW]);
 	aim[ROLL] = 0.0f;
 
-	VectorCopy(aim, player->v.v_angle);
-	player->v.angles[PITCH] = -aim[PITCH] / 3.0f;
-	player->v.angles[YAW] = aim[YAW];
-	player->v.angles[ROLL] = 0.0f;
-	player->v.fixangle = 1.0f;
-
 	chase_mode = qge_noesis_assist.value >= 1.5f ? 1 : 0;
+	engage_target = visible || (chase_mode && distance >= 0.0f &&
+								distance <= QGE_NOESIS_HIDDEN_CHASE_DISTANCE);
+	if (engage_target) {
+		VectorCopy(aim, player->v.v_angle);
+		player->v.angles[PITCH] = -aim[PITCH] / 3.0f;
+		player->v.angles[YAW] = aim[YAW];
+		player->v.angles[ROLL] = 0.0f;
+		player->v.fixangle = 1.0f;
+	}
+
 	forward_clear = left_clear = right_clear = -1.0f;
-	if (chase_mode) {
+	if (chase_mode && engage_target) {
 		if (visible && distance < 192.0f) {
 			move->forwardmove = -220.0f;
 			move->sidemove = (qge_frame_count & 8) ? 260.0f : -260.0f;
@@ -1139,7 +1145,7 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	if (visible && distance <= 1024.0f) {
 		player->v.button0 = 1.0f;
 	}
-	else if (chase_mode) {
+	else {
 		player->v.button0 = 0.0f;
 	}
 

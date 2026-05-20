@@ -484,10 +484,13 @@ path. `cmd` or
 targeted probes.
 `scan-fire-left` and `scan-fire-right` hold keyboard yaw plus attack for a
 short target-acquisition sweep; they do not use mouse input or screen control.
-The E1M1 adaptive route brackets its first scan-fire block with a short
-keyboard `look-up` and `center-view` recenter so attacks sweep a more useful
-enemy sightline without taking over the user's mouse. After the door bump it
-adds a short keyboard speed-jump-forward recovery to reduce door-phase stalls.
+The default adaptive/E1M1 routes keep unassisted play disciplined by aiming and
+moving with keyboard-only turns and route actions, then using short `attack 1`
+taps instead of long blind fire holds. The E1M1 adaptive route brackets its
+first acquisition block with a short keyboard `look-up` and `center-view`
+recenter so attacks sweep a more useful enemy sightline without taking over the
+user's mouse. After the door bump it adds a short keyboard speed-jump-forward
+recovery to reduce door-phase stalls.
 Generic combat-exploration recovery backs out, side-slides, turns, and jumps
 forward before the second push so a terminal wall contact is less likely to
 leave the plan wedged.
@@ -578,8 +581,12 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   default `0`. Mode `1` aims and fires at visible monsters while preserving the
   scripted movement command. Mode `2` also steers the server usercmd toward the
   nearest monster with a small wall-avoidance probe and kites visible close
-  targets instead of walking into them. Visibility and aim use a sampled monster
-  bbox point, so partly exposed enemies are not limited to a center-point trace.
+  targets instead of walking into them. Hidden distant targets do not override
+  scripted view or route movement; once the scripted route gets near enough,
+  hidden-target chase can help finish the approach, while assist still
+  suppresses blind fire until a target is visible. Visibility and aim use a
+  sampled monster bbox point, so partly exposed enemies are not limited to a
+  center-point trace.
   The engine-side cvar is `qge_noesis_assist`, remains off by default, and only
   acts during `-qgestreamdir` runs so normal local play is untouched.
 - `QGE_NOESIS_CMD`: optional Noesis action provider command. When set, the
