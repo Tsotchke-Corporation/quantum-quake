@@ -170,7 +170,7 @@ extern cvar_t quantum_physics_authoritative; /* Let QGE write approved physics s
 extern cvar_t quantum_debug;        /* Emit QGE render diagnostics (default 0) */
 extern cvar_t qge_noesis_assist;    /* Opt-in server-state Noesis assist (default 0) */
 extern cvar_t quantum_overlay_alpha;/* Quantum render composite alpha (default 0.10) */
-extern cvar_t quantum_scene_surface_budget; /* DWT surface encode budget (default 128) */
+extern cvar_t quantum_scene_surface_budget; /* DWT surface encode budget (default 512) */
 extern cvar_t quantum_render_update_interval; /* QGE update cadence in host frames (default 8) */
 
 #endif /* QGE_HOOKS_H */
