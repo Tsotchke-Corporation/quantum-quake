@@ -508,8 +508,9 @@ route brackets its first acquisition block with a short keyboard `look-up` and
 taking over the user's mouse. The bridge block now closes farther along the
 left bridge side before a bounded `scan-fire-left` sweep, and the door block
 adds a short left/right scan after the door bump before its speed-jump-forward
-recovery, then keeps a bounded hunt loop alive for another controlled movement
-and acquisition pass. In unassisted mode this is still only route/input
+recovery, then begins the bounded hunt loop with a keyboard-only back/turn/jump
+unstick prelude before another controlled movement and acquisition pass. In
+unassisted mode this is still only route/input
 evidence unless the summary reports visible or aligned combat; with the default
 `QGE_NOESIS_ASSIST=2` stream assist it gives the server-side visible-target aim
 and chase assist a better acquisition window, with runs remaining marked `server_assisted`.
