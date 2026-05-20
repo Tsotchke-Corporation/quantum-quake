@@ -290,7 +290,7 @@ override is provided, the harness captures at roughly two-thirds of
 very small values.
 
 For the default Noesis player, the implicit capture frame is never earlier than
-`QGE_NOESIS_MIN_CAPTURE_WAIT` (default `192`) or `QGE_NOESIS_START_WAIT + 4`,
+`QGE_NOESIS_MIN_CAPTURE_WAIT` (default `280`) or `QGE_NOESIS_START_WAIT + 4`,
 whichever is larger. This keeps short screenshot smokes from quitting before the
 E1M1 route/combat plan has enough engine-owned gameplay samples. An explicit
 `QGE_STREAM_CAPTURE_WAIT` continues to mean exactly the frame requested.
@@ -499,10 +499,11 @@ route brackets its first acquisition block with a short keyboard `look-up` and
 taking over the user's mouse. The bridge block now closes farther along the
 left bridge side before a bounded `scan-fire-left` sweep, and the door block
 adds a short left/right scan after the door bump before its speed-jump-forward
-recovery. In unassisted mode this is still only route/input evidence unless the
-summary reports visible or aligned combat; with `QGE_NOESIS_ASSIST=1` it gives
-the server-side visible-target aim assist a better acquisition window while
-remaining marked `server_assisted`.
+recovery, then keeps a bounded hunt loop alive for another controlled movement
+and acquisition pass. In unassisted mode this is still only route/input
+evidence unless the summary reports visible or aligned combat; with the default
+`QGE_NOESIS_ASSIST=2` stream assist it gives the server-side visible-target aim
+and chase assist a better acquisition window, with runs remaining marked `server_assisted`.
 Generic combat-exploration recovery backs out, side-slides, turns, and jumps
 forward before the second push so a terminal wall contact is less likely to
 leave the plan wedged.
@@ -594,10 +595,10 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   Quake units, required for route-heavy Noesis plans once gameplay telemetry is
   present, default `64`.
 - `QGE_NOESIS_MIN_CAPTURE_WAIT`: minimum engine auto-capture delay for Noesis
-  runs when `QGE_STREAM_CAPTURE_WAIT` is unset, default `192`. Set to `0` only
+  runs when `QGE_STREAM_CAPTURE_WAIT` is unset, default `280`. Set to `0` only
   when intentionally testing early capture or startup behavior.
 - `QGE_NOESIS_ASSIST`: server-state assist for Noesis automation. The stream
-  harness defaults to mode `1`; set `QGE_NOESIS_ASSIST=0` for unassisted claim
+  harness defaults to mode `2`; set `QGE_NOESIS_ASSIST=0` for unassisted claim
   runs. Mode `1` aims and fires at visible monsters while preserving the
   scripted movement command. For mode `1`, visible targets are ranked by
   current aim error first and distance second, so a scan does not abandon the

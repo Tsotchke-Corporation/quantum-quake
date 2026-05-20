@@ -376,6 +376,18 @@ emit_builtin_plan() {
       emit_action "center-view"
       emit_action "run-forward 14"
       emit_action "circle-right 8"
+      emit_action "center-view"
+      emit_action "turn-right 8"
+      emit_action "run-forward 12"
+      emit_action "scan-fire-left 8"
+      emit_action "wall-slide-left 10"
+      emit_action "scan-fire-right 8"
+      emit_action "wall-slide-right 10"
+      emit_action "circle-left 8"
+      emit_action "attack 1"
+      emit_action "run-forward 12"
+      emit_action "circle-right 8"
+      emit_action "attack 1"
       emit_action "clear-input 2"
       ;;
     patrol|*)
