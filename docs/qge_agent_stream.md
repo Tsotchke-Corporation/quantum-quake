@@ -596,8 +596,9 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
 - `QGE_NOESIS_MIN_CAPTURE_WAIT`: minimum engine auto-capture delay for Noesis
   runs when `QGE_STREAM_CAPTURE_WAIT` is unset, default `192`. Set to `0` only
   when intentionally testing early capture or startup behavior.
-- `QGE_NOESIS_ASSIST`: opt-in server-state assist for Noesis automation,
-  default `0`. Mode `1` aims and fires at visible monsters while preserving the
+- `QGE_NOESIS_ASSIST`: server-state assist for Noesis automation. The stream
+  harness defaults to mode `1`; set `QGE_NOESIS_ASSIST=0` for unassisted claim
+  runs. Mode `1` aims and fires at visible monsters while preserving the
   scripted movement command. For mode `1`, visible targets are ranked by
   current aim error first and distance second, so a scan does not abandon the
   enemy closest to the crosshair for a merely nearer side target. Mode `2` also
