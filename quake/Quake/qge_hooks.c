@@ -185,6 +185,12 @@ static float qge_noesis_assist_sidemove = 0.0f;
 static float qge_noesis_assist_forward_clear = -1.0f;
 static float qge_noesis_assist_left_clear = -1.0f;
 static float qge_noesis_assist_right_clear = -1.0f;
+static float qge_noesis_assist_pre_aim_error = -1.0f;
+static qboolean qge_noesis_assist_view_injected = false;
+static qboolean qge_noesis_assist_movement_injected = false;
+static qboolean qge_noesis_assist_attack_injected = false;
+static qboolean qge_noesis_assist_attack_suppressed = false;
+static qboolean qge_noesis_assist_fire_gate_passed = false;
 
 #define QGE_NOESIS_AIM_ALIGNED_DEG 12.0f
 #define QGE_NOESIS_HIDDEN_CHASE_DISTANCE 768.0f
@@ -1082,6 +1088,12 @@ static void QGE_NoesisAssistResetFrame(void)
 	qge_noesis_assist_forward_clear = -1.0f;
 	qge_noesis_assist_left_clear = -1.0f;
 	qge_noesis_assist_right_clear = -1.0f;
+	qge_noesis_assist_pre_aim_error = -1.0f;
+	qge_noesis_assist_view_injected = false;
+	qge_noesis_assist_movement_injected = false;
+	qge_noesis_assist_attack_injected = false;
+	qge_noesis_assist_attack_suppressed = false;
+	qge_noesis_assist_fire_gate_passed = false;
 }
 
 void QGE_NoesisAssistClientThink(client_t *client,
@@ -1096,10 +1108,16 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	vec3_t aim_point;
 	qboolean visible = false;
 	qboolean engage_target;
+	qboolean original_attack;
+	qboolean final_attack;
 	float distance = -1.0f;
 	float forward_clear;
 	float left_clear;
 	float right_clear;
+	float original_forwardmove;
+	float original_sidemove;
+	float original_upmove;
+	float pre_aim_error;
 	int chase_mode;
 
 	(void)client;
@@ -1113,6 +1131,12 @@ void QGE_NoesisAssistClientThink(client_t *client,
 									  &visible, &distance, aim_point);
 	if (!enemy)
 		return;
+
+	original_attack = player->v.button0 != 0.0f;
+	original_forwardmove = move->forwardmove;
+	original_sidemove = move->sidemove;
+	original_upmove = move->upmove;
+	pre_aim_error = QGE_GameplayAimErrorDegrees(player, aim_point);
 
 	VectorAdd(player->v.origin, player->v.view_ofs, eye);
 	VectorCopy(aim_point, target);
@@ -1168,6 +1192,7 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	else {
 		player->v.button0 = 0.0f;
 	}
+	final_attack = player->v.button0 != 0.0f;
 
 	qge_noesis_assist_mode = chase_mode ? 2 : 1;
 	qge_noesis_assist_active = true;
@@ -1181,6 +1206,16 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	qge_noesis_assist_forward_clear = forward_clear;
 	qge_noesis_assist_left_clear = left_clear;
 	qge_noesis_assist_right_clear = right_clear;
+	qge_noesis_assist_pre_aim_error = pre_aim_error;
+	qge_noesis_assist_view_injected = engage_target;
+	qge_noesis_assist_movement_injected =
+		move->forwardmove != original_forwardmove ||
+		move->sidemove != original_sidemove ||
+		move->upmove != original_upmove;
+	qge_noesis_assist_attack_injected = final_attack && !original_attack;
+	qge_noesis_assist_attack_suppressed = original_attack && !final_attack;
+	qge_noesis_assist_fire_gate_passed =
+		visible && distance >= 0.0f && distance <= 1024.0f;
 
 	if (quantum_debug.value >= 1.0f &&
 		qge_frame_count - qge_noesis_assist_last_log_frame >= 30) {
@@ -1453,7 +1488,11 @@ static void QGE_GameplayOutcomeSample(void)
 		"\"aim_pitch\":%.3f,\"aim_yaw\":%.3f,"
 		"\"forwardmove\":%.3f,\"sidemove\":%.3f,"
 		"\"forward_clear\":%.3f,\"left_clear\":%.3f,"
-		"\"right_clear\":%.3f},"
+		"\"right_clear\":%.3f,"
+		"\"pre_assist_aim_error_deg\":%.3f,"
+		"\"view_injected\":%s,\"movement_injected\":%s,"
+		"\"attack_injected\":%s,\"attack_suppressed\":%s,"
+		"\"fire_gate_passed\":%s},"
 		"\"pickup\":{\"pickup_delta\":%d,\"pickups_total\":%d,"
 		"\"item_bits_added\":%d,\"weapon_changed_delta\":%d,"
 		"\"weapon_changes_total\":%d}}\n",
@@ -1488,6 +1527,12 @@ static void QGE_GameplayOutcomeSample(void)
 		qge_noesis_assist_forwardmove, qge_noesis_assist_sidemove,
 		qge_noesis_assist_forward_clear, qge_noesis_assist_left_clear,
 		qge_noesis_assist_right_clear,
+		qge_noesis_assist_pre_aim_error,
+		qge_noesis_assist_view_injected ? "true" : "false",
+		qge_noesis_assist_movement_injected ? "true" : "false",
+		qge_noesis_assist_attack_injected ? "true" : "false",
+		qge_noesis_assist_attack_suppressed ? "true" : "false",
+		qge_noesis_assist_fire_gate_passed ? "true" : "false",
 		pickup_delta, qge_gameplay_pickups_total, item_bits_added,
 		weapon_changed_delta, qge_gameplay_weapon_changes_total);
 
@@ -1531,7 +1576,11 @@ static void QGE_GameplayOutcomeSample(void)
 			"\"target_visible\":%s,\"target_distance\":%.3f,"
 			"\"forwardmove\":%.3f,\"sidemove\":%.3f,"
 			"\"forward_clear\":%.3f,\"left_clear\":%.3f,"
-			"\"right_clear\":%.3f},"
+			"\"right_clear\":%.3f,"
+			"\"pre_assist_aim_error_deg\":%.3f,"
+			"\"view_injected\":%s,\"movement_injected\":%s,"
+			"\"attack_injected\":%s,\"attack_suppressed\":%s,"
+			"\"fire_gate_passed\":%s},"
 			"\"pickup\":{\"pickups_total\":%d,"
 			"\"weapon_changes_total\":%d}}}\n",
 			qge_gameplay_samples,
@@ -1560,6 +1609,12 @@ static void QGE_GameplayOutcomeSample(void)
 			qge_noesis_assist_forwardmove, qge_noesis_assist_sidemove,
 			qge_noesis_assist_forward_clear, qge_noesis_assist_left_clear,
 			qge_noesis_assist_right_clear,
+			qge_noesis_assist_pre_aim_error,
+			qge_noesis_assist_view_injected ? "true" : "false",
+			qge_noesis_assist_movement_injected ? "true" : "false",
+			qge_noesis_assist_attack_injected ? "true" : "false",
+			qge_noesis_assist_attack_suppressed ? "true" : "false",
+			qge_noesis_assist_fire_gate_passed ? "true" : "false",
 			qge_gameplay_pickups_total, qge_gameplay_weapon_changes_total);
 	}
 	qge_noesis_phase_queue_count = 0;

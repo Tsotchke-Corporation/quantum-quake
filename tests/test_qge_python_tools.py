@@ -716,6 +716,12 @@ class NoesisSummaryTests(unittest.TestCase):
                                 "target_distance": 280.0,
                                 "forwardmove": 400.0,
                                 "sidemove": 220.0,
+                                "pre_assist_aim_error_deg": 4.5,
+                                "view_injected": True,
+                                "movement_injected": True,
+                                "attack_injected": True,
+                                "attack_suppressed": False,
+                                "fire_gate_passed": True,
                             },
                         }),
                         json.dumps({
@@ -912,6 +918,39 @@ class NoesisSummaryTests(unittest.TestCase):
                 1,
             )
             self.assertEqual(
+                summary["gameplay"]["assist"][
+                    "view_injected_sample_count"],
+                1,
+            )
+            self.assertEqual(
+                summary["gameplay"]["assist"][
+                    "movement_injected_sample_count"],
+                1,
+            )
+            self.assertEqual(
+                summary["gameplay"]["assist"][
+                    "attack_injected_sample_count"],
+                1,
+            )
+            self.assertEqual(
+                summary["gameplay"]["assist"][
+                    "attack_suppressed_sample_count"],
+                0,
+            )
+            self.assertEqual(
+                summary["gameplay"]["assist"][
+                    "fire_gate_passed_sample_count"],
+                1,
+            )
+            self.assertEqual(
+                summary["gameplay"]["assist"]["pre_assist_aim_error_min"],
+                4.5,
+            )
+            self.assertEqual(
+                summary["gameplay"]["assist"]["pre_assist_aim_error_avg"],
+                4.5,
+            )
+            self.assertEqual(
                 summary["gameplay"]["combat"]["attack_visible_frames"],
                 1,
             )
@@ -1102,6 +1141,34 @@ class NoesisSummaryTests(unittest.TestCase):
             )
             self.assertEqual(by_name["noesis_assist_steering_sample_count"], 1)
             self.assertEqual(by_name["noesis_assist_attack_visible_frames"], 1)
+            self.assertEqual(
+                by_name["noesis_assist_view_injected_sample_count"],
+                1,
+            )
+            self.assertEqual(
+                by_name["noesis_assist_movement_injected_sample_count"],
+                1,
+            )
+            self.assertEqual(
+                by_name["noesis_assist_attack_injected_sample_count"],
+                1,
+            )
+            self.assertEqual(
+                by_name["noesis_assist_attack_suppressed_sample_count"],
+                0,
+            )
+            self.assertEqual(
+                by_name["noesis_assist_fire_gate_passed_sample_count"],
+                1,
+            )
+            self.assertEqual(
+                by_name["noesis_assist_pre_assist_aim_error_min"],
+                4.5,
+            )
+            self.assertEqual(
+                by_name["noesis_assist_pre_assist_aim_error_avg"],
+                4.5,
+            )
 
             no_phase_path = tmpdir / "gameplay_without_phase.ndjson"
             no_phase_path.write_text(

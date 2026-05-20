@@ -1005,6 +1005,34 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
         and bool(value_at(sample, "assist", "target_visible", default=False))
         and bool(value_at(sample, "player", "attack_active", default=False))
     )
+    assist_view_injected_frames = sum(
+        1 for sample in playable_samples
+        if bool(value_at(sample, "assist", "view_injected", default=False))
+    )
+    assist_movement_injected_frames = sum(
+        1 for sample in playable_samples
+        if bool(value_at(sample, "assist", "movement_injected", default=False))
+    )
+    assist_attack_injected_frames = sum(
+        1 for sample in playable_samples
+        if bool(value_at(sample, "assist", "attack_injected", default=False))
+    )
+    assist_attack_suppressed_frames = sum(
+        1 for sample in playable_samples
+        if bool(value_at(sample, "assist", "attack_suppressed", default=False))
+    )
+    assist_fire_gate_passed_frames = sum(
+        1 for sample in playable_samples
+        if bool(value_at(sample, "assist", "fire_gate_passed", default=False))
+    )
+    assist_pre_aim_errors = [
+        as_number(value_at(
+            sample, "assist", "pre_assist_aim_error_deg"), -1.0)
+        for sample in playable_samples
+    ]
+    assist_pre_aim_errors = [
+        value for value in assist_pre_aim_errors if value >= 0.0
+    ]
     death_count = 0
     prev_health = health_values[0]
     for health in health_values[1:]:
@@ -1129,6 +1157,21 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
             "steering_sample_count": assist_steering_frames,
             "wall_probe_sample_count": assist_wall_probe_frames,
             "attack_visible_frames": assist_attack_visible_frames,
+            "view_injected_sample_count": assist_view_injected_frames,
+            "movement_injected_sample_count": assist_movement_injected_frames,
+            "attack_injected_sample_count": assist_attack_injected_frames,
+            "attack_suppressed_sample_count": assist_attack_suppressed_frames,
+            "fire_gate_passed_sample_count": assist_fire_gate_passed_frames,
+            "pre_assist_aim_error_min": (
+                min(assist_pre_aim_errors)
+                if assist_pre_aim_errors else None
+            ),
+            "pre_assist_aim_error_avg": (
+                round(
+                    sum(assist_pre_aim_errors) /
+                    len(assist_pre_aim_errors), 4)
+                if assist_pre_aim_errors else None
+            ),
         },
         "phase": summarize_phase_progress(phase_events, playable_samples),
     }
@@ -2212,6 +2255,48 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "kind": "runtime_state",
             "name": "noesis_assist_attack_visible_frames",
             "value": gameplay_assist.get("attack_visible_frames", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_view_injected_sample_count",
+            "value": gameplay_assist.get("view_injected_sample_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_movement_injected_sample_count",
+            "value": gameplay_assist.get("movement_injected_sample_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_attack_injected_sample_count",
+            "value": gameplay_assist.get("attack_injected_sample_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_attack_suppressed_sample_count",
+            "value": gameplay_assist.get("attack_suppressed_sample_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_fire_gate_passed_sample_count",
+            "value": gameplay_assist.get("fire_gate_passed_sample_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_pre_assist_aim_error_min",
+            "value": gameplay_assist.get("pre_assist_aim_error_min"),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_pre_assist_aim_error_avg",
+            "value": gameplay_assist.get("pre_assist_aim_error_avg"),
             "path": str(summary_path),
         },
         {

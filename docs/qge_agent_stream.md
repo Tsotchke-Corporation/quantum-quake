@@ -133,8 +133,9 @@ The stream directory is intentionally simple and tail-friendly:
   enemy proximity/visibility. The summary derives ammo spent/gained,
   unproductive ammo spent, ammo waste fraction, and damage per ammo spent from
   these samples. When `QGE_NOESIS_ASSIST` is enabled, samples also include assist
-  mode, target visibility/distance, aim yaw/pitch, steering
-  commands, and wall-probe distances.
+  mode, target visibility/distance, aim yaw/pitch, steering commands,
+  wall-probe distances, pre-assist aim error, and whether the assist injected
+  view, movement, or attack state.
 - `logs/quantum_quake.log`: runtime console log mirrored into the stream.
 - `logs/open.log`: LaunchServices notes for macOS `open` mode.
 - `trace/qge_trace_summary.json`: JSON summary of `qge_trace.bin`, including
@@ -388,9 +389,11 @@ penalty when observed ammo spend is unproductive. Route telemetry also reports
 movement efficiency, stationary fraction, maximum stationary run, and
 duration-aware terminal-stall evidence, so a route that moves early and ends
 wedged cannot pass as clean progress while a short post-plan idle tail does not
-poison a long successful route. Assist runs additionally emit requested mode, active sample count,
-visible-target sample count, steering sample count, attack-visible frames,
-target-distance evidence, and a claim scope. Assisted runs are marked `server_assisted` so they cannot be
+poison a long successful route. Assist runs additionally emit requested mode,
+active sample count, visible-target sample count, steering sample count,
+attack-visible frames, target-distance evidence, view/movement/attack injection
+sample counts, pre-assist aim-error min/average, and a claim scope. Assisted
+runs are marked `server_assisted` so they cannot be
 mistaken for unassisted play evidence. Set `QGE_NOESIS_MIN_LOG_PHASES` to
 require that many `QGE_NOESIS_PHASE` markers to appear in the engine log and
 matching engine-owned `noesis_phase` outcome events to appear in gameplay
