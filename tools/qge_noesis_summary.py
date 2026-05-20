@@ -53,6 +53,9 @@ MOVEMENT_VERBS = {
     "door-bump",
     "door-push",
     "bump-door",
+    "door-open",
+    "use-bump",
+    "open-door",
     "run-forward",
     "sprint-forward",
     "charge",
@@ -83,6 +86,9 @@ ROUTE_VERBS = {
     "door-bump",
     "door-push",
     "bump-door",
+    "door-open",
+    "use-bump",
+    "open-door",
     "wall-slide-left",
     "wall-slide-right",
     "route-left",
@@ -485,6 +491,9 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
             "telemetry_sample_count": assist_telemetry_samples,
             "active_frames": assist_active_frames,
             "active_sample_count": assist_active_frames,
+            "active_fraction": round(
+                assist_active_frames / len(playable_samples), 4
+            ),
             "visible_target_frames": assist_visible_target_frames,
             "target_visible_sample_count": assist_visible_target_frames,
             "mode_max": max(assist_modes) if assist_modes else 0.0,
@@ -810,6 +819,14 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
     commands = summarize_commands(args.commands)
     log = summarize_log(args.log)
     gameplay = summarize_gameplay(gameplay_path)
+    assist_state = gameplay.get("assist") or {}
+    assist_active = int(assist_state.get("active_frames") or 0) > 0
+    unassisted_claim_supported = (
+        noesis_assist_requested <= 0 and not assist_active
+    )
+    claim_scope = (
+        "unassisted" if unassisted_claim_supported else "server_assisted"
+    )
     trace = summarize_trace(args.trace_summary) if args.trace_summary else {
         "path": "",
         "exists": False,
@@ -929,6 +946,7 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
             "frames_dir": str(args.frames_dir) if args.frames_dir else "",
             "missing_inputs": missing_inputs,
             "noesis_assist_requested": noesis_assist_requested,
+            "claim_scope": claim_scope,
         },
         "actions": actions,
         "commands": commands,
@@ -938,6 +956,9 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
         "frames": frames,
         "gameplay_score": gameplay_score,
         "quality_gates": gates,
+        "claim_gates": {
+            "unassisted_claim_supported": unassisted_claim_supported,
+        },
         "failures": failures,
     }
 
@@ -978,6 +999,20 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "kind": "runtime_state",
             "name": "noesis_failure_free",
             "value": not summary.get("failures"),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_claim_scope",
+            "value": (summary.get("inputs") or {}).get(
+                "claim_scope", "unassisted"),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_unassisted_claim_supported",
+            "value": (summary.get("claim_gates") or {}).get(
+                "unassisted_claim_supported", False),
             "path": str(summary_path),
         },
         {
@@ -1129,6 +1164,12 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "kind": "runtime_state",
             "name": "noesis_assist_active_sample_count",
             "value": gameplay_assist.get("active_sample_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_active_fraction",
+            "value": gameplay_assist.get("active_fraction", 0),
             "path": str(summary_path),
         },
         {

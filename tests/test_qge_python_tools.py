@@ -395,6 +395,7 @@ class NoesisSummaryTests(unittest.TestCase):
                         "advance-fire 12",
                         "wall-slide-right 10",
                         "speed-jump-forward 3",
+                        "door-open 4",
                         "door-bump 4",
                         "circle-fire-left 8",
                         "jump-forward 4",
@@ -618,9 +619,10 @@ class NoesisSummaryTests(unittest.TestCase):
             self.assertEqual(summary["plan"], "adaptive")
             self.assertEqual(summary["actions"]["verb_counts"]["advance-fire"], 1)
             self.assertEqual(summary["actions"]["verb_counts"]["wall-slide-right"], 1)
+            self.assertEqual(summary["actions"]["verb_counts"]["door-open"], 1)
             self.assertEqual(summary["actions"]["verb_counts"]["door-bump"], 1)
             self.assertEqual(summary["actions"]["combat_action_count"], 2)
-            self.assertEqual(summary["actions"]["route_action_count"], 4)
+            self.assertEqual(summary["actions"]["route_action_count"], 5)
             self.assertTrue(summary["quality_gates"]["movement_actions_present"])
             self.assertTrue(summary["quality_gates"]["combat_required"])
             self.assertEqual(summary["commands"]["pressed_button_variety"], 7)
@@ -635,8 +637,16 @@ class NoesisSummaryTests(unittest.TestCase):
             )
             self.assertTrue(summary["gameplay"]["player"]["survived"])
             self.assertEqual(summary["inputs"]["noesis_assist_requested"], 2)
+            self.assertEqual(summary["inputs"]["claim_scope"], "server_assisted")
+            self.assertFalse(
+                summary["claim_gates"]["unassisted_claim_supported"]
+            )
             self.assertEqual(summary["gameplay"]["assist"]["mode_max"], 2.0)
             self.assertEqual(summary["gameplay"]["assist"]["active_frames"], 1)
+            self.assertEqual(
+                summary["gameplay"]["assist"]["active_fraction"],
+                0.5,
+            )
             self.assertEqual(
                 summary["gameplay"]["assist"]["visible_target_frames"],
                 1,
@@ -666,9 +676,11 @@ class NoesisSummaryTests(unittest.TestCase):
             )
             self.assertTrue(by_name["noesis_failure_free"])
             self.assertEqual(by_name["noesis_plan"], "adaptive")
-            self.assertEqual(by_name["noesis_action_count"], 11)
-            self.assertEqual(by_name["noesis_route_action_count"], 4)
+            self.assertEqual(by_name["noesis_action_count"], 12)
+            self.assertEqual(by_name["noesis_route_action_count"], 5)
             self.assertGreaterEqual(by_name["noesis_gameplay_quality_score"], 35.0)
+            self.assertEqual(by_name["noesis_claim_scope"], "server_assisted")
+            self.assertFalse(by_name["noesis_unassisted_claim_supported"])
             self.assertEqual(by_name["noesis_log_phase_count"], 1)
             self.assertEqual(by_name["noesis_gameplay_outcome_sample_count"], 2)
             self.assertEqual(by_name["noesis_gameplay_total_distance"], 148.0)
@@ -676,6 +688,7 @@ class NoesisSummaryTests(unittest.TestCase):
             self.assertEqual(by_name["noesis_assist_requested_mode"], 2)
             self.assertEqual(by_name["noesis_assist_mode_max"], 2.0)
             self.assertEqual(by_name["noesis_assist_active_sample_count"], 1)
+            self.assertEqual(by_name["noesis_assist_active_fraction"], 0.5)
             self.assertEqual(
                 by_name["noesis_assist_target_visible_sample_count"],
                 1,

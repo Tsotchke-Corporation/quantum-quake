@@ -814,24 +814,69 @@ static int QGE_GameplayPlayerLeaf(edict_t *player)
 	return (int)(leaf - sv.worldmodel->leafs) - 1;
 }
 
-static qboolean QGE_GameplayEnemyVisible(edict_t *player, edict_t *enemy)
+static void QGE_GameplayEnemyBBoxPoint(edict_t *enemy,
+									   float xfrac,
+									   float yfrac,
+									   float zfrac,
+									   vec3_t point)
+{
+	point[0] = enemy->v.origin[0] + enemy->v.mins[0] +
+			   (enemy->v.maxs[0] - enemy->v.mins[0]) * xfrac;
+	point[1] = enemy->v.origin[1] + enemy->v.mins[1] +
+			   (enemy->v.maxs[1] - enemy->v.mins[1]) * yfrac;
+	point[2] = enemy->v.origin[2] + enemy->v.mins[2] +
+			   (enemy->v.maxs[2] - enemy->v.mins[2]) * zfrac;
+}
+
+static void QGE_GameplayEnemyCenterPoint(edict_t *enemy, vec3_t point)
+{
+	QGE_GameplayEnemyBBoxPoint(enemy, 0.5f, 0.5f, 0.5f, point);
+}
+
+static qboolean QGE_GameplayEnemyAimPoint(edict_t *player,
+										  edict_t *enemy,
+										  vec3_t aim_point)
 {
 	trace_t trace;
 	vec3_t start;
-	vec3_t end;
+	vec3_t point;
+	static const float fractions[][3] = {
+		{0.5f, 0.5f, 0.5f},
+		{0.5f, 0.5f, 0.82f},
+		{0.5f, 0.5f, 0.32f},
+		{0.25f, 0.5f, 0.62f},
+		{0.75f, 0.5f, 0.62f},
+	};
+	int i;
 
 	if (!player || !enemy)
 		return false;
 
 	VectorAdd(player->v.origin, player->v.view_ofs, start);
-	end[0] = enemy->v.origin[0] + 0.5f * (enemy->v.mins[0] + enemy->v.maxs[0]);
-	end[1] = enemy->v.origin[1] + 0.5f * (enemy->v.mins[1] + enemy->v.maxs[1]);
-	end[2] = enemy->v.origin[2] + 0.5f * (enemy->v.mins[2] + enemy->v.maxs[2]);
+	for (i = 0; i < (int)(sizeof(fractions) / sizeof(fractions[0])); i++) {
+		QGE_GameplayEnemyBBoxPoint(enemy,
+								   fractions[i][0],
+								   fractions[i][1],
+								   fractions[i][2],
+								   point);
+		trace = SV_Move(start, vec3_origin, vec3_origin, point,
+						MOVE_NOMONSTERS, player);
+		if (!trace.allsolid && !trace.startsolid &&
+			trace.fraction >= 0.99f) {
+			if (aim_point)
+				VectorCopy(point, aim_point);
+			return true;
+		}
+	}
 
-	trace = SV_Move(start, vec3_origin, vec3_origin, end, MOVE_NOMONSTERS,
-					player);
-	return (!trace.allsolid && !trace.startsolid &&
-			trace.fraction >= 0.99f) ? true : false;
+	if (aim_point)
+		QGE_GameplayEnemyCenterPoint(enemy, aim_point);
+	return false;
+}
+
+static qboolean QGE_GameplayEnemyVisible(edict_t *player, edict_t *enemy)
+{
+	return QGE_GameplayEnemyAimPoint(player, enemy, NULL);
 }
 
 static float QGE_NoesisAssistTraceDistance(edict_t *player, float yaw)
@@ -863,10 +908,13 @@ static float QGE_NoesisAssistTraceDistance(edict_t *player, float yaw)
 
 static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
 										  qboolean *visible_out,
-										  float *distance_out)
+										  float *distance_out,
+										  vec3_t aim_point_out)
 {
 	edict_t *best_visible = NULL;
 	edict_t *best_nearest = NULL;
+	vec3_t best_visible_aim;
+	vec3_t best_nearest_aim;
 	float best_visible_distance = 999999.0f;
 	float best_nearest_distance = 999999.0f;
 
@@ -874,12 +922,15 @@ static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
 		*visible_out = false;
 	if (distance_out)
 		*distance_out = -1.0f;
+	if (aim_point_out)
+		aim_point_out[0] = aim_point_out[1] = aim_point_out[2] = 0.0f;
 	if (!player || !sv.active)
 		return NULL;
 
 	for (int i = 2; i < sv.num_edicts; i++) {
 		edict_t *ent = EDICT_NUM(i);
 		vec3_t delta;
+		vec3_t candidate_aim;
 		float distance;
 
 		if (!ent || ent->free || ent->v.health <= 0.0f ||
@@ -891,11 +942,13 @@ static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
 		if (distance < best_nearest_distance) {
 			best_nearest_distance = distance;
 			best_nearest = ent;
+			QGE_GameplayEnemyCenterPoint(ent, best_nearest_aim);
 		}
-		if (QGE_GameplayEnemyVisible(player, ent) &&
+		if (QGE_GameplayEnemyAimPoint(player, ent, candidate_aim) &&
 			distance < best_visible_distance) {
 			best_visible_distance = distance;
 			best_visible = ent;
+			VectorCopy(candidate_aim, best_visible_aim);
 		}
 	}
 
@@ -904,10 +957,16 @@ static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
 			*visible_out = true;
 		if (distance_out)
 			*distance_out = best_visible_distance;
+		if (aim_point_out)
+			VectorCopy(best_visible_aim, aim_point_out);
 		return best_visible;
 	}
-	if (distance_out && best_nearest)
-		*distance_out = best_nearest_distance;
+	if (best_nearest) {
+		if (distance_out)
+			*distance_out = best_nearest_distance;
+		if (aim_point_out)
+			VectorCopy(best_nearest_aim, aim_point_out);
+	}
 	return best_nearest;
 }
 
@@ -936,6 +995,7 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	vec3_t target;
 	vec3_t delta;
 	vec3_t aim;
+	vec3_t aim_point;
 	qboolean visible = false;
 	float distance = -1.0f;
 	float forward_clear;
@@ -949,17 +1009,12 @@ void QGE_NoesisAssistClientThink(client_t *client,
 		!sv.active || !QGE_GameplayStreamDir())
 		return;
 
-	enemy = QGE_NoesisAssistFindEnemy(player, &visible, &distance);
+	enemy = QGE_NoesisAssistFindEnemy(player, &visible, &distance, aim_point);
 	if (!enemy)
 		return;
 
 	VectorAdd(player->v.origin, player->v.view_ofs, eye);
-	target[0] = enemy->v.origin[0] +
-				0.5f * (enemy->v.mins[0] + enemy->v.maxs[0]);
-	target[1] = enemy->v.origin[1] +
-				0.5f * (enemy->v.mins[1] + enemy->v.maxs[1]);
-	target[2] = enemy->v.origin[2] +
-				0.5f * (enemy->v.mins[2] + enemy->v.maxs[2]);
+	VectorCopy(aim_point, target);
 	VectorSubtract(target, eye, delta);
 	VectorAngles(delta, aim);
 	aim[PITCH] = q_max(-60.0f, q_min(60.0f, aim[PITCH]));

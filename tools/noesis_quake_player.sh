@@ -176,6 +176,13 @@ emit_action() {
     speed-jump-forward|run-jump-forward|jump-run-forward)
       hold_command_set "${arg:-1}" "speed" "jump" "forward"
       ;;
+    door-open|use-bump|open-door)
+      hold_command_set "${arg:-8}" "speed" "forward" "use"
+      clear_held_commands
+      emit_waits 1
+      hold_command "back" 2
+      emit_command "centerview"
+      ;;
     door-bump|door-push|bump-door)
       hold_command_set "${arg:-8}" "speed" "forward"
       clear_held_commands

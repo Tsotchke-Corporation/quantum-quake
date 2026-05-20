@@ -361,7 +361,9 @@ into `agent_stream/noesis/`, and records the result as
 `noesis_gameplay_total_distance`, survival, damage, kill, pickup, and visible
 enemy evidence. Assist runs additionally emit requested mode, active sample
 count, visible-target sample count, steering sample count, attack-visible
-frames, and target-distance evidence. Set `QGE_NOESIS_MIN_LOG_PHASES` to
+frames, target-distance evidence, and a claim scope. Assisted runs are marked
+`server_assisted` so they cannot be mistaken for unassisted play evidence. Set
+`QGE_NOESIS_MIN_LOG_PHASES` to
 require that many `QGE_NOESIS_PHASE` markers to appear in the engine log, which
 is useful when proving that a longer route plan actually executed rather than
 only being generated. Set `QGE_NOESIS_MIN_GAMEPLAY_SAMPLES` and
@@ -522,8 +524,8 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   `turn-left`, `turn-right`, `strafe-left`, `strafe-right`, `jump`,
   `center-view`, `advance-fire`, `circle-fire-left`, `circle-fire-right`,
   `wall-slide-left`, `wall-slide-right`, `speed-jump-forward`, `door-bump`,
-  `weapon-next`, `weapon-prev`, `attack`, `wait`, `weapon`, and `give`, with an
-  optional wait-count argument.
+  `door-open`, `weapon-next`, `weapon-prev`, `attack`, `wait`, `weapon`, and
+  `give`, with an optional wait-count argument.
 - `QGE_NOESIS_START_WAIT`: command-buffer waits emitted before Noesis actions,
   default `16`. Set to `0` when the action file already includes its own
   startup delay.
@@ -541,9 +543,11 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
 - `QGE_NOESIS_ASSIST`: opt-in server-state assist for Noesis automation,
   default `0`. Mode `1` aims and fires at visible monsters while preserving the
   scripted movement command. Mode `2` also steers the server usercmd toward the
-  nearest monster with a small wall-avoidance probe. The engine-side cvar is
-  `qge_noesis_assist`, remains off by default, and only acts during
-  `-qgestreamdir` runs so normal local play is untouched.
+  nearest monster with a small wall-avoidance probe. Visibility and aim use a
+  sampled monster bbox point, so partly exposed enemies are not limited to a
+  center-point trace. The engine-side cvar is `qge_noesis_assist`, remains off
+  by default, and only acts during `-qgestreamdir` runs so normal local play is
+  untouched.
 - `QGE_NOESIS_CMD`: optional Noesis action provider command. When set, the
   harness runs it from `QGE_NOESIS_DIR` and translates its stdout action lines;
   this takes precedence over `QGE_NOESIS_ACTIONS_FILE` and the default
