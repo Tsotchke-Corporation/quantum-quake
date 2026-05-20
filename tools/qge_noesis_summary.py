@@ -879,6 +879,8 @@ def summarize_trace(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8", errors="replace") as f:
         data = json.load(f)
     runtime = data.get("runtime_evidence") or {}
+    header = data.get("header") or {}
+    replay_health = data.get("replay_health") or {}
     ai = runtime.get("ai") or {}
     render = runtime.get("render") or {}
     visibility = runtime.get("visibility") or {}
@@ -886,8 +888,27 @@ def summarize_trace(path: Path) -> dict[str, Any]:
     return {
         "path": str(path),
         "exists": True,
+        "run_id": header.get("run_id", 0),
+        "moonlab_abi_hash": header.get("moonlab_abi_hash", 0),
+        "qge_build_hash": header.get("qge_build_hash", 0),
+        "quake_content_hash": header.get("quake_content_hash", 0),
         "single_trace_ready": bool(runtime.get("single_trace_ready", False)),
         "ai_decision_count": int(ai.get("decision_count") or 0),
+        "entropy_replay_events": int(
+            replay_health.get("entropy_replay_events") or 0
+        ),
+        "replay_metadata_mismatches": int(
+            replay_health.get("replay_metadata_mismatches") or 0
+        ),
+        "replay_exhaustions": int(
+            replay_health.get("replay_exhaustions") or 0
+        ),
+        "ai_decision_replay_metadata_mismatches": int(
+            replay_health.get("ai_decision_replay_metadata_mismatches") or 0
+        ),
+        "ai_decision_replay_exhaustions": int(
+            replay_health.get("ai_decision_replay_exhaustions") or 0
+        ),
         "render_sparse_dwt_count": int(render.get("sparse_dwt_count") or 0),
         "render_native_bridge_count": int(render.get("native_bridge_count") or 0),
         "render_native_fallback_count": int(render.get("native_fallback_count") or 0),
@@ -896,6 +917,29 @@ def summarize_trace(path: Path) -> dict[str, Any]:
         ),
         "projectile_branch_state_count": int(
             projectile.get("branch_state_count") or 0
+        ),
+        "projectile_save_demo_boundary_count": int(
+            projectile.get("save_demo_boundary_count") or 0
+        ),
+        "projectile_save_demo_writeback_count": int(
+            projectile.get("save_demo_writeback_count") or 0
+        ),
+        "projectile_save_demo_branch_count": int(
+            projectile.get("save_demo_branch_count") or 0
+        ),
+        "projectile_save_demo_collision_oracle_count": int(
+            projectile.get("save_demo_collision_oracle_count") or 0
+        ),
+        "projectile_save_demo_trace_id_xor": int(
+            projectile.get("save_demo_trace_id_xor") or 0
+        ),
+        "projectile_flags_or": int(projectile.get("flags_or") or 0),
+        "projectile_off_reason": projectile.get("off_reason", ""),
+        "projectile_branch_selected_probability_max": float(
+            projectile.get("branch_selected_probability_max") or 0.0
+        ),
+        "projectile_preimpact_selected_probability_max": float(
+            projectile.get("preimpact_selected_probability_max") or 0.0
         ),
     }
 
@@ -1451,6 +1495,96 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "kind": "runtime_state",
             "name": "noesis_ai_decision_count",
             "value": trace.get("ai_decision_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_trace_run_id",
+            "value": trace.get("run_id", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_trace_qge_build_hash",
+            "value": trace.get("qge_build_hash", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_trace_quake_content_hash",
+            "value": trace.get("quake_content_hash", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_replay_metadata_mismatches",
+            "value": trace.get("replay_metadata_mismatches", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_replay_exhaustions",
+            "value": trace.get("replay_exhaustions", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_ai_decision_replay_metadata_mismatches",
+            "value": trace.get("ai_decision_replay_metadata_mismatches", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_ai_decision_replay_exhaustions",
+            "value": trace.get("ai_decision_replay_exhaustions", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_projectile_save_demo_boundary_count",
+            "value": trace.get("projectile_save_demo_boundary_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_projectile_save_demo_writeback_count",
+            "value": trace.get("projectile_save_demo_writeback_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_projectile_save_demo_branch_count",
+            "value": trace.get("projectile_save_demo_branch_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_projectile_save_demo_collision_oracle_count",
+            "value": trace.get("projectile_save_demo_collision_oracle_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_projectile_save_demo_trace_id_xor",
+            "value": trace.get("projectile_save_demo_trace_id_xor", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_projectile_off_reason",
+            "value": trace.get("projectile_off_reason", ""),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_projectile_branch_selected_probability_max",
+            "value": trace.get("projectile_branch_selected_probability_max", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_projectile_preimpact_selected_probability_max",
+            "value": trace.get("projectile_preimpact_selected_probability_max", 0),
             "path": str(summary_path),
         },
         {

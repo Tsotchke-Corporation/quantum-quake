@@ -360,7 +360,10 @@ into `agent_stream/noesis/`, and records the result as
 `noesis_log_policy_done`, `noesis_gameplay_phase_event_count`,
 `noesis_gameplay_phase_stuck_window_count`,
 `noesis_gameplay_outcome_sample_count`, `noesis_gameplay_total_distance`,
-survival, damage, kill, pickup, and visible enemy evidence. The Noesis player
+survival, damage, kill, pickup, visible enemy evidence, trace identity, replay
+health, and projectile save/demo boundary evidence such as
+`noesis_projectile_save_demo_boundary_count` and
+`noesis_projectile_save_demo_trace_id_xor`. The Noesis player
 keeps the console `QGE_NOESIS_PHASE` marker for log compatibility and also
 executes `qge_noesis_phase`, which queues an engine-owned `noesis_phase` event
 in `gameplay_outcomes.ndjson` with the next gameplay sample's player, route,

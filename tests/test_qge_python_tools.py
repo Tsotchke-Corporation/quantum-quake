@@ -589,6 +589,19 @@ class NoesisSummaryTests(unittest.TestCase):
             )
             trace_path.write_text(
                 json.dumps({
+                    "header": {
+                        "run_id": 0x5151455F52554E31,
+                        "moonlab_abi_hash": 0x2,
+                        "qge_build_hash": 0x3,
+                        "quake_content_hash": 0x4,
+                    },
+                    "replay_health": {
+                        "entropy_replay_events": 1,
+                        "replay_metadata_mismatches": 0,
+                        "replay_exhaustions": 0,
+                        "ai_decision_replay_metadata_mismatches": 0,
+                        "ai_decision_replay_exhaustions": 0,
+                    },
                     "runtime_evidence": {
                         "single_trace_ready": False,
                         "ai": {"decision_count": 7},
@@ -598,7 +611,18 @@ class NoesisSummaryTests(unittest.TestCase):
                             "native_fallback_count": 0,
                         },
                         "visibility": {"authority_apply_count": 3},
-                        "projectile": {"branch_state_count": 0},
+                        "projectile": {
+                            "branch_state_count": 2,
+                            "save_demo_boundary_count": 3,
+                            "save_demo_writeback_count": 1,
+                            "save_demo_branch_count": 1,
+                            "save_demo_collision_oracle_count": 1,
+                            "save_demo_trace_id_xor": 0xAA55,
+                            "flags_or": 0x70000000,
+                            "off_reason": "none",
+                            "branch_selected_probability_max": 0.875,
+                            "preimpact_selected_probability_max": 0.75,
+                        },
                     },
                 }),
                 encoding="utf-8",
@@ -706,6 +730,14 @@ class NoesisSummaryTests(unittest.TestCase):
             )
             self.assertTrue(summary["quality_gates"]["route_progress_required"])
             self.assertEqual(summary["trace"]["ai_decision_count"], 7)
+            self.assertEqual(
+                summary["trace"]["projectile_save_demo_boundary_count"],
+                3,
+            )
+            self.assertEqual(
+                summary["trace"]["projectile_save_demo_trace_id_xor"],
+                0xAA55,
+            )
             self.assertGreaterEqual(summary["gameplay_score"]["score"], 35.0)
             self.assertEqual(summary["gameplay_score"]["executed_phase_count"], 1)
             self.assertEqual(
@@ -731,6 +763,33 @@ class NoesisSummaryTests(unittest.TestCase):
             self.assertEqual(by_name["noesis_claim_scope"], "server_assisted")
             self.assertFalse(by_name["noesis_unassisted_claim_supported"])
             self.assertEqual(by_name["noesis_log_phase_count"], 1)
+            self.assertEqual(by_name["noesis_trace_run_id"], 0x5151455F52554E31)
+            self.assertEqual(by_name["noesis_trace_qge_build_hash"], 0x3)
+            self.assertEqual(
+                by_name["noesis_projectile_save_demo_boundary_count"],
+                3,
+            )
+            self.assertEqual(
+                by_name["noesis_projectile_save_demo_writeback_count"],
+                1,
+            )
+            self.assertEqual(
+                by_name["noesis_projectile_save_demo_branch_count"],
+                1,
+            )
+            self.assertEqual(
+                by_name["noesis_projectile_save_demo_collision_oracle_count"],
+                1,
+            )
+            self.assertEqual(
+                by_name["noesis_projectile_save_demo_trace_id_xor"],
+                0xAA55,
+            )
+            self.assertEqual(by_name["noesis_projectile_off_reason"], "none")
+            self.assertEqual(
+                by_name["noesis_projectile_branch_selected_probability_max"],
+                0.875,
+            )
             self.assertEqual(by_name["noesis_gameplay_phase_event_count"], 1)
             self.assertEqual(by_name["noesis_gameplay_phase_state_count"], 1)
             self.assertEqual(
