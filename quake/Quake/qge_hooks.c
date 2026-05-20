@@ -163,6 +163,13 @@ static int qge_gameplay_prev_attack_active = 0;
 static int qge_gameplay_prev_damageable_alive = 0;
 static float *qge_gameplay_prev_edict_health = NULL;
 static int qge_gameplay_prev_edict_capacity = 0;
+#define QGE_NOESIS_PHASE_QUEUE_MAX 16
+#define QGE_NOESIS_PHASE_NAME_MAX 64
+static char qge_noesis_phase_queue[QGE_NOESIS_PHASE_QUEUE_MAX]
+								  [QGE_NOESIS_PHASE_NAME_MAX];
+static int qge_noesis_phase_queue_count = 0;
+static int qge_noesis_phase_sequence = 0;
+static qboolean qge_noesis_phase_command_registered = false;
 static int qge_noesis_assist_last_log_frame = -999999;
 static int qge_noesis_assist_mode = 0;
 static qboolean qge_noesis_assist_active = false;
@@ -715,6 +722,47 @@ static const char *QGE_GameplayStreamDir(void)
 	return NULL;
 }
 
+static void QGE_GameplayWriteJsonString(FILE *file, const char *value)
+{
+	const unsigned char *cursor;
+
+	fputc('"', file);
+	if (value) {
+		for (cursor = (const unsigned char *)value; *cursor; cursor++) {
+			switch (*cursor) {
+			case '"':
+				fputs("\\\"", file);
+				break;
+			case '\\':
+				fputs("\\\\", file);
+				break;
+			case '\b':
+				fputs("\\b", file);
+				break;
+			case '\f':
+				fputs("\\f", file);
+				break;
+			case '\n':
+				fputs("\\n", file);
+				break;
+			case '\r':
+				fputs("\\r", file);
+				break;
+			case '\t':
+				fputs("\\t", file);
+				break;
+			default:
+				if (*cursor < 0x20)
+					fprintf(file, "\\u%04x", *cursor);
+				else
+					fputc(*cursor, file);
+				break;
+			}
+		}
+	}
+	fputc('"', file);
+}
+
 static void QGE_GameplayOutcomeResetState(void)
 {
 	qge_gameplay_prev_valid = false;
@@ -1079,6 +1127,58 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	}
 }
 
+static qboolean QGE_NoesisPhaseCharAllowed(char c)
+{
+	return ((c >= 'a' && c <= 'z') ||
+			(c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') ||
+			c == '_' || c == '-' || c == '.');
+}
+
+static void QGE_NoesisPhaseNormalize(const char *raw,
+									 char *out,
+									 size_t out_size)
+{
+	size_t i = 0;
+
+	if (!out || out_size == 0)
+		return;
+	if (!raw || !raw[0])
+		raw = "unknown";
+	while (*raw == ' ' || *raw == '\t')
+		raw++;
+	if (strncmp(raw, "phase=", 6) == 0)
+		raw += 6;
+	while (*raw == ' ' || *raw == '\t')
+		raw++;
+
+	for (; *raw && i + 1 < out_size; raw++) {
+		if (*raw == ' ' || *raw == '\t')
+			break;
+		out[i++] = QGE_NoesisPhaseCharAllowed(*raw) ? *raw : '_';
+	}
+	if (i == 0) {
+		q_strlcpy(out, "unknown", out_size);
+		return;
+	}
+	out[i] = '\0';
+}
+
+static void QGE_NoesisPhase_f(void)
+{
+	char phase[QGE_NOESIS_PHASE_NAME_MAX];
+	int slot;
+
+	QGE_NoesisPhaseNormalize(Cmd_Argc() > 1 ? Cmd_Argv(1) : "unknown",
+							 phase, sizeof(phase));
+	if (qge_noesis_phase_queue_count >= QGE_NOESIS_PHASE_QUEUE_MAX)
+		slot = QGE_NOESIS_PHASE_QUEUE_MAX - 1;
+	else
+		slot = qge_noesis_phase_queue_count++;
+	q_strlcpy(qge_noesis_phase_queue[slot], phase,
+			  sizeof(qge_noesis_phase_queue[slot]));
+}
+
 static void QGE_GameplayOutcomeSample(void)
 {
 	edict_t *player;
@@ -1290,6 +1390,68 @@ static void QGE_GameplayOutcomeSample(void)
 		pickup_delta, qge_gameplay_pickups_total, item_bits_added,
 		weapon_changed_delta, qge_gameplay_weapon_changes_total);
 
+	for (int i = 0; i < qge_noesis_phase_queue_count; i++) {
+		qge_noesis_phase_sequence++;
+		fprintf(qge_gameplay_outcome_file,
+			"{\"schema\":\"qge.gameplay_outcome.v0\",\"type\":\"event\","
+			"\"kind\":\"noesis_phase\",\"phase\":");
+		QGE_GameplayWriteJsonString(qge_gameplay_outcome_file,
+									qge_noesis_phase_queue[i]);
+		fprintf(qge_gameplay_outcome_file,
+			",\"phase_sequence\":%d,\"frame\":%d,"
+			"\"time_msec\":%d,\"map\":",
+			qge_noesis_phase_sequence, qge_frame_count, QGE_ServerTimeMsec());
+		QGE_GameplayWriteJsonString(qge_gameplay_outcome_file, sv.name);
+		fprintf(qge_gameplay_outcome_file,
+			",\"sample_count\":%d,"
+			"\"state\":{\"player\":{\"health\":%d,\"armor\":%d,"
+			"\"items\":%d,\"weapon\":%d,"
+			"\"origin\":[%.3f,%.3f,%.3f],"
+			"\"angles\":[%.3f,%.3f,%.3f],"
+			"\"v_angle\":[%.3f,%.3f,%.3f],"
+			"\"attack_active\":%s},"
+			"\"route\":{\"leaf\":%d,\"total_distance\":%.3f,"
+			"\"displacement_from_start\":%.3f,"
+			"\"max_displacement_from_start\":%.3f,"
+			"\"leaf_transition_count\":%d},"
+			"\"combat\":{\"damage_taken_total\":%d,"
+			"\"damage_dealt_inferred_total\":%d,"
+			"\"kills_total\":%d,\"damageable_alive\":%d,"
+			"\"nearest_enemy_id\":%d,\"nearest_enemy_distance\":%.3f,"
+			"\"nearest_enemy_visible\":%s,\"visible_enemy_count\":%d,"
+			"\"attack_presses_total\":%d},"
+			"\"assist\":{\"mode\":%d,\"active\":%s,\"target_id\":%d,"
+			"\"target_visible\":%s,\"target_distance\":%.3f,"
+			"\"forwardmove\":%.3f,\"sidemove\":%.3f,"
+			"\"forward_clear\":%.3f,\"left_clear\":%.3f,"
+			"\"right_clear\":%.3f},"
+			"\"pickup\":{\"pickups_total\":%d,"
+			"\"weapon_changes_total\":%d}}}\n",
+			qge_gameplay_samples,
+			health, armor, items, weapon,
+			player->v.origin[0], player->v.origin[1], player->v.origin[2],
+			player->v.angles[0], player->v.angles[1], player->v.angles[2],
+			player->v.v_angle[0], player->v.v_angle[1], player->v.v_angle[2],
+			attack_active ? "true" : "false",
+			leaf, qge_gameplay_total_distance, displacement,
+			qge_gameplay_max_displacement, qge_gameplay_leaf_transitions,
+			qge_gameplay_damage_taken_total, qge_gameplay_damage_dealt_total,
+			qge_gameplay_kills_total, damageable_alive, nearest_enemy_id,
+			nearest_enemy_distance,
+			nearest_enemy_visible ? "true" : "false", visible_enemy_count,
+			qge_gameplay_attack_presses_total,
+			qge_noesis_assist_mode,
+			qge_noesis_assist_active ? "true" : "false",
+			qge_noesis_assist_target_id,
+			qge_noesis_assist_target_visible ? "true" : "false",
+			qge_noesis_assist_target_distance,
+			qge_noesis_assist_forwardmove, qge_noesis_assist_sidemove,
+			qge_noesis_assist_forward_clear, qge_noesis_assist_left_clear,
+			qge_noesis_assist_right_clear,
+			qge_gameplay_pickups_total, qge_gameplay_weapon_changes_total);
+	}
+	qge_noesis_phase_queue_count = 0;
+
 	if (damage_taken_delta > 0)
 		fprintf(qge_gameplay_outcome_file,
 			"{\"schema\":\"qge.gameplay_outcome.v0\",\"type\":\"event\","
@@ -1350,6 +1512,8 @@ static void QGE_GameplayOutcomeShutdown(void)
 	qge_gameplay_outcome_tried = false;
 	qge_gameplay_outcome_path[0] = 0;
 	qge_gameplay_map[0] = 0;
+	qge_noesis_phase_queue_count = 0;
+	qge_noesis_phase_sequence = 0;
 	QGE_GameplayOutcomeResetState();
 }
 
@@ -3245,6 +3409,10 @@ void QGE_Init(void)
 	Cvar_RegisterVariable(&quantum_render_gate_kernel);
 	Cvar_RegisterVariable(&quantum_render_gate_shots);
 	Cvar_RegisterVariable(&quantum_debug_sprite_billboard);
+	if (!qge_noesis_phase_command_registered) {
+		Cmd_AddCommand("qge_noesis_phase", QGE_NoesisPhase_f);
+		qge_noesis_phase_command_registered = true;
+	}
 	QGE_ApplyEarlyRenderOverrides();
 
 	fprintf(stderr, "QGE: CVars registered, initializing core...\n");

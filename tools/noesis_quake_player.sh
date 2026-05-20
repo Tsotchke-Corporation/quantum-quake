@@ -24,6 +24,19 @@ record_action() {
   fi
 }
 
+emit_passthrough_command() {
+  local command="$*"
+  local phase
+
+  emit_command "$command"
+  if [[ "$command" == echo\ QGE_NOESIS_PHASE* ]]; then
+    phase="${command#echo QGE_NOESIS_PHASE }"
+    if [[ -n "$phase" && "$phase" != "$command" ]]; then
+      emit_command "qge_noesis_phase $phase"
+    fi
+  fi
+}
+
 emit_waits() {
   local count="${1:-1}"
   local i=0
@@ -238,9 +251,9 @@ emit_action() {
       ;;
     cmd|quake)
       if [[ -n "${arg:-}" && -n "${rest:-}" ]]; then
-        emit_command "$arg $rest"
+        emit_passthrough_command "$arg $rest"
       elif [[ -n "${arg:-}" ]]; then
-        emit_command "$arg"
+        emit_passthrough_command "$arg"
       fi
       ;;
     +forward|+back|+left|+right|+moveleft|+moveright|+attack|+jump|+use|+speed|+moveup|+movedown|+lookup|+lookdown|-forward|-back|-left|-right|-moveleft|-moveright|-attack|-jump|-use|-speed|-moveup|-movedown|-lookup|-lookdown)

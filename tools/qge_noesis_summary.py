@@ -99,6 +99,22 @@ ROUTE_VERBS = {
     "circle-left",
     "circle-right",
 }
+ROUTE_PHASE_HINTS = {
+    "route",
+    "bridge",
+    "door",
+    "exit",
+    "probe",
+    "push",
+    "slide",
+    "recovery",
+}
+COMBAT_PHASE_HINTS = {
+    "clear",
+    "combat",
+    "fire",
+    "spawn",
+}
 BUTTON_COMMANDS = {
     "attack",
     "forward",
@@ -117,6 +133,18 @@ BUTTON_COMMANDS = {
     "lookdown",
     "klook",
     "mlook",
+}
+MOVEMENT_BUTTONS = {
+    "forward",
+    "back",
+    "left",
+    "right",
+    "moveleft",
+    "moveright",
+    "jump",
+    "speed",
+    "moveup",
+    "movedown",
 }
 
 
@@ -139,6 +167,13 @@ def command_token(line: str) -> str:
     if not stripped:
         return ""
     return stripped.split(None, 1)[0]
+
+
+def normalize_phase_name(phase: Any) -> str:
+    text = str(phase or "").strip()
+    if text.startswith("phase="):
+        text = text.split("=", 1)[1].strip()
+    return text
 
 
 def summarize_actions(path: Path) -> dict[str, Any]:
@@ -164,6 +199,7 @@ def summarize_actions(path: Path) -> dict[str, Any]:
         "policy_marker_count": len(policy_markers),
         "phase_count": len(phases),
         "phases": phases,
+        "normalized_phases": [normalize_phase_name(phase) for phase in phases],
         "verb_counts": dict(sorted(verb_counts.items())),
         "combat_action_count": combat_count,
         "movement_action_count": movement_count,
@@ -223,6 +259,18 @@ def summarize_commands(path: Path) -> dict[str, Any]:
     }
 
 
+def movement_intent_present(
+    actions: dict[str, Any],
+    commands: dict[str, Any],
+) -> bool:
+    press_counts = commands.get("press_counts") or {}
+    return (
+        int(actions.get("movement_action_count") or 0) > 0 or
+        any(int(press_counts.get(button) or 0) > 0
+            for button in MOVEMENT_BUTTONS)
+    )
+
+
 def summarize_log(path: Path) -> dict[str, Any]:
     lines = read_lines(path)
     unknown_commands = [
@@ -244,6 +292,7 @@ def summarize_log(path: Path) -> dict[str, Any]:
         "noesis_log_line_count": len(noesis_lines),
         "phase_count": len(phases),
         "phases": phases,
+        "normalized_phases": [normalize_phase_name(phase) for phase in phases],
         "policy_start_present": any("QGE_NOESIS_POLICY" in line for line in noesis_lines),
         "policy_done_present": any("QGE_NOESIS_POLICY done" in line for line in noesis_lines),
         "player_start_present": any("QGE_NOESIS_PLAYER start" in line for line in noesis_lines),
@@ -262,11 +311,13 @@ def value_at(data: dict[str, Any], *keys: str, default: Any = None) -> Any:
 
 def as_number(value: Any, default: float = 0.0) -> float:
     if isinstance(value, (int, float)):
-        return float(value)
+        number = float(value)
+        return number if math.isfinite(number) else default
     try:
-        return float(value)
+        number = float(value)
     except (TypeError, ValueError):
         return default
+    return number if math.isfinite(number) else default
 
 
 def vector_distance(a: Any, b: Any) -> float:
@@ -278,6 +329,167 @@ def vector_distance(a: Any, b: Any) -> float:
         (as_number(a[i], 0.0) - as_number(b[i], 0.0)) ** 2
         for i in range(3)
     ))
+
+
+def metric_delta(end: dict[str, Any], start: dict[str, Any], *keys: str) -> float:
+    return max(0.0, as_number(snapshot_value_at(end, *keys), 0.0) -
+               as_number(snapshot_value_at(start, *keys), 0.0))
+
+
+def snapshot_value_at(data: dict[str, Any], *keys: str, default: Any = None) -> Any:
+    state = data.get("state") if isinstance(data, dict) else None
+    if isinstance(state, dict):
+        value = value_at(state, *keys, default=None)
+        if value is not None:
+            return value
+    return value_at(data, *keys, default=default)
+
+
+def phase_requires(phase: str, hints: set[str]) -> bool:
+    lowered = phase.lower()
+    return any(hint in lowered for hint in hints)
+
+
+def summarize_phase_progress(
+    phase_events: list[dict[str, Any]],
+    samples: list[dict[str, Any]],
+) -> dict[str, Any]:
+    ordered_events = sorted(
+        phase_events,
+        key=lambda event: int(as_number(event.get("frame"), 0.0)),
+    )
+    normalized_phases = [
+        normalize_phase_name(event.get("phase")) for event in ordered_events
+    ]
+    intervals: list[dict[str, Any]] = []
+    blocked_phases: list[str] = []
+    route_blocked = 0
+    combat_blocked = 0
+    stuck_windows = 0
+
+    for index, event in enumerate(ordered_events):
+        phase = normalize_phase_name(event.get("phase"))
+        start_frame = int(as_number(event.get("frame"), 0.0))
+        if index + 1 < len(ordered_events):
+            end_state = ordered_events[index + 1]
+            end_frame = int(as_number(end_state.get("frame"), start_frame))
+        elif samples:
+            end_state = samples[-1]
+            end_frame = int(as_number(end_state.get("frame"), start_frame))
+        else:
+            end_state = event
+            end_frame = start_frame
+
+        interval_samples = [
+            sample for sample in samples
+            if start_frame < int(as_number(sample.get("frame"), 0.0)) <= end_frame
+        ]
+        visible_enemy_samples = sum(
+            1 for sample in interval_samples
+            if as_number(value_at(sample, "combat", "visible_enemy_count"), 0.0) > 0
+            or bool(value_at(sample, "combat", "nearest_enemy_visible", default=False))
+        )
+        enemy_contact_samples = sum(
+            1 for sample in interval_samples
+            if (
+                as_number(value_at(sample, "combat", "visible_enemy_count"), 0.0) > 0
+                or 0.0 <= as_number(
+                    value_at(sample, "combat", "nearest_enemy_distance"), -1.0
+                ) <= 768.0
+            )
+        )
+        attack_active_samples = sum(
+            1 for sample in interval_samples
+            if bool(value_at(sample, "player", "attack_active", default=False))
+        )
+        stationary_samples = sum(
+            1 for sample in interval_samples
+            if as_number(value_at(sample, "route", "frame_distance"), 0.0) < 1.0
+        )
+        distance_delta = metric_delta(
+            end_state, event, "route", "total_distance")
+        displacement_delta = metric_delta(
+            end_state, event, "route", "max_displacement_from_start")
+        leaf_delta = metric_delta(
+            end_state, event, "route", "leaf_transition_count")
+        attack_delta = metric_delta(
+            end_state, event, "combat", "attack_presses_total")
+        damage_delta = metric_delta(
+            end_state, event, "combat", "damage_dealt_inferred_total")
+        kill_delta = metric_delta(end_state, event, "combat", "kills_total")
+        pickup_delta = metric_delta(end_state, event, "pickup", "pickups_total")
+        route_required = phase_requires(phase, ROUTE_PHASE_HINTS)
+        combat_required = phase_requires(phase, COMBAT_PHASE_HINTS)
+        route_progress = (
+            distance_delta >= 8.0 or displacement_delta >= 8.0 or
+            leaf_delta > 0.0 or pickup_delta > 0.0
+        )
+        combat_progress = (
+            (visible_enemy_samples > 0 or enemy_contact_samples > 0) and
+            (attack_delta > 0.0 or damage_delta > 0.0 or kill_delta > 0.0 or
+             attack_active_samples > 0)
+        )
+        route_pass = not route_required or route_progress
+        combat_pass = not combat_required or combat_progress
+        stationary_fraction = (
+            stationary_samples / len(interval_samples)
+            if interval_samples else 0.0
+        )
+        stuck_window = (
+            route_required and len(interval_samples) >= 6 and
+            stationary_fraction >= 0.75 and not route_progress and
+            damage_delta <= 0.0 and kill_delta <= 0.0
+        )
+
+        if not route_pass:
+            route_blocked += 1
+        if not combat_pass:
+            combat_blocked += 1
+        if stuck_window:
+            stuck_windows += 1
+        if not route_pass or not combat_pass or stuck_window:
+            blocked_phases.append(phase)
+
+        intervals.append({
+            "phase": phase,
+            "start_frame": start_frame,
+            "end_frame": end_frame,
+            "sample_count": len(interval_samples),
+            "route_required": route_required,
+            "combat_required": combat_required,
+            "distance_delta": round(distance_delta, 3),
+            "displacement_delta": round(displacement_delta, 3),
+            "leaf_transition_delta": int(leaf_delta),
+            "attack_press_delta": int(attack_delta),
+            "damage_dealt_delta": int(damage_delta),
+            "kill_delta": int(kill_delta),
+            "pickup_delta": int(pickup_delta),
+            "visible_enemy_sample_count": visible_enemy_samples,
+            "enemy_contact_sample_count": enemy_contact_samples,
+            "stationary_fraction": round(stationary_fraction, 4),
+            "route_progress_pass": route_pass,
+            "combat_progress_pass": combat_pass,
+            "stuck_window": stuck_window,
+        })
+
+    return {
+        "outcome_event_count": len(ordered_events),
+        "phases": [str(event.get("phase") or "") for event in ordered_events],
+        "normalized_phases": normalized_phases,
+        "progress_interval_count": len(intervals),
+        "progress_pass_count": sum(
+            1 for interval in intervals
+            if interval["route_progress_pass"] and
+            interval["combat_progress_pass"] and
+            not interval["stuck_window"]
+        ),
+        "progress_blocked_count": len(set(blocked_phases)),
+        "route_blocked_count": route_blocked,
+        "combat_blocked_count": combat_blocked,
+        "stuck_window_count": stuck_windows,
+        "blocked_phases": sorted(set(blocked_phases)),
+        "intervals": intervals,
+    }
 
 
 def summarize_gameplay(path: Path | None) -> dict[str, Any]:
@@ -298,6 +510,7 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
         }
 
     samples: list[dict[str, Any]] = []
+    phase_events: list[dict[str, Any]] = []
     event_counts: Counter[str] = Counter()
     parse_error_count = 0
     for line in lines:
@@ -314,7 +527,10 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
         if item.get("type") == "sample":
             samples.append(item)
         elif item.get("type") == "event":
-            event_counts[str(item.get("kind") or "unknown")] += 1
+            kind = str(item.get("kind") or "unknown")
+            event_counts[kind] += 1
+            if kind == "noesis_phase":
+                phase_events.append(item)
 
     if not samples:
         return {
@@ -325,6 +541,7 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
             "sample_count": 0,
             "event_count": sum(event_counts.values()),
             "event_counts": dict(sorted(event_counts.items())),
+            "phase": summarize_phase_progress(phase_events, []),
         }
 
     playable_samples = [
@@ -396,19 +613,33 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
     for index, sample in enumerate(playable_samples):
         frame_distance = as_number(
             value_at(sample, "route", "frame_distance"), -1.0)
-        if frame_distance < 0.0:
-            frame_distance = (
-                vector_distance(
-                    value_at(playable_samples[index - 1], "player", "origin"),
-                    value_at(sample, "player", "origin"),
-                )
-                if index > 0 else 0.0
+        origin_delta = 0.0
+        total_distance_delta = 0.0
+        displacement_delta = 0.0
+        displacement_now = as_number(
+            value_at(sample, "route", "displacement_from_start"), 0.0)
+        if index > 0:
+            prev_sample = playable_samples[index - 1]
+            origin_delta = vector_distance(
+                value_at(prev_sample, "player", "origin"),
+                value_at(sample, "player", "origin"),
             )
+            total_distance_delta = max(0.0, as_number(
+                value_at(sample, "route", "total_distance"), 0.0) -
+                as_number(value_at(prev_sample, "route", "total_distance"), 0.0))
+            displacement_delta = abs(displacement_now - as_number(
+                value_at(prev_sample, "route", "displacement_from_start"), 0.0))
+        if frame_distance < 0.0:
+            frame_distance = total_distance_delta if total_distance_delta > 0.0 else origin_delta
+        elif (
+            index > 0 and frame_distance >= 1.0 and
+            total_distance_delta < 1.0 and origin_delta < 1.0 and
+            displacement_delta < 1.0
+        ):
+            frame_distance = 0.0
         route_frame_distances.append(frame_distance)
         if index == 0:
             continue
-        displacement_now = as_number(
-            value_at(sample, "route", "displacement_from_start"), 0.0)
         if displacement_now >= route_progress_best + 8.0:
             route_progress_sample_count += 1
             route_progress_best = displacement_now
@@ -434,26 +665,48 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
     terminal_start_index = max(
         0, len(playable_samples) - route_terminal_stationary_run - 1)
     terminal_base = playable_samples[terminal_start_index]
-    terminal_leaf_delta = max(0.0, leaf_transitions - as_number(
+    terminal_samples = playable_samples[terminal_start_index + 1:]
+    terminal_leaf_delta = max(0.0, max(
+        [as_number(value_at(sample, "route", "leaf_transition_count"), 0.0)
+         for sample in terminal_samples] +
+        [as_number(value_at(terminal_base, "route", "leaf_transition_count"), 0.0)]
+    ) - as_number(
         value_at(terminal_base, "route", "leaf_transition_count"), 0.0))
-    terminal_damage_delta = max(0.0, damage_dealt - as_number(value_at(
+    terminal_damage_delta = max(0.0, max(
+        [as_number(value_at(sample, "combat", "damage_dealt_inferred_total"), 0.0)
+         for sample in terminal_samples] +
+        [as_number(value_at(terminal_base, "combat", "damage_dealt_inferred_total"), 0.0)]
+    ) - as_number(value_at(
         terminal_base, "combat", "damage_dealt_inferred_total"), 0.0))
-    terminal_kill_delta = max(0.0, kills - as_number(
-        value_at(terminal_base, "combat", "kills_total"), 0.0))
-    terminal_pickup_delta = max(0.0, pickups - as_number(
-        value_at(terminal_base, "pickup", "pickups_total"), 0.0))
+    terminal_kill_delta = max(0.0, max(
+        [as_number(value_at(sample, "combat", "kills_total"), 0.0)
+         for sample in terminal_samples] +
+        [as_number(value_at(terminal_base, "combat", "kills_total"), 0.0)]
+    ) - as_number(value_at(terminal_base, "combat", "kills_total"), 0.0))
+    terminal_pickup_delta = max(0.0, max(
+        [as_number(value_at(sample, "pickup", "pickups_total"), 0.0)
+         for sample in terminal_samples] +
+        [as_number(value_at(terminal_base, "pickup", "pickups_total"), 0.0)]
+    ) - as_number(value_at(terminal_base, "pickup", "pickups_total"), 0.0))
+    terminal_attack_delta = max(0.0, max(
+        [as_number(value_at(sample, "combat", "attack_presses_total"), 0.0)
+         for sample in terminal_samples] +
+        [as_number(value_at(terminal_base, "combat", "attack_presses_total"), 0.0)]
+    ) - as_number(value_at(
+        terminal_base, "combat", "attack_presses_total"), 0.0))
     terminal_visible_enemy_samples = sum(
-        1 for sample in playable_samples[terminal_start_index + 1:]
+        1 for sample in terminal_samples
         if as_number(value_at(sample, "combat", "visible_enemy_count"), 0.0) > 0
         or bool(value_at(sample, "combat", "nearest_enemy_visible", default=False))
     )
-    route_terminal_activity = (
-        terminal_leaf_delta > 0.0 or terminal_damage_delta > 0.0 or
-        terminal_kill_delta > 0.0 or terminal_pickup_delta > 0.0
+    terminal_combat_activity = (
+        terminal_damage_delta > 0.0 or terminal_kill_delta > 0.0 or
+        (terminal_attack_delta > 0.0 and terminal_visible_enemy_samples > 0)
     )
+    route_terminal_activity = terminal_leaf_delta > 0.0 or terminal_pickup_delta > 0.0
     route_terminal_stall = (
         route_terminal_stationary_run >= 6 and not route_terminal_activity and
-        terminal_visible_enemy_samples == 0
+        not terminal_combat_activity
     )
     route_recovered_after_stall = (
         route_stationary_run_max >= 6 and not route_terminal_stall and
@@ -613,6 +866,7 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
             "wall_probe_sample_count": assist_wall_probe_frames,
             "attack_visible_frames": assist_attack_visible_frames,
         },
+        "phase": summarize_phase_progress(phase_events, playable_samples),
     }
 
 
@@ -735,6 +989,7 @@ def build_gameplay_score(
         1 for button in ("speed", "forward", "moveleft", "moveright", "jump")
         if int(press_counts.get(button) or 0) > 0
     )
+    has_movement_intent = movement_intent_present(actions, commands)
     wait_ratio = 0.0
     if commands.get("line_count", 0) > 0:
         wait_ratio = float(commands.get("wait_count", 0)) / float(commands["line_count"])
@@ -765,7 +1020,7 @@ def build_gameplay_score(
         survived = bool(player.get("survived", False))
         min_distance = max(float(min_route_distance), 1.0)
         not_stuck = (
-            actions.get("movement_action_count", 0) <= 0 or
+            not has_movement_intent or
             not terminal_stall and (
                 total_distance >= min(48.0, min_distance) or
                 max_displacement >= min(32.0, min_distance)
@@ -924,6 +1179,8 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
     commands = summarize_commands(args.commands)
     log = summarize_log(args.log)
     gameplay = summarize_gameplay(gameplay_path)
+    min_phase_outcomes = int(getattr(args, "min_phase_outcomes", 0) or 0)
+    movement_intent = movement_intent_present(actions, commands)
     assist_state = gameplay.get("assist") or {}
     assist_active = int(assist_state.get("active_frames") or 0) > 0
     unassisted_claim_supported = (
@@ -963,7 +1220,7 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
         "commands_present": commands["line_count"] >= args.min_commands,
         "no_unknown_actions": commands["skipped_unknown_count"] == 0,
         "no_unknown_commands": log["unknown_command_count"] == 0,
-        "movement_actions_present": actions["movement_action_count"] > 0,
+        "movement_actions_present": movement_intent,
         "combat_actions_present": actions["combat_action_count"] > 0,
         "phase_markers_present": actions["phase_count"] > 0,
         "frames_present": frames["frame_count"] >= args.min_frames,
@@ -993,6 +1250,35 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
         gates["gameplay_outcomes_required"] = (
             gameplay.get("sample_count", 0) >= args.min_gameplay_samples
         )
+    phase_state = gameplay.get("phase") or {}
+    if min_phase_outcomes > 0:
+        phase_event_count = int(phase_state.get("outcome_event_count") or 0)
+        phase_names = set(phase_state.get("normalized_phases") or [])
+        logged_names = [
+            phase for phase in (log.get("normalized_phases") or [])
+            if phase
+        ]
+        gates["phase_outcome_events_required"] = (
+            phase_event_count >= min_phase_outcomes
+        )
+        gates["phase_outcome_state_required"] = (
+            phase_event_count >= min_phase_outcomes and
+            int(phase_state.get("progress_interval_count") or 0) >=
+            min_phase_outcomes
+        )
+        gates["phase_outcome_markers_match"] = all(
+            phase in phase_names for phase in logged_names
+        )
+        gates["phase_stuck_windows_absent"] = (
+            int(phase_state.get("stuck_window_count") or 0) == 0
+        )
+        gates["phase_route_progress_required"] = (
+            int(phase_state.get("route_blocked_count") or 0) == 0
+        )
+        if args.require_combat:
+            gates["phase_combat_progress_required"] = (
+                int(phase_state.get("combat_blocked_count") or 0) == 0
+            )
     if gameplay.get("sample_count", 0) >= 2:
         player_state = gameplay.get("player") or {}
         route_state = gameplay.get("route") or {}
@@ -1006,7 +1292,7 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
                 total_distance >= args.min_route_distance or
                 max_displacement >= args.min_route_distance
             )
-        if actions.get("movement_action_count", 0) > 0:
+        if movement_intent:
             gates["not_stuck"] = (
                 not terminal_stall and (
                     total_distance >= min(48.0, args.min_route_distance) or
@@ -1085,6 +1371,7 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
     gameplay_combat = gameplay.get("combat") or {}
     gameplay_pickup = gameplay.get("pickup") or {}
     gameplay_assist = gameplay.get("assist") or {}
+    gameplay_phase = gameplay.get("phase") or {}
     return [
         {
             "kind": "runtime_backend",
@@ -1188,6 +1475,42 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "kind": "runtime_state",
             "name": "noesis_log_phase_count",
             "value": log.get("phase_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_phase_event_count",
+            "value": gameplay_phase.get("outcome_event_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_phase_state_count",
+            "value": gameplay_phase.get("progress_interval_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_phase_progress_pass_count",
+            "value": gameplay_phase.get("progress_pass_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_phase_progress_blocked_count",
+            "value": gameplay_phase.get("progress_blocked_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_phase_stuck_window_count",
+            "value": gameplay_phase.get("stuck_window_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_phase_blocked_phases",
+            "value": ",".join(gameplay_phase.get("blocked_phases") or []),
             "path": str(summary_path),
         },
         {
@@ -1403,6 +1726,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--min-frames", type=int, default=0)
     parser.add_argument("--min-frame-mae", type=float)
     parser.add_argument("--min-log-phases", type=int, default=0)
+    parser.add_argument("--min-phase-outcomes", type=int, default=0)
     parser.add_argument("--min-gameplay-samples", type=int, default=0)
     parser.add_argument("--min-route-distance", type=float, default=64.0)
     parser.add_argument("--require-phase-markers", action="store_true")

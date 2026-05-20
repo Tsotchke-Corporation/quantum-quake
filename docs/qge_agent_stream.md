@@ -357,18 +357,25 @@ into `agent_stream/noesis/`, and records the result as
 `agent_stream_noesis_status` in the JSONL ICC sidecar. It also emits
 `noesis_route_action_count`, `noesis_gameplay_quality_score`,
 `noesis_gameplay_quality_grade`, `noesis_log_phase_count`,
-`noesis_log_policy_done`, `noesis_gameplay_outcome_sample_count`,
-`noesis_gameplay_total_distance`, survival, damage, kill, pickup, and visible
-enemy evidence. Route telemetry also reports movement efficiency, stationary
-fraction, maximum stationary run, and terminal-stall evidence, so a route that
-moves early and ends wedged cannot pass as clean progress. Assist runs
+`noesis_log_policy_done`, `noesis_gameplay_phase_event_count`,
+`noesis_gameplay_phase_stuck_window_count`,
+`noesis_gameplay_outcome_sample_count`, `noesis_gameplay_total_distance`,
+survival, damage, kill, pickup, and visible enemy evidence. The Noesis player
+keeps the console `QGE_NOESIS_PHASE` marker for log compatibility and also
+executes `qge_noesis_phase`, which queues an engine-owned `noesis_phase` event
+in `gameplay_outcomes.ndjson` with the next gameplay sample's player, route,
+combat, pickup, and assist state. Route telemetry also reports movement
+efficiency, stationary fraction, maximum stationary run, and terminal-stall
+evidence, so a route that moves early and ends wedged cannot pass as clean
+progress. Assist runs
 additionally emit requested mode, active sample count, visible-target sample
 count, steering sample count, attack-visible frames, target-distance evidence,
 and a claim scope. Assisted runs are marked `server_assisted` so they cannot be
 mistaken for unassisted play evidence. Set `QGE_NOESIS_MIN_LOG_PHASES` to
-require that many `QGE_NOESIS_PHASE` markers to appear in the engine log, which
-is useful when proving that a longer route plan actually executed rather than
-only being generated. Set `QGE_NOESIS_MIN_GAMEPLAY_SAMPLES` and
+require that many `QGE_NOESIS_PHASE` markers to appear in the engine log and
+matching engine-owned `noesis_phase` outcome events to appear in gameplay
+telemetry, which is useful when proving that a longer route plan actually
+executed rather than only being generated. Set `QGE_NOESIS_MIN_GAMEPLAY_SAMPLES` and
 `QGE_NOESIS_MIN_ROUTE_DISTANCE` to require engine-owned state samples and route
 movement evidence. This reducer is evidence-only: a blocked Noesis quality
 summary does not turn a completed media stream into a process failure.
@@ -535,7 +542,8 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   default `600`; larger counts are clamped and traced. The stream manifest
   records the normalized cap as `input.noesis_max_wait`.
 - `QGE_NOESIS_MIN_LOG_PHASES`: minimum Noesis phase markers that must appear in
-  the runtime log for the Noesis summary to pass, default `0`.
+  the runtime log and as engine-owned `noesis_phase` gameplay outcome events for
+  the Noesis summary to pass, default `0`.
 - `QGE_NOESIS_MIN_GAMEPLAY_SAMPLES`: minimum engine-owned
   `gameplay_outcomes.ndjson` samples required for the Noesis summary to pass,
   default `2` in the stream harness.

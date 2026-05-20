@@ -558,6 +558,7 @@ write_noesis_summary() {
     --min-frames "$frames"
     --min-frame-mae 2.0
     --min-log-phases "$noesis_min_log_phases"
+    --min-phase-outcomes "$noesis_min_log_phases"
     --min-gameplay-samples "$noesis_min_gameplay_samples"
     --min-route-distance "$noesis_min_route_distance"
     --require-phase-markers
