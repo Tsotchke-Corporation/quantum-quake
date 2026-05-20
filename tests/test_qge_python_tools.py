@@ -765,6 +765,10 @@ class NoesisSummaryTests(unittest.TestCase):
                 summary["gameplay"]["combat"]["damage_per_attack_press"],
                 18.0,
             )
+            self.assertEqual(
+                summary["gameplay"]["combat"]["net_damage_per_attack_press"],
+                12.0,
+            )
             self.assertTrue(summary["quality_gates"]["route_progress_required"])
             self.assertTrue(
                 summary["quality_gates"]["combat_effectiveness_required"]
@@ -860,6 +864,10 @@ class NoesisSummaryTests(unittest.TestCase):
             self.assertEqual(
                 by_name["noesis_gameplay_damage_per_attack_press"],
                 18.0,
+            )
+            self.assertEqual(
+                by_name["noesis_gameplay_net_damage_per_attack_press"],
+                12.0,
             )
             self.assertEqual(by_name["noesis_assist_requested_mode"], 2)
             self.assertEqual(by_name["noesis_assist_mode_max"], 2.0)
@@ -1065,12 +1073,109 @@ class NoesisSummaryTests(unittest.TestCase):
                 summary["gameplay"]["combat"]["nearest_enemy_angle_error_min"],
                 38.0,
             )
+            self.assertEqual(
+                summary["gameplay"]["combat"]["net_damage_per_attack_press"],
+                0.0,
+            )
             self.assertFalse(
                 summary["quality_gates"]["combat_effectiveness_required"]
             )
             self.assertIn(
                 "combat_effectiveness_required",
                 summary["failures"],
+            )
+
+    def test_net_damage_per_attack_press_tracks_bad_trades(self) -> None:
+        def write_gameplay(path: Path, attack_presses: int) -> None:
+            samples = [
+                {
+                    "schema": "qge.gameplay_outcome.v0",
+                    "type": "sample",
+                    "frame": 1,
+                    "player": {
+                        "health": 100,
+                        "armor": 0,
+                        "weapon": 2,
+                        "origin": [0, 0, 0],
+                    },
+                    "route": {
+                        "total_distance": 0.0,
+                        "displacement_from_start": 0.0,
+                        "max_displacement_from_start": 0.0,
+                        "leaf_transition_count": 0,
+                    },
+                    "combat": {
+                        "damage_taken_total": 0,
+                        "damage_dealt_inferred_total": 0,
+                        "kills_total": 0,
+                        "attack_presses_total": 0,
+                        "visible_enemy_count": 1,
+                        "nearest_enemy_distance": 220.0,
+                        "nearest_enemy_visible": True,
+                    },
+                    "pickup": {
+                        "pickups_total": 0,
+                        "weapon_changes_total": 0,
+                    },
+                },
+                {
+                    "schema": "qge.gameplay_outcome.v0",
+                    "type": "sample",
+                    "frame": 2,
+                    "player": {
+                        "health": 80,
+                        "armor": 0,
+                        "weapon": 2,
+                        "origin": [16, 0, 0],
+                    },
+                    "route": {
+                        "frame_distance": 16.0,
+                        "total_distance": 16.0,
+                        "displacement_from_start": 16.0,
+                        "max_displacement_from_start": 16.0,
+                        "leaf_transition_count": 0,
+                    },
+                    "combat": {
+                        "damage_taken_total": 20,
+                        "damage_dealt_inferred_total": 0,
+                        "kills_total": 0,
+                        "attack_presses_total": attack_presses,
+                        "visible_enemy_count": 1,
+                        "nearest_enemy_distance": 210.0,
+                        "nearest_enemy_visible": True,
+                    },
+                    "pickup": {
+                        "pickups_total": 0,
+                        "weapon_changes_total": 0,
+                    },
+                },
+            ]
+            path.write_text(
+                "\n".join(json.dumps(sample) for sample in samples) + "\n",
+                encoding="utf-8",
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            punished_path = tmpdir / "punished.ndjson"
+            passive_path = tmpdir / "passive.ndjson"
+            write_gameplay(punished_path, 1)
+            write_gameplay(passive_path, 0)
+
+            punished = noesis_summary.summarize_gameplay(punished_path)
+            self.assertEqual(
+                punished["combat"]["net_damage_per_attack_press"],
+                -20.0,
+            )
+            self.assertEqual(
+                punished["combat"]["damage_per_attack_press"],
+                0.0,
+            )
+
+            passive = noesis_summary.summarize_gameplay(passive_path)
+            self.assertEqual(
+                passive["combat"]["net_damage_per_attack_press"],
+                0.0,
             )
 
     def test_terminal_stall_blocks_route_summary(self) -> None:

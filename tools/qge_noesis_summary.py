@@ -824,6 +824,10 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
     damage_per_attack_press = (
         damage_dealt / attack_presses if attack_presses > 0.0 else 0.0
     )
+    net_damage_per_attack_press = (
+        (damage_dealt - damage_taken) / attack_presses
+        if attack_presses > 0.0 else 0.0
+    )
     enemy_contact_frames = sum(
         1 for sample in playable_samples
         if (
@@ -957,6 +961,8 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
                 if aim_errors else None
             ),
             "damage_per_attack_press": round(damage_per_attack_press, 4),
+            "net_damage_per_attack_press": round(
+                net_damage_per_attack_press, 4),
         },
         "pickup": {
             "pickup_count": pickups,
@@ -1907,6 +1913,12 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "kind": "runtime_state",
             "name": "noesis_gameplay_damage_per_attack_press",
             "value": gameplay_combat.get("damage_per_attack_press", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_gameplay_net_damage_per_attack_press",
+            "value": gameplay_combat.get("net_damage_per_attack_press", 0),
             "path": str(summary_path),
         },
         {
