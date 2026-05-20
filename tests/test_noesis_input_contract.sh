@@ -338,6 +338,26 @@ if (( adaptive_command_count < 150 )); then
   exit 1
 fi
 
+builtin_route_actions="$tmpdir/builtin-route-actions.txt"
+builtin_route_commands="$tmpdir/builtin-route-commands.cfg"
+builtin_route_stdout="$tmpdir/builtin-route-stdout.cfg"
+
+QGE_NOESIS_DIR="$repo_root" \
+QGE_NOESIS_PLAN=e1m1-route-push \
+QGE_STREAM_MAP=e1m1 \
+QGE_NOESIS_START_WAIT=0 \
+QGE_NOESIS_ACTION_TRACE_FILE="$builtin_route_actions" \
+QGE_NOESIS_COMMAND_TRACE_FILE="$builtin_route_commands" \
+  "$repo_root/tools/noesis_quake_player.sh" > "$builtin_route_stdout"
+
+cmp -s "$builtin_route_stdout" "$builtin_route_commands"
+grep -q '^door-open 8$' "$builtin_route_actions"
+grep -q '^door-bump 6$' "$builtin_route_actions"
+grep -q '^+use$' "$builtin_route_commands"
+grep -q '^-use$' "$builtin_route_commands"
+grep -q '^+forward$' "$builtin_route_commands"
+grep -q '^echo QGE_NOESIS_PLAYER done$' "$builtin_route_commands"
+
 combo_actions="$tmpdir/combo-actions.txt"
 combo_trace="$tmpdir/combo-trace.txt"
 combo_commands="$tmpdir/combo-commands.cfg"

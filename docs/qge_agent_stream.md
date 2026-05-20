@@ -476,9 +476,10 @@ Supported movement/action verbs are `forward`, `back`, `turn-left`,
 verbs include `run-forward`, `jump-forward`, `advance-fire`, `retreat-fire`,
 `scan-fire-left`, `scan-fire-right`, `strafe-fire-left`, `strafe-fire-right`, `circle-fire-left`,
 `circle-fire-right`, `wall-slide-left`, `wall-slide-right`,
-`speed-jump-forward`, `door-bump`, and `clear-input`. `door-bump` uses a timed
-forward bump plus recovery because classic Quake doors are route-touch targets
-rather than reliable `+use` targets in this command-buffer path. `cmd` or
+`speed-jump-forward`, `door-open`, `door-bump`, and `clear-input`. `door-open`
+holds forward plus use before recovery; `door-bump` uses a timed forward bump
+because classic Quake doors are often route-touch targets in this command-buffer
+path. `cmd` or
 `quake` passes the remaining text through as a raw Quake console command for
 targeted probes.
 `scan-fire-left` and `scan-fire-right` hold keyboard yaw plus attack for a
