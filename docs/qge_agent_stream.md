@@ -137,7 +137,10 @@ The stream directory is intentionally simple and tail-friendly:
   wall-probe distances, pre-assist aim error, and whether the assist injected
   view, movement, or attack state. Mode `2` also keeps a bounded target lock and
   suppresses fire on large first-frame target switches so Noesis can finish one
-  viable monster instead of oscillating between nearby candidates.
+  viable monster instead of oscillating between nearby candidates. The assist
+  leaves the current view alone only when the pre-assist aim error is already
+  close to aligned, and projects target-relative movement back into the current
+  view basis so route movement is not dependent on a server view snap.
 - `logs/quantum_quake.log`: runtime console log mirrored into the stream.
 - `logs/open.log`: LaunchServices notes for macOS `open` mode.
 - `trace/qge_trace_summary.json`: JSON summary of `qge_trace.bin`, including
@@ -615,9 +618,14 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   probe side using Quake's sidemove sign convention. Hidden distant targets do not override
   scripted view or route movement; once the scripted route gets near enough,
   hidden-target chase can help finish the approach, while assist still
-  suppresses blind fire until a target is visible. Visibility and aim use a
-  sampled monster bbox point, so partly exposed enemies are not limited to a
-  center-point trace.
+  suppresses blind fire until a target is visible. It also skips server view
+  injection when Noesis is already aimed within `QGE_NOESIS_VIEW_HOLD_DEG`,
+  which is intentionally tighter than `QGE_NOESIS_AIM_ALIGNED_DEG` because
+  firing and view control have different risk budgets. Injected movement is
+  projected through the current view basis, so holding the view does not make
+  target chase movement drift into walls. Visibility and aim use a sampled
+  monster bbox point, so partly exposed enemies are not limited to a center-point
+  trace.
   The engine-side cvar is `qge_noesis_assist`, remains off by default, and only
   acts during `-qgestreamdir` runs so normal local play is untouched.
 - `QGE_NOESIS_CMD`: optional Noesis action provider command. When set, the

@@ -200,6 +200,7 @@ static qboolean qge_noesis_assist_target_switched = false;
 static qboolean qge_noesis_assist_switch_fire_suppressed = false;
 
 #define QGE_NOESIS_AIM_ALIGNED_DEG 12.0f
+#define QGE_NOESIS_VIEW_HOLD_DEG 6.0f
 #define QGE_NOESIS_HIDDEN_CHASE_DISTANCE 768.0f
 #define QGE_NOESIS_TARGET_LOCK_FRAMES 45
 #define QGE_NOESIS_TARGET_LOCK_MAX_DISTANCE 1152.0f
@@ -1004,6 +1005,41 @@ static float QGE_NoesisAssistTraceDistance(edict_t *player, float yaw)
 	return trace.fraction * probe_distance;
 }
 
+static void QGE_NoesisAssistSetRelativeMove(usercmd_t *move,
+											float basis_yaw,
+											float target_yaw,
+											float relative_forward,
+											float relative_side)
+{
+	vec3_t basis_angles;
+	vec3_t target_angles;
+	vec3_t basis_forward;
+	vec3_t basis_right;
+	vec3_t target_forward;
+	vec3_t target_right;
+	vec3_t up;
+	vec3_t wish;
+
+	if (!move)
+		return;
+
+	basis_angles[0] = basis_angles[1] = basis_angles[2] = 0.0f;
+	target_angles[0] = target_angles[1] = target_angles[2] = 0.0f;
+	basis_angles[YAW] = basis_yaw;
+	target_angles[YAW] = target_yaw;
+	AngleVectors(basis_angles, basis_forward, basis_right, up);
+	AngleVectors(target_angles, target_forward, target_right, up);
+
+	wish[0] = target_forward[0] * relative_forward +
+		target_right[0] * relative_side;
+	wish[1] = target_forward[1] * relative_forward +
+		target_right[1] * relative_side;
+	wish[2] = 0.0f;
+
+	move->forwardmove = DotProduct(wish, basis_forward);
+	move->sidemove = DotProduct(wish, basis_right);
+}
+
 static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
 										  qboolean prefer_aim_error,
 										  qboolean allow_target_lock,
@@ -1165,6 +1201,7 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	qboolean locked_target = false;
 	qboolean previous_lock_active;
 	qboolean target_switched = false;
+	qboolean view_injected = false;
 	int previous_locked_target_id;
 	int selected_target_id;
 	float distance = -1.0f;
@@ -1175,6 +1212,9 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	float original_sidemove;
 	float original_upmove;
 	float pre_aim_error;
+	float movement_yaw;
+	float relative_forward;
+	float relative_side;
 	int chase_mode;
 
 	(void)client;
@@ -1217,27 +1257,32 @@ void QGE_NoesisAssistClientThink(client_t *client,
 
 	engage_target = visible || (chase_mode && distance >= 0.0f &&
 								distance <= QGE_NOESIS_HIDDEN_CHASE_DISTANCE);
-	if (engage_target) {
+	view_injected =
+		engage_target && pre_aim_error > QGE_NOESIS_VIEW_HOLD_DEG;
+	if (view_injected) {
 		VectorCopy(aim, player->v.v_angle);
 		player->v.angles[PITCH] = -aim[PITCH] / 3.0f;
 		player->v.angles[YAW] = aim[YAW];
 		player->v.angles[ROLL] = 0.0f;
 		player->v.fixangle = 1.0f;
 	}
+	movement_yaw = view_injected ? aim[YAW] : anglemod(player->v.v_angle[YAW]);
 
 	forward_clear = left_clear = right_clear = -1.0f;
 	if (chase_mode && engage_target) {
+		relative_forward = 0.0f;
+		relative_side = 0.0f;
 		if (visible && distance < 192.0f) {
-			move->forwardmove = -220.0f;
-			move->sidemove = (qge_frame_count & 8) ? 260.0f : -260.0f;
+			relative_forward = -220.0f;
+			relative_side = (qge_frame_count & 8) ? 260.0f : -260.0f;
 		}
 		else if (visible && distance < 384.0f) {
-			move->forwardmove = 0.0f;
-			move->sidemove = (qge_frame_count & 8) ? 260.0f : -260.0f;
+			relative_forward = 0.0f;
+			relative_side = (qge_frame_count & 8) ? 260.0f : -260.0f;
 		}
 		else {
-			move->forwardmove = 400.0f;
-			move->sidemove = 0.0f;
+			relative_forward = 400.0f;
+			relative_side = 0.0f;
 		}
 		move->upmove = 0.0f;
 
@@ -1246,13 +1291,15 @@ void QGE_NoesisAssistClientThink(client_t *client,
 												   anglemod(aim[YAW] + 45.0f));
 		right_clear = QGE_NoesisAssistTraceDistance(player,
 													anglemod(aim[YAW] - 45.0f));
-		if (move->forwardmove > 0.0f && forward_clear < 56.0f) {
-			move->sidemove = left_clear >= right_clear ? -320.0f : 320.0f;
-			move->forwardmove = 180.0f;
+		if (relative_forward > 0.0f && forward_clear < 56.0f) {
+			relative_side = left_clear >= right_clear ? -320.0f : 320.0f;
+			relative_forward = 180.0f;
 		}
-		else if (visible && distance < 512.0f && move->sidemove == 0.0f) {
-			move->sidemove = (qge_frame_count & 8) ? 220.0f : -220.0f;
+		else if (visible && distance < 512.0f && relative_side == 0.0f) {
+			relative_side = (qge_frame_count & 8) ? 220.0f : -220.0f;
 		}
+		QGE_NoesisAssistSetRelativeMove(move, movement_yaw, aim[YAW],
+										relative_forward, relative_side);
 	}
 
 	qge_noesis_assist_switch_fire_suppressed =
@@ -1279,7 +1326,7 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	qge_noesis_assist_left_clear = left_clear;
 	qge_noesis_assist_right_clear = right_clear;
 	qge_noesis_assist_pre_aim_error = pre_aim_error;
-	qge_noesis_assist_view_injected = engage_target;
+	qge_noesis_assist_view_injected = view_injected;
 	qge_noesis_assist_movement_injected =
 		move->forwardmove != original_forwardmove ||
 		move->sidemove != original_sidemove ||
