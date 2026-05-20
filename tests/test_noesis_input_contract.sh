@@ -273,6 +273,54 @@ if (( command_count < 50 )); then
   exit 1
 fi
 
+recovery_actions="$tmpdir/recovery-actions.txt"
+recovery_commands="$tmpdir/recovery-commands.cfg"
+recovery_stdout="$tmpdir/recovery-stdout.cfg"
+
+QGE_NOESIS_DIR="$repo_root" \
+QGE_NOESIS_PLAN=combat-explore \
+QGE_STREAM_MAP=start \
+QGE_NOESIS_CMD="$repo_root/tools/noesis_quake_policy.sh" \
+QGE_NOESIS_START_WAIT=0 \
+QGE_NOESIS_ACTION_TRACE_FILE="$recovery_actions" \
+QGE_NOESIS_COMMAND_TRACE_FILE="$recovery_commands" \
+  "$repo_root/tools/noesis_quake_player.sh" > "$recovery_stdout"
+
+cmp -s "$recovery_stdout" "$recovery_commands"
+grep -q '^cmd echo QGE_NOESIS_PHASE phase=stuck_recovery$' "$recovery_actions"
+grep -q '^back 5$' "$recovery_actions"
+grep -q '^wall-slide-left 6$' "$recovery_actions"
+grep -q '^turn-right 8$' "$recovery_actions"
+grep -q '^jump-forward 5$' "$recovery_actions"
+grep -q '^cmd echo QGE_NOESIS_PHASE phase=second_push$' "$recovery_actions"
+grep -q '^+back$' "$recovery_commands"
+grep -q '^-back$' "$recovery_commands"
+grep -q '^+moveleft$' "$recovery_commands"
+grep -q '^-moveleft$' "$recovery_commands"
+grep -q '^+jump$' "$recovery_commands"
+
+builtin_recovery_actions="$tmpdir/builtin-recovery-actions.txt"
+builtin_recovery_commands="$tmpdir/builtin-recovery-commands.cfg"
+builtin_recovery_stdout="$tmpdir/builtin-recovery-stdout.cfg"
+
+QGE_NOESIS_DIR="$repo_root" \
+QGE_NOESIS_PLAN=combat-explore \
+QGE_STREAM_MAP=start \
+QGE_NOESIS_START_WAIT=0 \
+QGE_NOESIS_ACTION_TRACE_FILE="$builtin_recovery_actions" \
+QGE_NOESIS_COMMAND_TRACE_FILE="$builtin_recovery_commands" \
+  "$repo_root/tools/noesis_quake_player.sh" > "$builtin_recovery_stdout"
+
+cmp -s "$builtin_recovery_stdout" "$builtin_recovery_commands"
+grep -q '^back 5$' "$builtin_recovery_actions"
+grep -q '^wall-slide-left 6$' "$builtin_recovery_actions"
+grep -q '^turn-right 8$' "$builtin_recovery_actions"
+grep -q '^jump-forward 5$' "$builtin_recovery_actions"
+grep -q '^run-forward 10$' "$builtin_recovery_actions"
+grep -q '^+back$' "$builtin_recovery_commands"
+grep -q '^+moveleft$' "$builtin_recovery_commands"
+grep -q '^+jump$' "$builtin_recovery_commands"
+
 adaptive_actions="$tmpdir/adaptive-actions.txt"
 adaptive_commands="$tmpdir/adaptive-commands.cfg"
 adaptive_stdout="$tmpdir/adaptive-stdout.cfg"
@@ -305,9 +353,13 @@ grep -q '^wall-slide-left 12$' "$adaptive_actions"
 grep -q '^door-open 8$' "$adaptive_actions"
 grep -q '^door-bump 6$' "$adaptive_actions"
 grep -q '^speed-jump-forward 4$' "$adaptive_actions"
-grep -q '^jump-forward 3$' "$adaptive_actions"
 grep -q '^clear-input 2$' "$adaptive_actions"
 grep -q '^cmd echo QGE_NOESIS_POLICY done$' "$adaptive_actions"
+adaptive_speed_jump_count="$(grep -c '^speed-jump-forward 4$' "$adaptive_actions" | tr -d ' ')"
+if (( adaptive_speed_jump_count < 2 )); then
+  echo "expected E1M1 adaptive route to include bridge and post-door speed jumps" >&2
+  exit 1
+fi
 
 grep -q '^echo QGE_NOESIS_PHASE phase=e1m1_entry_clear$' "$adaptive_commands"
 grep -q '^qge_noesis_phase phase=e1m1_entry_clear$' "$adaptive_commands"
@@ -353,6 +405,11 @@ QGE_NOESIS_COMMAND_TRACE_FILE="$builtin_route_commands" \
 cmp -s "$builtin_route_stdout" "$builtin_route_commands"
 grep -q '^door-open 8$' "$builtin_route_actions"
 grep -q '^door-bump 6$' "$builtin_route_actions"
+grep -q '^speed-jump-forward 4$' "$builtin_route_actions"
+if grep -q '^jump-forward 3$' "$builtin_route_actions"; then
+  echo "built-in E1M1 route kept weak post-door jump-forward recovery" >&2
+  exit 1
+fi
 grep -q '^+use$' "$builtin_route_commands"
 grep -q '^-use$' "$builtin_route_commands"
 grep -q '^+forward$' "$builtin_route_commands"

@@ -487,7 +487,10 @@ short target-acquisition sweep; they do not use mouse input or screen control.
 The E1M1 adaptive route brackets its first scan-fire block with a short
 keyboard `look-up` and `center-view` recenter so attacks sweep a more useful
 enemy sightline without taking over the user's mouse. After the door bump it
-adds a short keyboard jump-forward recovery to reduce door-phase stalls.
+adds a short keyboard speed-jump-forward recovery to reduce door-phase stalls.
+Generic combat-exploration recovery backs out, side-slides, turns, and jumps
+forward before the second push so a terminal wall contact is less likely to
+leave the plan wedged.
 
 Action streams can come from either `QGE_NOESIS_ACTIONS_FILE` or
 `QGE_NOESIS_CMD`. The command provider runs from `QGE_NOESIS_DIR` and should
