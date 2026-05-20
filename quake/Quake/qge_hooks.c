@@ -1134,7 +1134,7 @@ void QGE_NoesisAssistClientThink(client_t *client,
 		right_clear = QGE_NoesisAssistTraceDistance(player,
 													anglemod(aim[YAW] - 45.0f));
 		if (move->forwardmove > 0.0f && forward_clear < 56.0f) {
-			move->sidemove = left_clear >= right_clear ? 320.0f : -320.0f;
+			move->sidemove = left_clear >= right_clear ? -320.0f : 320.0f;
 			move->forwardmove = 180.0f;
 		}
 		else if (visible && distance < 512.0f && move->sidemove == 0.0f) {

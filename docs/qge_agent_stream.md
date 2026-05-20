@@ -290,9 +290,10 @@ override is provided, the harness captures at roughly two-thirds of
 very small values.
 
 For the default Noesis player, the implicit capture frame is never earlier than
-`QGE_NOESIS_START_WAIT + 4`, so short smoke runs still capture after the policy
-provider has started emitting actions. An explicit `QGE_STREAM_CAPTURE_WAIT`
-continues to mean exactly the frame requested.
+`QGE_NOESIS_MIN_CAPTURE_WAIT` (default `192`) or `QGE_NOESIS_START_WAIT + 4`,
+whichever is larger. This keeps short screenshot smokes from quitting before the
+E1M1 route/combat plan has enough engine-owned gameplay samples. An explicit
+`QGE_STREAM_CAPTURE_WAIT` continues to mean exactly the frame requested.
 
 The launch watchdog defaults to `90 + QGE_STREAM_FRAMES *
 QGE_STREAM_WAIT_FRAMES / 10` seconds. Set `QGE_STREAM_TIMEOUT_SECONDS` for
@@ -583,16 +584,20 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
 - `QGE_NOESIS_MIN_ROUTE_DISTANCE`: minimum route distance or displacement, in
   Quake units, required for route-heavy Noesis plans once gameplay telemetry is
   present, default `64`.
+- `QGE_NOESIS_MIN_CAPTURE_WAIT`: minimum engine auto-capture delay for Noesis
+  runs when `QGE_STREAM_CAPTURE_WAIT` is unset, default `192`. Set to `0` only
+  when intentionally testing early capture or startup behavior.
 - `QGE_NOESIS_ASSIST`: opt-in server-state assist for Noesis automation,
   default `0`. Mode `1` aims and fires at visible monsters while preserving the
   scripted movement command. Mode `2` also steers the server usercmd toward the
   nearest monster with a small wall-avoidance probe and kites visible close
-  targets instead of walking into them. Hidden distant targets do not override
-  scripted view or route movement; once the scripted route gets near enough,
-  hidden-target chase can help finish the approach, while assist still
-  suppresses blind fire until a target is visible. Visibility and aim use a
-  sampled monster bbox point, so partly exposed enemies are not limited to a
-  center-point trace.
+  targets instead of walking into them. When hidden-target chase hits a wall,
+  its sidestep follows the clearer probe side using Quake's sidemove sign
+  convention. Hidden distant targets do not override scripted view or route
+  movement; once the scripted route gets near enough, hidden-target chase can
+  help finish the approach, while assist still suppresses blind fire until a
+  target is visible. Visibility and aim use a sampled monster bbox point, so
+  partly exposed enemies are not limited to a center-point trace.
   The engine-side cvar is `qge_noesis_assist`, remains off by default, and only
   acts during `-qgestreamdir` runs so normal local play is untouched.
 - `QGE_NOESIS_CMD`: optional Noesis action provider command. When set, the
