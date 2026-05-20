@@ -1227,6 +1227,11 @@ def build_gameplay_score(
         attack_presses = float(combat.get("attack_press_count") or 0.0)
         attack_visible_frames = float(combat.get("attack_visible_frames") or 0.0)
         attack_aligned_frames = float(combat.get("attack_aligned_frames") or 0.0)
+        unproductive_attack_fraction = max(
+            0.0,
+            min(float(combat.get("unproductive_attack_fraction") or 0.0), 1.0),
+        )
+        productive_attack_fraction = max(0.0, 1.0 - unproductive_attack_fraction)
         visible_enemy_frames = float(combat.get("visible_enemy_frames") or 0.0)
         contact_frames = float(combat.get("enemy_contact_frames") or 0.0)
         pickups = float(pickup.get("pickup_count") or 0.0)
@@ -1273,7 +1278,8 @@ def build_gameplay_score(
                 3,
             ),
             "combat_effectiveness": round(
-                score_component(attack_presses, 2.0, 3.0) +
+                score_component(attack_presses, 2.0, 3.0) *
+                productive_attack_fraction +
                 score_component(visible_enemy_frames, 4.0, 2.0) +
                 score_component(attack_visible_frames, 4.0, 2.0) +
                 score_component(attack_aligned_frames, 3.0, 3.0) +

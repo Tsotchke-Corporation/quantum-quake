@@ -372,11 +372,12 @@ executes `qge_noesis_phase`, which queues an engine-owned `noesis_phase` event
 in `gameplay_outcomes.ndjson` with the next gameplay sample's player, route,
 combat, pickup, and assist state. Required combat progress needs damage, a kill,
 or an attack while the player is aligned to a visible enemy; pressing fire near
-an enemy is not enough. Route telemetry also reports movement efficiency,
-stationary fraction, maximum stationary run, and duration-aware terminal-stall
-evidence, so a route that moves early and ends wedged cannot pass as clean
-progress while a short post-plan idle tail does not poison a long successful
-route. Assist runs additionally emit requested mode, active sample count,
+an enemy is not enough. The gameplay score discounts attack-press credit when
+attack frames are blind or visible-but-unaligned. Route telemetry also reports
+movement efficiency, stationary fraction, maximum stationary run, and
+duration-aware terminal-stall evidence, so a route that moves early and ends
+wedged cannot pass as clean progress while a short post-plan idle tail does not
+poison a long successful route. Assist runs additionally emit requested mode, active sample count,
 visible-target sample count, steering sample count, attack-visible frames,
 target-distance evidence, and a claim scope. Assisted runs are marked `server_assisted` so they cannot be
 mistaken for unassisted play evidence. Set `QGE_NOESIS_MIN_LOG_PHASES` to

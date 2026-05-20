@@ -1399,6 +1399,70 @@ class NoesisSummaryTests(unittest.TestCase):
             self.assertEqual(summary["route"]["stationary_run_max"], 6)
             self.assertEqual(summary["route"]["terminal_stationary_run"], 0)
 
+    def test_gameplay_score_discounts_unproductive_fire(self) -> None:
+        actions = {
+            "line_count": 4,
+            "movement_action_count": 1,
+            "combat_action_count": 1,
+            "phase_count": 0,
+        }
+        commands = {
+            "line_count": 10,
+            "wait_count": 5,
+            "pressed_button_variety": 3,
+            "press_counts": {"forward": 1, "attack": 1},
+            "wait_clamped_count": 0,
+        }
+        log = {"policy_done_present": True, "phase_count": 0}
+        frames = {"frame_count": 0, "delta": {}}
+        trace = {"exists": False}
+        gates = {
+            "required_inputs_present": True,
+            "run_completed": True,
+            "frames_present": True,
+            "no_unknown_actions": True,
+            "no_unknown_commands": True,
+        }
+
+        base_gameplay = {
+            "sample_count": 2,
+            "player": {"survived": True},
+            "route": {
+                "total_distance": 72.0,
+                "max_displacement_from_start": 72.0,
+                "terminal_stall": False,
+                "leaf_transition_count": 1,
+            },
+            "pickup": {"pickup_count": 0},
+            "combat": {
+                "damage_dealt_inferred": 0,
+                "damage_taken": 0,
+                "kills": 0,
+                "attack_press_count": 2,
+                "attack_visible_frames": 0,
+                "attack_aligned_frames": 0,
+                "visible_enemy_frames": 0,
+                "enemy_contact_frames": 0,
+            },
+        }
+        disciplined_gameplay = json.loads(json.dumps(base_gameplay))
+        disciplined_gameplay["combat"]["unproductive_attack_fraction"] = 0.0
+        wasteful_gameplay = json.loads(json.dumps(base_gameplay))
+        wasteful_gameplay["combat"]["unproductive_attack_fraction"] = 1.0
+
+        disciplined = noesis_summary.build_gameplay_score(
+            actions, commands, log, frames, trace, disciplined_gameplay, gates
+        )
+        wasteful = noesis_summary.build_gameplay_score(
+            actions, commands, log, frames, trace, wasteful_gameplay, gates
+        )
+
+        self.assertEqual(
+            disciplined["breakdown"]["combat_effectiveness"] -
+            wasteful["breakdown"]["combat_effectiveness"],
+            3.0,
+        )
+
     def test_terminal_stall_blocks_route_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmpdir = Path(tmp)
