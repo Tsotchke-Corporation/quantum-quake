@@ -659,9 +659,10 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   `-qgerenderres` / `-qgerenderthreshold` launch arguments so DWT buffers are
   allocated at the requested size before `autoexec.cfg` runs.
 - `QGE_PHYSICS`, `QGE_PROJECTILES`, `QGE_PARTICLES`: QGE simulation toggles.
-- `QGE_SCENE_SURFACE_BUDGET`: QGE scene surface budget, default `128`.
-  This is independent of `QGE_RENDER_RES`; raising it improves surface coverage
-  but increases CPU raster and sparse-DWT cost.
+- `QGE_SCENE_SURFACE_BUDGET`: QGE scene surface budget, default `512`.
+  This is independent of `QGE_RENDER_RES`. The higher default avoids striding
+  across dense visible BSP sets, which otherwise leaves missing floor, wall, and
+  ceiling spans; lowering it improves CPU cost at the expense of world coverage.
 - `QGE_STREAM_ACTIVATE`: macOS `open` mode foreground activation, default `0`.
   Set to `1` only when the local window manager requires the app to be brought
   foreground for capture.
