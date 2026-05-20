@@ -838,7 +838,7 @@ static int scr_qge_autocapture_frames = 0;
 static int scr_qge_autocapture_wait = 0;
 static int scr_qge_autocapture_seen = 0;
 static int scr_qge_autocapture_done = 0;
-static qboolean scr_qge_autocapture_quit = false;
+static qboolean scr_qge_autocapture_quit_pending = false;
 
 static int SCR_QGECommandLineInt(const char *parm, int fallback)
 {
@@ -864,9 +864,21 @@ static void SCR_QGEConfigureAutoCapture(void)
 		scr_qge_autocapture_wait = 0;
 }
 
+static qboolean SCR_QGEAutoCaptureSuppressOverlay(void)
+{
+	SCR_QGEConfigureAutoCapture();
+	return scr_qge_autocapture_frames > 0 && cls.signon == SIGNONS;
+}
+
 static void SCR_QGEAutoCaptureMaybe(void)
 {
 	SCR_QGEConfigureAutoCapture();
+	if (scr_qge_autocapture_quit_pending) {
+		key_dest = key_console;
+		Host_Quit_f();
+		return;
+	}
+
 	if (scr_qge_autocapture_frames <= 0 ||
 		scr_qge_autocapture_done >= scr_qge_autocapture_frames ||
 		cls.signon != SIGNONS)
@@ -879,13 +891,9 @@ static void SCR_QGEAutoCaptureMaybe(void)
 	scr_qge_autocapture_done++;
 	Con_Printf("QGE_AUTO_CAPTURE %d/%d\n",
 			   scr_qge_autocapture_done, scr_qge_autocapture_frames);
-	if (scr_qge_autocapture_done >= scr_qge_autocapture_frames &&
-		!scr_qge_autocapture_quit) {
-		scr_qge_autocapture_quit = true;
-		Cbuf_InsertText("screenshot png\nquit\n");
-	} else {
-		Cbuf_InsertText("screenshot png\n");
-	}
+	if (scr_qge_autocapture_done >= scr_qge_autocapture_frames)
+		scr_qge_autocapture_quit_pending = true;
+	Cbuf_InsertText("screenshot png\n");
 }
 
 
@@ -1088,6 +1096,8 @@ needs almost the entire 256k of stack space!
 */
 void SCR_UpdateScreen (void)
 {
+	qboolean qge_autocapture_frame;
+
 	vid.numpages = (gl_triplebuffer.value) ? 3 : 2;
 
 	if (scr_disabled_for_loading)
@@ -1116,9 +1126,12 @@ void SCR_UpdateScreen (void)
 //
 // do 3D refresh drawing, and then update the screen
 //
+	qge_autocapture_frame = SCR_QGEAutoCaptureSuppressOverlay();
 	SCR_SetUpToDrawConsole ();
 
 	V_RenderView ();
+	if (qge_autocapture_frame)
+		Con_ClearNotify();
 
 	QGE_2DBeginFrame ();
 	QGE_2DSetLayer (QGE_2D_LAYER_HUD);
@@ -1162,13 +1175,16 @@ void SCR_UpdateScreen (void)
 		SCR_DrawPause ();
 		SCR_CheckDrawCenterString ();
 		Sbar_Draw ();
-		SCR_DrawDevStats (); //johnfitz
-		SCR_DrawFPS (); //johnfitz
-		SCR_DrawClock (); //johnfitz
-		QGE_2DSetLayer (QGE_2D_LAYER_CONSOLE);
-		SCR_DrawConsole ();
-		QGE_2DSetLayer (QGE_2D_LAYER_HUD);
-		M_Draw ();
+		if (!qge_autocapture_frame)
+		{
+			SCR_DrawDevStats (); //johnfitz
+			SCR_DrawFPS (); //johnfitz
+			SCR_DrawClock (); //johnfitz
+			QGE_2DSetLayer (QGE_2D_LAYER_CONSOLE);
+			SCR_DrawConsole ();
+			QGE_2DSetLayer (QGE_2D_LAYER_HUD);
+			M_Draw ();
+		}
 	}
 
 	QGE_2DSetLayer (QGE_2D_LAYER_NONE);

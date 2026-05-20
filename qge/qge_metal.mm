@@ -316,6 +316,12 @@ static qge_metal_ctx_t* qge_metal_init_common(int num_qubits,
         struct qge_metal_internal* internal = new qge_metal_internal();
         internal->device = device;
         internal->commandQueue = [device newCommandQueue];
+        if (!internal->commandQueue) {
+            fprintf(stderr, "[QGE Metal] Failed to create command queue\n");
+            delete internal;
+            free(ctx);
+            return NULL;
+        }
 
         /* Compile shaders */
         NSError* error = nil;
@@ -420,7 +426,13 @@ extern "C" void qge_metal_free(qge_metal_ctx_t* ctx) {
 }
 
 extern "C" bool qge_metal_available(void) {
-    return metal_is_available() != 0;
+    @autoreleasepool {
+        id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+        if (!device)
+            return false;
+        id<MTLCommandQueue> commandQueue = [device newCommandQueue];
+        return commandQueue != nil;
+    }
 }
 
 /* ============================================================================
@@ -588,7 +600,8 @@ extern "C" int qge_metal_inverse_dwt(
     if (!ctx || !coefficients || !output || num_levels <= 0) return -1;
 
     struct qge_metal_internal* internal = (struct qge_metal_internal*)ctx->internal_ptr;
-    if (!internal || !internal->haarInverseLevelPipeline) return -1;
+    if (!internal || !internal->commandQueue || !internal->haarInverseLevelPipeline)
+        return -1;
 
     @autoreleasepool {
         NSDate* startTime = [NSDate date];

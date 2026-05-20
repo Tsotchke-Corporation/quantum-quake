@@ -50,7 +50,7 @@ cvar_t quantum_overlay_alpha = {"quantum_overlay_alpha", "0.10", CVAR_ARCHIVE};
 cvar_t quantum_scene_surface_budget = {"quantum_scene_surface_budget", "512", CVAR_ARCHIVE};
 cvar_t quantum_render_res = {"quantum_render_res", "1024", CVAR_ARCHIVE};
 cvar_t quantum_render_threshold = {"quantum_render_threshold", "0.001", CVAR_ARCHIVE};
-cvar_t quantum_render_edge_gain = {"quantum_render_edge_gain", "0.06", CVAR_ARCHIVE};
+cvar_t quantum_render_edge_gain = {"quantum_render_edge_gain", "0", CVAR_ARCHIVE};
 cvar_t quantum_render_material_gain = {"quantum_render_material_gain", "0.18", CVAR_ARCHIVE};
 cvar_t quantum_render_bilinear_samples = {"quantum_render_bilinear_samples", "0", CVAR_ARCHIVE};
 cvar_t quantum_render_edge_samples = {"quantum_render_edge_samples", "0", CVAR_ARCHIVE};
@@ -4724,16 +4724,33 @@ static qge_projected_vertex_t QGE_ProjectVertexLerp(
 	float t)
 {
 	qge_projected_vertex_t out;
+	float ia, ib, inv_depth;
 
 	if (t < 0.0f) t = 0.0f;
 	if (t > 1.0f) t = 1.0f;
 	out.x = a->x + (b->x - a->x) * t;
 	out.y = a->y + (b->y - a->y) * t;
-	out.depth = a->depth + (b->depth - a->depth) * t;
-	out.tex_s = a->tex_s + (b->tex_s - a->tex_s) * t;
-	out.tex_t = a->tex_t + (b->tex_t - a->tex_t) * t;
-	out.light_s = a->light_s + (b->light_s - a->light_s) * t;
-	out.light_t = a->light_t + (b->light_t - a->light_t) * t;
+	ia = a->depth > 0.0001f ? 1.0f / a->depth : 1.0f;
+	ib = b->depth > 0.0001f ? 1.0f / b->depth : 1.0f;
+	inv_depth = ia + (ib - ia) * t;
+	if (inv_depth > 0.000001f) {
+		float depth = 1.0f / inv_depth;
+		out.depth = depth;
+		out.tex_s = ((a->tex_s * ia) +
+					 (b->tex_s * ib - a->tex_s * ia) * t) * depth;
+		out.tex_t = ((a->tex_t * ia) +
+					 (b->tex_t * ib - a->tex_t * ia) * t) * depth;
+		out.light_s = ((a->light_s * ia) +
+					   (b->light_s * ib - a->light_s * ia) * t) * depth;
+		out.light_t = ((a->light_t * ia) +
+					   (b->light_t * ib - a->light_t * ia) * t) * depth;
+	} else {
+		out.depth = a->depth + (b->depth - a->depth) * t;
+		out.tex_s = a->tex_s + (b->tex_s - a->tex_s) * t;
+		out.tex_t = a->tex_t + (b->tex_t - a->tex_t) * t;
+		out.light_s = a->light_s + (b->light_s - a->light_s) * t;
+		out.light_t = a->light_t + (b->light_t - a->light_t) * t;
+	}
 	return out;
 }
 
@@ -5850,141 +5867,6 @@ static void QGE_InitPaletteLut(void)
 	qge_palette_lut_ready = true;
 }
 
-static float QGE_TexturePaletteSample(const qge_scene_surface_t *surface,
-									  const texture_t *tex,
-									  int tx,
-									  int ty,
-									  qge_rgb_sample_t *color)
-{
-	const byte *pixels;
-	int palette_index;
-
-	if (!surface || !tex || !color || tex->width <= 0 || tex->height <= 0)
-		return 0.0f;
-	QGE_InitPaletteLut();
-
-	tx %= (int)tex->width;
-	ty %= (int)tex->height;
-	if (tx < 0) tx += (int)tex->width;
-	if (ty < 0) ty += (int)tex->height;
-
-	pixels = (const byte *)(tex + 1);
-	palette_index = pixels[ty * (int)tex->width + tx];
-	if (!qge_palette_opaque[palette_index] ||
-		((surface->flags & SURF_DRAWFENCE) && palette_index == 255)) {
-		color->r = 0.0f;
-		color->g = 0.0f;
-		color->b = 0.0f;
-		return 0.0f;
-	}
-
-	*color = qge_palette_lut[palette_index];
-	QGE_RGBClamp(color);
-	return 1.0f;
-}
-
-static float QGE_TexturePaletteSampleDirect(const qge_scene_surface_t *surface,
-											const texture_t *tex,
-											int tx,
-											int ty,
-											qge_rgb_sample_t *color)
-{
-	const byte *pixels;
-	int palette_index;
-
-	if (!surface || !tex || !color)
-		return 0.0f;
-	QGE_InitPaletteLut();
-
-	pixels = (const byte *)(tex + 1);
-	palette_index = pixels[ty * (int)tex->width + tx];
-	if (!qge_palette_opaque[palette_index] ||
-		((surface->flags & SURF_DRAWFENCE) && palette_index == 255)) {
-		color->r = 0.0f;
-		color->g = 0.0f;
-		color->b = 0.0f;
-		return 0.0f;
-	}
-
-	*color = qge_palette_lut[palette_index];
-	return 1.0f;
-}
-
-static qboolean QGE_SurfaceTextureColorPrepared(const qge_scene_surface_t *surface,
-												texture_t *tex,
-												float tex_s,
-												float tex_t,
-												qge_rgb_sample_t *color,
-												qboolean bilinear)
-{
-	unsigned int width, height;
-	float fx, fy;
-	int x0, y0, x1, y1;
-	float tx_frac, ty_frac;
-	qge_rgb_sample_t c00, c10, c01, c11;
-	float a00, a10, a01, a11;
-	float w00, w10, w01, w11;
-	float alpha;
-
-	if (!color)
-		return false;
-	color->r = 0.75f;
-	color->g = 0.75f;
-	color->b = 0.75f;
-
-	if (!tex)
-		return true;
-
-	width = tex->width;
-	height = tex->height;
-	if (!width || !height)
-		return true;
-
-	if (tex_s < 0.0f || tex_s >= 1.0f) {
-		tex_s = tex_s - floorf(tex_s);
-		if (tex_s < 0.0f) tex_s += 1.0f;
-	}
-	if (tex_t < 0.0f || tex_t >= 1.0f) {
-		tex_t = tex_t - floorf(tex_t);
-		if (tex_t < 0.0f) tex_t += 1.0f;
-	}
-
-	if (!bilinear) {
-		x0 = (int)(tex_s * (float)width);
-		y0 = (int)(tex_t * (float)height);
-		if (x0 >= (int)width) x0 = (int)width - 1;
-		if (y0 >= (int)height) y0 = (int)height - 1;
-		return QGE_TexturePaletteSampleDirect(surface, tex, x0, y0, color) > 0.0f;
-	}
-
-	fx = tex_s * (float)width - 0.5f;
-	fy = tex_t * (float)height - 0.5f;
-	x0 = (int)floorf(fx);
-	y0 = (int)floorf(fy);
-	x1 = x0 + 1;
-	y1 = y0 + 1;
-	tx_frac = fx - floorf(fx);
-	ty_frac = fy - floorf(fy);
-
-	a00 = QGE_TexturePaletteSample(surface, tex, x0, y0, &c00);
-	a10 = QGE_TexturePaletteSample(surface, tex, x1, y0, &c10);
-	a01 = QGE_TexturePaletteSample(surface, tex, x0, y1, &c01);
-	a11 = QGE_TexturePaletteSample(surface, tex, x1, y1, &c11);
-	w00 = (1.0f - tx_frac) * (1.0f - ty_frac) * a00;
-	w10 = tx_frac * (1.0f - ty_frac) * a10;
-	w01 = (1.0f - tx_frac) * ty_frac * a01;
-	w11 = tx_frac * ty_frac * a11;
-	alpha = w00 + w10 + w01 + w11;
-	if (alpha <= 0.01f)
-		return false;
-
-	color->r = (c00.r * w00 + c10.r * w10 + c01.r * w01 + c11.r * w11) / alpha;
-	color->g = (c00.g * w00 + c10.g * w10 + c01.g * w01 + c11.g * w11) / alpha;
-	color->b = (c00.b * w00 + c10.b * w10 + c01.b * w01 + c11.b * w11) / alpha;
-	QGE_RGBClamp(color);
-	return true;
-}
-
 static qge_rgb_sample_t QGE_LightmapSampleTexel(const msurface_t *surf,
 												int map,
 												int s,
@@ -6221,12 +6103,6 @@ QGE_HOT_INLINE qge_rgb_sample_t QGE_SurfaceLightColorContext(
 		return color;
 	if (!ctx->has_light || !ctx->surf || !ctx->surf->samples)
 		return QGE_SurfaceLightColor(ctx->surf, sample);
-	if (ctx->bilinear)
-		return QGE_SurfaceLightColorPrepared(ctx->surf, sample,
-											 ctx->light_smax,
-											 ctx->light_tmax,
-											 ctx->light_size,
-											 true);
 
 	if (ctx->light_map_count <= 0) {
 		color.r = 0.85f;
@@ -6236,6 +6112,58 @@ QGE_HOT_INLINE qge_rgb_sample_t QGE_SurfaceLightColorContext(
 	}
 
 	surf = ctx->surf;
+	if (ctx->bilinear) {
+		float sf = sample->light_s * ctx->light_s_scale +
+				   ctx->light_s_offset - 0.5f;
+		float tf = sample->light_t * ctx->light_t_scale +
+				   ctx->light_t_offset - 0.5f;
+		int s1, t1;
+		float s_frac, t_frac;
+		float w00, w10, w01, w11;
+
+		s0 = (int)floorf(sf);
+		t0 = (int)floorf(tf);
+		s1 = s0 + 1;
+		t1 = t0 + 1;
+		s_frac = sf - floorf(sf);
+		t_frac = tf - floorf(tf);
+		if (s0 < 0) s0 = 0;
+		if (t0 < 0) t0 = 0;
+		if (s1 < 0) s1 = 0;
+		if (t1 < 0) t1 = 0;
+		if (s0 >= ctx->light_smax) s0 = ctx->light_smax - 1;
+		if (t0 >= ctx->light_tmax) t0 = ctx->light_tmax - 1;
+		if (s1 >= ctx->light_smax) s1 = ctx->light_smax - 1;
+		if (t1 >= ctx->light_tmax) t1 = ctx->light_tmax - 1;
+		w00 = (1.0f - s_frac) * (1.0f - t_frac);
+		w10 = s_frac * (1.0f - t_frac);
+		w01 = (1.0f - s_frac) * t_frac;
+		w11 = s_frac * t_frac;
+
+		color.r = 0.0f;
+		color.g = 0.0f;
+		color.b = 0.0f;
+		for (int map = 0; map < ctx->light_map_count; map++) {
+			const byte *base = surf->samples + map * ctx->light_size * 3;
+			const byte *p00 = base + (t0 * ctx->light_smax + s0) * 3;
+			const byte *p10 = base + (t0 * ctx->light_smax + s1) * 3;
+			const byte *p01 = base + (t1 * ctx->light_smax + s0) * 3;
+			const byte *p11 = base + (t1 * ctx->light_smax + s1) * 3;
+			float scale = ctx->light_scales[map];
+
+			color.r += ((float)p00[0] * w00 + (float)p10[0] * w10 +
+						(float)p01[0] * w01 + (float)p11[0] * w11) * scale;
+			color.g += ((float)p00[1] * w00 + (float)p10[1] * w10 +
+						(float)p01[1] * w01 + (float)p11[1] * w11) * scale;
+			color.b += ((float)p00[2] * w00 + (float)p10[2] * w10 +
+						(float)p01[2] * w01 + (float)p11[2] * w11) * scale;
+		}
+		if (color.r > 1.35f) color.r = 1.35f;
+		if (color.g > 1.35f) color.g = 1.35f;
+		if (color.b > 1.35f) color.b = 1.35f;
+		return color;
+	}
+
 	s0 = (int)(sample->light_s * ctx->light_s_scale + ctx->light_s_offset);
 	t0 = (int)(sample->light_t * ctx->light_t_scale + ctx->light_t_offset);
 	if (s0 < 0) s0 = 0;
@@ -6285,11 +6213,97 @@ QGE_HOT_INLINE qboolean QGE_SurfaceTextureColorContext(
 
 	if (!ctx || !ctx->tex)
 		return true;
-	if (ctx->bilinear)
-		return QGE_SurfaceTextureColorPrepared(ctx->surface, ctx->tex,
-											   tex_s, tex_t, color, true);
 	if (!ctx->tex_pixels || !ctx->tex_width || !ctx->tex_height)
 		return true;
+
+	if (ctx->bilinear) {
+		float fx, fy;
+		int x1, y1;
+		float tx_frac, ty_frac;
+		float w00, w10, w01, w11;
+		float alpha = 0.0f;
+		float r = 0.0f, g = 0.0f, b = 0.0f;
+		int p00, p10, p01, p11;
+		qboolean a00, a10, a01, a11;
+
+		if (tex_s < 0.0f || tex_s >= 1.0f) {
+			tex_s = tex_s - floorf(tex_s);
+			if (tex_s < 0.0f) tex_s += 1.0f;
+		}
+		if (tex_t < 0.0f || tex_t >= 1.0f) {
+			tex_t = tex_t - floorf(tex_t);
+			if (tex_t < 0.0f) tex_t += 1.0f;
+		}
+		fx = tex_s * ctx->tex_width_f - 0.5f;
+		fy = tex_t * ctx->tex_height_f - 0.5f;
+		x0 = (int)floorf(fx);
+		y0 = (int)floorf(fy);
+		x1 = x0 + 1;
+		y1 = y0 + 1;
+		tx_frac = fx - floorf(fx);
+		ty_frac = fy - floorf(fy);
+
+		if (ctx->tex_power2) {
+			x0 &= (int)ctx->tex_width_mask;
+			x1 &= (int)ctx->tex_width_mask;
+			y0 &= (int)ctx->tex_height_mask;
+			y1 &= (int)ctx->tex_height_mask;
+		} else {
+			x0 %= (int)ctx->tex_width;
+			x1 %= (int)ctx->tex_width;
+			y0 %= (int)ctx->tex_height;
+			y1 %= (int)ctx->tex_height;
+			if (x0 < 0) x0 += (int)ctx->tex_width;
+			if (x1 < 0) x1 += (int)ctx->tex_width;
+			if (y0 < 0) y0 += (int)ctx->tex_height;
+			if (y1 < 0) y1 += (int)ctx->tex_height;
+		}
+
+		p00 = ctx->tex_pixels[y0 * (int)ctx->tex_width + x0];
+		p10 = ctx->tex_pixels[y0 * (int)ctx->tex_width + x1];
+		p01 = ctx->tex_pixels[y1 * (int)ctx->tex_width + x0];
+		p11 = ctx->tex_pixels[y1 * (int)ctx->tex_width + x1];
+		a00 = qge_palette_opaque[p00] && !(ctx->fence && p00 == 255);
+		a10 = qge_palette_opaque[p10] && !(ctx->fence && p10 == 255);
+		a01 = qge_palette_opaque[p01] && !(ctx->fence && p01 == 255);
+		a11 = qge_palette_opaque[p11] && !(ctx->fence && p11 == 255);
+		w00 = (1.0f - tx_frac) * (1.0f - ty_frac) * (a00 ? 1.0f : 0.0f);
+		w10 = tx_frac * (1.0f - ty_frac) * (a10 ? 1.0f : 0.0f);
+		w01 = (1.0f - tx_frac) * ty_frac * (a01 ? 1.0f : 0.0f);
+		w11 = tx_frac * ty_frac * (a11 ? 1.0f : 0.0f);
+		alpha = w00 + w10 + w01 + w11;
+		if (alpha <= 0.01f) {
+			color->r = 0.0f;
+			color->g = 0.0f;
+			color->b = 0.0f;
+			return false;
+		}
+		if (a00) {
+			r += qge_palette_lut[p00].r * w00;
+			g += qge_palette_lut[p00].g * w00;
+			b += qge_palette_lut[p00].b * w00;
+		}
+		if (a10) {
+			r += qge_palette_lut[p10].r * w10;
+			g += qge_palette_lut[p10].g * w10;
+			b += qge_palette_lut[p10].b * w10;
+		}
+		if (a01) {
+			r += qge_palette_lut[p01].r * w01;
+			g += qge_palette_lut[p01].g * w01;
+			b += qge_palette_lut[p01].b * w01;
+		}
+		if (a11) {
+			r += qge_palette_lut[p11].r * w11;
+			g += qge_palette_lut[p11].g * w11;
+			b += qge_palette_lut[p11].b * w11;
+		}
+		color->r = r / alpha;
+		color->g = g / alpha;
+		color->b = b / alpha;
+		QGE_RGBClamp(color);
+		return true;
+	}
 
 	if (ctx->tex_power2 && tex_s >= 0.0f && tex_t >= 0.0f) {
 		x0 = ((int)(tex_s * ctx->tex_width_f)) & (int)ctx->tex_width_mask;

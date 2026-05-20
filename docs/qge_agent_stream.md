@@ -642,10 +642,22 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   `QGE_RENDER_EDGE_GAIN`, `QGE_RENDER_MATERIAL_GAIN`,
   `QGE_RENDER_BILINEAR_SAMPLES`, `QGE_RENDER_EDGE_SAMPLES`,
   `QGE_RENDER_DISPLAY_FILTER`, `QGE_RENDER_UPDATE_INTERVAL`: QGE render
-  controls.
+  controls. Engine autocapture skips the diagnostic console/dev overlay while
+  capture is active, so diagnostic chatter is still logged but does not cover
+  captured world frames. After the requested autocapture screenshots are queued,
+  the harness exits through the console quit path instead of idling until the
+  watchdog timeout. `QGE_RENDER_EDGE_GAIN` defaults to `0`; the diagnostic
+  world-edge overlay is opt-in because it makes floors, walls, and ceilings read
+  as noisy polygon outlines in normal captures. Viewport-clipped world polygons
+  use perspective-correct interpolation for texture and lightmap coordinates.
+  The native Metal render bridge is only considered available when it can create
+  a command queue; if that probe fails, QGE falls back to the CPU/NEON path
+  instead of accepting a no-op native reconstruction.
   `QGE_RENDER_BILINEAR_SAMPLES=0` uses nearest texture/light samples in the
   quantum rasterizer for faster CPU-only captures; set it to `1` for smoother
-  per-pixel sampling.
+  per-pixel sampling. The bilinear path samples prepared surface texture and
+  lightmap context directly so smoother diagnostic captures do not pay the old
+  helper-call overhead per pixel.
   `QGE_RENDER_EDGE_SAMPLES=0` uses center-sampled triangle coverage in the
   quantum rasterizer for faster high-resolution captures; set it to `1` to
   restore subpixel edge coverage.
