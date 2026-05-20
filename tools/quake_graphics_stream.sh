@@ -560,7 +560,6 @@ write_noesis_summary() {
     --min-actions 1
     --min-commands 1
     --min-frames "$frames"
-    --min-frame-mae 2.0
     --min-log-phases "$noesis_min_log_phases"
     --min-phase-outcomes "$noesis_min_log_phases"
     --min-gameplay-samples "$noesis_min_gameplay_samples"
@@ -570,6 +569,9 @@ write_noesis_summary() {
     --out "$noesis_summary_file"
     --icc-out "$noesis_icc_file"
   )
+  if (( frames >= 2 )); then
+    noesis_args+=(--min-frame-mae 2.0)
+  fi
   if [[ "$trace_summary_status" == "complete" && -s "$trace_summary_file" ]]; then
     noesis_args+=(--trace-summary "$trace_summary_file")
   fi

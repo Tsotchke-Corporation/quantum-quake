@@ -488,12 +488,17 @@ targeted probes.
 `scan-fire-left` and `scan-fire-right` hold keyboard yaw plus attack for a
 short target-acquisition sweep; they do not use mouse input or screen control.
 The default adaptive/E1M1 routes keep unassisted play disciplined by aiming and
-moving with keyboard-only turns and route actions, then using short `attack 1`
-taps instead of long blind fire holds. The E1M1 adaptive route brackets its
-first acquisition block with a short keyboard `look-up` and `center-view`
-recenter so attacks sweep a more useful enemy sightline without taking over the
-user's mouse. After the door bump it adds a short keyboard speed-jump-forward
-recovery to reduce door-phase stalls.
+moving with keyboard-only turns and route actions, then using short attack taps
+or bounded scan-fire sweeps instead of long blind fire holds. The E1M1 adaptive
+route brackets its first acquisition block with a short keyboard `look-up` and
+`center-view` recenter so attacks sweep a more useful enemy sightline without
+taking over the user's mouse. The bridge block now closes farther along the
+left bridge side before a bounded `scan-fire-left` sweep, and the door block
+adds a short left/right scan after the door bump before its speed-jump-forward
+recovery. In unassisted mode this is still only route/input evidence unless the
+summary reports visible or aligned combat; with `QGE_NOESIS_ASSIST=1` it gives
+the server-side visible-target aim assist a better acquisition window while
+remaining marked `server_assisted`.
 Generic combat-exploration recovery backs out, side-slides, turns, and jumps
 forward before the second push so a terminal wall contact is less likely to
 leave the plan wedged.

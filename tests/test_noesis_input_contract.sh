@@ -205,12 +205,16 @@ grep -Fq 'qge_noesis_assist $noesis_assist' "$repo_root/tools/quake_graphics_str
 grep -Fq -- '--min-log-phases "$noesis_min_log_phases"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq -- '--min-phase-outcomes "$noesis_min_log_phases"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq -- '--min-gameplay-samples "$noesis_min_gameplay_samples"' "$repo_root/tools/quake_graphics_stream.sh"
+grep -Fq 'if (( frames >= 2 )); then' "$repo_root/tools/quake_graphics_stream.sh"
+grep -Fq 'noesis_args+=(--min-frame-mae 2.0)' "$repo_root/tools/quake_graphics_stream.sh"
 grep -q 'QGE_NOESIS_MIN_LOG_PHASES' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'QGE_NOESIS_MIN_GAMEPLAY_SAMPLES' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'QGE_NOESIS_MIN_CAPTURE_WAIT' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'QGE_NOESIS_ASSIST' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'claim scope' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'attack-aligned frame counts' "$repo_root/docs/qge_agent_stream.md"
+grep -q 'left bridge side before a bounded `scan-fire-left` sweep' "$repo_root/docs/qge_agent_stream.md"
+grep -q 'remaining marked `server_assisted`' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'kites visible close' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'Hidden distant targets do not override' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'QGE_NoesisAssistClientThink' "$repo_root/quake/Quake/qge_hooks.c"
@@ -361,23 +365,29 @@ grep -q '^attack 1$' "$adaptive_actions"
 grep -q '^run-forward 12$' "$adaptive_actions"
 grep -q '^wall-slide-right 12$' "$adaptive_actions"
 grep -q '^circle-left 6$' "$adaptive_actions"
-grep -q '^wall-slide-left 12$' "$adaptive_actions"
+grep -q '^turn-left 10$' "$adaptive_actions"
+grep -q '^run-forward 14$' "$adaptive_actions"
+grep -q '^wall-slide-left 10$' "$adaptive_actions"
+grep -q '^scan-fire-left 12$' "$adaptive_actions"
+grep -q '^attack 2$' "$adaptive_actions"
 grep -q '^door-open 8$' "$adaptive_actions"
 grep -q '^door-bump 6$' "$adaptive_actions"
+grep -q '^scan-fire-left 6$' "$adaptive_actions"
+grep -q '^scan-fire-right 6$' "$adaptive_actions"
 grep -q '^speed-jump-forward 4$' "$adaptive_actions"
 grep -q '^clear-input 2$' "$adaptive_actions"
 grep -q '^cmd echo QGE_NOESIS_POLICY done$' "$adaptive_actions"
 adaptive_speed_jump_count="$(grep -c '^speed-jump-forward 4$' "$adaptive_actions" | tr -d ' ')"
-if (( adaptive_speed_jump_count < 2 )); then
-  echo "expected E1M1 adaptive route to include bridge and post-door speed jumps" >&2
+if (( adaptive_speed_jump_count < 1 )); then
+  echo "expected E1M1 adaptive route to include post-door speed jump recovery" >&2
   exit 1
 fi
 adaptive_attack_tap_count="$(grep -c '^attack 1$' "$adaptive_actions" | tr -d ' ')"
-if (( adaptive_attack_tap_count < 5 )); then
-  echo "expected E1M1 adaptive route to use disciplined attack taps" >&2
+if (( adaptive_attack_tap_count < 3 )); then
+  echo "expected E1M1 adaptive route to keep disciplined attack taps" >&2
   exit 1
 fi
-if grep -Eq '^(scan-fire|advance-fire|circle-fire|strafe-fire)' "$adaptive_actions"; then
+if grep -Eq '^(advance-fire|circle-fire|strafe-fire)' "$adaptive_actions"; then
   echo "E1M1 adaptive route kept long default fire holds" >&2
   exit 1
 fi
@@ -426,13 +436,20 @@ QGE_NOESIS_COMMAND_TRACE_FILE="$builtin_route_commands" \
 cmp -s "$builtin_route_stdout" "$builtin_route_commands"
 grep -q '^door-open 8$' "$builtin_route_actions"
 grep -q '^door-bump 6$' "$builtin_route_actions"
+grep -q '^turn-left 10$' "$builtin_route_actions"
+grep -q '^run-forward 14$' "$builtin_route_actions"
+grep -q '^wall-slide-left 10$' "$builtin_route_actions"
+grep -q '^scan-fire-left 12$' "$builtin_route_actions"
+grep -q '^attack 2$' "$builtin_route_actions"
+grep -q '^scan-fire-left 6$' "$builtin_route_actions"
+grep -q '^scan-fire-right 6$' "$builtin_route_actions"
 grep -q '^speed-jump-forward 4$' "$builtin_route_actions"
 grep -q '^attack 1$' "$builtin_route_actions"
 if grep -q '^jump-forward 3$' "$builtin_route_actions"; then
   echo "built-in E1M1 route kept weak post-door jump-forward recovery" >&2
   exit 1
 fi
-if grep -Eq '^(scan-fire|advance-fire|circle-fire|strafe-fire)' "$builtin_route_actions"; then
+if grep -Eq '^(advance-fire|circle-fire|strafe-fire)' "$builtin_route_actions"; then
   echo "built-in E1M1 route kept long default fire holds" >&2
   exit 1
 fi
