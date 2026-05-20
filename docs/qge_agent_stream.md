@@ -594,15 +594,18 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   when intentionally testing early capture or startup behavior.
 - `QGE_NOESIS_ASSIST`: opt-in server-state assist for Noesis automation,
   default `0`. Mode `1` aims and fires at visible monsters while preserving the
-  scripted movement command. Mode `2` also steers the server usercmd toward the
-  nearest monster with a small wall-avoidance probe and kites visible close
-  targets instead of walking into them. When hidden-target chase hits a wall,
-  its sidestep follows the clearer probe side using Quake's sidemove sign
-  convention. Hidden distant targets do not override scripted view or route
-  movement; once the scripted route gets near enough, hidden-target chase can
-  help finish the approach, while assist still suppresses blind fire until a
-  target is visible. Visibility and aim use a sampled monster bbox point, so
-  partly exposed enemies are not limited to a center-point trace.
+  scripted movement command. For mode `1`, visible targets are ranked by
+  current aim error first and distance second, so a scan does not abandon the
+  enemy closest to the crosshair for a merely nearer side target. Mode `2` also
+  steers the server usercmd toward the nearest monster with a small
+  wall-avoidance probe and kites visible close targets instead of walking into
+  them. When hidden-target chase hits a wall, its sidestep follows the clearer
+  probe side using Quake's sidemove sign convention. Hidden distant targets do not override
+  scripted view or route movement; once the scripted route gets near enough,
+  hidden-target chase can help finish the approach, while assist still
+  suppresses blind fire until a target is visible. Visibility and aim use a
+  sampled monster bbox point, so partly exposed enemies are not limited to a
+  center-point trace.
   The engine-side cvar is `qge_noesis_assist`, remains off by default, and only
   acts during `-qgestreamdir` runs so normal local play is untouched.
 - `QGE_NOESIS_CMD`: optional Noesis action provider command. When set, the

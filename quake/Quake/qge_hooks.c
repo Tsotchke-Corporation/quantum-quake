@@ -986,6 +986,7 @@ static float QGE_NoesisAssistTraceDistance(edict_t *player, float yaw)
 }
 
 static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
+										  qboolean prefer_aim_error,
 										  qboolean *visible_out,
 										  float *distance_out,
 										  vec3_t aim_point_out)
@@ -995,6 +996,7 @@ static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
 	vec3_t best_visible_aim;
 	vec3_t best_nearest_aim;
 	float best_visible_distance = 999999.0f;
+	float best_visible_aim_error = 999999.0f;
 	float best_nearest_distance = 999999.0f;
 
 	if (visible_out)
@@ -1023,11 +1025,28 @@ static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
 			best_nearest = ent;
 			QGE_GameplayEnemyCenterPoint(ent, best_nearest_aim);
 		}
-		if (QGE_GameplayEnemyAimPoint(player, ent, candidate_aim) &&
-			distance < best_visible_distance) {
-			best_visible_distance = distance;
-			best_visible = ent;
-			VectorCopy(candidate_aim, best_visible_aim);
+		if (QGE_GameplayEnemyAimPoint(player, ent, candidate_aim)) {
+			qboolean candidate_better = false;
+			float aim_error = -1.0f;
+
+			if (prefer_aim_error) {
+				aim_error = QGE_GameplayAimErrorDegrees(player, candidate_aim);
+				candidate_better =
+					!best_visible ||
+					aim_error < best_visible_aim_error ||
+					(aim_error == best_visible_aim_error &&
+					 distance < best_visible_distance);
+			}
+			else {
+				candidate_better =
+					!best_visible || distance < best_visible_distance;
+			}
+			if (candidate_better) {
+				best_visible_distance = distance;
+				best_visible_aim_error = aim_error;
+				best_visible = ent;
+				VectorCopy(candidate_aim, best_visible_aim);
+			}
 		}
 	}
 
@@ -1089,7 +1108,9 @@ void QGE_NoesisAssistClientThink(client_t *client,
 		!sv.active || !QGE_GameplayStreamDir())
 		return;
 
-	enemy = QGE_NoesisAssistFindEnemy(player, &visible, &distance, aim_point);
+	chase_mode = qge_noesis_assist.value >= 1.5f ? 1 : 0;
+	enemy = QGE_NoesisAssistFindEnemy(player, chase_mode ? false : true,
+									  &visible, &distance, aim_point);
 	if (!enemy)
 		return;
 
@@ -1101,7 +1122,6 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	aim[YAW] = anglemod(aim[YAW]);
 	aim[ROLL] = 0.0f;
 
-	chase_mode = qge_noesis_assist.value >= 1.5f ? 1 : 0;
 	engage_target = visible || (chase_mode && distance >= 0.0f &&
 								distance <= QGE_NOESIS_HIDDEN_CHASE_DISTANCE);
 	if (engage_target) {
