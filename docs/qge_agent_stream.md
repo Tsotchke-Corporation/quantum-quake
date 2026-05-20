@@ -138,9 +138,10 @@ The stream directory is intentionally simple and tail-friendly:
   view, movement, or attack state. Mode `2` also keeps a bounded target lock and
   suppresses fire on large first-frame target switches so Noesis can finish one
   viable monster instead of oscillating between nearby candidates. The assist
-  leaves the current view alone only when the pre-assist aim error is already
-  close to aligned, and projects target-relative movement back into the current
-  view basis so route movement is not dependent on a server view snap.
+  keeps early E1M1 route phases visible-only for combat takeover, leaves the
+  current view alone only when the pre-assist aim error is already close to
+  aligned, and projects target-relative movement back into the current view basis
+  so route movement is not dependent on a server view snap.
 - `logs/quantum_quake.log`: runtime console log mirrored into the stream.
 - `logs/open.log`: LaunchServices notes for macOS `open` mode.
 - `trace/qge_trace_summary.json`: JSON summary of `qge_trace.bin`, including
@@ -617,7 +618,9 @@ default provider, and an explicit `QGE_NOESIS_CMD` takes precedence over both.
   small wall-avoidance probe and kites visible close targets instead of walking
   into them. When hidden-target chase hits a wall, its sidestep follows the clearer
   probe side using Quake's sidemove sign convention. Hidden distant targets do not override
-  scripted view or route movement; once the scripted route gets near enough,
+  scripted view or route movement; the E1M1 entry, bridge, and door-slide phases
+  are visible-only for combat takeover so hidden enemies cannot hijack the route
+  through walls. Once the scripted route reaches the exit/hunt phases,
   hidden-target chase can help finish the approach, while assist still
   suppresses blind fire until a target is visible. It also skips server view
   injection when Noesis is already aimed within `QGE_NOESIS_VIEW_HOLD_DEG`,

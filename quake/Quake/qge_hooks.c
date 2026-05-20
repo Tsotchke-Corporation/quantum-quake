@@ -169,6 +169,7 @@ static int qge_gameplay_prev_edict_capacity = 0;
 #define QGE_NOESIS_PHASE_NAME_MAX 64
 static char qge_noesis_phase_queue[QGE_NOESIS_PHASE_QUEUE_MAX]
 								  [QGE_NOESIS_PHASE_NAME_MAX];
+static char qge_noesis_current_phase[QGE_NOESIS_PHASE_NAME_MAX];
 static int qge_noesis_phase_queue_count = 0;
 static int qge_noesis_phase_sequence = 0;
 static qboolean qge_noesis_phase_command_registered = false;
@@ -804,6 +805,7 @@ static void QGE_GameplayOutcomeResetState(void)
 	qge_noesis_assist_target_lock_until_frame = -1;
 	qge_noesis_assist_target_switches_total = 0;
 	qge_noesis_assist_locked_frames_total = 0;
+	qge_noesis_current_phase[0] = 0;
 	qge_gameplay_prev_health = 0;
 	qge_gameplay_prev_armor = 0;
 	qge_gameplay_prev_ammo_total = 0;
@@ -1005,6 +1007,15 @@ static float QGE_NoesisAssistTraceDistance(edict_t *player, float yaw)
 	return trace.fraction * probe_distance;
 }
 
+static float QGE_NoesisAssistHiddenChaseDistance(void)
+{
+	if (strcmp(qge_noesis_current_phase, "e1m1_entry_clear") == 0 ||
+		strcmp(qge_noesis_current_phase, "e1m1_bridge_route") == 0 ||
+		strcmp(qge_noesis_current_phase, "e1m1_door_slide") == 0)
+		return 0.0f;
+	return QGE_NOESIS_HIDDEN_CHASE_DISTANCE;
+}
+
 static void QGE_NoesisAssistSetRelativeMove(usercmd_t *move,
 											float basis_yaw,
 											float target_yaw,
@@ -1075,6 +1086,7 @@ static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
 		vec3_t delta;
 		vec3_t locked_aim;
 		float distance;
+		float hidden_chase_distance;
 		qboolean visible;
 
 		if (locked && !locked->free && locked->v.health > 0.0f &&
@@ -1084,8 +1096,9 @@ static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
 			visible = QGE_GameplayEnemyAimPoint(player, locked, locked_aim);
 			if (!visible)
 				QGE_GameplayEnemyCenterPoint(locked, locked_aim);
+			hidden_chase_distance = QGE_NoesisAssistHiddenChaseDistance();
 			if (distance <= QGE_NOESIS_TARGET_LOCK_MAX_DISTANCE &&
-				(visible || distance <= QGE_NOESIS_HIDDEN_CHASE_DISTANCE)) {
+				(visible || distance <= hidden_chase_distance)) {
 				if (visible_out)
 					*visible_out = visible;
 				if (distance_out)
@@ -1215,6 +1228,7 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	float movement_yaw;
 	float relative_forward;
 	float relative_side;
+	float hidden_chase_distance;
 	int chase_mode;
 
 	(void)client;
@@ -1255,8 +1269,9 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	aim[YAW] = anglemod(aim[YAW]);
 	aim[ROLL] = 0.0f;
 
+	hidden_chase_distance = QGE_NoesisAssistHiddenChaseDistance();
 	engage_target = visible || (chase_mode && distance >= 0.0f &&
-								distance <= QGE_NOESIS_HIDDEN_CHASE_DISTANCE);
+								distance <= hidden_chase_distance);
 	view_injected =
 		engage_target && pre_aim_error > QGE_NOESIS_VIEW_HOLD_DEG;
 	if (view_injected) {
@@ -1413,6 +1428,8 @@ static void QGE_NoesisPhase_f(void)
 		slot = qge_noesis_phase_queue_count++;
 	q_strlcpy(qge_noesis_phase_queue[slot], phase,
 			  sizeof(qge_noesis_phase_queue[slot]));
+	q_strlcpy(qge_noesis_current_phase, phase,
+			  sizeof(qge_noesis_current_phase));
 }
 
 static void QGE_GameplayOutcomeSample(void)
