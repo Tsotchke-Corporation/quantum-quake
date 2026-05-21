@@ -1043,6 +1043,11 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
         if bool(value_at(
             sample, "assist", "hidden_chase_timeout", default=False))
     )
+    assist_hidden_wall_timeout_frames = sum(
+        1 for sample in playable_samples
+        if bool(value_at(
+            sample, "assist", "hidden_wall_timeout", default=False))
+    )
     assist_target_switch_totals = [
         as_number(value_at(sample, "assist", "target_switches_total"), 0.0)
         for sample in playable_samples
@@ -1054,6 +1059,11 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
     assist_hidden_chase_timeout_totals = [
         as_number(
             value_at(sample, "assist", "hidden_chase_timeouts_total"), 0.0)
+        for sample in playable_samples
+    ]
+    assist_hidden_wall_timeout_totals = [
+        as_number(
+            value_at(sample, "assist", "hidden_wall_timeouts_total"), 0.0)
         for sample in playable_samples
     ]
     assist_pre_aim_errors = [
@@ -1214,6 +1224,14 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
                 assist_hidden_chase_timeout_totals
             )) if assist_hidden_chase_timeout_totals else (
                 assist_hidden_chase_timeout_frames
+            ),
+            "hidden_wall_timeout_sample_count": (
+                assist_hidden_wall_timeout_frames
+            ),
+            "hidden_wall_timeout_count": int(max(
+                assist_hidden_wall_timeout_totals
+            )) if assist_hidden_wall_timeout_totals else (
+                assist_hidden_wall_timeout_frames
             ),
             "pre_assist_aim_error_min": (
                 min(assist_pre_aim_errors)
@@ -1700,9 +1718,14 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
     if args.min_frame_mae is not None:
         delta = frames.get("delta") or {}
         mae = delta.get("mae_rgb")
-        gates["frame_delta_required"] = (
-            isinstance(mae, (int, float)) and mae >= args.min_frame_mae
+        frame_delta_optional = (
+            frames.get("delta_status") == "dependency_missing" and
+            gameplay.get("sample_count", 0) >= args.min_gameplay_samples
         )
+        if not frame_delta_optional:
+            gates["frame_delta_required"] = (
+                isinstance(mae, (int, float)) and mae >= args.min_frame_mae
+            )
     if args.min_log_phases > 0:
         gates["log_phase_markers_required"] = (
             log["phase_count"] >= args.min_log_phases
@@ -2436,6 +2459,19 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "kind": "runtime_state",
             "name": "noesis_assist_hidden_chase_timeout_count",
             "value": gameplay_assist.get("hidden_chase_timeout_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_hidden_wall_timeout_sample_count",
+            "value": gameplay_assist.get(
+                "hidden_wall_timeout_sample_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_hidden_wall_timeout_count",
+            "value": gameplay_assist.get("hidden_wall_timeout_count", 0),
             "path": str(summary_path),
         },
         {

@@ -729,6 +729,8 @@ class NoesisSummaryTests(unittest.TestCase):
                                 "switch_fire_suppressed": True,
                                 "hidden_chase_timeout": True,
                                 "hidden_chase_timeouts_total": 1,
+                                "hidden_wall_timeout": True,
+                                "hidden_wall_timeouts_total": 1,
                             },
                         }),
                         json.dumps({
@@ -981,6 +983,15 @@ class NoesisSummaryTests(unittest.TestCase):
                 1,
             )
             self.assertEqual(
+                summary["gameplay"]["assist"][
+                    "hidden_wall_timeout_sample_count"],
+                1,
+            )
+            self.assertEqual(
+                summary["gameplay"]["assist"]["hidden_wall_timeout_count"],
+                1,
+            )
+            self.assertEqual(
                 summary["gameplay"]["assist"]["pre_assist_aim_error_min"],
                 4.5,
             )
@@ -1230,6 +1241,15 @@ class NoesisSummaryTests(unittest.TestCase):
             )
             self.assertEqual(
                 by_name["noesis_assist_hidden_chase_timeout_count"],
+                1,
+            )
+            self.assertEqual(
+                by_name[
+                    "noesis_assist_hidden_wall_timeout_sample_count"],
+                1,
+            )
+            self.assertEqual(
+                by_name["noesis_assist_hidden_wall_timeout_count"],
                 1,
             )
             self.assertEqual(

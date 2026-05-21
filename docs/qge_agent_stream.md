@@ -667,7 +667,12 @@ loop with policy updates.
   while trying to chase an enemy through solid geometry. The clearer-side choice
   is held for `QGE_NOESIS_WALL_FOLLOW_FRAMES` frames so a blocked hidden target
   does not make the controller flip-flop in place. In autonomous no-script mode,
-  a hidden target that does not become visible within
+  hidden targets are additionally wall-stall gated: if a target inside
+  `QGE_NOESIS_HIDDEN_WALL_STALL_DISTANCE` keeps the target-facing probe below
+  `QGE_NOESIS_WALL_SLIDE_CLEAR` for
+  `QGE_NOESIS_HIDDEN_WALL_STALL_FRAMES`, the target is cooled down instead of
+  letting Noesis sidestep around the same wall contact. A hidden target that
+  does not become visible within
   `QGE_NOESIS_HIDDEN_CHASE_VISIBILITY_TIMEOUT_FRAMES` is cooled down for
   `QGE_NOESIS_HIDDEN_CHASE_COOLDOWN_FRAMES`, forcing target reacquisition
   instead of indefinitely pursuing the same unseen monster.

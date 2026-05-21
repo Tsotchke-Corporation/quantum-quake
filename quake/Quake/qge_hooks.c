@@ -210,6 +210,10 @@ static int qge_noesis_assist_hidden_cooldown_target_id = 0;
 static int qge_noesis_assist_hidden_cooldown_until_frame = -1;
 static int qge_noesis_assist_hidden_chase_timeouts_total = 0;
 static qboolean qge_noesis_assist_hidden_chase_timeout = false;
+static int qge_noesis_assist_hidden_wall_target_id = 0;
+static int qge_noesis_assist_hidden_wall_since_frame = -1;
+static int qge_noesis_assist_hidden_wall_timeouts_total = 0;
+static qboolean qge_noesis_assist_hidden_wall_timeout = false;
 
 #define QGE_NOESIS_AIM_ALIGNED_DEG 12.0f
 #define QGE_NOESIS_VIEW_HOLD_DEG 6.0f
@@ -220,6 +224,8 @@ static qboolean qge_noesis_assist_hidden_chase_timeout = false;
 #define QGE_NOESIS_WALL_FOLLOW_FRAMES 24
 #define QGE_NOESIS_HIDDEN_CHASE_VISIBILITY_TIMEOUT_FRAMES 80
 #define QGE_NOESIS_HIDDEN_CHASE_COOLDOWN_FRAMES 120
+#define QGE_NOESIS_HIDDEN_WALL_STALL_DISTANCE 1152.0f
+#define QGE_NOESIS_HIDDEN_WALL_STALL_FRAMES 30
 #define QGE_NOESIS_TARGET_LOCK_FRAMES 45
 #define QGE_NOESIS_TARGET_LOCK_MAX_DISTANCE 1152.0f
 
@@ -836,6 +842,10 @@ static void QGE_GameplayOutcomeResetState(void)
 	qge_noesis_assist_hidden_cooldown_until_frame = -1;
 	qge_noesis_assist_hidden_chase_timeouts_total = 0;
 	qge_noesis_assist_hidden_chase_timeout = false;
+	qge_noesis_assist_hidden_wall_target_id = 0;
+	qge_noesis_assist_hidden_wall_since_frame = -1;
+	qge_noesis_assist_hidden_wall_timeouts_total = 0;
+	qge_noesis_assist_hidden_wall_timeout = false;
 	qge_noesis_current_phase[0] = 0;
 	qge_gameplay_prev_health = 0;
 	qge_gameplay_prev_armor = 0;
@@ -1086,6 +1096,53 @@ static qboolean QGE_NoesisAssistHiddenCoolingDown(int target_id,
 	return true;
 }
 
+static void QGE_NoesisAssistResetHiddenWallStall(void)
+{
+	qge_noesis_assist_hidden_wall_target_id = 0;
+	qge_noesis_assist_hidden_wall_since_frame = -1;
+}
+
+static void QGE_NoesisAssistCooldownHiddenTarget(int target_id)
+{
+	qge_noesis_assist_hidden_cooldown_target_id = target_id;
+	qge_noesis_assist_hidden_cooldown_until_frame =
+		qge_frame_count + QGE_NOESIS_HIDDEN_CHASE_COOLDOWN_FRAMES;
+	qge_noesis_assist_hidden_chase_target_id = 0;
+	qge_noesis_assist_hidden_chase_since_frame = -1;
+	qge_noesis_assist_locked_target_id = 0;
+	qge_noesis_assist_target_lock_until_frame = -1;
+	qge_noesis_assist_wall_follow_until_frame = -1;
+	QGE_NoesisAssistResetHiddenWallStall();
+}
+
+static qboolean QGE_NoesisAssistHiddenWallStalled(int target_id,
+												 qboolean visible,
+												 float distance,
+												 float forward_clear)
+{
+	if (visible || qge_noesis_autonomous.value < 0.5f ||
+		target_id <= 1 ||
+		distance < 0.0f ||
+		distance > QGE_NOESIS_HIDDEN_WALL_STALL_DISTANCE ||
+		forward_clear < 0.0f ||
+		forward_clear >= QGE_NOESIS_WALL_SLIDE_CLEAR) {
+		QGE_NoesisAssistResetHiddenWallStall();
+		return false;
+	}
+	if (target_id != qge_noesis_assist_hidden_wall_target_id) {
+		qge_noesis_assist_hidden_wall_target_id = target_id;
+		qge_noesis_assist_hidden_wall_since_frame = qge_frame_count;
+		return false;
+	}
+	if (qge_noesis_assist_hidden_wall_since_frame < 0) {
+		qge_noesis_assist_hidden_wall_since_frame = qge_frame_count;
+		return false;
+	}
+	return qge_frame_count -
+		qge_noesis_assist_hidden_wall_since_frame >=
+		QGE_NOESIS_HIDDEN_WALL_STALL_FRAMES;
+}
+
 static void QGE_NoesisAssistSetRelativeMove(usercmd_t *move,
 											float basis_yaw,
 											float target_yaw,
@@ -1278,6 +1335,7 @@ static void QGE_NoesisAssistResetFrame(void)
 	qge_noesis_assist_target_switched = false;
 	qge_noesis_assist_switch_fire_suppressed = false;
 	qge_noesis_assist_hidden_chase_timeout = false;
+	qge_noesis_assist_hidden_wall_timeout = false;
 }
 
 void QGE_NoesisAssistClientThink(client_t *client,
@@ -1354,14 +1412,7 @@ void QGE_NoesisAssistClientThink(client_t *client,
 				 QGE_NOESIS_HIDDEN_CHASE_VISIBILITY_TIMEOUT_FRAMES) {
 			qge_noesis_assist_hidden_chase_timeout = true;
 			qge_noesis_assist_hidden_chase_timeouts_total++;
-			qge_noesis_assist_hidden_cooldown_target_id = selected_target_id;
-			qge_noesis_assist_hidden_cooldown_until_frame =
-				qge_frame_count + QGE_NOESIS_HIDDEN_CHASE_COOLDOWN_FRAMES;
-			qge_noesis_assist_hidden_chase_target_id = 0;
-			qge_noesis_assist_hidden_chase_since_frame = -1;
-			qge_noesis_assist_locked_target_id = 0;
-			qge_noesis_assist_target_lock_until_frame = -1;
-			qge_noesis_assist_wall_follow_until_frame = -1;
+			QGE_NoesisAssistCooldownHiddenTarget(selected_target_id);
 			qge_noesis_assist_mode = chase_mode ? 2 : 1;
 			qge_noesis_assist_active = true;
 			qge_noesis_assist_target_id = selected_target_id;
@@ -1389,6 +1440,40 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	hidden_chase_distance = QGE_NoesisAssistHiddenChaseDistance();
 	engage_target = visible || (chase_mode && distance >= 0.0f &&
 								distance <= hidden_chase_distance);
+	forward_clear = left_clear = right_clear = -1.0f;
+	if (chase_mode && engage_target && !visible &&
+		qge_noesis_autonomous.value >= 0.5f &&
+		distance <= QGE_NOESIS_HIDDEN_WALL_STALL_DISTANCE) {
+		forward_clear = QGE_NoesisAssistTraceDistance(player, aim[YAW]);
+		left_clear = QGE_NoesisAssistTraceDistance(player,
+												   anglemod(aim[YAW] + 45.0f));
+		right_clear = QGE_NoesisAssistTraceDistance(player,
+													anglemod(aim[YAW] - 45.0f));
+		if (QGE_NoesisAssistHiddenWallStalled(selected_target_id, visible,
+											 distance, forward_clear)) {
+			qge_noesis_assist_hidden_wall_timeout = true;
+			qge_noesis_assist_hidden_wall_timeouts_total++;
+			qge_noesis_assist_hidden_chase_timeout = true;
+			qge_noesis_assist_hidden_chase_timeouts_total++;
+			QGE_NoesisAssistCooldownHiddenTarget(selected_target_id);
+			qge_noesis_assist_mode = chase_mode ? 2 : 1;
+			qge_noesis_assist_active = true;
+			qge_noesis_assist_target_id = selected_target_id;
+			qge_noesis_assist_target_visible = false;
+			qge_noesis_assist_target_distance = distance;
+			qge_noesis_assist_aim_pitch = aim[PITCH];
+			qge_noesis_assist_aim_yaw = aim[YAW];
+			qge_noesis_assist_forward_clear = forward_clear;
+			qge_noesis_assist_left_clear = left_clear;
+			qge_noesis_assist_right_clear = right_clear;
+			qge_noesis_assist_pre_aim_error = pre_aim_error;
+			qge_noesis_assist_target_switched = target_switched;
+			return;
+		}
+	}
+	else {
+		QGE_NoesisAssistResetHiddenWallStall();
+	}
 	view_injected =
 		engage_target && pre_aim_error > QGE_NOESIS_VIEW_HOLD_DEG;
 	if (view_injected) {
@@ -1400,7 +1485,6 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	}
 	movement_yaw = view_injected ? aim[YAW] : anglemod(player->v.v_angle[YAW]);
 
-	forward_clear = left_clear = right_clear = -1.0f;
 	if (chase_mode && engage_target) {
 		relative_forward = 0.0f;
 		relative_side = 0.0f;
@@ -1418,11 +1502,13 @@ void QGE_NoesisAssistClientThink(client_t *client,
 		}
 		move->upmove = 0.0f;
 
-		forward_clear = QGE_NoesisAssistTraceDistance(player, aim[YAW]);
-		left_clear = QGE_NoesisAssistTraceDistance(player,
-												   anglemod(aim[YAW] + 45.0f));
-		right_clear = QGE_NoesisAssistTraceDistance(player,
-													anglemod(aim[YAW] - 45.0f));
+		if (forward_clear < 0.0f) {
+			forward_clear = QGE_NoesisAssistTraceDistance(player, aim[YAW]);
+			left_clear = QGE_NoesisAssistTraceDistance(player,
+													   anglemod(aim[YAW] + 45.0f));
+			right_clear = QGE_NoesisAssistTraceDistance(player,
+														anglemod(aim[YAW] - 45.0f));
+		}
 		if (relative_forward > 0.0f &&
 			forward_clear < QGE_NOESIS_WALL_SLIDE_CLEAR) {
 			float wall_follow_side =
@@ -1777,7 +1863,9 @@ static void QGE_GameplayOutcomeSample(void)
 		"\"locked_frames_total\":%d,"
 		"\"switch_fire_suppressed\":%s,"
 		"\"hidden_chase_timeout\":%s,"
-		"\"hidden_chase_timeouts_total\":%d},"
+		"\"hidden_chase_timeouts_total\":%d,"
+		"\"hidden_wall_timeout\":%s,"
+		"\"hidden_wall_timeouts_total\":%d},"
 		"\"pickup\":{\"pickup_delta\":%d,\"pickups_total\":%d,"
 		"\"item_bits_added\":%d,\"weapon_changed_delta\":%d,"
 		"\"weapon_changes_total\":%d}}\n",
@@ -1825,6 +1913,8 @@ static void QGE_GameplayOutcomeSample(void)
 		qge_noesis_assist_switch_fire_suppressed ? "true" : "false",
 		qge_noesis_assist_hidden_chase_timeout ? "true" : "false",
 		qge_noesis_assist_hidden_chase_timeouts_total,
+		qge_noesis_assist_hidden_wall_timeout ? "true" : "false",
+		qge_noesis_assist_hidden_wall_timeouts_total,
 		pickup_delta, qge_gameplay_pickups_total, item_bits_added,
 		weapon_changed_delta, qge_gameplay_weapon_changes_total);
 
@@ -1877,7 +1967,9 @@ static void QGE_GameplayOutcomeSample(void)
 			"\"locked_frames_total\":%d,"
 			"\"switch_fire_suppressed\":%s,"
 			"\"hidden_chase_timeout\":%s,"
-			"\"hidden_chase_timeouts_total\":%d},"
+			"\"hidden_chase_timeouts_total\":%d,"
+			"\"hidden_wall_timeout\":%s,"
+			"\"hidden_wall_timeouts_total\":%d},"
 			"\"pickup\":{\"pickups_total\":%d,"
 			"\"weapon_changes_total\":%d}}}\n",
 			qge_gameplay_samples,
@@ -1919,6 +2011,8 @@ static void QGE_GameplayOutcomeSample(void)
 			qge_noesis_assist_switch_fire_suppressed ? "true" : "false",
 			qge_noesis_assist_hidden_chase_timeout ? "true" : "false",
 			qge_noesis_assist_hidden_chase_timeouts_total,
+			qge_noesis_assist_hidden_wall_timeout ? "true" : "false",
+			qge_noesis_assist_hidden_wall_timeouts_total,
 			qge_gameplay_pickups_total, qge_gameplay_weapon_changes_total);
 	}
 	qge_noesis_phase_queue_count = 0;
