@@ -12,8 +12,9 @@ fast-forwarded to the same commit for compatibility after the older unrelated
 Three.js/WebTransport history was merged as provenance. The authoritative tree
 is the `master` QGE/QuakeSpasm layout documented here.
 
-Latest verified runtime baseline: `b1b7578` (`Use base palette for QGE world
-textures`), mirrored to both `origin/master` and `origin/main`.
+Latest verified runtime baseline: the current tone-headroom QGE renderer slice
+after `b1b7578` (`Use base palette for QGE world textures`), mirrored to both
+`origin/master` and `origin/main`.
 
 ## Current Status
 
@@ -77,13 +78,13 @@ Important known limitations:
 
 The current QGE graphics baseline is improved but still visibly glitchy. The
 latest fixed-view evidence is
-`diagnostics/quake_stream/20260521-135044/frame_001.png`, from the
-`b1b7578` baseline. That run reports QGE ownership of world geometry, world
-textures, lightmaps, and the viewmodel with no fallback reason. The matching
-region comparison against the classic `20260521-125448` reference shows the
-far-floor luminance and high-frequency texture noise moving closer to classic
-Quake after ordinary world texels stopped inheriting the global fullbright
-boost.
+`diagnostics/quake_stream/20260521-143859/frame_001.png`. That run reports QGE
+ownership of world geometry, world textures, lightmaps, and the viewmodel with
+no fallback reason. The matching region comparison against the classic
+`20260521-125448` reference shows the previous QGE ceiling mean-luminance delta
+falling from about `+9.07` to `+2.30`, side-wall deltas from about
+`+9.79/+9.90` to `+3.83/+3.67`, and far-floor delta from about `+7.36` to
+`+3.70` after increasing direct-spatial tone white headroom.
 
 What is still broken is just as important: side walls and ceilings are still
 too bright, raster seams remain visible, turbulent water/warp materials are not

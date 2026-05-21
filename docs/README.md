@@ -23,8 +23,9 @@ state, claims policy, stream/harness operation, and long-range research plans.
 - `master` is the primary branch; `origin/HEAD` points at `origin/master`, and
   `origin/main` is fast-forwarded to the same commit for compatibility. The
   active runtime tree is the C/QuakeSpasm/QGE tree on `master`. Latest verified
-  runtime baseline is `b1b7578` (`Use base palette for QGE world textures`),
-  mirrored to both `origin/master` and `origin/main`.
+  runtime baseline is the current tone-headroom QGE renderer slice after
+  `b1b7578` (`Use base palette for QGE world textures`), mirrored to both
+  `origin/master` and `origin/main`.
 - QGE has test-backed runtime, trace, visibility, projectile, audio, and
   rendering surfaces, but classic Quake remains the reference for full
   conformance.
@@ -34,10 +35,12 @@ state, claims policy, stream/harness operation, and long-range research plans.
   far-depth world background, normalized warp/water texture sampling, and stable
   render-gate display gain from deterministic state marginals. Normal world
   textures now use the base Quake palette instead of a global high-index
-  fullbright boost, reducing noisy floor speckles. Floors, walls, and ceilings
-  no longer shimmer from finite-shot display gain, but they are still visibly
-  glitchy: over-bright side walls/ceilings, raster seams, warp/water seams,
-  viewmodel fidelity, and vanilla-material fidelity remain open.
+  fullbright boost, reducing noisy floor speckles. The current tone-headroom
+  slice also pulls the fixed-view ceiling, side-wall, and far-floor luminance
+  closer to the classic reference. Floors, walls, and ceilings no longer shimmer
+  from finite-shot display gain, but they are still visibly glitchy: residual
+  side-wall/ceiling brightness, raster seams, warp/water seams, viewmodel
+  fidelity, and vanilla-material fidelity remain open.
 - Default Noesis runs are no-script autonomous diagnostics with server-side
   movement/combat feedback plus local clearance, floor, and hazard probes when
   no target is engaged. Noesis is not yet learning Quake from experience, has

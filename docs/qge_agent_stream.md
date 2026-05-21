@@ -750,7 +750,8 @@ loop with policy updates.
   QGE world-surface shading uses the lower `QGE_SURFACE_TEXTURE_AMBIENT` and
   `QGE_SURFACE_LIGHT_AMBIENT` floors plus a wider
   `QGE_NO_FLOOR_TONE_WHITE_HEADROOM`, so dark floors, walls, and ceilings keep
-  lightmap contrast instead of washing into translucent BSP-face panels.
+  lightmap contrast without pushing side walls and ceilings as far above the
+  classic reference.
   Render-gate display gain is derived from deterministic state marginals rather
   than finite-shot readout counts, so static floors, walls, and ceilings do not
   flicker just because `quantum_render_gate_shots` sampled a different basis
@@ -804,9 +805,9 @@ loop with policy updates.
   block bands while still running and logging the sparse DWT path. At the
   default full mix, display conversion uses the existing tone curve without the
   median-derived black floor that can crush darker texture samples to black, and
-  leaves `QGE_NO_FLOOR_TONE_WHITE_HEADROOM` above the sampled white point so
-  bright floors and ceilings keep texture and stronger lightmap contrast instead
-  of washing out to flat white; set it lower to inspect raw inverse-DWT
+  leaves `QGE_NO_FLOOR_TONE_WHITE_HEADROOM` well above the sampled white point
+  so bright floors and ceilings keep texture and stronger lightmap contrast
+  instead of washing out to flat white; set it lower to inspect raw inverse-DWT
   contribution.
   `QGE_RENDER_DISPLAY_FILTER=0` skips neighbor smoothing during display-buffer
   conversion because live captures showed the smoothed display can over-blur the

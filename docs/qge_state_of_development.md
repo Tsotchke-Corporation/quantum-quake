@@ -28,8 +28,9 @@ The latest verified branch state is:
 - Remote `HEAD` resolves to `refs/heads/master`.
 - `origin/main` is fast-forwarded to the same commit as `origin/master` for
   compatibility after the historical merge.
-- Latest verified runtime baseline is `b1b7578` (`Use base palette for QGE
-  world textures`), mirrored to both `origin/master` and `origin/main`.
+- Latest verified runtime baseline is the current tone-headroom QGE renderer
+  slice after `b1b7578` (`Use base palette for QGE world textures`), mirrored
+  to both `origin/master` and `origin/main`.
 - The active runtime tree is the C/QuakeSpasm/QGE tree, not the older
   JavaScript/WebTransport history.
 
@@ -54,6 +55,17 @@ The latest verified branch state is:
 
 Recent verified slices on `master` establish the current baseline:
 
+- The current tone-headroom QGE renderer slice increases
+  `QGE_NO_FLOOR_TONE_WHITE_HEADROOM` to keep preserved-detail world surfaces
+  from over-brightening the fixed-view scene. Fixed-view evidence at
+  `diagnostics/quake_stream/20260521-143859/frame_001.png` keeps QGE ownership
+  of world geometry, textures, lightmaps, and the viewmodel with
+  `fallback_reason=none`. Region checks against the classic `20260521-125448`
+  reference show ceiling mean-luminance delta improving from about `+9.07` to
+  `+2.30`, side-wall deltas from about `+9.79/+9.90` to `+3.83/+3.67`, and
+  far-floor delta from about `+7.36` to `+3.70`. Raster seams, turbulent
+  material fidelity, residual wall/ceiling brightness, and viewmodel fidelity
+  remain open.
 - `b1b7578` makes ordinary QGE world texture sampling use the base Quake
   palette instead of globally boosting high palette indices as fullbright.
   Fixed-view evidence at `diagnostics/quake_stream/20260521-135044/frame_001.png`
@@ -259,6 +271,10 @@ Implemented:
   separately, and world shading uses lower texture/light ambient floors with
   wider tone headroom so floors, walls, and ceilings keep more lightmap
   contrast instead of washing into bright BSP panels.
+- The direct-spatial no-floor tone path now uses a higher
+  `QGE_NO_FLOOR_TONE_WHITE_HEADROOM`, reducing fixed-view over-bright ceiling,
+  side-wall, and floor regions while preserving the no-median-floor display
+  path.
 - QGE polygon raster fill now uses a near-uniform world gain instead of
   multiplying every texel on a BSP face by that face's coarse brightness score.
   Texture and lightmap samples still provide local shading, but adjacent floor,
@@ -306,6 +322,9 @@ Known current visual state:
 - The most recent render-gate work fixes one class of static-scene shimmer:
   finite-shot readout counts still vary in telemetry, but the visible display
   gain is stable for an unchanged camera.
+- The most recent tone-headroom work reduces the fixed-view over-bright
+  ceiling, side-wall, and far-floor deltas against the classic reference, but
+  does not fix seams, turbulent surfaces, or vanilla material fidelity.
 - Floors, walls, and ceilings still need conformance work: raster seams,
   warped/noisy surfaces, gray/turbulent seams, and incomplete vanilla-material
   fidelity remain, even after default bilinear sampling, preserved-detail
