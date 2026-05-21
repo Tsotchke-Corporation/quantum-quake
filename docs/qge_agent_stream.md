@@ -721,8 +721,10 @@ loop with policy updates.
   `QGE_RENDER_DETAIL_MIX=1.0` preserves the pre-DWT RGB spatial raster and uses
   it as the final display signal after sparse DWT reconstruction runs. This
   keeps floor, wall, and ceiling texture detail from collapsing into sparse
-  block bands while still running and logging the sparse DWT path; set it lower
-  to inspect raw inverse-DWT contribution.
+  block bands while still running and logging the sparse DWT path. At the
+  default full mix, display conversion uses the existing tone curve without the
+  median-derived black floor that can crush darker texture samples to black; set
+  it lower to inspect raw inverse-DWT contribution.
   `QGE_RENDER_DISPLAY_FILTER=0` skips neighbor smoothing during display-buffer
   conversion because live captures showed the smoothed display can over-blur the
   whole world frame; set it to `1` for noisy-capture experiments.

@@ -51,6 +51,8 @@ Recent verified slices on `master` establish the current baseline:
   raster detail for final display, enabling default bilinear sampling, fixing
   normal-world palette opacity, and clipping very near surfaces at
   `QGE_SURFACE_NEAR_CLIP_DEPTH`.
+- The follow-up preserved-detail display work uses a no-floor tone map after a
+  direct-RGB experiment proved too dark in live capture.
 - `43e906f` makes Noesis no-script autonomous control the default stream mode.
   Scripted route fixtures remain opt-in regression tools.
 - `99b136d`, `351c593`, and nearby rendering commits stabilize QGE stream
@@ -61,6 +63,9 @@ Useful live evidence anchors:
 
 - `diagnostics/quake_stream/20260520-200246/frame_001.png`: current improved
   QGE world-rendering capture after the detail, opacity, and near-clip fixes.
+- `diagnostics/quake_stream/20260520-202448/frame_001.png`: follow-up
+  no-floor tone-map capture that keeps the same preserved-detail path bright
+  enough without the median-derived black floor.
 - `diagnostics/quake_stream/20260520-191730/frame_001.png` and
   `diagnostics/quake_stream/20260520-193513/frame_001.png`: older blockier QGE
   world captures used as visual comparisons.
@@ -117,6 +122,9 @@ Implemented:
 - Detail-preserving QGE render output: the full RGB raster is kept while sparse
   DWT coefficients are encoded, then used as the default final display signal so
   floor/wall/ceiling detail is not dominated by sparse-block reconstruction.
+- Full preserved-detail display uses a no-floor tone map so ordinary dark
+  texture samples are not converted into black holes while the scene still gets
+  the brightness lift needed for live capture.
 - Bilinear texture and lightmap sampling is enabled by default for QGE primary
   captures; the nearest-sample path remains available for faster diagnostics.
 - Normal floor, wall, and ceiling textures no longer inherit the global
@@ -135,8 +143,8 @@ Known current visual state:
   captures.
 - Floors, walls, and ceilings still need conformance work: raster seams,
   warped/noisy surfaces, and incomplete vanilla-material fidelity remain, even
-  after default bilinear sampling and preserved detail output reduce sparse DWT
-  block bands.
+  after default bilinear sampling and preserved-detail no-floor output reduce
+  sparse DWT block bands and tone-floor artifacts.
 - `QGE_RENDER_BILINEAR_SAMPLES=0` and `QGE_RENDER_DETAIL_MIX=0` remain useful
   for isolating raw sparse DWT and nearest-sample behavior during diagnostics.
 - `QGE_RENDER_DISPLAY_FILTER=1` can smooth noisy captures, but it is not the

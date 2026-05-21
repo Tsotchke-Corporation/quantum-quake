@@ -7990,6 +7990,12 @@ static void QGE_InitToneLut(void)
 	qge_tone_lut_ready = true;
 }
 
+static qboolean QGE_RenderUseSpatialNoFloorTone(void)
+{
+	return quantum_render_detail_mix.value >= 0.999f &&
+		   quantum_render_display_filter.value < 0.5f;
+}
+
 static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 											 float *max_val,
 											 int *nonzero_pixels,
@@ -8013,6 +8019,7 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 	int running;
 	int i;
 	qboolean direct_display = quantum_render_display_filter.value < 0.5f;
+	qboolean no_floor_tone = QGE_RenderUseSpatialNoFloorTone();
 	const float *rbuf = qge_render_color_buffer[QGE_DWT_R];
 	const float *gbuf = qge_render_color_buffer[QGE_DWT_G];
 	const float *bbuf = qge_render_color_buffer[QGE_DWT_B];
@@ -8112,7 +8119,7 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 		}
 	}
 
-	floor_val = median * 0.85f;
+	floor_val = no_floor_tone ? 0.0f : median * 0.85f;
 	if (white <= floor_val + 0.0001f)
 		white = max_abs;
 	inv_range = 1.0f / (white - floor_val + 0.0001f);
