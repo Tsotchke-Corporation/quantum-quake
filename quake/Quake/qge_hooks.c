@@ -90,6 +90,9 @@ static int qge_render_res = 1024;  /* Internal quantum render resolution */
 #define QGE_SPATIAL_DEPTH_FAR 1.0e30f
 #define QGE_SPATIAL_DEPTH_EPSILON 0.25f
 #define QGE_SURFACE_NEAR_CLIP_DEPTH 8.0f
+#define QGE_SPATIAL_WORLD_BACKGROUND_R 0.018f
+#define QGE_SPATIAL_WORLD_BACKGROUND_G 0.017f
+#define QGE_SPATIAL_WORLD_BACKGROUND_B 0.015f
 
 /* GL texture for quantum framebuffer */
 static GLuint qge_texture = 0;
@@ -713,6 +716,7 @@ typedef struct {
 	qboolean bilinear;
 	qboolean sky;
 	qboolean fence;
+	qboolean warp;
 	qboolean tex_power2;
 	float color_gain_r;
 	float color_gain_g;
@@ -5310,6 +5314,35 @@ static void QGE_SpatialClear(void)
 	}
 }
 
+static void QGE_SpatialFillWorldBackground(void)
+{
+	int pixels = qge_render_res * qge_render_res;
+	float *rbuf = qge_spatial_color_buffer[QGE_DWT_R];
+	float *gbuf = qge_spatial_color_buffer[QGE_DWT_G];
+	float *bbuf = qge_spatial_color_buffer[QGE_DWT_B];
+	float luma = 0.299f * QGE_SPATIAL_WORLD_BACKGROUND_R +
+				 0.587f * QGE_SPATIAL_WORLD_BACKGROUND_G +
+				 0.114f * QGE_SPATIAL_WORLD_BACKGROUND_B;
+
+	if (pixels <= 0)
+		return;
+	if (rbuf && gbuf && bbuf) {
+		for (int i = 0; i < pixels; i++) {
+			rbuf[i] = QGE_SPATIAL_WORLD_BACKGROUND_R;
+			gbuf[i] = QGE_SPATIAL_WORLD_BACKGROUND_G;
+			bbuf[i] = QGE_SPATIAL_WORLD_BACKGROUND_B;
+		}
+	}
+	else if (qge_spatial_encode_buffer) {
+		for (int i = 0; i < pixels; i++)
+			qge_spatial_encode_buffer[i] = luma;
+	}
+	if (qge_spatial_depth_buffer) {
+		for (int i = 0; i < pixels; i++)
+			qge_spatial_depth_buffer[i] = QGE_SPATIAL_DEPTH_FAR;
+	}
+}
+
 QGE_HOT_INLINE float QGE_ClampSpatialSignal(float value)
 {
 	if (value < 0.0f)
@@ -6351,6 +6384,7 @@ static void QGE_PrepareSurfaceSampleContext(qge_surface_sample_context_t *ctx,
 	ctx->bilinear = quantum_render_bilinear_samples.value >= 0.5f;
 	ctx->sky = surface && (surface->flags & SURF_DRAWSKY);
 	ctx->fence = surface && (surface->flags & SURF_DRAWFENCE);
+	ctx->warp = surface && (surface->flags & SURF_DRAWTURB);
 	ctx->tex_power2 = ctx->tex_width && ctx->tex_height &&
 					  ((ctx->tex_width & ctx->tex_width_mask) == 0u) &&
 					  ((ctx->tex_height & ctx->tex_height_mask) == 0u);
@@ -6516,6 +6550,10 @@ QGE_HOT_INLINE qboolean QGE_SurfaceTextureColorContext(
 		return true;
 	if (!ctx->tex_pixels || !ctx->tex_width || !ctx->tex_height)
 		return true;
+	if (ctx->warp) {
+		tex_s *= 1.0f / 64.0f;
+		tex_t *= 1.0f / 64.0f;
+	}
 
 	if (ctx->bilinear) {
 		float fx, fy;
@@ -8561,6 +8599,7 @@ static void QGE_EncodeScene(void)
 	for (int ch = 0; ch < QGE_DWT_CHANNELS; ch++)
 		qge_dwt_framebuffer_reset(qge_dwt_fb[ch]);
 	QGE_SpatialClear();
+	QGE_SpatialFillWorldBackground();
 
 	/* Encode visible BSP world surfaces submitted by R_MarkSurfaces. */
 	surface_budget = (int)quantum_scene_surface_budget.value;

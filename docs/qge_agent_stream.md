@@ -753,6 +753,15 @@ loop with policy updates.
   QGE world-surface projection clips very near geometry at
   `QGE_SURFACE_NEAR_CLIP_DEPTH` so walls or ceilings close to the camera do not
   explode into full-frame strips during autonomous captures.
+  `SURF_DRAWTURB`/water polygons normalize Quake's raw warp texture coordinates
+  before palette sampling, so water or slime surfaces do not become flat gray
+  bands across floor/wall/ceiling captures.
+  Before BSP surfaces are rasterized, the spatial framebuffer is initialized
+  with a far-depth ambient world background using
+  `QGE_SPATIAL_WORLD_BACKGROUND_R/G/B`; nearer world, entity, and particle
+  samples still replace it through the depth buffer, but uncovered pixels no
+  longer collapse into hard black voids when a close wall/floor/ceiling polygon
+  is clipped or absent from the visible surface set.
   `QGE_RENDER_EDGE_SAMPLES=0` uses center-sampled triangle coverage in the
   quantum rasterizer for faster high-resolution captures; set it to `1` to
   restore subpixel edge coverage.
