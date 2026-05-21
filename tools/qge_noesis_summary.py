@@ -1038,12 +1038,22 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
         if bool(value_at(
             sample, "assist", "switch_fire_suppressed", default=False))
     )
+    assist_hidden_chase_timeout_frames = sum(
+        1 for sample in playable_samples
+        if bool(value_at(
+            sample, "assist", "hidden_chase_timeout", default=False))
+    )
     assist_target_switch_totals = [
         as_number(value_at(sample, "assist", "target_switches_total"), 0.0)
         for sample in playable_samples
     ]
     assist_locked_frame_totals = [
         as_number(value_at(sample, "assist", "locked_frames_total"), 0.0)
+        for sample in playable_samples
+    ]
+    assist_hidden_chase_timeout_totals = [
+        as_number(
+            value_at(sample, "assist", "hidden_chase_timeouts_total"), 0.0)
         for sample in playable_samples
     ]
     assist_pre_aim_errors = [
@@ -1196,6 +1206,14 @@ def summarize_gameplay(path: Path | None) -> dict[str, Any]:
             )) if assist_locked_frame_totals else assist_locked_frames,
             "switch_fire_suppressed_sample_count": (
                 assist_switch_fire_suppressed_frames
+            ),
+            "hidden_chase_timeout_sample_count": (
+                assist_hidden_chase_timeout_frames
+            ),
+            "hidden_chase_timeout_count": int(max(
+                assist_hidden_chase_timeout_totals
+            )) if assist_hidden_chase_timeout_totals else (
+                assist_hidden_chase_timeout_frames
             ),
             "pre_assist_aim_error_min": (
                 min(assist_pre_aim_errors)
@@ -2405,6 +2423,19 @@ def build_icc_evidence(summary: dict[str, Any], summary_path: Path) -> list[dict
             "name": "noesis_assist_switch_fire_suppressed_sample_count",
             "value": gameplay_assist.get(
                 "switch_fire_suppressed_sample_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_hidden_chase_timeout_sample_count",
+            "value": gameplay_assist.get(
+                "hidden_chase_timeout_sample_count", 0),
+            "path": str(summary_path),
+        },
+        {
+            "kind": "runtime_state",
+            "name": "noesis_assist_hidden_chase_timeout_count",
+            "value": gameplay_assist.get("hidden_chase_timeout_count", 0),
             "path": str(summary_path),
         },
         {

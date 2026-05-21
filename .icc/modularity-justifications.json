@@ -10,6 +10,13 @@
       "task_id": "qge_domain_ownership_swarm",
       "reason": "This file is the current compatibility boundary between the upstream QuakeSpasm runtime and QGE-owned rendering, visibility, Noesis, physics, audio, and telemetry hooks. Keeping the hooks co-located avoids splitting hot frame-state code before the engine ownership seams are stable.",
       "mitigation": "New work should keep changes narrowly scoped, covered by tests and stream evidence, and move stable subsystems into focused modules when the QGE ownership boundary no longer needs direct access to Quake renderer and server internals."
+    },
+    {
+      "path": "tools/qge_noesis_summary.py",
+      "status": "temporary_evidence_reducer",
+      "task_id": "qge_domain_ownership_swarm",
+      "reason": "This reducer is still the single compatibility point for stream manifest parsing, Noesis action traces, gameplay outcome telemetry, quality gates, scoring, and ICC evidence emission while the Noesis evidence schema is changing quickly.",
+      "mitigation": "Keep additions schema-focused and unit-tested. Once the no-script gameplay telemetry stabilizes, split gameplay parsing, scoring, and ICC evidence emission into focused helper modules."
     }
   ]
 }

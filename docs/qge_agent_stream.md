@@ -666,7 +666,11 @@ loop with policy updates.
   is less likely to park the camera against nearby floors, walls, or ceilings
   while trying to chase an enemy through solid geometry. The clearer-side choice
   is held for `QGE_NOESIS_WALL_FOLLOW_FRAMES` frames so a blocked hidden target
-  does not make the controller flip-flop in place.
+  does not make the controller flip-flop in place. In autonomous no-script mode,
+  a hidden target that does not become visible within
+  `QGE_NOESIS_HIDDEN_CHASE_VISIBILITY_TIMEOUT_FRAMES` is cooled down for
+  `QGE_NOESIS_HIDDEN_CHASE_COOLDOWN_FRAMES`, forcing target reacquisition
+  instead of indefinitely pursuing the same unseen monster.
   Mode `1` aims and fires at visible monsters while preserving any existing
   movement command. For mode `1`, visible targets are ranked by
   current aim error first and distance second, so a scan does not abandon the
