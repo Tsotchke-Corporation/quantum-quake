@@ -95,6 +95,7 @@ static int qge_render_res = 1024;  /* Internal quantum render resolution */
 #define QGE_SPATIAL_WORLD_BACKGROUND_B 0.015f
 #define QGE_SPATIAL_SEAM_REPAIR_MIN_NEIGHBORS 3
 #define QGE_SPATIAL_SEAM_REPAIR_DEPTH_RATIO 0.25f
+#define QGE_TEXTURE_BILINEAR_MIN_FOOTPRINT 1.15f
 #define QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT 2.25f
 #define QGE_TEXTURE_PREFILTER_MAX_FOOTPRINT 4.0f
 
@@ -7076,7 +7077,7 @@ QGE_HOT_INLINE qboolean QGE_SurfaceTextureColorContext(
 		return QGE_SurfaceTexturePrefilterContext(ctx, tex_s, tex_t,
 												  tex_footprint, color);
 
-	if (ctx->bilinear) {
+	if (ctx->bilinear && tex_footprint >= QGE_TEXTURE_BILINEAR_MIN_FOOTPRINT) {
 		float fx, fy;
 		int x1, y1;
 		float tx_frac, ty_frac;

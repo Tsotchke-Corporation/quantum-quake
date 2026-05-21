@@ -254,6 +254,10 @@ Implemented:
   minification. Mildly minified floors, walls, and ceilings stay on bilinear
   sampling so nearby surfaces do not smear into broad bands, while distant
   texture crawl still has a bounded palette filter.
+- Magnified and one-texel world texture samples stay on nearest palette lookup
+  even when bilinear sampling is enabled. This keeps close floors, walls, and
+  ceilings sharper while leaving bilinear/minification handling available for
+  distance and slanted surfaces.
 - Render-gate visible display gain now uses deterministic state marginals
   rather than finite-shot readout counts. The stochastic counters are still
   logged, but static floors, walls, and ceilings do not pick up frame-to-frame
