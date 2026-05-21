@@ -268,7 +268,8 @@ hands the original command line to Quake directly. On macOS `open` mode, the
 harness also uses `open -W -n -F` plus `-ApplePersistenceIgnoreState YES`: it
 waits for the app, starts a new instance, asks LaunchServices to ignore
 restored window state, and does not require a manual click. The generated app
-bundle also opts the launcher window out of AppKit state restoration. The
+bundle also opts the launcher window out of AppKit state restoration and writes
+an exact `APPL????` `PkgInfo` record so LaunchServices can scan the bundle. The
 harness passes `-nomouse` by default so SDL does not enter relative mouse mode
 or warp/capture the user cursor. It lets SDL choose the display by default;
 set `QGE_STREAM_DISPLAY` only when a specific display index is required. Set

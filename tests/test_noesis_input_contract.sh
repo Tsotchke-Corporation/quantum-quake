@@ -16,6 +16,8 @@ grep -Fq 'if ([arguments argument:@"-nolauncher"] != nil)' "$repo_root/quake/Mac
 grep -Fq '[self launchQuakeUsingLauncherControls:NO];' "$repo_root/quake/MacOSX/AppController.m"
 grep -Fq '[self launchQuakeUsingLauncherControls:YES];' "$repo_root/quake/MacOSX/AppController.m"
 grep -Fq '[quakeArgs removeObjectAtIndex:i];' "$repo_root/quake/MacOSX/QuakeArguments.m"
+grep -Fq "printf 'APPL????' > \$(APP_CONTENTS)/PkgInfo" "$repo_root/Makefile"
+grep -Fq 'exact `APPL????` `PkgInfo` record' "$repo_root/docs/qge_agent_stream.md"
 grep -Fq 'video_args+=(-display "$stream_display")' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'open "${open_args[@]}" --args -ApplePersistenceIgnoreState YES "${run_args[@]}" -condebug >>"$open_log_file" 2>&1' "$repo_root/tools/quake_graphics_stream.sh"
 grep -q 'startup_issue="gl_context_failed"' "$repo_root/tools/quake_graphics_stream.sh"

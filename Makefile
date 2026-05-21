@@ -344,7 +344,7 @@ quake:
 		-c "Add :CFBundleInfoDictionaryVersion string 6.0" \
 		$(APP_CONTENTS)/Info.plist
 	@# Create PkgInfo
-	@echo -n "APPL????" > $(APP_CONTENTS)/PkgInfo
+	@printf 'APPL????' > $(APP_CONTENTS)/PkgInfo
 	@# Ad-hoc codesign everything
 	@echo "Signing app bundle..."
 	@xattr -cr $(APP_BUNDLE) 2>/dev/null || true
