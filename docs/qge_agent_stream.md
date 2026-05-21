@@ -214,6 +214,11 @@ high-resolution CPU timing split:
   inverse-DWT path. The same line includes `idwt_backend`, `idwt_path`, and
   `idwt_reason` so CPU, native, mixed, and intentional fallback paths remain
   machine-readable in `qge_perf_summary.py` and trace-derived runtime evidence.
+- `gate_p`, `gate_edge`, `gate_gain`, `edge_gain`, `material_gain`, and
+  `gate_rgb`: render-gate state observables and derived display gains. The
+  finite-shot counters remain logged as measurement telemetry, but visible
+  floor/wall/ceiling gain uses deterministic state marginals so a static camera
+  does not shimmer from per-frame shot noise.
 - `convert`: tone mapping and RGB display-buffer conversion.
 - `blit`: OpenGL texture upload and screen draw.
 
@@ -743,6 +748,10 @@ loop with policy updates.
   `QGE_SURFACE_LIGHT_AMBIENT` floors plus a wider
   `QGE_NO_FLOOR_TONE_WHITE_HEADROOM`, so dark floors, walls, and ceilings keep
   lightmap contrast instead of washing into translucent BSP-face panels.
+  Render-gate display gain is derived from deterministic state marginals rather
+  than finite-shot readout counts, so static floors, walls, and ceilings do not
+  flicker just because `quantum_render_gate_shots` sampled a different basis
+  distribution on the next frame.
   Polygon raster fill uses a near-uniform world gain because the per-pixel
   texture and lightmap samples already carry local brightness; this reduces
   rectangular per-face exposure blocks on adjacent floors, walls, and ceilings.

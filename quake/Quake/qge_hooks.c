@@ -2543,10 +2543,40 @@ static uint64_t QGE_RenderGateSampleBasis(uint64_t raw)
 		   (uint64_t)qge_render_gate_state.state_dim - 1u : 0u;
 }
 
+static void QGE_RenderGateMarginalProbabilities(
+	const quantum_state_t *state,
+	double probabilities[QGE_RENDER_GATE_QUBITS])
+{
+	if (!probabilities)
+		return;
+	memset(probabilities, 0,
+		   sizeof(double) * QGE_RENDER_GATE_QUBITS);
+	if (!state)
+		return;
+
+	for (uint64_t basis = 0; basis < (uint64_t)state->state_dim; basis++) {
+		double p = quantum_state_get_probability(state, basis);
+
+		if (!isfinite(p) || p < 0.0)
+			continue;
+		for (int q = 0; q < QGE_RENDER_GATE_QUBITS; q++) {
+			if (basis & (1u << q))
+				probabilities[q] += p;
+		}
+	}
+	for (int q = 0; q < QGE_RENDER_GATE_QUBITS; q++) {
+		if (probabilities[q] < 0.0)
+			probabilities[q] = 0.0;
+		if (probabilities[q] > 1.0)
+			probabilities[q] = 1.0;
+	}
+}
+
 /* Bounded reviewer-facing simulated QPU workload: scene/material/light
  * statistics are angle-encoded into a 6-qubit Moonlab state, entangling gates
  * mix feature and readout qubits, and finite-shot measurements produce an edge
- * preservation observable used by the sparse-DWT renderer. */
+ * preservation observable. The display gains use deterministic state marginals
+ * so static floors, walls, and ceilings do not flicker from finite-shot noise. */
 static void QGE_RunRenderGateKernel(const qge_frame_snapshot_t *snapshot)
 {
 	qge_quantum_runtime_t *rt;
@@ -2557,6 +2587,7 @@ static void QGE_RunRenderGateKernel(const qge_frame_snapshot_t *snapshot)
 	float entity_ratio;
 	float special_ratio = 0.0f;
 	double shot_probabilities[QGE_RENDER_GATE_QUBITS] = {0.0};
+	double state_probabilities[QGE_RENDER_GATE_QUBITS] = {0.0};
 	int basis_counts[QGE_RENDER_GATE_DIM];
 	int surface_count = qge_scene_surface_count;
 	int entity_count = snapshot ? (int)snapshot->edict_count : 0;
@@ -2668,6 +2699,8 @@ static void QGE_RunRenderGateKernel(const qge_frame_snapshot_t *snapshot)
 		return;
 	}
 
+	QGE_RenderGateMarginalProbabilities(&qge_render_gate_state,
+										state_probabilities);
 	qge_render_gate_shots = QGE_RenderGateShotCount();
 	memset(basis_counts, 0, sizeof(basis_counts));
 	rt = QGE_Runtime();
@@ -2700,14 +2733,14 @@ static void QGE_RunRenderGateKernel(const qge_frame_snapshot_t *snapshot)
 
 	qge_render_gate_coherence =
 		(float)fabs(measurement_expectation_x(&qge_render_gate_state, 5));
-	qge_render_gate_probability = (float)shot_probabilities[5];
-	qge_render_gate_edge_observable = (float)shot_probabilities[4];
+	qge_render_gate_probability = (float)state_probabilities[5];
+	qge_render_gate_edge_observable = (float)state_probabilities[4];
 	qge_render_gate_gain = 0.94f + 0.12f * qge_render_gate_probability;
 	qge_render_gate_edge_gain = 0.70f + 0.85f * qge_render_gate_edge_observable;
 	qge_render_gate_material_gain = 0.85f + 0.30f * qge_render_gate_edge_observable;
-	qge_render_gate_color_gain[QGE_DWT_R] = 0.94f + 0.10f * (float)shot_probabilities[0];
-	qge_render_gate_color_gain[QGE_DWT_G] = 0.94f + 0.10f * (float)shot_probabilities[1];
-	qge_render_gate_color_gain[QGE_DWT_B] = 0.94f + 0.10f * (float)shot_probabilities[2];
+	qge_render_gate_color_gain[QGE_DWT_R] = 0.94f + 0.10f * (float)state_probabilities[0];
+	qge_render_gate_color_gain[QGE_DWT_G] = 0.94f + 0.10f * (float)state_probabilities[1];
+	qge_render_gate_color_gain[QGE_DWT_B] = 0.94f + 0.10f * (float)state_probabilities[2];
 	qge_render_gate_state_hash = QGE_RenderGateAnalyzeState(
 		&qge_render_gate_state,
 		&qge_render_gate_active_basis,
@@ -2715,7 +2748,7 @@ static void QGE_RunRenderGateKernel(const qge_frame_snapshot_t *snapshot)
 		&qge_render_gate_max_probability,
 		NULL);
 
-	QGE_RenderGateRecordMeasurements(rt, shot_probabilities);
+	QGE_RenderGateRecordMeasurements(rt, state_probabilities);
 	QGE_RecordRenderGateProbe(rt);
 }
 
