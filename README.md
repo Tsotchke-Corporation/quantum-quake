@@ -85,12 +85,18 @@ no fallback reason. The matching region comparison against the classic
 falling from about `+9.07` to `+2.30`, side-wall deltas from about
 `+9.79/+9.90` to `+3.83/+3.67`, and far-floor delta from about `+7.36` to
 `+3.70` after increasing direct-spatial tone white headroom.
+The follow-up activation-only fixed-view capture
+`diagnostics/quake_stream/20260521-150734/frame_001.png` keeps full QGE
+ownership and replaces the old synthetic first-person viewmodel glyph with
+alias-model mesh output (`emesh=58`, `ecoeff=27`, `own_viewmodel=1`,
+`fallback_reason=none`).
 
 What is still broken is just as important: side walls and ceilings are still
 too bright, raster seams remain visible, turbulent water/warp materials are not
-vanilla-quality, and the viewmodel path is not yet faithful. Treat the renderer
-as a diagnostic primary path with useful ownership telemetry, not as a finished
-replacement for classic Quake rendering.
+vanilla-quality, and the viewmodel is still an untextured QGE mesh rather than
+a faithful classic weapon material. Treat the renderer as a diagnostic primary
+path with useful ownership telemetry, not as a finished replacement for classic
+Quake rendering.
 
 ## Quick Start
 

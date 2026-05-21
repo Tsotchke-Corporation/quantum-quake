@@ -816,6 +816,11 @@ loop with policy updates.
   floors, walls, ceilings, entities, and the viewmodel move with the camera.
   Higher values deliberately reuse the last texture between updates for
   profiling; values above `16` are clamped.
+  Alias-model mesh encoding also covers the first-person viewmodel with
+  `QGE_MAX_ALIAS_VIEWMODEL_TRIS`, replacing the old synthetic center-line
+  viewmodel glyph when alias mesh metadata is available. This is still a
+  geometry-colored QGE mesh path; classic weapon texture/material fidelity
+  remains a separate renderer gap.
   `QGE_RENDER_RES` and `QGE_RENDER_THRESHOLD` are also passed as early
   `-qgerenderres` / `-qgerenderthreshold` launch arguments so DWT buffers are
   allocated at the requested size before `autoexec.cfg` runs.

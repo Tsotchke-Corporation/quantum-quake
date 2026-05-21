@@ -66,6 +66,12 @@ Recent verified slices on `master` establish the current baseline:
   far-floor delta from about `+7.36` to `+3.70`. Raster seams, turbulent
   material fidelity, residual wall/ceiling brightness, and viewmodel fidelity
   remain open.
+- The current viewmodel mesh slice replaces the synthetic first-person weapon
+  glyph with bounded alias-model mesh encoding. Activation-only fixed-view
+  evidence at `diagnostics/quake_stream/20260521-150734/frame_001.png` reports
+  `emesh=58`, `ecoeff=27`, `own_viewmodel=1`, and `fallback_reason=none`.
+  The viewmodel is still not vanilla-faithful or texture-sampled like classic
+  Quake, but it is now real model geometry instead of the placeholder line art.
 - `b1b7578` makes ordinary QGE world texture sampling use the base Quake
   palette instead of globally boosting high palette indices as fullbright.
   Fixed-view evidence at `diagnostics/quake_stream/20260521-135044/frame_001.png`
@@ -241,6 +247,9 @@ Implemented:
 - Texture and lightmap signal caches.
 - BSP surface projection, triangle raster, material/light encoding, viewmodel
   and entity coefficient paths.
+- The first-person viewmodel uses alias-model mesh encoding with a larger
+  bounded triangle budget instead of the previous synthetic center-line glyph
+  when alias mesh metadata is available.
 - Surface-budget telemetry and default scene surface budget increased to 512
   after fixed-view `e1m1` diagnostics showed the old 128 limit dropped visible
   floor/wall/ceiling surfaces.
@@ -325,6 +334,10 @@ Known current visual state:
 - The most recent tone-headroom work reduces the fixed-view over-bright
   ceiling, side-wall, and far-floor deltas against the classic reference, but
   does not fix seams, turbulent surfaces, or vanilla material fidelity.
+- The most recent viewmodel work encodes the first-person weapon through the
+  alias-model mesh path (`emesh=58` in the `20260521-150734` capture) instead
+  of the old synthetic center-line glyph. It is still an untextured QGE mesh,
+  not a faithful classic weapon material.
 - Floors, walls, and ceilings still need conformance work: raster seams,
   warped/noisy surfaces, gray/turbulent seams, and incomplete vanilla-material
   fidelity remain, even after default bilinear sampling, preserved-detail

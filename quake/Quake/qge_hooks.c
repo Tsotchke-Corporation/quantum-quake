@@ -604,6 +604,7 @@ static unsigned int QGE_TextureSignalBuild(const texture_t *tex,
 #define QGE_MAX_PROJECTED_POLY_VERTS 96
 #define QGE_MAX_PROJECTED_TRIS (QGE_MAX_PROJECTED_POLY_VERTS - 2)
 #define QGE_MAX_ALIAS_ENTITY_TRIS 96
+#define QGE_MAX_ALIAS_VIEWMODEL_TRIS 384
 #define QGE_PROJECTED_AREA_EPSILON 0.000001f
 typedef struct {
 	qboolean valid;
@@ -8189,13 +8190,12 @@ static qboolean QGE_EncodeAliasModelMeshCoefficients(
 	const unsigned short *indexes;
 	const trivertx_t *poseverts_data;
 	int frame, pose, tri_count, stride;
+	int tri_budget;
 	int encoded = 0;
 	qge_rgb_sample_t fill = QGE_RGBScaled(color, 0.24f);
 	qge_rgb_sample_t edge = QGE_RGBScaled(color, 0.85f);
 
 	if (!edict || !ref || !ref->debug_cookie)
-		return false;
-	if (QGE_IsSnapshotViewmodel(edict))
 		return false;
 
 	model = (qmodel_t *)(uintptr_t)ref->debug_cookie;
@@ -8219,8 +8219,9 @@ static qboolean QGE_EncodeAliasModelMeshCoefficients(
 	poseverts_data = (const trivertx_t *)((const byte *)hdr + hdr->vertexes) +
 		pose * hdr->numverts;
 	tri_count = hdr->numindexes / 3;
-	stride = (tri_count + QGE_MAX_ALIAS_ENTITY_TRIS - 1) /
-		QGE_MAX_ALIAS_ENTITY_TRIS;
+	tri_budget = QGE_IsSnapshotViewmodel(edict) ?
+		QGE_MAX_ALIAS_VIEWMODEL_TRIS : QGE_MAX_ALIAS_ENTITY_TRIS;
+	stride = (tri_count + tri_budget - 1) / tri_budget;
 	if (stride < 1)
 		stride = 1;
 
@@ -8534,6 +8535,9 @@ static void QGE_EncodeAliasModelCoefficients(
 	if (w < 1) w = 1;
 	if (h < 1) h = 1;
 
+	if (QGE_EncodeAliasModelMeshCoefficients(edict, ref, color))
+		return;
+
 	if (QGE_IsSnapshotViewmodel(edict)) {
 		QGE_EntityCoeffLine((float)x1, (float)y2,
 							(float)cx, (float)y1,
@@ -8547,9 +8551,6 @@ static void QGE_EncodeAliasModelCoefficients(
 		QGE_EntityCoeffPixel(cx, y1 + h / 5, &detail, depth_world);
 		return;
 	}
-
-	if (QGE_EncodeAliasModelMeshCoefficients(edict, ref, color))
-		return;
 
 	QGE_SpatialFillRectColorDepth(bounds, &fill, depth_world);
 	QGE_SpatialOutlineRectColorDepth(bounds, &edge, depth_world);
