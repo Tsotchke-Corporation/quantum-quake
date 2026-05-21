@@ -191,6 +191,11 @@ Implemented:
   separately, and world shading uses lower texture/light ambient floors with
   wider tone headroom so floors, walls, and ceilings keep more lightmap
   contrast instead of washing into bright BSP panels.
+- QGE polygon raster fill now uses a near-uniform world gain instead of
+  multiplying every texel on a BSP face by that face's coarse brightness score.
+  Texture and lightmap samples still provide local shading, but adjacent floor,
+  wall, and ceiling faces are less likely to appear as rectangular exposure
+  blocks.
 - Same-depth world samples use max-channel ownership with a tight
   `QGE_SPATIAL_DEPTH_EPSILON`, which reduces seam brightening without treating
   nearby distinct faces as the same surface.
@@ -203,9 +208,9 @@ Known current visual state:
   captures.
 - Floors, walls, and ceilings still need conformance work: raster seams,
   warped/noisy surfaces, and incomplete vanilla-material fidelity remain, even
-  after default bilinear sampling, preserved-detail highlight headroom, and
-  duplicate-snapshot clearing reduce sparse DWT block bands, tone-floor
-  artifacts, and ghost panels.
+  after default bilinear sampling, preserved-detail highlight headroom,
+  flattened raster fill, and duplicate-snapshot clearing reduce sparse DWT
+  block bands, tone-floor artifacts, exposure panels, and ghost panels.
 - This means the current QGE graphics path is useful for diagnostics and
   iterative comparison, but it should still be called visibly glitchy for
   player-facing floor, wall, and ceiling fidelity.

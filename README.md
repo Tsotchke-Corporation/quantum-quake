@@ -43,9 +43,10 @@ Important known limitations:
   improved world-surface coverage, Quake-FOV world projection, bilinear
   surface/light sampling, darker lightmap-preserving surface shading, and
   preserved spatial detail for the final display while still running the sparse
-  DWT path for evidence. Floors, walls, and ceilings are less blocky and less
-  washed out, but can still show raster seams and incomplete vanilla-material
-  fidelity.
+  DWT path for evidence. The raster fill gain is kept nearly uniform across
+  adjacent BSP faces so per-face exposure blocks are reduced. Floors, walls,
+  and ceilings are less blocky and less washed out, but can still show raster
+  seams and incomplete vanilla-material fidelity.
 - Noesis is not yet learning Quake from experience. Current no-script runs use
   a reactive server-side controller with an explicit autonomous assist hint,
   target feedback, and wall-contact heuristics; scripted route fixtures are

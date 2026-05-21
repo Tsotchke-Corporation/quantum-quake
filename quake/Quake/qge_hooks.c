@@ -6982,12 +6982,22 @@ static void QGE_EncodeProjectedPolygonDWT(dwt_framebuffer_t *fb,
 										  float area)
 {
 	float fill;
+	float area_mix;
+	float raster_gain;
 
 	if (!surface || !verts || num_verts < 3 || !bounds)
 		return;
 
-	fill = brightness * (1.0f - depth * 0.1f) * 1.75f;
-	fill *= 0.60f + fminf(area / 4096.0f, 1.0f) * 0.40f;
+	/*
+	 * Texture and lightmap sampling already carry local surface lighting.
+	 * Keep the raster fill nearly uniform across BSP faces so adjacent wall,
+	 * floor, and ceiling polygons do not show rectangular per-face exposure
+	 * patches in the direct spatial display.
+	 */
+	area_mix = fminf(area / 4096.0f, 1.0f);
+	raster_gain = QGE_WorldEncodeGain();
+	fill = raster_gain * (1.05f - depth * 0.08f);
+	fill *= 0.90f + area_mix * 0.10f;
 	if (fill < 0.004f)
 		fill = 0.004f;
 	QGE_SpatialFillPolygonDepth(surface, verts, num_verts, bounds, fill);

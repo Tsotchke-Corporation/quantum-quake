@@ -734,6 +734,9 @@ loop with policy updates.
   `QGE_SURFACE_LIGHT_AMBIENT` floors plus a wider
   `QGE_NO_FLOOR_TONE_WHITE_HEADROOM`, so dark floors, walls, and ceilings keep
   lightmap contrast instead of washing into translucent BSP-face panels.
+  Polygon raster fill uses a near-uniform world gain because the per-pixel
+  texture and lightmap samples already carry local brightness; this reduces
+  rectangular per-face exposure blocks on adjacent floors, walls, and ceilings.
   When audited QGE visibility authority replaces the classic PVS surface set,
   the frame snapshot clears its prior visible-surface entries before recording
   the authoritative set, preventing duplicate world panels from being rasterized
