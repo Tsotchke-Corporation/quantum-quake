@@ -24,7 +24,8 @@ The latest verified branch state is:
 
 - `master` is the primary branch locally and remotely.
 - Remote `HEAD` resolves to `refs/heads/master`.
-- `origin/main` has already been merged into `master` for ancestry.
+- `origin/main` is fast-forwarded to the same commit as `origin/master` for
+  compatibility after the historical merge.
 - The active runtime tree is the C/QuakeSpasm/QGE tree, not the older
   JavaScript/WebTransport history.
 
@@ -32,8 +33,9 @@ The latest verified branch state is:
 
 - `master` is the primary development branch for Quantum Quake.
 - `origin/main` was an unrelated Three.js/WebTransport Quake history. It has
-  been merged into `master` for repository ancestry while preserving the QGE
-  tree as authoritative.
+  been merged into `master` for repository ancestry, then fast-forwarded to the
+  current `master` commit so both remote branch names resolve to the same QGE
+  tree. Remote `HEAD` still points at `origin/master`.
 - The active source layout is the C/QuakeSpasm/QGE tree:
   `qge/`, `quake/Quake/`, `deps/moonlab/`, `tools/`, `tests/`, `.icc/`, and
   `docs/`.
@@ -41,41 +43,46 @@ The latest verified branch state is:
   active runtime tree for this project unless deliberately re-imported under a
   non-conflicting directory in a future task.
 - Do not delete `origin/main` as part of normal cleanup without an explicit
-  destructive-branch-change request; it is harmless as merged provenance.
+  destructive-branch-change request; it is harmless as a compatibility pointer
+  to the same commit as `master`.
 
 ## Recent Verified Baseline
 
 Recent verified slices on `master` establish the current baseline:
 
-- `53cd998` improves QGE floor/wall/ceiling rendering by preserving spatial
-  raster detail for final display, enabling default bilinear sampling, fixing
-  normal-world palette opacity, and clipping very near surfaces at
-  `QGE_SURFACE_NEAR_CLIP_DEPTH`.
-- The follow-up preserved-detail display work uses a no-floor tone map after a
-  direct-RGB experiment proved too dark in live capture.
-- `43e906f` makes Noesis no-script autonomous control the default stream mode.
-  Scripted route fixtures remain opt-in regression tools.
-- `99b136d`, `351c593`, and nearby rendering commits stabilize QGE stream
-  startup, world-surface coverage, and surface-budget behavior.
-- `529ab0c` merges the historical `main` branch into `master`.
+- `1c1acc3` adds hidden-target cooldowns for no-script Noesis autonomous
+  control. A hidden target that does not become visible within the timeout is
+  temporarily cooled down so the controller can reacquire another target
+  instead of running the player into the same wall or obstruction indefinitely.
+- `c4ec5f0` reduces hidden-target wall push by removing forward pressure when
+  the target-facing wall probes are blocked and the target is not visible.
+- `e0c8e36`, `59c8d0f`, and `53cd998` are the current rendering baseline:
+  preserved-detail QGE display, no-floor tone mapping, normal-world palette
+  opacity fixes, bilinear surface/lightmap sampling, duplicate snapshot
+  clearing, and near-plane clipping for close world surfaces.
+- `0809057` and earlier no-script movement commits improve autonomous
+  wall-contact steering, but do not make Noesis a learned Quake player.
+- The historical `origin/main` history is merged for ancestry and the remote
+  `origin/main` branch now matches `origin/master`; `master` remains the primary
+  branch and remote `HEAD`.
 
 Useful live evidence anchors:
 
-- `diagnostics/quake_stream/20260520-200246/frame_001.png`: current improved
-  QGE world-rendering capture after the detail, opacity, and near-clip fixes.
-- `diagnostics/quake_stream/20260520-202448/frame_001.png`: follow-up
-  no-floor tone-map capture that keeps the same preserved-detail path bright
-  enough without the median-derived black floor.
+- `diagnostics/agent_stream/20260520-223950/noesis/qge_noesis_summary.json`:
+  latest no-script Noesis autonomous evidence after hidden-target cooldowns:
+  `noesis_scripted=0`, action trace line count `0`, `claim_scope` is
+  `server_autonomous`, three kills, `48.0` inferred damage, no damage taken,
+  score `81.574`, no terminal stall, `target_count=5`, and two
+  `hidden_chase_timeout` events that forced target reacquisition.
+- `diagnostics/agent_stream/20260520-221936/noesis/qge_noesis_summary.json`:
+  no-script evidence after hidden wall-push reduction and before hidden-target
+  cooldowns: action trace line count `0`, one kill, `24.0` inferred damage,
+  `16.0` damage taken, route distance `8085.643`, and no terminal stall. This
+  run showed that wall pushing had been reduced but target fixation was still a
+  gameplay problem.
 - `diagnostics/quake_stream/20260520-191730/frame_001.png` and
   `diagnostics/quake_stream/20260520-193513/frame_001.png`: older blockier QGE
   world captures used as visual comparisons.
-- `diagnostics/agent_stream/20260520-191730/noesis/qge_noesis_summary.json`:
-  no-script Noesis autonomous movement evidence with no action script lines.
-- `diagnostics/agent_stream/20260520-210235/noesis/qge_noesis_summary.json`:
-  fresh no-script Noesis evidence on the current renderer build:
-  `noesis_scripted=0`, action trace line count `0`, route distance `6535.963`,
-  `movement_injected_sample_count=279`, one pickup, one kill, and no terminal
-  stall.
 - `diagnostics/agent_stream/20260520-212112/noesis/qge_noesis_summary.json`:
   no-script Noesis wall-follow evidence after the autonomous wall-contact
   tuning: `noesis_scripted=0`, action trace line count `0`, three kills,
@@ -83,6 +90,11 @@ Useful live evidence anchors:
   frame at `diagnostics/quake_stream/20260520-212112/frame_001.png` still shows
   close-geometry QGE rendering artifacts, so this is a gameplay improvement and
   not a rendering-quality completion claim.
+- `diagnostics/quake_stream/20260520-200246/frame_001.png`: improved QGE
+  world-rendering capture after the detail, opacity, and near-clip fixes.
+- `diagnostics/quake_stream/20260520-202448/frame_001.png`: follow-up no-floor
+  tone-map capture that keeps the same preserved-detail path bright enough
+  without the median-derived black floor.
 - `diagnostics/quake_stream/20260520-215105/frame_001.png`: fixed-view classic
   reference capture used to distinguish real E1M1 brush panels from QGE
   rendering artifacts.
@@ -108,7 +120,7 @@ attempt-eval artifacts before push.
 | Visibility | Shadow/parity telemetry and controlled authority smoke | Bounded audited writeback only | Map breadth, dynamic cases, and user-visible quantum modes |
 | Projectiles/physics | Shadow state, branch state, writeback gates, collision oracle | Controlled authority gates | Full gameplay authority and quantum-native effects |
 | Audio | Post-mix and source-mode telemetry with smoke evidence | Diagnostic/source authority experiments | Complete source authority and player-facing effects |
-| AI/Noesis | No-script autonomous controller and opt-in scripted fixtures | Harness-only autonomous assist, not learning | General play, route recovery, target choice, and training loop |
+| AI/Noesis | No-script autonomous controller, wall-contact heuristics, hidden-target cooldowns, and opt-in scripted fixtures | Harness-only autonomous assist, not learning | General play, navigation, target choice, and training loop |
 | Documentation/claims | Claims ledger, state doc, architecture docs, ICC attempts | Evidence-gated wording | Keeping docs synchronized after each verified slice |
 
 ## Implemented Runtime Surfaces
@@ -173,6 +185,9 @@ Known current visual state:
   after default bilinear sampling, preserved-detail highlight headroom, and
   duplicate-snapshot clearing reduce sparse DWT block bands, tone-floor
   artifacts, and ghost panels.
+- This means the current QGE graphics path is useful for diagnostics and
+  iterative comparison, but it should still be called visibly glitchy for
+  player-facing floor, wall, and ceiling fidelity.
 - `QGE_RENDER_BILINEAR_SAMPLES=0` and `QGE_RENDER_DETAIL_MIX=0` remain useful
   for isolating raw sparse DWT and nearest-sample behavior during diagnostics.
 - `QGE_RENDER_DISPLAY_FILTER=1` can smooth noisy captures, but it is not the
@@ -252,8 +267,16 @@ Implemented:
 - Noesis summary reducer with route/combat/ammo/assist scoring.
 - Assist telemetry for target visibility, target locks, target switches, aim
   alignment, movement injection, attack injection, and fire suppression.
-- Recent `e1m1` harnesses can produce safe two-kill smoke runs without mouse
-  capture or window activation.
+- Hidden-target wall-push reduction: when Noesis is chasing an unseen target and
+  the forward probe is blocked, the controller keeps clearer-side strafe but
+  removes hidden-target forward pressure instead of grinding into the wall.
+- Hidden-target cooldown feedback for no-script autonomous runs: a hidden target
+  that does not become visible within the timeout is cooled down briefly so
+  target reacquisition can try another enemy.
+- Recent `e1m1` no-script harnesses can produce safe three-kill smoke runs
+  without mouse capture, window activation, or route action scripts. The current
+  strongest evidence is
+  `diagnostics/agent_stream/20260520-223950/noesis/qge_noesis_summary.json`.
 
 Partial or pending:
 
@@ -262,17 +285,27 @@ Partial or pending:
   fixtures rather than learned play.
 - It does not yet demonstrate robust, general Quake skill outside the bounded
   `e1m1` smoke.
-- Target selection, route recovery, and post-second-kill continuation remain
-  active work.
-- No-script wall-contact behavior now holds a bounded wall-follow side instead
-  of oscillating every few frames, but it can still wander against geometry
-  after combat and needs a real navigation/search policy.
+- Target selection, real navigation/search, post-kill continuation, and
+  learned policy updates remain active work.
+- No-script wall-contact behavior now has bounded wall-follow, hidden wall-push
+  reduction, and hidden-target cooldowns, but it can still look confused because
+  it is steering from local probes and reactive target feedback rather than a
+  map-level navigation plan.
 - If Noesis appears stationary, first check the run manifest and summary:
   `input.noesis_scripted` should be `0`, `input.noesis_autonomous` should be
   `1`, the action trace should have zero route-script lines, and route movement
   should appear in `gameplay.route.total_distance` plus
   `assist.movement_injected_sample_count`. If all movement counters are zero,
   the no-script autonomous hint or server assist did not engage.
+
+What "learning" would require:
+
+- A replay dataset or live experience buffer with state/action/outcome records
+  beyond the current diagnostic summaries.
+- An optimizer or policy update loop that changes model/controller parameters
+  across runs.
+- Evaluation splits that show improvement on held-out routes, maps, or combat
+  situations instead of a single scripted or hand-tuned `e1m1` smoke.
 
 ## What Counts As Progress
 
@@ -304,8 +337,9 @@ it uses no-script autonomous control or an opt-in scripted fixture.
 - **QGE graphics show full-frame wall strips:** inspect near-plane clipping,
   camera proximity, and projected polygon depth before tuning DWT thresholds.
 - **A branch appears stale:** fetch first, then verify `origin/HEAD` and
-  `git merge-base --is-ancestor origin/main master`; do not assume branch names
-  alone reflect the active runtime.
+  compare `origin/main` and `origin/master`. The intended current state is that
+  both resolve to the same commit, with `origin/HEAD` pointing at
+  `origin/master`.
 
 ## Claims Policy
 

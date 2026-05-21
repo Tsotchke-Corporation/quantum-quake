@@ -85,6 +85,17 @@ Classic Quake remains the reference, content shell, demo/save/network base, and
 fallback. It is not acceptable as hidden production output for a QGE-owned
 publication smoke.
 
+Current implementation status:
+
+- QGE primary rendering is active in diagnostics, but it is not yet vanilla
+  complete. Floors, walls, and ceilings still show visible seams, noisy
+  projection/tone artifacts, and incomplete material fidelity.
+- Noesis gameplay evidence currently comes from a no-script, server-autonomous
+  controller with local steering, combat assist telemetry, wall-contact
+  heuristics, and hidden-target cooldowns. It is not a learned policy yet.
+- Branch authority is consolidated on `master`; `origin/main` is a compatibility
+  pointer to the same commit, not a separate active runtime tree.
+
 ## Quantum Media Compiler
 
 The media compiler turns a game frame into a research problem:

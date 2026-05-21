@@ -6,9 +6,10 @@ the C engine, QGE runtime hooks, diagnostics harnesses, Noesis gameplay
 automation, and ICC evidence used to move individual game domains from shadow
 telemetry toward bounded authority.
 
-The `master` branch is the primary development branch for this codebase. The
-older `main` history was an unrelated Three.js/WebTransport Quake port; it has
-been merged into `master` for repository ancestry only. The authoritative tree
+The `master` branch is the primary development branch for this codebase.
+`origin/HEAD` resolves to `origin/master`, and `origin/main` is kept
+fast-forwarded to the same commit for compatibility after the older unrelated
+Three.js/WebTransport history was merged as provenance. The authoritative tree
 is the `master` QGE/QuakeSpasm layout documented here.
 
 ## Current Status
@@ -30,8 +31,9 @@ Working and routinely verified:
 - QGE audio post-mix and source-mode telemetry, including source authority
   smoke checks.
 - Noesis harness play on `e1m1` with no-script autonomous server control by
-  default, opt-in keyboard-style action-plan fixtures, engine-side assist
-  telemetry, route/combat outcome summaries, and ICC evidence sidecars.
+  default, opt-in keyboard-style action-plan fixtures for regression tests,
+  engine-side assist telemetry, route/combat outcome summaries, stale hidden
+  target cooldowns, and ICC evidence sidecars.
 - Reproducible diagnostic streams under `diagnostics/agent_stream/` and
   `diagnostics/quake_stream/`.
 
@@ -44,8 +46,9 @@ Important known limitations:
   blocky, but can still show raster seams and incomplete vanilla-material
   fidelity.
 - Noesis is not yet learning Quake from experience. Current no-script runs use
-  a reactive server-side controller with an explicit autonomous assist hint;
-  scripted route fixtures are opt-in regression tools.
+  a reactive server-side controller with an explicit autonomous assist hint,
+  target feedback, and wall-contact heuristics; scripted route fixtures are
+  opt-in regression tools, not the default gameplay path.
 - QGE is not yet the sole owner of all vanilla Quake media. Sky, water/warp,
   full conformance lighting, particles, sprites, menus, and all edge cases are
   still in progress.
