@@ -20,8 +20,9 @@ render_res="${QGE_RENDER_RES:-1024}"
 render_threshold="${QGE_RENDER_THRESHOLD:-0.001}"
 render_edge_gain="${QGE_RENDER_EDGE_GAIN:-0}"
 render_material_gain="${QGE_RENDER_MATERIAL_GAIN:-0.18}"
-render_bilinear_samples="${QGE_RENDER_BILINEAR_SAMPLES:-0}"
+render_bilinear_samples="${QGE_RENDER_BILINEAR_SAMPLES:-1}"
 render_edge_samples="${QGE_RENDER_EDGE_SAMPLES:-0}"
+render_detail_mix="${QGE_RENDER_DETAIL_MIX:-1.0}"
 render_display_filter="${QGE_RENDER_DISPLAY_FILTER:-0}"
 render_update_interval="${QGE_RENDER_UPDATE_INTERVAL:-8}"
 sprite_test="${QGE_STREAM_SPRITE_TEST:-0}"
@@ -120,6 +121,7 @@ render_value="$(normalize_nonnegative_int "$render_value" 1)"
 render_res="$(normalize_positive_int "$render_res" 1024)"
 render_bilinear_samples="$(normalize_nonnegative_int "$render_bilinear_samples" 0)"
 render_edge_samples="$(normalize_nonnegative_int "$render_edge_samples" 0)"
+render_detail_mix="${render_detail_mix:-1.0}"
 render_display_filter="$(normalize_nonnegative_int "$render_display_filter" 0)"
 render_update_interval="$(normalize_positive_int "$render_update_interval" 8)"
 physics_value="$(normalize_nonnegative_int "$physics_value" 1)"
@@ -412,6 +414,7 @@ write_agent_manifest() {
     "quantum_render_material_gain": $(json_string "$render_material_gain"),
     "quantum_render_bilinear_samples": $render_bilinear_samples,
     "quantum_render_edge_samples": $render_edge_samples,
+    "quantum_render_detail_mix": $(json_string "$render_detail_mix"),
     "quantum_render_display_filter": $render_display_filter,
     "quantum_render_update_interval": $render_update_interval,
     "sprite_test": $sprite_test
@@ -738,6 +741,7 @@ trap restore_autoexec EXIT
   echo "quantum_render_material_gain $render_material_gain"
   echo "quantum_render_bilinear_samples $render_bilinear_samples"
   echo "quantum_render_edge_samples $render_edge_samples"
+  echo "quantum_render_detail_mix $render_detail_mix"
   echo "quantum_render_display_filter $render_display_filter"
   echo "quantum_render_update_interval $render_update_interval"
   echo "quantum_debug_sprite_billboard $sprite_test"
@@ -818,7 +822,7 @@ cp "$before_file" "$seen_file"
 echo "Streaming Quantum Quake graphics diagnostics"
 echo "  outdir=$outdir"
 echo "  agent_stream=$agent_stream"
-echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples display_filter=$render_display_filter update_interval=$render_update_interval sprite_test=$sprite_test quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_physics_authoritative=$physics_authoritative quantum_particles=$particles_value quantum_ai=$ai_value quantum_vis=$vis_value"
+echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples detail_mix=$render_detail_mix display_filter=$render_display_filter update_interval=$render_update_interval sprite_test=$sprite_test quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_physics_authoritative=$physics_authoritative quantum_particles=$particles_value quantum_ai=$ai_value quantum_vis=$vis_value"
 echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound snd_quantum=$sound_quantum_mode snd_quantum_source_authority=$sound_source_authority trace=$trace replay=$replay_trace replay_strict=$replay_strict fire_test=$fire_test fire_min_start_wait=$fire_min_start_wait fire_min_frames=$fire_min_frames scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_scripted=$noesis_scripted noesis_autonomous=$noesis_autonomous noesis_require_combat=$noesis_require_combat noesis_max_wait=$noesis_max_wait noesis_min_log_phases=$noesis_min_log_phases noesis_min_gameplay_samples=$noesis_min_gameplay_samples noesis_min_route_distance=$noesis_min_route_distance noesis_min_capture_wait=$noesis_min_capture_wait noesis_assist=$noesis_assist"
 echo "QGE_AGENT_STREAM $agent_stream"
 
@@ -1195,6 +1199,7 @@ Render threshold: $render_threshold
 Render edge gain: $render_edge_gain
 Render material gain: $render_material_gain
 Render edge samples: $render_edge_samples
+Render detail mix: $render_detail_mix
 Scene surface budget: $scene_surface_budget
 Physics cvars: quantum_physics $physics_value, quantum_projectiles $projectiles_value, quantum_physics_authoritative $physics_authoritative, quantum_particles $particles_value
 AI cvar: quantum_ai $ai_value

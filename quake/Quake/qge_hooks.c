@@ -53,8 +53,9 @@ cvar_t quantum_render_res = {"quantum_render_res", "1024", CVAR_ARCHIVE};
 cvar_t quantum_render_threshold = {"quantum_render_threshold", "0.001", CVAR_ARCHIVE};
 cvar_t quantum_render_edge_gain = {"quantum_render_edge_gain", "0", CVAR_ARCHIVE};
 cvar_t quantum_render_material_gain = {"quantum_render_material_gain", "0.18", CVAR_ARCHIVE};
-cvar_t quantum_render_bilinear_samples = {"quantum_render_bilinear_samples", "0", CVAR_ARCHIVE};
+cvar_t quantum_render_bilinear_samples = {"quantum_render_bilinear_samples", "1", CVAR_ARCHIVE};
 cvar_t quantum_render_edge_samples = {"quantum_render_edge_samples", "0", CVAR_ARCHIVE};
+cvar_t quantum_render_detail_mix = {"quantum_render_detail_mix", "1.0", CVAR_ARCHIVE};
 cvar_t quantum_render_display_filter = {"quantum_render_display_filter", "0", CVAR_ARCHIVE};
 cvar_t quantum_render_update_interval = {"quantum_render_update_interval", "8", CVAR_ARCHIVE};
 cvar_t quantum_render_gate_kernel = {"quantum_render_gate_kernel", "1", CVAR_ARCHIVE};
@@ -88,6 +89,7 @@ static int qge_render_res = 1024;  /* Internal quantum render resolution */
 
 #define QGE_SPATIAL_DEPTH_FAR 1.0e30f
 #define QGE_SPATIAL_DEPTH_EPSILON 2.0f
+#define QGE_SURFACE_NEAR_CLIP_DEPTH 8.0f
 
 /* GL texture for quantum framebuffer */
 static GLuint qge_texture = 0;
@@ -3753,6 +3755,7 @@ void QGE_Init(void)
 	Cvar_RegisterVariable(&quantum_render_material_gain);
 	Cvar_RegisterVariable(&quantum_render_bilinear_samples);
 	Cvar_RegisterVariable(&quantum_render_edge_samples);
+	Cvar_RegisterVariable(&quantum_render_detail_mix);
 	Cvar_RegisterVariable(&quantum_render_display_filter);
 	Cvar_RegisterVariable(&quantum_render_update_interval);
 	Cvar_RegisterVariable(&quantum_render_gate_kernel);
@@ -4618,7 +4621,7 @@ static qboolean QGE_ProjectPoint(const vec3_t world, float *x, float *y, float *
 
 	VectorSubtract(world, r_refdef.vieworg, view_delta);
 	dist = DotProduct(view_delta, vpn);
-	if (dist < 1.0f)
+	if (dist < QGE_SURFACE_NEAR_CLIP_DEPTH)
 		return false;
 
 	scale = (float)qge_render_res / (dist * 2.0f);
@@ -4677,14 +4680,14 @@ static void QGE_IntersectNearPlane(const qge_clip_vertex_t *a,
 	if (fabsf(denom) < 0.0001f)
 		t = 0.0f;
 	else
-		t = (1.0f - a->depth) / denom;
+		t = (QGE_SURFACE_NEAR_CLIP_DEPTH - a->depth) / denom;
 	if (t < 0.0f) t = 0.0f;
 	if (t > 1.0f) t = 1.0f;
 
 	out->world[0] = a->world[0] + (b->world[0] - a->world[0]) * t;
 	out->world[1] = a->world[1] + (b->world[1] - a->world[1]) * t;
 	out->world[2] = a->world[2] + (b->world[2] - a->world[2]) * t;
-	out->depth = 1.0f;
+	out->depth = QGE_SURFACE_NEAR_CLIP_DEPTH;
 	out->tex_s = a->tex_s + (b->tex_s - a->tex_s) * t;
 	out->tex_t = a->tex_t + (b->tex_t - a->tex_t) * t;
 	out->light_s = a->light_s + (b->light_s - a->light_s) * t;
@@ -4703,14 +4706,14 @@ static int QGE_ClipSurfacePolygonNear(const glpoly_t *poly,
 		return 0;
 
 	QGE_SetClipVertexFromPoly(poly, poly->numverts - 1, &prev);
-	prev_inside = prev.depth >= 1.0f;
+	prev_inside = prev.depth >= QGE_SURFACE_NEAR_CLIP_DEPTH;
 
 	for (int i = 0; i < poly->numverts; i++) {
 		qge_clip_vertex_t cur;
 		qboolean cur_inside;
 
 		QGE_SetClipVertexFromPoly(poly, i, &cur);
-		cur_inside = cur.depth >= 1.0f;
+		cur_inside = cur.depth >= QGE_SURFACE_NEAR_CLIP_DEPTH;
 
 		if (prev_inside && cur_inside) {
 			QGE_AddClipVertex(out, &count, max_count, &cur);
@@ -6210,6 +6213,17 @@ QGE_HOT_INLINE qge_rgb_sample_t QGE_SurfaceLightColorContext(
 	return color;
 }
 
+QGE_HOT_INLINE qboolean QGE_SurfaceTexturePaletteOpaque(
+	const qge_surface_sample_context_t *ctx,
+	int palette_index)
+{
+	if (!ctx)
+		return qge_palette_opaque[palette_index] ? true : false;
+	if (!ctx->fence)
+		return true;
+	return qge_palette_opaque[palette_index] && palette_index != 255;
+}
+
 QGE_HOT_INLINE qboolean QGE_SurfaceTextureColorContext(
 	const qge_surface_sample_context_t *ctx,
 	float tex_s,
@@ -6277,10 +6291,10 @@ QGE_HOT_INLINE qboolean QGE_SurfaceTextureColorContext(
 		p10 = ctx->tex_pixels[y0 * (int)ctx->tex_width + x1];
 		p01 = ctx->tex_pixels[y1 * (int)ctx->tex_width + x0];
 		p11 = ctx->tex_pixels[y1 * (int)ctx->tex_width + x1];
-		a00 = qge_palette_opaque[p00] && !(ctx->fence && p00 == 255);
-		a10 = qge_palette_opaque[p10] && !(ctx->fence && p10 == 255);
-		a01 = qge_palette_opaque[p01] && !(ctx->fence && p01 == 255);
-		a11 = qge_palette_opaque[p11] && !(ctx->fence && p11 == 255);
+		a00 = QGE_SurfaceTexturePaletteOpaque(ctx, p00);
+		a10 = QGE_SurfaceTexturePaletteOpaque(ctx, p10);
+		a01 = QGE_SurfaceTexturePaletteOpaque(ctx, p01);
+		a11 = QGE_SurfaceTexturePaletteOpaque(ctx, p11);
 		w00 = (1.0f - tx_frac) * (1.0f - ty_frac) * (a00 ? 1.0f : 0.0f);
 		w10 = tx_frac * (1.0f - ty_frac) * (a10 ? 1.0f : 0.0f);
 		w01 = (1.0f - tx_frac) * ty_frac * (a01 ? 1.0f : 0.0f);
@@ -6339,8 +6353,7 @@ QGE_HOT_INLINE qboolean QGE_SurfaceTextureColorContext(
 	}
 
 	palette_index = ctx->tex_pixels[y0 * (int)ctx->tex_width + x0];
-	if (!qge_palette_opaque[palette_index] ||
-		(ctx->fence && palette_index == 255)) {
+	if (!QGE_SurfaceTexturePaletteOpaque(ctx, palette_index)) {
 		color->r = 0.0f;
 		color->g = 0.0f;
 		color->b = 0.0f;
@@ -8187,6 +8200,43 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 	*max_val = max_abs;
 }
 
+static qboolean QGE_RenderPreserveSpatialDetail(void)
+{
+	return quantum_render_detail_mix.value > 0.001f &&
+		   qge_spatial_color_buffer[QGE_DWT_R] &&
+		   qge_spatial_color_buffer[QGE_DWT_G] &&
+		   qge_spatial_color_buffer[QGE_DWT_B];
+}
+
+static void QGE_MixSpatialDetailIntoRender(int total_pixels)
+{
+	float mix = quantum_render_detail_mix.value;
+	float keep;
+
+	if (!QGE_RenderPreserveSpatialDetail())
+		return;
+	if (!qge_render_color_buffer[QGE_DWT_R] ||
+		!qge_render_color_buffer[QGE_DWT_G] ||
+		!qge_render_color_buffer[QGE_DWT_B])
+		return;
+	if (mix <= 0.0f)
+		return;
+	if (mix > 1.0f)
+		mix = 1.0f;
+	keep = 1.0f - mix;
+
+	for (int ch = 0; ch < QGE_DWT_CHANNELS; ch++) {
+		float *dst = qge_render_color_buffer[ch];
+		const float *src = qge_spatial_color_buffer[ch];
+		if (!dst || !src)
+			continue;
+		for (int i = 0; i < total_pixels; i++) {
+			float value = dst[i] * keep + src[i] * mix;
+			dst[i] = QGE_ClampSpatialSignal(value);
+		}
+	}
+}
+
 /*
  * Encode the current Quake scene as wavelet coefficients in quantum state.
  *
@@ -8252,8 +8302,12 @@ static void QGE_EncodeScene(void)
 		float *source = qge_spatial_color_buffer[ch] ?
 						qge_spatial_color_buffer[ch] :
 						qge_spatial_encode_buffer;
-		qge_dwt_encode_spatial_inplace(qge_dwt_fb[ch], source,
-									   qge_render_res, qge_render_res);
+		if (QGE_RenderPreserveSpatialDetail() && qge_spatial_color_buffer[ch])
+			qge_dwt_encode_spatial(qge_dwt_fb[ch], source,
+								   qge_render_res, qge_render_res);
+		else
+			qge_dwt_encode_spatial_inplace(qge_dwt_fb[ch], source,
+										   qge_render_res, qge_render_res);
 	}
 	after_forward = Sys_DoubleTime();
 	qge_scene_setup_ms = (after_setup - start) * 1000.0;
@@ -8507,6 +8561,7 @@ void QGE_RenderScene(void)
 	int nonzero_pixels = 0;
 	double abs_sum = 0.0;
 	int total_pixels = qge_render_res * qge_render_res;
+	QGE_MixSpatialDetailIntoRender(total_pixels);
 	QGE_ConvertRenderBufferToDisplay(total_pixels, &max_val, &nonzero_pixels, &abs_sum);
 	qge_display_texture_dirty = true;
 	after_convert = Sys_DoubleTime();

@@ -172,6 +172,7 @@ extern cvar_t qge_noesis_assist;    /* Opt-in server-state Noesis assist (defaul
 extern cvar_t qge_noesis_autonomous; /* No-script Noesis controller hint (default 0) */
 extern cvar_t quantum_overlay_alpha;/* Quantum render composite alpha (default 0.10) */
 extern cvar_t quantum_scene_surface_budget; /* DWT surface encode budget (default 512) */
+extern cvar_t quantum_render_detail_mix; /* Mix preserved spatial detail into DWT output (default 1.0) */
 extern cvar_t quantum_render_update_interval; /* QGE update cadence in host frames (default 8) */
 
 #endif /* QGE_HOOKS_H */

@@ -671,8 +671,9 @@ cached-policy provider. An explicit `QGE_NOESIS_CMD` still takes precedence over
 - `QGE_RENDER`, `QGE_RENDER_RES`, `QGE_RENDER_THRESHOLD`,
   `QGE_RENDER_EDGE_GAIN`, `QGE_RENDER_MATERIAL_GAIN`,
   `QGE_RENDER_BILINEAR_SAMPLES`, `QGE_RENDER_EDGE_SAMPLES`,
-  `QGE_RENDER_DISPLAY_FILTER`, `QGE_RENDER_UPDATE_INTERVAL`: QGE render
-  controls. Engine autocapture skips the diagnostic console/dev overlay while
+  `QGE_RENDER_DETAIL_MIX`, `QGE_RENDER_DISPLAY_FILTER`,
+  `QGE_RENDER_UPDATE_INTERVAL`: QGE render controls. Engine autocapture skips
+  the diagnostic console/dev overlay while
   capture is active, so diagnostic chatter is still logged but does not cover
   captured world frames. After the requested autocapture screenshots are queued,
   the harness exits through the console quit path instead of idling until the
@@ -683,17 +684,27 @@ cached-policy provider. An explicit `QGE_NOESIS_CMD` still takes precedence over
   The native Metal render bridge is only considered available when it can create
   a command queue; if that probe fails, QGE falls back to the CPU/NEON path
   instead of accepting a no-op native reconstruction.
-  `QGE_RENDER_BILINEAR_SAMPLES=0` uses nearest texture/light samples in the
-  quantum rasterizer for faster CPU-only captures; set it to `1` for smoother
-  per-pixel sampling. The bilinear path samples prepared surface texture and
-  lightmap context directly so smoother diagnostic captures do not pay the old
-  helper-call overhead per pixel.
+  `QGE_RENDER_BILINEAR_SAMPLES=1` uses bilinear texture/light samples in the
+  quantum rasterizer so floor, wall, and ceiling textures do not default to
+  nearest-sample blocks; set it to `0` for faster raw sampling diagnostics. The
+  bilinear path samples prepared surface texture and lightmap context directly
+  so smoother diagnostic captures do not pay the old helper-call overhead per
+  pixel. Normal world textures keep palette-index texels opaque; only
+  fence/transparent surfaces use palette alpha as a cutout mask.
+  QGE world-surface projection clips very near geometry at
+  `QGE_SURFACE_NEAR_CLIP_DEPTH` so walls or ceilings close to the camera do not
+  explode into full-frame strips during autonomous captures.
   `QGE_RENDER_EDGE_SAMPLES=0` uses center-sampled triangle coverage in the
   quantum rasterizer for faster high-resolution captures; set it to `1` to
   restore subpixel edge coverage.
+  `QGE_RENDER_DETAIL_MIX=1.0` preserves the pre-DWT RGB spatial raster and uses
+  it as the final display signal after sparse DWT reconstruction runs. This
+  keeps floor, wall, and ceiling texture detail from collapsing into sparse
+  block bands while still running and logging the sparse DWT path; set it lower
+  to inspect raw inverse-DWT contribution.
   `QGE_RENDER_DISPLAY_FILTER=0` skips neighbor smoothing during display-buffer
-  conversion for faster high-resolution CPU captures; set it to `1` to restore
-  the smoothed display filter.
+  conversion because live captures showed the smoothed display can over-blur the
+  whole world frame; set it to `1` for noisy-capture experiments.
   `QGE_RENDER_UPDATE_INTERVAL=8` updates the full QGE frame every eighth host
   frame and reuses the last texture between updates; set it to `1` to update
   every frame. Values above `16` are clamped.

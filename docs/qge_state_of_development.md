@@ -50,6 +50,18 @@ Implemented:
 - Surface-budget telemetry and default scene surface budget increased to 512
   after fixed-view `e1m1` diagnostics showed the old 128 limit dropped visible
   floor/wall/ceiling surfaces.
+- Detail-preserving QGE render output: the full RGB raster is kept while sparse
+  DWT coefficients are encoded, then used as the default final display signal so
+  floor/wall/ceiling detail is not dominated by sparse-block reconstruction.
+- Bilinear texture and lightmap sampling is enabled by default for QGE primary
+  captures; the nearest-sample path remains available for faster diagnostics.
+- Normal floor, wall, and ceiling textures no longer inherit the global
+  transparent palette rule. Palette alpha is now reserved for fence/transparent
+  world surfaces so ordinary world texels do not punch dark holes through the
+  raster.
+- QGE world-surface projection now clips at `QGE_SURFACE_NEAR_CLIP_DEPTH`
+  instead of one unit from the camera, reducing giant over-projected wall and
+  ceiling strips when the autonomous player is very close to level geometry.
 - Render logs report surface counts, snapshot misses, ownership fields, native
   IDWT counts, fallback reasons, and timing splits.
 
@@ -57,11 +69,14 @@ Known current visual state:
 
 - The most recent coverage work fixes large missing-world holes in fixed-view
   captures.
-- Floors, walls, and ceilings are still visibly glitchy: blocky texture
-  sampling, raster seams, warped/noisy surfaces, and occasional diagnostic text
-  contamination remain.
-- `QGE_RENDER_BILINEAR_SAMPLES=1` and `QGE_RENDER_DISPLAY_FILTER=1` can improve
-  smoothness, but recent live tests made them too expensive for default use.
+- Floors, walls, and ceilings still need conformance work: raster seams,
+  warped/noisy surfaces, and incomplete vanilla-material fidelity remain, even
+  after default bilinear sampling and preserved detail output reduce sparse DWT
+  block bands.
+- `QGE_RENDER_BILINEAR_SAMPLES=0` and `QGE_RENDER_DETAIL_MIX=0` remain useful
+  for isolating raw sparse DWT and nearest-sample behavior during diagnostics.
+- `QGE_RENDER_DISPLAY_FILTER=1` can smooth noisy captures, but it is not the
+  default because recent live captures showed whole-frame blur.
 - Edge sampling was rejected as a default because it produced blurred/line
   artifacts and much higher frame cost.
 
@@ -69,7 +84,8 @@ Next rendering priorities:
 
 - Remove diagnostic notify text from captured world frames without hiding log
   evidence.
-- Improve texture/lightmap sampling quality without the current bilinear cost.
+- Compare default detail-preserving output against raw sparse DWT captures in a
+  stable visual regression set.
 - Separate projection/raster bugs from DWT/tone-map artifacts using paired
   classic/QGE captures.
 - Add focused tests for surface coverage, seam stability, and texture sampling
