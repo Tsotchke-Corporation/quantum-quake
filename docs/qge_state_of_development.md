@@ -28,9 +28,8 @@ The latest verified branch state is:
 - Remote `HEAD` resolves to `refs/heads/master`.
 - `origin/main` is fast-forwarded to the same commit as `origin/master` for
   compatibility after the historical merge.
-- Latest verified runtime baseline is `656caf4` (`Stabilize QGE render gate
-  display gain`), mirrored to both `origin/master` and `origin/main` before this
-  documentation refresh.
+- Latest verified runtime baseline is this `Use base palette for QGE world
+  textures` commit, pending mirror to both `origin/master` and `origin/main`.
 - The active runtime tree is the C/QuakeSpasm/QGE tree, not the older
   JavaScript/WebTransport history.
 
@@ -168,6 +167,16 @@ Useful live evidence anchors:
   `47` to `30`, front-wall mean from about `51` to `32`, and side-wall mean
   from about `56` to `36`, moving the QGE frame closer to classic while
   preserving QGE ownership.
+- `diagnostics/quake_stream/20260521-135044/frame_001.png`: fixed-view QGE
+  capture after removing the global high-palette fullbright boost from ordinary
+  world texture sampling. The stable frame reports `fallback_reason=none`,
+  `own_world=1`, `own_textures=1`, `own_lightmaps=1`, `own_viewmodel=1`,
+  `res=1024`, and `texfilter=110668`. Region checks against the classic
+  `20260521-125448` reference show the far-floor mean luminance moving from
+  about `37.25` to `32.75` and horizontal high-frequency delta moving from
+  about `2.71` to `2.47`, while the run keeps QGE texture and lightmap
+  ownership. Side walls and ceilings remain visibly too bright, so this is a
+  targeted floor/noise improvement rather than a renderer-complete claim.
 
 The ICC control plane is part of the baseline. Verified slices should refresh
 index, memory, git history, source-drift, production-audit, task-attempt, and
@@ -268,6 +277,10 @@ Implemented:
   even when bilinear sampling is enabled. This keeps close floors, walls, and
   ceilings sharper while leaving bilinear/minification handling available for
   distance and slanted surfaces.
+- QGE world texture sampling now uses the base Quake palette for ordinary
+  palette indices instead of globally boosting indices `>=224` as fullbright.
+  Fullbright texture metadata remains tracked separately, avoiding noisy
+  emissive speckles on normal floors, walls, and ceilings.
 - Render-gate visible display gain now uses deterministic state marginals
   rather than finite-shot readout counts. The stochastic counters are still
   logged, but static floors, walls, and ceilings do not pick up frame-to-frame

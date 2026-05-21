@@ -741,8 +741,9 @@ loop with policy updates.
   textures keep sharper Quake-like definition; set it to `0` for faster raw
   sampling diagnostics. The bilinear path samples prepared surface texture and
   lightmap context directly so smoother diagnostic captures do not pay the old
-  helper-call overhead per pixel. Normal world textures keep palette-index texels opaque; only
-  fence/transparent surfaces use palette alpha as a cutout mask.
+  helper-call overhead per pixel. Normal world textures keep palette-index
+  texels opaque and use the base Quake palette without a global fullbright
+  boost; only fence/transparent surfaces use palette alpha as a cutout mask.
   QGE world projection uses Quake's `r_refdef.fov_x` and `r_refdef.fov_y`
   separately, so floor and ceiling projection follows the classic viewport
   aspect instead of a square-FOV approximation.

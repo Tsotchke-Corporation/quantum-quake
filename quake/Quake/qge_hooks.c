@@ -6578,10 +6578,9 @@ static void QGE_InitPaletteLut(void)
 		return;
 	for (int i = 0; i < 256; i++) {
 		const byte *rgba = (const byte *)&d_8to24table[i];
-		float fullbright_boost = i >= 224 ? 0.25f : 0.0f;
-		qge_palette_lut[i].r = (float)rgba[0] * inv_255 + fullbright_boost;
-		qge_palette_lut[i].g = (float)rgba[1] * inv_255 + fullbright_boost;
-		qge_palette_lut[i].b = (float)rgba[2] * inv_255 + fullbright_boost;
+		qge_palette_lut[i].r = (float)rgba[0] * inv_255;
+		qge_palette_lut[i].g = (float)rgba[1] * inv_255;
+		qge_palette_lut[i].b = (float)rgba[2] * inv_255;
 		qge_palette_opaque[i] = rgba[3] != 0;
 	}
 	qge_palette_lut_ready = true;
