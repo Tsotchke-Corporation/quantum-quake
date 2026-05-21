@@ -23,24 +23,43 @@ state, claims policy, stream/harness operation, and long-range research plans.
 - `master` is the primary branch; `origin/HEAD` points at `origin/master`, and
   `origin/main` is fast-forwarded to the same commit for compatibility. The
   active runtime tree is the C/QuakeSpasm/QGE tree on `master`. Latest verified
-  runtime baseline is the current tone-headroom QGE renderer slice after
-  `b1b7578` (`Use base palette for QGE world textures`), mirrored to both
-  `origin/master` and `origin/main`.
+  runtime baseline is `c34681e` (`Improve QGE one-texel texture filtering`),
+  mirrored to both `origin/master` and `origin/main`.
 - QGE has test-backed runtime, trace, visibility, projectile, audio, and
   rendering surfaces, but classic Quake remains the reference for full
   conformance.
 - QGE primary rendering is improved but not visually complete. The current
   fixed-view renderer has better FOV alignment, depth ownership,
   lightmap-preserving contrast, every-frame QGE refresh by default, an ambient
-  far-depth world background, normalized warp/water texture sampling, and stable
-  render-gate display gain from deterministic state marginals. Normal world
-  textures now use the base Quake palette instead of a global high-index
-  fullbright boost, reducing noisy floor speckles. The current tone-headroom
-  slice also pulls the fixed-view ceiling, side-wall, and far-floor luminance
-  closer to the classic reference. Floors, walls, and ceilings no longer shimmer
-  from finite-shot display gain, but they are still visibly glitchy: residual
-  side-wall/ceiling brightness, raster seams, warp/water seams, viewmodel
-  fidelity, and vanilla-material fidelity remain open.
+  far-depth world background, normalized warp/water texture sampling, stable
+  render-gate display gain from deterministic state marginals, base-palette
+  ordinary world textures, bounded fullbright wall texel contribution,
+  moderate-minification texture prefiltering, one-texel bilinear wall/ceiling
+  smoothing, and alias-skin first-person weapon sampling. The latest fixed-view
+  evidence is `diagnostics/quake_stream/20260521-180918/frame_002.png`; it cuts
+  measured ceiling and wall high-frequency crawl relative to
+  `20260521-174755`, but floors, walls, and ceilings are still not
+  vanilla-quality. Remaining renderer gaps include nearby floor noise,
+  residual brightness mismatch, raster seams, warp/water seams, viewmodel
+  lighting/placement/material parity, and vanilla-material fidelity.
+
+## Renderer Evidence Snapshot
+
+The current visual baseline should be read as a sequence of narrow verified
+renderer fixes, not as one finished renderer claim:
+
+- `20260521-151552`: current classic fixed-view reference frame.
+- `20260521-153315`: world tone/headroom capture; brought fixed-view ceiling,
+  side-wall, and far-floor luminance closer to classic.
+- `20260521-164816`: fullbright wall-material split; restored bounded unlit
+  additive contribution for true fullbright wall texels.
+- `20260521-173303`: alias-skin viewmodel capture; replaced the flat QGE weapon
+  mesh with skin-sampled alias triangles.
+- `20260521-174755`: moderate-minification prefilter capture; improved
+  mid-floor texture crawl and whole-frame RMSE.
+- `20260521-180918`: one-texel bilinear capture; reduced side-wall,
+  front-wall, and ceiling crawl, with mixed whole-frame RMSE across the three
+  captured frames.
 - Default Noesis runs are no-script autonomous diagnostics with server-side
   movement/combat feedback plus local clearance, floor, and hazard probes when
   no target is engaged. Noesis is not yet learning Quake from experience, has
