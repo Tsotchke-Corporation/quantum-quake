@@ -28,8 +28,8 @@ The latest verified branch state is:
 - Remote `HEAD` resolves to `refs/heads/master`.
 - `origin/main` is fast-forwarded to the same commit as `origin/master` for
   compatibility after the historical merge.
-- Latest verified runtime baseline is this `Use base palette for QGE world
-  textures` commit, pending mirror to both `origin/master` and `origin/main`.
+- Latest verified runtime baseline is `b1b7578` (`Use base palette for QGE
+  world textures`), mirrored to both `origin/master` and `origin/main`.
 - The active runtime tree is the C/QuakeSpasm/QGE tree, not the older
   JavaScript/WebTransport history.
 
@@ -54,6 +54,13 @@ The latest verified branch state is:
 
 Recent verified slices on `master` establish the current baseline:
 
+- `b1b7578` makes ordinary QGE world texture sampling use the base Quake
+  palette instead of globally boosting high palette indices as fullbright.
+  Fixed-view evidence at `diagnostics/quake_stream/20260521-135044/frame_001.png`
+  keeps QGE ownership of world textures and lightmaps while moving the far-floor
+  luminance and high-frequency texture noise closer to the classic reference.
+  Side walls and ceilings remain visibly too bright, so this is a targeted
+  floor/noise improvement rather than a renderer-complete claim.
 - `656caf4` stabilizes QGE render-gate display gain by deriving the visible
   gain values from deterministic quantum-state marginal probabilities instead
   of finite-shot readout counts. Finite-shot readout and edge counters remain in
@@ -531,7 +538,7 @@ make quake
 Safe fixed-view graphics capture:
 
 ```sh
-QGE_STREAM_LAUNCH=direct QGE_STREAM_MOUSE=0 QGE_STREAM_ACTIVATE=0 \
+QGE_STREAM_LAUNCH=open QGE_STREAM_MOUSE=0 QGE_STREAM_ACTIVATE=0 \
 QGE_STREAM_TRACE=1 QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=1 \
 QGE_STREAM_WAIT_FRAMES=12 QGE_STREAM_PLAYER=none QGE_RENDER=2 \
 QGE_RENDER_UPDATE_INTERVAL=1 QGE_STREAM_SOUND=0 \
@@ -544,7 +551,7 @@ commands when the purpose is to prove every-frame QGE refresh.
 Safe Noesis gameplay capture:
 
 ```sh
-QGE_STREAM_LAUNCH=direct QGE_STREAM_MOUSE=0 QGE_STREAM_ACTIVATE=0 \
+QGE_STREAM_LAUNCH=open QGE_STREAM_MOUSE=0 QGE_STREAM_ACTIVATE=0 \
 QGE_STREAM_TRACE=1 QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=3 \
 QGE_STREAM_WAIT_FRAMES=12 QGE_STREAM_PLAYER=noesis QGE_RENDER=2 \
 QGE_RENDER_UPDATE_INTERVAL=1 QGE_STREAM_SOUND=0 \

@@ -251,7 +251,7 @@ grep -q 'Mild minification uses the nine-tap path' "$repo_root/docs/qge_agent_st
 grep -q 'QGE_RenderGateMarginalProbabilities' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'state_probabilities\[5\]' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'finite-shot counters remain logged as measurement telemetry' "$repo_root/docs/qge_agent_stream.md"
-grep -q 'Latest verified runtime baseline is this `Use base palette for QGE world' "$repo_root/docs/qge_state_of_development.md"
+grep -q 'Latest verified runtime baseline is `b1b7578` (`Use base palette for QGE' "$repo_root/docs/qge_state_of_development.md"
 grep -q 'QGE primary rendering updates every host frame by default' "$repo_root/docs/qge_state_of_development.md"
 grep -q 'QGE graphics shimmer on a static camera' "$repo_root/docs/qge_state_of_development.md"
 grep -q 'QGE_FrameSnapshotClearVisibleSurfaces' "$repo_root/quake/Quake/qge_hooks.h"

@@ -12,9 +12,8 @@ fast-forwarded to the same commit for compatibility after the older unrelated
 Three.js/WebTransport history was merged as provenance. The authoritative tree
 is the `master` QGE/QuakeSpasm layout documented here.
 
-Latest verified runtime baseline: `656caf4` (`Stabilize QGE render gate display
-gain`), mirrored to both `origin/master` and `origin/main` before this
-documentation refresh.
+Latest verified runtime baseline: `b1b7578` (`Use base palette for QGE world
+textures`), mirrored to both `origin/master` and `origin/main`.
 
 ## Current Status
 
@@ -31,8 +30,9 @@ Working and routinely verified:
   fallback reasons. The current graphics baseline updates the QGE primary
   render every host frame by default, seeds a far-depth ambient world
   background for missing world pixels, normalizes warp/water texture
-  coordinates before palette sampling, and derives render-gate display gain
-  from deterministic state marginals instead of finite-shot readout counts.
+  coordinates before palette sampling, uses the base Quake palette for ordinary
+  world texture indices, and derives render-gate display gain from
+  deterministic state marginals instead of finite-shot readout counts.
 - QGE visibility shadow/parity paths with audited authority-gate telemetry.
 - QGE projectile shadow/writeback/collision-oracle evidence paths with replay
   and persistence-boundary trace records.
@@ -54,8 +54,10 @@ Important known limitations:
   preserved spatial detail for the final display while still running the sparse
   DWT path for evidence. QGE now refreshes every host frame by default and
   removes finite-shot render-gate shimmer from static floors, walls, and
-  ceilings. Remaining issues are now more clearly projection/material problems:
-  raster seams, warp/water seams, and incomplete vanilla-material fidelity.
+  ceilings, and no longer globally boosts high palette indices into noisy
+  floor speckles. Remaining issues are now more clearly projection/material
+  problems: over-bright side walls/ceilings, raster seams, warp/water seams,
+  viewmodel fidelity, and incomplete vanilla-material fidelity.
 - Noesis is not yet learning Quake from experience and does not yet have a
   map-level world model. Current no-script runs use a reactive server-side
   controller with an explicit autonomous assist hint, target feedback,
@@ -70,6 +72,24 @@ Important known limitations:
 - Live graphics harnesses launch a local Quake app. Safe runs used by agents
   set `QGE_STREAM_MOUSE=0` and `QGE_STREAM_ACTIVATE=0` unless a human is
   intentionally testing interactivity.
+
+## Current Renderer Evidence
+
+The current QGE graphics baseline is improved but still visibly glitchy. The
+latest fixed-view evidence is
+`diagnostics/quake_stream/20260521-135044/frame_001.png`, from the
+`b1b7578` baseline. That run reports QGE ownership of world geometry, world
+textures, lightmaps, and the viewmodel with no fallback reason. The matching
+region comparison against the classic `20260521-125448` reference shows the
+far-floor luminance and high-frequency texture noise moving closer to classic
+Quake after ordinary world texels stopped inheriting the global fullbright
+boost.
+
+What is still broken is just as important: side walls and ceilings are still
+too bright, raster seams remain visible, turbulent water/warp materials are not
+vanilla-quality, and the viewmodel path is not yet faithful. Treat the renderer
+as a diagnostic primary path with useful ownership telemetry, not as a finished
+replacement for classic Quake rendering.
 
 ## Quick Start
 
@@ -95,7 +115,7 @@ make quake
 Run a compact fixed-view QGE graphics diagnostic:
 
 ```sh
-QGE_STREAM_LAUNCH=direct QGE_STREAM_MOUSE=0 QGE_STREAM_ACTIVATE=0 \
+QGE_STREAM_LAUNCH=open QGE_STREAM_MOUSE=0 QGE_STREAM_ACTIVATE=0 \
 QGE_STREAM_TRACE=1 QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=1 \
 QGE_STREAM_WAIT_FRAMES=12 QGE_STREAM_PLAYER=none QGE_RENDER=2 \
 QGE_RENDER_UPDATE_INTERVAL=1 QGE_STREAM_SOUND=0 \
@@ -103,12 +123,14 @@ bash tools/quake_graphics_stream.sh
 ```
 
 `QGE_RENDER_UPDATE_INTERVAL=1` is the default, but it is left in this command
-to make fixed-view graphics evidence explicit.
+to make fixed-view graphics evidence explicit. On macOS, `QGE_STREAM_LAUNCH=open`
+is the validated safe path for app-bundle GL context startup; direct launch is
+kept for lower-level diagnostics.
 
 Run a harnessed Noesis gameplay smoke:
 
 ```sh
-QGE_STREAM_LAUNCH=direct QGE_STREAM_MOUSE=0 QGE_STREAM_ACTIVATE=0 \
+QGE_STREAM_LAUNCH=open QGE_STREAM_MOUSE=0 QGE_STREAM_ACTIVATE=0 \
 QGE_STREAM_TRACE=1 QGE_STREAM_MAP=e1m1 QGE_STREAM_FRAMES=3 \
 QGE_STREAM_WAIT_FRAMES=12 QGE_STREAM_PLAYER=noesis QGE_RENDER=2 \
 QGE_RENDER_UPDATE_INTERVAL=1 QGE_STREAM_SOUND=0 \
