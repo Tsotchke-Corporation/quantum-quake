@@ -760,6 +760,9 @@ loop with policy updates.
   than finite-shot readout counts, so static floors, walls, and ceilings do not
   flicker just because `quantum_render_gate_shots` sampled a different basis
   distribution on the next frame.
+  QGE render/snapshot diagnostic milestones are written to stderr instead of
+  Quake notify text, so trace and ownership evidence remains in the stream logs
+  without painting debug strings over captured floors, walls, or ceilings.
   Polygon raster fill uses a near-uniform world gain because the per-pixel
   texture and lightmap samples already carry local brightness; this reduces
   rectangular per-face exposure blocks on adjacent floors, walls, and ceilings.

@@ -29,7 +29,8 @@ The latest verified branch state is:
 - `origin/main` is fast-forwarded to the same commit as `origin/master` for
   compatibility after the historical merge.
 - Latest verified runtime baseline is the current QGE world fullbright sampling
-  slice, mirrored to both `origin/master` and `origin/main`.
+  slice plus diagnostic notify cleanup, mirrored to both `origin/master` and
+  `origin/main`.
 - The active runtime tree is the C/QuakeSpasm/QGE tree, not the older
   JavaScript/WebTransport history.
 
@@ -54,6 +55,16 @@ The latest verified branch state is:
 
 Recent verified slices on `master` establish the current baseline:
 
+- The current diagnostic-notify cleanup keeps QGE render/snapshot milestones in
+  stderr-backed logs instead of Quake notify text, so graphics captures no
+  longer paint diagnostic strings over the floors, walls, and ceilings being
+  inspected. Fixed-view evidence at
+  `diagnostics/quake_stream/20260521-164816/frame_001.png` keeps QGE ownership
+  of world geometry, textures, lightmaps, HUD/console, and the viewmodel with
+  `own_console=1`, `own_viewmodel=1`, `emesh=58`, `ecoeff=27`, and
+  `fallback_reason=none` on captured frames. This removes a capture contaminant;
+  it does not claim that the underlying world-surface renderer is vanilla
+  faithful.
 - The current QGE world fullbright sampling slice splits world texture palette
   indices `>=224` into an unlit additive contribution when the texture has a
   fullbright mask, while normal texture indices remain in the lightmapped base
@@ -243,6 +254,13 @@ Useful live evidence anchors:
   show wall-light deltas improving from about `-37.42/-28.70` to
   `-19.83/-12.57` while front wall, floors, side walls, and ceiling stay within
   the previous world-tone range.
+- `diagnostics/quake_stream/20260521-164816/frame_001.png`: fixed-view QGE
+  capture after moving QGE render/snapshot diagnostic milestones out of Quake
+  notify text and into stderr-backed logs. The captured frames keep
+  `fallback_reason=none`, `own_world=1`, `own_textures=1`, `own_lightmaps=1`,
+  `own_viewmodel=1`, `own_console=1`, `emesh=58`, and `ecoeff=27`. This is a
+  capture-cleanliness fix for inspecting floors, walls, and ceilings; residual
+  texture, seam, material, and tone-map artifacts remain open.
 
 The ICC control plane is part of the baseline. Verified slices should refresh
 index, memory, git history, source-drift, production-audit, task-attempt, and
@@ -429,8 +447,6 @@ Known current visual state:
 
 Next rendering priorities:
 
-- Remove diagnostic notify text from captured world frames without hiding log
-  evidence.
 - Compare default detail-preserving output against raw sparse DWT captures in a
   stable visual regression set.
 - Separate projection/raster bugs from DWT/tone-map artifacts using paired

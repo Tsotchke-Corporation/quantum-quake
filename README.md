@@ -13,7 +13,8 @@ Three.js/WebTransport history was merged as provenance. The authoritative tree
 is the `master` QGE/QuakeSpasm layout documented here.
 
 Latest verified runtime baseline: the current QGE world fullbright sampling
-slice, mirrored to both `origin/master` and `origin/main`.
+slice plus diagnostic notify cleanup, mirrored to both `origin/master` and
+`origin/main`.
 
 ## Current Status
 
@@ -79,11 +80,14 @@ Important known limitations:
 ## Current Renderer Evidence
 
 The current QGE graphics baseline is improved but still visibly glitchy. The
-latest activation-only fixed-view evidence is
-`diagnostics/quake_stream/20260521-155209/frame_001.png`. That run reports QGE
-ownership of world geometry, world textures, lightmaps, and the viewmodel with
-`emesh=58`, `ecoeff=27`, `own_viewmodel=1`, and `fallback_reason=none`. Against
-the classic `20260521-151552` reference, the previous world-tone capture
+latest fixed-view evidence is
+`diagnostics/quake_stream/20260521-164816/frame_001.png`. That run keeps QGE
+ownership of world geometry, world textures, lightmaps, HUD/console, and the
+viewmodel with `emesh=58`, `ecoeff=27`, `own_viewmodel=1`,
+`own_console=1`, and `fallback_reason=none` on captured frames. It also keeps
+QGE render/snapshot milestones in the logs instead of painting them as Quake
+notify text over the world. Against the classic `20260521-151552` reference,
+the previous world-tone capture
 `20260521-153315` moved the front-wall mean-luminance delta from about `-19.73`
 to `-0.92`, side-wall deltas from about `-9.64/-11.01` to `+3.08/+2.65`,
 ceiling delta from about `-11.51` to `+2.19`, and far-floor delta from about

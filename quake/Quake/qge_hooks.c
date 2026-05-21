@@ -355,8 +355,8 @@ static void QGE_ApplyEarlyRenderOverrides(void)
 		source = "QGE_RENDER_RES";
 	if (source) {
 		Cvar_SetValueQuick(&quantum_render_res, (float)Q_atoi(value));
-		Con_Printf("QGE: early %s quantum_render_res %d\n",
-				   source, (int)quantum_render_res.value);
+		fprintf(stderr, "QGE early %s quantum_render_res %d\n",
+				source, (int)quantum_render_res.value);
 	}
 
 	source = NULL;
@@ -366,8 +366,8 @@ static void QGE_ApplyEarlyRenderOverrides(void)
 		source = "QGE_RENDER_THRESHOLD";
 	if (source) {
 		Cvar_SetValueQuick(&quantum_render_threshold, Q_atof(value));
-		Con_Printf("QGE: early %s quantum_render_threshold %.4f\n",
-				   source, quantum_render_threshold.value);
+		fprintf(stderr, "QGE early %s quantum_render_threshold %.4f\n",
+				source, quantum_render_threshold.value);
 	}
 }
 
@@ -935,8 +935,8 @@ static void QGE_GameplayOutcomeInit(void)
 	}
 
 	QGE_GameplayOutcomeResetState();
-	Con_Printf("QGE gameplay outcome stream: %s\n",
-			   qge_gameplay_outcome_path);
+	fprintf(stderr, "QGE gameplay outcome stream: %s\n",
+			qge_gameplay_outcome_path);
 }
 
 static qboolean QGE_GameplayIsDamageable(edict_t *ent, int entnum)
@@ -2344,8 +2344,6 @@ static void QGE_TraceBackendGate(const char *phase)
 	memset(&profile, 0, sizeof(profile));
 	qge_get_profile(qge_ctx, &profile);
 
-	Con_Printf("QGE: Backend gate phase=%s backend=%s status=%s native=%d active=%d flags=0x%x path=%s reason=%s probe=%s\n",
-			   phase, backend_name, status, native_available, active, flags, runtime_path, reason, probe_reason);
 	fprintf(stderr, "QGE backend gate phase=%s backend=%s status=%s native=%d active=%d flags=0x%x path=%s reason=%s probe=%s qubits=%d memory=%llu\n",
 			phase, backend_name, status, native_available, active, flags, runtime_path, reason, probe_reason, profile.current_qubits,
 			(unsigned long long)profile.memory_used_bytes);
@@ -3130,11 +3128,6 @@ static void QGE_TraceTextureSignalCacheProbe(const qmodel_t *model)
 	if (qge_texture_signal_warp_entries > 0)
 		flags |= 0x8u;
 
-	Con_Printf("QGE: Texture signal cache backend=cpu_gltexture_cache entries=%d gltexture=%d fullbright=%d warp=%d\n",
-			   qge_texture_signal_cache_entries,
-			   qge_texture_signal_gltexture_entries,
-			   qge_texture_signal_fullbright_entries,
-			   qge_texture_signal_warp_entries);
 	fprintf(stderr, "QGE texture signal cache backend=cpu_gltexture_cache entries=%d gltexture=%d fullbright=%d warp=%d hash=0x%llx\n",
 			qge_texture_signal_cache_entries,
 			qge_texture_signal_gltexture_entries,
@@ -3220,10 +3213,6 @@ static void QGE_TraceLightmapSignalCacheProbe(const qmodel_t *model)
 	if (qge_lightmap_signal_contrast_entries > 0)
 		flags |= 0x4u;
 
-	Con_Printf("QGE: Lightmap signal cache backend=cpu_lightmap_samples entries=%d lit=%d contrast=%d\n",
-			   qge_lightmap_signal_cache_entries,
-			   qge_lightmap_signal_lit_entries,
-			   qge_lightmap_signal_contrast_entries);
 	fprintf(stderr, "QGE lightmap signal cache backend=cpu_lightmap_samples entries=%d lit=%d contrast=%d hash=0x%llx\n",
 			qge_lightmap_signal_cache_entries,
 			qge_lightmap_signal_lit_entries,
@@ -3676,19 +3665,6 @@ static void QGE_RegisterWorldIfNeeded(void)
 	qge_debug_sprite_logged_id = QGE_RESOURCE_ID_INVALID;
 	QGE_TraceWorldRegistryProbe(&qge_registry_stats);
 
-	Con_Printf("QGE: World registry map=%s models=%u planes=%u nodes=%u leafs=%u surfaces=%u textures=%u lightmaps=%u alias=%u sprites=%u sounds=%u hud=%u\n",
-			   qge_registry_stats.map_name,
-			   qge_registry_stats.model_count,
-			   qge_registry_stats.plane_count,
-			   qge_registry_stats.node_count,
-			   qge_registry_stats.leaf_count,
-			   qge_registry_stats.surface_count,
-			   qge_registry_stats.texture_count,
-			   qge_registry_stats.lightmap_count,
-			   qge_registry_stats.alias_model_count,
-			   qge_registry_stats.sprite_count,
-			   qge_registry_stats.sound_count,
-			   qge_registry_stats.hud_image_count);
 	fprintf(stderr, "QGE registry map=%s world=0x%x models=%u planes=%u nodes=%u leafs=%u surfaces=%u textures=%u lightmaps=%u alias=%u sprites=%u sounds=%u hud=%u total=%u\n",
 			qge_registry_stats.map_name,
 			world_id,
@@ -4176,18 +4152,18 @@ static void QGE_FrameSnapshotFinalize(void)
 	if (quantum_debug.value >= 1.0f) {
 		if (qge_frame_count < 5 || (qge_frame_count % 60) == 0 ||
 			stats.particle_count > 0) {
-			Con_Printf("QGE snapshot frame=%d surfaces=%u edicts=%u lights=%u "
-					   "particles=%u sounds=%u world=0x%x model=0x%x leaf=%u sealed=%d\n",
-					   qge_frame_count,
-					   stats.visible_surface_count,
-					   stats.edict_count,
-					   stats.dynamic_light_count,
-					   stats.particle_count,
-					   stats.sound_source_count,
-					   snapshot->world_id,
-					   snapshot->world_model_id,
-					   snapshot->view_leaf_index,
-					   stats.sealed ? 1 : 0);
+			fprintf(stderr, "QGE snapshot frame=%d surfaces=%u edicts=%u lights=%u "
+					"particles=%u sounds=%u world=0x%x model=0x%x leaf=%u sealed=%d\n",
+					qge_frame_count,
+					stats.visible_surface_count,
+					stats.edict_count,
+					stats.dynamic_light_count,
+					stats.particle_count,
+					stats.sound_source_count,
+					snapshot->world_id,
+					snapshot->world_model_id,
+					snapshot->view_leaf_index,
+					stats.sealed ? 1 : 0);
 		}
 		fprintf(stderr, "QGE snapshot frame=%d surfaces=%u edicts=%u lights=%u "
 				"particles=%u sounds=%u entropy=%u dropped_surfaces=%u "
@@ -4223,7 +4199,7 @@ void QGE_Init(void)
 
 	fprintf(stderr, "QGE: Init starting...\n");
 
-	Con_Printf("\n======= Quantum Game Engine =======\n");
+	fprintf(stderr, "======= Quantum Game Engine =======\n");
 
 	/* Register CVars */
 	Cvar_RegisterVariable(&quantum_render);
@@ -4271,7 +4247,7 @@ void QGE_Init(void)
 
 	/* Initialize quantum RNG early */
 	if (qge_rng_init() == 0) {
-		Con_Printf("QGE: Quantum RNG initialized (Bell-verified)\n");
+		fprintf(stderr, "QGE quantum RNG initialized bell_verified=1\n");
 		qge_rng_set_runtime(QGE_Runtime());
 	} else {
 		Con_Printf("QGE: Quantum RNG failed, using classical fallback\n");
@@ -4293,8 +4269,6 @@ void QGE_Init(void)
 		if (qge_quantum_runtime_load_replay_trace(rt, replay_path) == 0) {
 			memset(&replay_stats, 0, sizeof(replay_stats));
 			qge_quantum_runtime_get_stats(rt, &replay_stats);
-			Con_Printf("QGE: Replay trace loaded from %s (strict=%d)\n",
-					   replay_path, replay_strict ? 1 : 0);
 			fprintf(stderr,
 					"QGE replay path=%s strict=%d entropy_loaded=%llu ai_loaded=%llu\n",
 					replay_path, replay_strict ? 1 : 0,
@@ -4309,11 +4283,11 @@ void QGE_Init(void)
 
 	if (quantum_state_init(&qge_render_gate_state, QGE_RENDER_GATE_QUBITS) == QS_SUCCESS) {
 		qge_render_gate_initialized = true;
-		Con_Printf("QGE: Render gate kernel initialized (%d qubits)\n",
-				   QGE_RENDER_GATE_QUBITS);
+		fprintf(stderr, "QGE render gate kernel initialized qubits=%d\n",
+				QGE_RENDER_GATE_QUBITS);
 	} else {
 		qge_render_gate_initialized = false;
-		Con_Printf("QGE: Render gate kernel unavailable\n");
+		fprintf(stderr, "QGE render gate kernel unavailable\n");
 	}
 
 	const char *trace_path = QGE_CommandLineTracePath();
@@ -4321,7 +4295,6 @@ void QGE_Init(void)
 		trace_path = getenv("QGE_TRACE_PATH");
 	if (trace_path && trace_path[0]) {
 		if (qge_quantum_trace_open(QGE_Runtime(), trace_path) == 0) {
-			Con_Printf("QGE: Trace recording to %s\n", trace_path);
 			fprintf(stderr, "QGE trace path=%s\n", trace_path);
 		} else {
 			Con_Printf("QGE: Failed to open trace %s\n", trace_path);
@@ -4333,7 +4306,7 @@ void QGE_Init(void)
 	fprintf(stderr, "QGE: RNG done, creating DWT framebuffers...\n");
 	qge_render_res = QGE_ClampRenderResolution(quantum_render_res.value);
 	if ((int)quantum_render_res.value != qge_render_res)
-		Con_Printf("QGE: quantum_render_res clamped to %d\n", qge_render_res);
+		fprintf(stderr, "QGE quantum_render_res clamped to %d\n", qge_render_res);
 
 	/* Phase 4.1: Create one sparse DWT framebuffer per RGB channel */
 	dwt_config_t dwt_cfg = {
@@ -4355,15 +4328,12 @@ void QGE_Init(void)
 			qge_context_get_or_create_render_acceleration(qge_ctx,
 														  qge_render_res);
 		if (render_bridge) {
-			Con_Printf("QGE: Native sparse DWT render bridge active (%dx%d)\n",
-					   qge_render_res, qge_render_res);
 			fprintf(stderr,
 					"QGE render bridge active backend=%s res=%d path=%s\n",
 					qge_backend_name(qge_get_backend(qge_ctx)),
 					qge_render_res,
 					qge_context_backend_runtime_path(qge_ctx));
 		} else if (qge_context_backend_native_available(qge_ctx)) {
-			Con_Printf("QGE: Native render bridge unavailable, using sparse CPU DWT\n");
 			fprintf(stderr,
 					"QGE render bridge unavailable backend=%s res=%d reason=%s\n",
 					qge_backend_name(qge_get_backend(qge_ctx)),
@@ -4379,8 +4349,9 @@ void QGE_Init(void)
 	}
 	if (qge_dwt_fb[QGE_DWT_R] && qge_dwt_fb[QGE_DWT_G] &&
 		qge_dwt_fb[QGE_DWT_B]) {
-		Con_Printf("QGE: RGB sparse DWT framebuffers created (%dx%d, threshold %.4f)\n",
-				   qge_render_res, qge_render_res, dwt_cfg.sparsity_threshold);
+		fprintf(stderr,
+				"QGE RGB sparse DWT framebuffers created res=%d threshold=%.4f\n",
+				qge_render_res, dwt_cfg.sparsity_threshold);
 	}
 
 	fprintf(stderr, "QGE: Framebuffers created, allocating render buffers...\n");
@@ -4400,7 +4371,7 @@ void QGE_Init(void)
 	/* Create particle system */
 	qge_particles = qge_particle_system_create(64);
 	if (qge_particles) {
-		Con_Printf("QGE: Quantum particle system created (18 qubits)\n");
+		fprintf(stderr, "QGE quantum particle system created qubits=18\n");
 	}
 
 	fprintf(stderr, "QGE: Creating GL texture...\n");
@@ -4438,16 +4409,14 @@ void QGE_Init(void)
 
 	fprintf(stderr, "QGE: Init complete!\n");
 
-	Con_Printf("QGE: Engine ready — all quantum subsystems online\n");
-	Con_Printf("  quantum_rng %d | quantum_ai %d | quantum_render %d\n",
-			   (int)quantum_rng.value, (int)quantum_ai.value,
-			   (int)quantum_render.value);
-	Con_Printf("  quantum_physics %d | quantum_projectiles %d | quantum_physics_authoritative %d | quantum_particles %d\n",
-			   (int)quantum_physics.value, (int)quantum_projectiles.value,
-			   (int)quantum_physics_authoritative.value,
-			   (int)quantum_particles.value);
-	Con_Printf("  RGB sparse DWT | Stable DWT quality | Backend bridge pending\n");
-	Con_Printf("===================================\n\n");
+	fprintf(stderr,
+			"QGE engine ready rng=%d ai=%d render=%d physics=%d projectiles=%d "
+			"physics_authoritative=%d particles=%d\n",
+			(int)quantum_rng.value, (int)quantum_ai.value,
+			(int)quantum_render.value, (int)quantum_physics.value,
+			(int)quantum_projectiles.value,
+			(int)quantum_physics_authoritative.value,
+			(int)quantum_particles.value);
 }
 
 void QGE_Shutdown(void)
@@ -4455,11 +4424,11 @@ void QGE_Shutdown(void)
 	if (!qge_initialized)
 		return;
 
-	Con_Printf("QGE: Shutting down quantum engine\n");
+	fprintf(stderr, "QGE shutting down quantum engine\n");
 
 	if (qge_avg_frame_ms > 0 && qge_frame_count > 0)
-		Con_Printf("QGE: Average quantum render time: %.2f ms (%d frames)\n",
-				   qge_avg_frame_ms, qge_frame_count);
+		fprintf(stderr, "QGE average quantum render time %.2f ms frames=%d\n",
+				qge_avg_frame_ms, qge_frame_count);
 
 	QGE_GameplayOutcomeShutdown();
 
@@ -9674,7 +9643,7 @@ void QGE_RenderScene(void)
 		if (quantum_debug.value >= 1.0f) {
 			if (qge_frame_count < 5 || (qge_frame_count % 60) == 0 ||
 				qge_scene_encoded_particles > 0) {
-				Con_Printf("QGE render frame=%d mode=%s owner=%s classic3d=%d suppressed3d=%d "
+				fprintf(stderr, "QGE render frame=%d mode=%s owner=%s classic3d=%d suppressed3d=%d "
 						   "res=%d time=%.1f encode=%.1f setup=%.1f raster=%.1f fdwt=%.1f dwt=%.1f convert=%.1f blit=%.1f reuse=%d interval=%d "
 						   "coeffs=%d snapshot=%d snapshot_miss=%d "
 						   "texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d microfill=%d gaprepair=%d texfilter=%d "
