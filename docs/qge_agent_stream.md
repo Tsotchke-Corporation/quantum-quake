@@ -755,12 +755,25 @@ loop with policy updates.
   translucent-looking wall or doorway panels. The depth tie window is the tight
   `QGE_SPATIAL_DEPTH_EPSILON`, so adjacent but distinct BSP faces keep normal
   nearest-surface ownership instead of bleeding through each other.
+  After world rasterization, a bounded far-depth seam repair fills only
+  background pixels surrounded by at least
+  `QGE_SPATIAL_SEAM_REPAIR_MIN_NEIGHBORS` real world samples. Repaired pixels
+  keep far depth, so the pass closes one-pixel floor/wall/ceiling coverage gaps
+  without flooding into open background or occluding later entity/particle
+  passes. Render logs expose the count as `gaprepair`.
+  QGE also estimates the projected texture footprint for world-surface pixels
+  and applies a bounded nine-tap palette prefilter when a floor, wall, or
+  ceiling pixel covers more than `QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT` texels.
+  This approximates the classic renderer's mip selection and reduces noisy
+  distant texture crawl without replacing the QGE-owned framebuffer with classic
+  GL output. Render logs expose those filtered samples as `texfilter`.
   QGE world-surface projection clips very near geometry at
   `QGE_SURFACE_NEAR_CLIP_DEPTH` so walls or ceilings close to the camera do not
   explode into full-frame strips during autonomous captures.
-  `SURF_DRAWTURB`/water polygons normalize Quake's raw warp texture coordinates
-  before palette sampling, so water or slime surfaces do not become flat gray
-  bands across floor/wall/ceiling captures.
+  `SURF_DRAWTURB`/water polygons normalize both Quake's raw subdivided warp
+  texture vectors and the already-scaled undivided water-poly coordinates before
+  palette sampling, so water or slime surfaces do not become flat gray bands
+  across floor/wall/ceiling captures.
   Before BSP surfaces are rasterized, the spatial framebuffer is initialized
   with a far-depth ambient world background using
   `QGE_SPATIAL_WORLD_BACKGROUND_R/G/B`; nearer world, entity, and particle

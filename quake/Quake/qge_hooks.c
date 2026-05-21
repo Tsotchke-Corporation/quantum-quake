@@ -93,6 +93,10 @@ static int qge_render_res = 1024;  /* Internal quantum render resolution */
 #define QGE_SPATIAL_WORLD_BACKGROUND_R 0.018f
 #define QGE_SPATIAL_WORLD_BACKGROUND_G 0.017f
 #define QGE_SPATIAL_WORLD_BACKGROUND_B 0.015f
+#define QGE_SPATIAL_SEAM_REPAIR_MIN_NEIGHBORS 3
+#define QGE_SPATIAL_SEAM_REPAIR_DEPTH_RATIO 0.25f
+#define QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT 1.35f
+#define QGE_TEXTURE_PREFILTER_MAX_FOOTPRINT 8.0f
 
 /* GL texture for quantum framebuffer */
 static GLuint qge_texture = 0;
@@ -462,6 +466,8 @@ static int qge_scene_polygon_culled = 0;
 static int qge_scene_polygon_triangles = 0;
 static int qge_scene_triangle_edge_fills = 0;
 static int qge_scene_polygon_micro_fills = 0;
+static int qge_scene_world_gap_repairs = 0;
+static int qge_scene_texture_prefilter_samples = 0;
 static int qge_scene_snapshot_edicts = 0;
 static int qge_scene_encoded_edicts = 0;
 static int qge_scene_alias_encoded = 0;
@@ -645,10 +651,15 @@ typedef struct {
 	float b_light_t_ib;
 	float c_light_t_ic;
 	float inv_depth_dx;
+	float inv_depth_dy;
 	float tex_s_num_dx;
+	float tex_s_num_dy;
 	float tex_t_num_dx;
+	float tex_t_num_dy;
 	float light_s_num_dx;
+	float light_s_num_dy;
 	float light_t_num_dx;
+	float light_t_num_dy;
 	float w0_origin;
 	float w1_origin;
 	float w0_dx;
@@ -681,6 +692,7 @@ typedef struct {
 	float depth;
 	float tex_s;
 	float tex_t;
+	float tex_footprint;
 	float light_s;
 	float light_t;
 } qge_projected_sample_t;
@@ -4662,7 +4674,7 @@ void QGE_FrameEnd(void)
 		fprintf(stderr, "QGE scene frame=%d world_surfaces=%d submitted=%d dropped=%d "
 				"snapshot=%d snapshot_miss=%d encoded=%d material_encoded=%d "
 				"tex=%d texcache=%d/%d entries=%d light=%d lightcache=%d/%d "
-				"light_entries=%d poly=%d culled=%d surrogate=%d micro=%d clipped=%d invalid=%d "
+				"light_entries=%d poly=%d gaprepair=%d texfilter=%d culled=%d surrogate=%d micro=%d clipped=%d invalid=%d "
 				"fallback=%d sky=%d water=%d\n",
 				qge_frame_count, qge_scene_world_surfaces, qge_scene_surface_count,
 				qge_scene_surface_dropped, qge_scene_snapshot_surfaces,
@@ -4672,6 +4684,8 @@ void QGE_FrameEnd(void)
 				qge_texture_signal_cache_entries, qge_scene_lightmapped_surfaces,
 				qge_scene_lightmap_cache_hits, qge_scene_lightmap_cache_misses,
 				qge_lightmap_signal_cache_entries, qge_scene_polygon_encoded,
+				qge_scene_world_gap_repairs,
+				qge_scene_texture_prefilter_samples,
 				qge_scene_polygon_culled,
 				qge_scene_polygon_surrogate, qge_scene_polygon_surrogate_micro,
 				qge_scene_polygon_surrogate_clipped,
@@ -4736,6 +4750,8 @@ void QGE_SceneBegin(void)
 	qge_scene_polygon_triangles = 0;
 	qge_scene_triangle_edge_fills = 0;
 	qge_scene_polygon_micro_fills = 0;
+	qge_scene_world_gap_repairs = 0;
+	qge_scene_texture_prefilter_samples = 0;
 	qge_scene_snapshot_edicts = 0;
 	qge_scene_encoded_edicts = 0;
 	qge_scene_alias_encoded = 0;
@@ -5522,6 +5538,64 @@ static void QGE_SpatialFillWorldBackground(void)
 	}
 }
 
+QGE_HOT_INLINE qboolean QGE_SpatialDepthHasWorld(float depth)
+{
+	return depth > 0.0f &&
+		isfinite(depth) &&
+		depth < QGE_SPATIAL_DEPTH_FAR * QGE_SPATIAL_SEAM_REPAIR_DEPTH_RATIO;
+}
+
+static void QGE_SpatialRepairWorldCoverageGaps(void)
+{
+	float *depth = qge_spatial_depth_buffer;
+	float *rbuf = qge_spatial_color_buffer[QGE_DWT_R];
+	float *gbuf = qge_spatial_color_buffer[QGE_DWT_G];
+	float *bbuf = qge_spatial_color_buffer[QGE_DWT_B];
+	int repairs = 0;
+
+	if (!depth || !rbuf || !gbuf || !bbuf || qge_render_res < 3)
+		return;
+
+	for (int y = 1; y + 1 < qge_render_res; y++) {
+		for (int x = 1; x + 1 < qge_render_res; x++) {
+			int idx = y * qge_render_res + x;
+			float r = 0.0f;
+			float g = 0.0f;
+			float b = 0.0f;
+			int neighbors = 0;
+
+			if (QGE_SpatialDepthHasWorld(depth[idx]))
+				continue;
+
+			for (int dy = -1; dy <= 1; dy++) {
+				for (int dx = -1; dx <= 1; dx++) {
+					int nidx;
+					if (dx == 0 && dy == 0)
+						continue;
+					nidx = (y + dy) * qge_render_res + (x + dx);
+					if (!QGE_SpatialDepthHasWorld(depth[nidx]))
+						continue;
+					r += rbuf[nidx];
+					g += gbuf[nidx];
+					b += bbuf[nidx];
+					neighbors++;
+				}
+			}
+			if (neighbors < QGE_SPATIAL_SEAM_REPAIR_MIN_NEIGHBORS)
+				continue;
+			rbuf[idx] = r / (float)neighbors;
+			gbuf[idx] = g / (float)neighbors;
+			bbuf[idx] = b / (float)neighbors;
+			/*
+			 * Keep the far depth so repaired coverage cannot seed a wider
+			 * flood fill and cannot occlude later entity/particle passes.
+			 */
+			repairs++;
+		}
+	}
+	qge_scene_world_gap_repairs = repairs;
+}
+
 QGE_HOT_INLINE float QGE_ClampSpatialSignal(float value)
 {
 	if (value < 0.0f)
@@ -5923,12 +5997,14 @@ static qge_projected_sample_t QGE_ProjectedPolygonAverageSample(const qge_projec
 		sample.depth += verts[i].depth;
 		sample.tex_s += verts[i].tex_s;
 		sample.tex_t += verts[i].tex_t;
+		sample.tex_footprint += 1.0f;
 		sample.light_s += verts[i].light_s;
 		sample.light_t += verts[i].light_t;
 	}
 	sample.depth /= (float)num_verts;
 	sample.tex_s /= (float)num_verts;
 	sample.tex_t /= (float)num_verts;
+	sample.tex_footprint /= (float)num_verts;
 	sample.light_s /= (float)num_verts;
 	sample.light_t /= (float)num_verts;
 	return sample;
@@ -5984,18 +6060,33 @@ static qboolean QGE_PrepareProjectedTriangleSampler(
 	sampler->inv_depth_dx =
 		w0_x * (sampler->ia - sampler->ic) +
 		w1_x * (sampler->ib - sampler->ic);
+	sampler->inv_depth_dy =
+		w0_y * (sampler->ia - sampler->ic) +
+		w1_y * (sampler->ib - sampler->ic);
 	sampler->tex_s_num_dx =
 		w0_x * (sampler->a_tex_s_ia - sampler->c_tex_s_ic) +
 		w1_x * (sampler->b_tex_s_ib - sampler->c_tex_s_ic);
+	sampler->tex_s_num_dy =
+		w0_y * (sampler->a_tex_s_ia - sampler->c_tex_s_ic) +
+		w1_y * (sampler->b_tex_s_ib - sampler->c_tex_s_ic);
 	sampler->tex_t_num_dx =
 		w0_x * (sampler->a_tex_t_ia - sampler->c_tex_t_ic) +
 		w1_x * (sampler->b_tex_t_ib - sampler->c_tex_t_ic);
+	sampler->tex_t_num_dy =
+		w0_y * (sampler->a_tex_t_ia - sampler->c_tex_t_ic) +
+		w1_y * (sampler->b_tex_t_ib - sampler->c_tex_t_ic);
 	sampler->light_s_num_dx =
 		w0_x * (sampler->a_light_s_ia - sampler->c_light_s_ic) +
 		w1_x * (sampler->b_light_s_ib - sampler->c_light_s_ic);
+	sampler->light_s_num_dy =
+		w0_y * (sampler->a_light_s_ia - sampler->c_light_s_ic) +
+		w1_y * (sampler->b_light_s_ib - sampler->c_light_s_ic);
 	sampler->light_t_num_dx =
 		w0_x * (sampler->a_light_t_ia - sampler->c_light_t_ic) +
 		w1_x * (sampler->b_light_t_ib - sampler->c_light_t_ic);
+	sampler->light_t_num_dy =
+		w0_y * (sampler->a_light_t_ia - sampler->c_light_t_ic) +
+		w1_y * (sampler->b_light_t_ib - sampler->c_light_t_ic);
 	sampler->w0_origin = -(w0_x * c->x + w0_y * c->y);
 	sampler->w1_origin = -(w1_x * c->x + w1_y * c->y);
 	sampler->valid = true;
@@ -6031,6 +6122,7 @@ static qboolean QGE_ProjectedTriangleSampleWeights(
 		sample->depth = w0 * a->depth + w1 * b->depth + w2 * c->depth;
 		sample->tex_s = w0 * a->tex_s + w1 * b->tex_s + w2 * c->tex_s;
 		sample->tex_t = w0 * a->tex_t + w1 * b->tex_t + w2 * c->tex_t;
+		sample->tex_footprint = 1.0f;
 		sample->light_s = w0 * a->light_s + w1 * b->light_s + w2 * c->light_s;
 		sample->light_t = w0 * a->light_t + w1 * b->light_t + w2 * c->light_t;
 		return true;
@@ -6044,6 +6136,7 @@ static qboolean QGE_ProjectedTriangleSampleWeights(
 	sample->tex_t = (w0 * sampler->a_tex_t_ia +
 					 w1 * sampler->b_tex_t_ib +
 					 w2 * sampler->c_tex_t_ic) * depth_scale;
+	sample->tex_footprint = 1.0f;
 	sample->light_s = (w0 * sampler->a_light_s_ia +
 					   w1 * sampler->b_light_s_ib +
 					   w2 * sampler->c_light_s_ic) * depth_scale;
@@ -6079,6 +6172,7 @@ static qboolean QGE_ProjectedTriangleSampleWeightsUnchecked(
 	sample->tex_t = (w0 * sampler->a_tex_t_ia +
 					 w1 * sampler->b_tex_t_ib +
 					 w2 * sampler->c_tex_t_ic) * depth_scale;
+	sample->tex_footprint = 1.0f;
 	sample->light_s = (w0 * sampler->a_light_s_ia +
 					   w1 * sampler->b_light_s_ib +
 					   w2 * sampler->c_light_s_ic) * depth_scale;
@@ -6137,6 +6231,7 @@ static qboolean QGE_ProjectedTrianglePixelSamplePrepared(
 		sample->depth += sub.depth;
 		sample->tex_s += sub.tex_s;
 		sample->tex_t += sub.tex_t;
+		sample->tex_footprint += sub.tex_footprint;
 		sample->light_s += sub.light_s;
 		sample->light_t += sub.light_t;
 		hits++;
@@ -6147,11 +6242,91 @@ static qboolean QGE_ProjectedTrianglePixelSamplePrepared(
 	sample->depth /= (float)hits;
 	sample->tex_s /= (float)hits;
 	sample->tex_t /= (float)hits;
+	sample->tex_footprint /= (float)hits;
 	sample->light_s /= (float)hits;
 	sample->light_t /= (float)hits;
 	*coverage = (float)hits * 0.25f;
 	qge_scene_triangle_edge_fills++;
 	return true;
+}
+
+static float QGE_ProjectedTriangleTextureFootprint(
+	const qge_projected_triangle_sampler_t *sampler,
+	const qge_surface_sample_context_t *ctx,
+	float inv_depth,
+	float tex_s_num,
+	float tex_t_num)
+{
+	float tex_s;
+	float tex_t;
+	float footprint = 1.0f;
+
+	if (!sampler || !sampler->valid || !ctx ||
+		!ctx->tex_width || !ctx->tex_height ||
+		!(inv_depth > 0.000001f))
+		return 1.0f;
+
+	tex_s = tex_s_num / inv_depth;
+	tex_t = tex_t_num / inv_depth;
+
+	if (inv_depth + sampler->inv_depth_dx > 0.000001f) {
+		float sx = (tex_s_num + sampler->tex_s_num_dx) /
+				   (inv_depth + sampler->inv_depth_dx);
+		float tx = (tex_t_num + sampler->tex_t_num_dx) /
+				   (inv_depth + sampler->inv_depth_dx);
+		float ds = (sx - tex_s) * ctx->tex_width_f;
+		float dt = (tx - tex_t) * ctx->tex_height_f;
+		float len = sqrtf(ds * ds + dt * dt);
+		if (len > footprint)
+			footprint = len;
+	}
+	if (inv_depth + sampler->inv_depth_dy > 0.000001f) {
+		float sy = (tex_s_num + sampler->tex_s_num_dy) /
+				   (inv_depth + sampler->inv_depth_dy);
+		float ty = (tex_t_num + sampler->tex_t_num_dy) /
+				   (inv_depth + sampler->inv_depth_dy);
+		float ds = (sy - tex_s) * ctx->tex_width_f;
+		float dt = (ty - tex_t) * ctx->tex_height_f;
+		float len = sqrtf(ds * ds + dt * dt);
+		if (len > footprint)
+			footprint = len;
+	}
+
+	if (!isfinite(footprint) || footprint < 1.0f)
+		return 1.0f;
+	if (footprint > QGE_TEXTURE_PREFILTER_MAX_FOOTPRINT)
+		return QGE_TEXTURE_PREFILTER_MAX_FOOTPRINT;
+	return footprint;
+}
+
+static float QGE_ProjectedTriangleTextureFootprintAt(
+	const qge_projected_triangle_sampler_t *sampler,
+	const qge_surface_sample_context_t *ctx,
+	float x,
+	float y)
+{
+	float w0;
+	float w1;
+	float w2;
+	float inv_depth;
+	float tex_s_num;
+	float tex_t_num;
+
+	if (!sampler || !sampler->valid)
+		return 1.0f;
+
+	w0 = sampler->w0_origin + sampler->w0_dx * x + sampler->w0_dy * y;
+	w1 = sampler->w1_origin + sampler->w1_dx * x + sampler->w1_dy * y;
+	w2 = 1.0f - w0 - w1;
+	inv_depth = w0 * sampler->ia + w1 * sampler->ib + w2 * sampler->ic;
+	tex_s_num = w0 * sampler->a_tex_s_ia +
+				w1 * sampler->b_tex_s_ib +
+				w2 * sampler->c_tex_s_ic;
+	tex_t_num = w0 * sampler->a_tex_t_ia +
+				w1 * sampler->b_tex_t_ib +
+				w2 * sampler->c_tex_t_ic;
+	return QGE_ProjectedTriangleTextureFootprint(sampler, ctx, inv_depth,
+												 tex_s_num, tex_t_num);
 }
 
 static qboolean QGE_ProjectedTriangleRowSpan(
@@ -6710,10 +6885,129 @@ QGE_HOT_INLINE qboolean QGE_SurfaceTexturePaletteOpaque(
 	return qge_palette_opaque[palette_index] && palette_index != 255;
 }
 
+static int QGE_SurfaceTextureWrappedCoord(int value, unsigned int size,
+										  unsigned int mask,
+										  qboolean power2)
+{
+	if (size == 0)
+		return 0;
+	if (power2)
+		return value & (int)mask;
+	value %= (int)size;
+	if (value < 0)
+		value += (int)size;
+	return value;
+}
+
+static void QGE_SurfaceTextureAccumulateTexel(
+	const qge_surface_sample_context_t *ctx,
+	int x,
+	int y,
+	float weight,
+	float *r,
+	float *g,
+	float *b,
+	float *alpha)
+{
+	int palette_index;
+
+	if (!ctx || !ctx->tex_pixels || !r || !g || !b || !alpha || weight <= 0.0f)
+		return;
+
+	x = QGE_SurfaceTextureWrappedCoord(x, ctx->tex_width,
+									   ctx->tex_width_mask,
+									   ctx->tex_power2);
+	y = QGE_SurfaceTextureWrappedCoord(y, ctx->tex_height,
+									   ctx->tex_height_mask,
+									   ctx->tex_power2);
+	palette_index = ctx->tex_pixels[y * (int)ctx->tex_width + x];
+	if (!QGE_SurfaceTexturePaletteOpaque(ctx, palette_index))
+		return;
+
+	*r += qge_palette_lut[palette_index].r * weight;
+	*g += qge_palette_lut[palette_index].g * weight;
+	*b += qge_palette_lut[palette_index].b * weight;
+	*alpha += weight;
+}
+
+static qboolean QGE_SurfaceTexturePrefilterContext(
+	const qge_surface_sample_context_t *ctx,
+	float tex_s,
+	float tex_t,
+	float tex_footprint,
+	qge_rgb_sample_t *color)
+{
+	float r = 0.0f;
+	float g = 0.0f;
+	float b = 0.0f;
+	float alpha = 0.0f;
+	float radius;
+	int cx;
+	int cy;
+	int step;
+
+	if (!ctx || !color || !ctx->tex_pixels ||
+		tex_footprint < QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT)
+		return false;
+
+	if (tex_s < 0.0f || tex_s >= 1.0f) {
+		tex_s = tex_s - floorf(tex_s);
+		if (tex_s < 0.0f) tex_s += 1.0f;
+	}
+	if (tex_t < 0.0f || tex_t >= 1.0f) {
+		tex_t = tex_t - floorf(tex_t);
+		if (tex_t < 0.0f) tex_t += 1.0f;
+	}
+
+	if (tex_footprint > QGE_TEXTURE_PREFILTER_MAX_FOOTPRINT)
+		tex_footprint = QGE_TEXTURE_PREFILTER_MAX_FOOTPRINT;
+	radius = tex_footprint * 0.5f;
+	if (radius < 1.0f)
+		radius = 1.0f;
+	step = (int)ceilf(radius);
+
+	cx = (int)floorf(tex_s * ctx->tex_width_f);
+	cy = (int)floorf(tex_t * ctx->tex_height_f);
+
+	/* Nine-tap footprint filter approximates classic mip selection for CPU QGE. */
+	QGE_SurfaceTextureAccumulateTexel(ctx, cx, cy, 0.2500f,
+									  &r, &g, &b, &alpha);
+	QGE_SurfaceTextureAccumulateTexel(ctx, cx - step, cy, 0.1250f,
+									  &r, &g, &b, &alpha);
+	QGE_SurfaceTextureAccumulateTexel(ctx, cx + step, cy, 0.1250f,
+									  &r, &g, &b, &alpha);
+	QGE_SurfaceTextureAccumulateTexel(ctx, cx, cy - step, 0.1250f,
+									  &r, &g, &b, &alpha);
+	QGE_SurfaceTextureAccumulateTexel(ctx, cx, cy + step, 0.1250f,
+									  &r, &g, &b, &alpha);
+	QGE_SurfaceTextureAccumulateTexel(ctx, cx - step, cy - step, 0.0625f,
+									  &r, &g, &b, &alpha);
+	QGE_SurfaceTextureAccumulateTexel(ctx, cx + step, cy - step, 0.0625f,
+									  &r, &g, &b, &alpha);
+	QGE_SurfaceTextureAccumulateTexel(ctx, cx - step, cy + step, 0.0625f,
+									  &r, &g, &b, &alpha);
+	QGE_SurfaceTextureAccumulateTexel(ctx, cx + step, cy + step, 0.0625f,
+									  &r, &g, &b, &alpha);
+
+	if (alpha <= 0.01f) {
+		color->r = 0.0f;
+		color->g = 0.0f;
+		color->b = 0.0f;
+		return false;
+	}
+	color->r = r / alpha;
+	color->g = g / alpha;
+	color->b = b / alpha;
+	QGE_RGBClamp(color);
+	qge_scene_texture_prefilter_samples++;
+	return true;
+}
+
 QGE_HOT_INLINE qboolean QGE_SurfaceTextureColorContext(
 	const qge_surface_sample_context_t *ctx,
 	float tex_s,
 	float tex_t,
+	float tex_footprint,
 	qge_rgb_sample_t *color)
 {
 	int x0, y0;
@@ -6730,9 +7024,22 @@ QGE_HOT_INLINE qboolean QGE_SurfaceTextureColorContext(
 	if (!ctx->tex_pixels || !ctx->tex_width || !ctx->tex_height)
 		return true;
 	if (ctx->warp) {
-		tex_s *= 1.0f / 64.0f;
-		tex_t *= 1.0f / 64.0f;
+		/*
+		 * Quake stores the first turbulent world poly in already-scaled
+		 * coordinates, while subdivided warp polys use raw texture vectors.
+		 * Sample both forms through roughly the same 64-unit repeating space.
+		 */
+		if (fabsf(tex_s) < 64.0f && fabsf(tex_t) < 64.0f) {
+			tex_s *= 2.0f;
+			tex_t *= 2.0f;
+		} else {
+			tex_s *= 1.0f / 64.0f;
+			tex_t *= 1.0f / 64.0f;
+		}
 	}
+	if (!ctx->warp && tex_footprint >= QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT)
+		return QGE_SurfaceTexturePrefilterContext(ctx, tex_s, tex_t,
+												  tex_footprint, color);
 
 	if (ctx->bilinear) {
 		float fx, fy;
@@ -6879,7 +7186,7 @@ QGE_HOT_INLINE qge_rgb_sample_t QGE_SurfaceSampleColorContext(
 	}
 
 	if (!QGE_SurfaceTextureColorContext(ctx, sample->tex_s, sample->tex_t,
-										&tex_color)) {
+										sample->tex_footprint, &tex_color)) {
 		out.r = 0.0f;
 		out.g = 0.0f;
 		out.b = 0.0f;
@@ -7041,11 +7348,19 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 																		 fallback_w1,
 																		 &sample))
 							continue;
+						sample.tex_footprint =
+							QGE_ProjectedTriangleTextureFootprintAt(
+								&sampler, &sample_ctx,
+								(float)x + 0.5f, sample_y);
 					} else {
 						float depth_scale = 1.0f / inv_depth;
 						sample.depth = depth_scale;
 						sample.tex_s = tex_s_num * depth_scale;
 						sample.tex_t = tex_t_num * depth_scale;
+						sample.tex_footprint =
+							QGE_ProjectedTriangleTextureFootprint(
+								&sampler, &sample_ctx, inv_depth,
+								tex_s_num, tex_t_num);
 						sample.light_s = light_s_num * depth_scale;
 						sample.light_t = light_t_num * depth_scale;
 					}
@@ -7091,6 +7406,10 @@ static void QGE_SpatialFillPolygonDepth(const qge_scene_surface_t *surface,
 																	  &coverage))
 							continue;
 					}
+					sample.tex_footprint =
+						QGE_ProjectedTriangleTextureFootprintAt(
+							&sampler, &sample_ctx,
+							(float)x + 0.5f, (float)y + 0.5f);
 					if (prepared_rgb_depth &&
 						sample.depth > depth_buffer[row_index + x] +
 									   QGE_SPATIAL_DEPTH_EPSILON)
@@ -8799,6 +9118,7 @@ static void QGE_EncodeScene(void)
 		encoded_world = QGE_EncodeTransientWorldSurfaces(qge_dwt_fb[QGE_DWT_R],
 														 surface_budget);
 	qge_scene_encoded_surfaces = encoded_world;
+	QGE_SpatialRepairWorldCoverageGaps();
 
 	QGE_EncodeSnapshotEdicts(qge_dwt_fb[QGE_DWT_R], snapshot);
 	QGE_EncodeSnapshotParticles(qge_dwt_fb[QGE_DWT_R], snapshot);
@@ -9166,7 +9486,7 @@ void QGE_RenderScene(void)
 				Con_Printf("QGE render frame=%d mode=%s owner=%s classic3d=%d suppressed3d=%d "
 						   "res=%d time=%.1f encode=%.1f setup=%.1f raster=%.1f fdwt=%.1f dwt=%.1f convert=%.1f blit=%.1f reuse=%d interval=%d "
 						   "coeffs=%d snapshot=%d snapshot_miss=%d "
-						   "texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d microfill=%d "
+						   "texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d microfill=%d gaprepair=%d texfilter=%d "
 						   "culled=%d surrogate=%d micro=%d clipped=%d fallback=%d "
 						   "encoded=%d material=%d edicts=%d alias=%d sprites=%d sbill=%d emesh=%d ecoeff=%d "
 						   "viewmodel=%d entity_miss=%d particles=%d pcoeff=%d gates=%d shots=%d "
@@ -9192,6 +9512,8 @@ void QGE_RenderScene(void)
 						   qge_scene_lightmap_cache_misses, qge_scene_polygon_encoded,
 						   qge_scene_polygon_triangles, qge_scene_triangle_edge_fills,
 						   qge_scene_polygon_micro_fills,
+						   qge_scene_world_gap_repairs,
+						   qge_scene_texture_prefilter_samples,
 						   qge_scene_polygon_culled,
 						   qge_scene_polygon_surrogate,
 						   qge_scene_polygon_surrogate_micro,
@@ -9225,7 +9547,7 @@ void QGE_RenderScene(void)
 					"res=%d time=%.1fms encode=%.1fms setup=%.1fms raster=%.1fms fdwt=%.1fms dwt=%.1fms convert=%.1fms blit=%.1fms reuse=%d interval=%d "
 					"coeffs=%d sparse=%.1f%% "
 					"scene_surfaces=%d snapshot_surfaces=%d snapshot_misses=%d "
-					"texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d microfill=%d "
+					"texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d microfill=%d gaprepair=%d texfilter=%d "
 					"culled=%d surrogate=%d micro=%d clipped=%d invalid=%d fallback=%d encoded_surfaces=%d "
 					"material_encoded=%d snapshot_edicts=%d encoded_edicts=%d alias=%d "
 					"sprites=%d sprite_billboards=%d entity_mesh_tris=%d entity_coeffs=%d viewmodel=%d entity_misses=%d "
@@ -9256,6 +9578,8 @@ void QGE_RenderScene(void)
 					qge_scene_lightmap_cache_misses, qge_scene_polygon_encoded,
 					qge_scene_polygon_triangles, qge_scene_triangle_edge_fills,
 					qge_scene_polygon_micro_fills,
+					qge_scene_world_gap_repairs,
+					qge_scene_texture_prefilter_samples,
 					qge_scene_polygon_culled,
 					qge_scene_polygon_surrogate,
 					qge_scene_polygon_surrogate_micro,
