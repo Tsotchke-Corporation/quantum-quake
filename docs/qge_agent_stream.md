@@ -679,7 +679,12 @@ loop with policy updates.
   target is also dropped when a visible enemy is within
   `QGE_NOESIS_VISIBLE_BREAK_HIDDEN_LOCK_DISTANCE`, so the autonomous controller
   does not ignore an immediate fight in favor of pathing into a wall toward an
-  unseen monster.
+  unseen monster. If autonomous mode has no engaged target, the controller now
+  falls back to local clearance exploration: it probes forward/left/right from
+  the current view, verifies floor and non-lethal contents ahead with
+  `QGE_NOESIS_EXPLORE_FLOOR_PROBE_DISTANCE`, moves forward through open space,
+  and turns/slides away from wall contacts using `QGE_NOESIS_EXPLORE_TURN_DEG`.
+  This keeps no-script runs moving without a cached route script.
   Mode `1` aims and fires at visible monsters while preserving any existing
   movement command. For mode `1`, visible targets are ranked by
   current aim error first and distance second, so a scan does not abandon the

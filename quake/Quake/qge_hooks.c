@@ -225,6 +225,9 @@ static qboolean qge_noesis_assist_hidden_wall_timeout = false;
 #define QGE_NOESIS_WALL_TRAP_CLEAR 40.0f
 #define QGE_NOESIS_WALL_SLIDE_CLEAR 56.0f
 #define QGE_NOESIS_WALL_FOLLOW_FRAMES 24
+#define QGE_NOESIS_EXPLORE_TURN_DEG 24.0f
+#define QGE_NOESIS_EXPLORE_FLOOR_PROBE_DISTANCE 64.0f
+#define QGE_NOESIS_EXPLORE_FLOOR_DROP 96.0f
 #define QGE_NOESIS_HIDDEN_CHASE_VISIBILITY_TIMEOUT_FRAMES 80
 #define QGE_NOESIS_HIDDEN_CHASE_COOLDOWN_FRAMES 120
 #define QGE_NOESIS_HIDDEN_WALL_STALL_DISTANCE 1152.0f
@@ -1053,6 +1056,39 @@ static float QGE_NoesisAssistTraceDistance(edict_t *player, float yaw)
 	return trace.fraction * probe_distance;
 }
 
+static qboolean QGE_NoesisAssistPathHasFloor(edict_t *player, float yaw)
+{
+	trace_t trace;
+	vec3_t angles;
+	vec3_t forward;
+	vec3_t right;
+	vec3_t up;
+	vec3_t start;
+	vec3_t end;
+	vec3_t contents_point;
+	int contents;
+
+	if (!player)
+		return false;
+
+	angles[0] = angles[1] = angles[2] = 0.0f;
+	angles[YAW] = yaw;
+	AngleVectors(angles, forward, right, up);
+	VectorCopy(player->v.origin, start);
+	VectorMA(start, QGE_NOESIS_EXPLORE_FLOOR_PROBE_DISTANCE, forward, start);
+	start[2] += 8.0f;
+	VectorCopy(start, end);
+	end[2] -= QGE_NOESIS_EXPLORE_FLOOR_DROP;
+	trace = SV_Move(start, vec3_origin, vec3_origin, end,
+					MOVE_NOMONSTERS, player);
+	if (trace.startsolid || trace.allsolid || trace.fraction >= 1.0f)
+		return false;
+	VectorCopy(trace.endpos, contents_point);
+	contents_point[2] += 4.0f;
+	contents = SV_PointContents(contents_point);
+	return contents != CONTENTS_LAVA && contents != CONTENTS_SLIME;
+}
+
 static float QGE_NoesisAssistHiddenChaseDistance(void)
 {
 	if (qge_noesis_autonomous.value >= 0.5f)
@@ -1181,6 +1217,93 @@ static void QGE_NoesisAssistSetRelativeMove(usercmd_t *move,
 
 	move->forwardmove = DotProduct(wish, basis_forward);
 	move->sidemove = DotProduct(wish, basis_right);
+}
+
+static qboolean QGE_NoesisAssistAutonomousExplore(edict_t *player,
+												 usercmd_t *move,
+												 float *forward_clear_out,
+												 float *left_clear_out,
+												 float *right_clear_out,
+												 qboolean *view_injected_out)
+{
+	float yaw;
+	float forward_clear;
+	float left_clear;
+	float right_clear;
+	qboolean forward_floor;
+	qboolean left_floor;
+	qboolean right_floor;
+	float wall_follow_side;
+	float turn_delta = 0.0f;
+	float forwardmove = 240.0f;
+	float sidemove = 0.0f;
+
+	if (forward_clear_out)
+		*forward_clear_out = -1.0f;
+	if (left_clear_out)
+		*left_clear_out = -1.0f;
+	if (right_clear_out)
+		*right_clear_out = -1.0f;
+	if (view_injected_out)
+		*view_injected_out = false;
+	if (!player || !move || qge_noesis_autonomous.value < 0.5f)
+		return false;
+
+	yaw = anglemod(player->v.v_angle[YAW]);
+	forward_clear = QGE_NoesisAssistTraceDistance(player, yaw);
+	left_clear = QGE_NoesisAssistTraceDistance(player, anglemod(yaw + 45.0f));
+	right_clear = QGE_NoesisAssistTraceDistance(player, anglemod(yaw - 45.0f));
+	forward_floor = QGE_NoesisAssistPathHasFloor(player, yaw);
+	left_floor = QGE_NoesisAssistPathHasFloor(player, anglemod(yaw + 45.0f));
+	right_floor = QGE_NoesisAssistPathHasFloor(player, anglemod(yaw - 45.0f));
+	if (!forward_floor)
+		forward_clear = 0.0f;
+	if (!left_floor)
+		left_clear = 0.0f;
+	if (!right_floor)
+		right_clear = 0.0f;
+	wall_follow_side = QGE_NoesisAssistWallFollowSide(left_clear, right_clear);
+
+	if (forward_clear < QGE_NOESIS_WALL_TRAP_CLEAR &&
+		left_clear < QGE_NOESIS_WALL_TRAP_CLEAR &&
+		right_clear < QGE_NOESIS_WALL_TRAP_CLEAR) {
+		forwardmove = -180.0f;
+		sidemove = wall_follow_side * 280.0f;
+		turn_delta = wall_follow_side < 0.0f ?
+			QGE_NOESIS_EXPLORE_TURN_DEG : -QGE_NOESIS_EXPLORE_TURN_DEG;
+	}
+	else if (forward_clear < QGE_NOESIS_WALL_SLIDE_CLEAR) {
+		forwardmove = 80.0f;
+		sidemove = wall_follow_side * 320.0f;
+		turn_delta = wall_follow_side < 0.0f ?
+			QGE_NOESIS_EXPLORE_TURN_DEG : -QGE_NOESIS_EXPLORE_TURN_DEG;
+	}
+	else if (forward_clear < 96.0f) {
+		forwardmove = 180.0f;
+		sidemove = wall_follow_side * 160.0f;
+		turn_delta = wall_follow_side < 0.0f ?
+			QGE_NOESIS_EXPLORE_TURN_DEG * 0.5f :
+			-QGE_NOESIS_EXPLORE_TURN_DEG * 0.5f;
+	}
+
+	move->forwardmove = forwardmove;
+	move->sidemove = sidemove;
+	move->upmove = 0.0f;
+	if (turn_delta != 0.0f) {
+		player->v.v_angle[YAW] = anglemod(yaw + turn_delta);
+		player->v.angles[YAW] = player->v.v_angle[YAW];
+		player->v.fixangle = 1.0f;
+		if (view_injected_out)
+			*view_injected_out = true;
+	}
+
+	if (forward_clear_out)
+		*forward_clear_out = forward_clear;
+	if (left_clear_out)
+		*left_clear_out = left_clear;
+	if (right_clear_out)
+		*right_clear_out = right_clear;
+	return true;
 }
 
 static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
@@ -1410,6 +1533,10 @@ void QGE_NoesisAssistClientThink(client_t *client,
 		return;
 
 	chase_mode = qge_noesis_assist.value >= 1.5f ? 1 : 0;
+	original_attack = player->v.button0 != 0.0f;
+	original_forwardmove = move->forwardmove;
+	original_sidemove = move->sidemove;
+	original_upmove = move->upmove;
 	previous_locked_target_id = qge_noesis_assist_locked_target_id;
 	previous_lock_active = previous_locked_target_id > 0;
 	enemy = QGE_NoesisAssistFindEnemy(player, chase_mode ? false : true,
@@ -1420,6 +1547,31 @@ void QGE_NoesisAssistClientThink(client_t *client,
 		qge_noesis_assist_locked_target_id = 0;
 		qge_noesis_assist_target_lock_until_frame = -1;
 		qge_noesis_assist_wall_follow_until_frame = -1;
+		if (chase_mode &&
+			QGE_NoesisAssistAutonomousExplore(player, move,
+											  &forward_clear, &left_clear,
+											  &right_clear, &view_injected)) {
+			player->v.button0 = 0.0f;
+			qge_noesis_assist_mode = 2;
+			qge_noesis_assist_active = true;
+			qge_noesis_assist_target_id = 0;
+			qge_noesis_assist_target_visible = false;
+			qge_noesis_assist_target_distance = -1.0f;
+			qge_noesis_assist_forwardmove = move->forwardmove;
+			qge_noesis_assist_sidemove = move->sidemove;
+			qge_noesis_assist_forward_clear = forward_clear;
+			qge_noesis_assist_left_clear = left_clear;
+			qge_noesis_assist_right_clear = right_clear;
+			qge_noesis_assist_pre_aim_error = -1.0f;
+			qge_noesis_assist_view_injected = view_injected;
+			qge_noesis_assist_movement_injected =
+				move->forwardmove != original_forwardmove ||
+				move->sidemove != original_sidemove ||
+				move->upmove != original_upmove;
+			qge_noesis_assist_attack_injected = false;
+			qge_noesis_assist_attack_suppressed = original_attack;
+			qge_noesis_assist_fire_gate_passed = false;
+		}
 		return;
 	}
 	selected_target_id = NUM_FOR_EDICT(enemy);
@@ -1454,10 +1606,6 @@ void QGE_NoesisAssistClientThink(client_t *client,
 		}
 	}
 
-	original_attack = player->v.button0 != 0.0f;
-	original_forwardmove = move->forwardmove;
-	original_sidemove = move->sidemove;
-	original_upmove = move->upmove;
 	pre_aim_error = QGE_GameplayAimErrorDegrees(player, aim_point);
 
 	VectorAdd(player->v.origin, player->v.view_ofs, eye);
@@ -1472,6 +1620,37 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	engage_target = visible || (chase_mode && distance >= 0.0f &&
 								distance <= hidden_chase_distance);
 	forward_clear = left_clear = right_clear = -1.0f;
+	if (chase_mode && !engage_target &&
+		QGE_NoesisAssistAutonomousExplore(player, move,
+										  &forward_clear, &left_clear,
+										  &right_clear, &view_injected)) {
+		player->v.button0 = 0.0f;
+		qge_noesis_assist_locked_target_id = 0;
+		qge_noesis_assist_target_lock_until_frame = -1;
+		qge_noesis_assist_mode = 2;
+		qge_noesis_assist_active = true;
+		qge_noesis_assist_target_id = selected_target_id;
+		qge_noesis_assist_target_visible = visible;
+		qge_noesis_assist_target_distance = distance;
+		qge_noesis_assist_aim_pitch = aim[PITCH];
+		qge_noesis_assist_aim_yaw = aim[YAW];
+		qge_noesis_assist_forwardmove = move->forwardmove;
+		qge_noesis_assist_sidemove = move->sidemove;
+		qge_noesis_assist_forward_clear = forward_clear;
+		qge_noesis_assist_left_clear = left_clear;
+		qge_noesis_assist_right_clear = right_clear;
+		qge_noesis_assist_pre_aim_error = pre_aim_error;
+		qge_noesis_assist_view_injected = view_injected;
+		qge_noesis_assist_movement_injected =
+			move->forwardmove != original_forwardmove ||
+			move->sidemove != original_sidemove ||
+			move->upmove != original_upmove;
+		qge_noesis_assist_attack_injected = false;
+		qge_noesis_assist_attack_suppressed = original_attack;
+		qge_noesis_assist_fire_gate_passed = false;
+		qge_noesis_assist_target_switched = target_switched;
+		return;
+	}
 	if (chase_mode && engage_target && !visible &&
 		qge_noesis_autonomous.value >= 0.5f &&
 		distance <= QGE_NOESIS_HIDDEN_WALL_STALL_DISTANCE) {
