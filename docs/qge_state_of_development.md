@@ -29,7 +29,7 @@ The latest verified branch state is:
 - `origin/main` is fast-forwarded to the same commit as `origin/master` for
   compatibility after the historical merge.
 - Latest verified runtime baseline is the current QGE world fullbright sampling
-  slice plus diagnostic notify cleanup, mirrored to both `origin/master` and
+  scale plus diagnostic notify cleanup, mirrored to both `origin/master` and
   `origin/main`.
 - The active runtime tree is the C/QuakeSpasm/QGE tree, not the older
   JavaScript/WebTransport history.
@@ -55,6 +55,18 @@ The latest verified branch state is:
 
 Recent verified slices on `master` establish the current baseline:
 
+- The current QGE world fullbright scale slice raises
+  `QGE_SURFACE_FULLBRIGHT_SCALE` to keep true fullbright wall texels closer to
+  classic Quake's unlit additive contribution without changing ordinary
+  lightmapped texture samples. Fixed-view evidence at
+  `diagnostics/quake_stream/20260521-170934/frame_001.png` keeps QGE ownership
+  of world geometry, textures, lightmaps, HUD/console, and the viewmodel with
+  `own_console=1`, `own_viewmodel=1`, `emesh=58`, `ecoeff=27`, and
+  `fallback_reason=none` on captured frames. Against the classic
+  `20260521-151552` reference, whole-frame RMSE improves from `0.0457305` in
+  the diagnostic-notify-clean capture to `0.0452656`; sampled wall-light crops
+  move closer to classic while normal ceiling/front-wall/side-wall crops remain
+  unchanged.
 - The current diagnostic-notify cleanup keeps QGE render/snapshot milestones in
   stderr-backed logs instead of Quake notify text, so graphics captures no
   longer paint diagnostic strings over the floors, walls, and ceilings being
@@ -261,6 +273,14 @@ Useful live evidence anchors:
   `own_viewmodel=1`, `own_console=1`, `emesh=58`, and `ecoeff=27`. This is a
   capture-cleanliness fix for inspecting floors, walls, and ceilings; residual
   texture, seam, material, and tone-map artifacts remain open.
+- `diagnostics/quake_stream/20260521-170934/frame_001.png`: fixed-view QGE
+  capture after increasing the bounded fullbright wall-texel additive scale.
+  The captured frames keep `fallback_reason=none`, `own_world=1`,
+  `own_textures=1`, `own_lightmaps=1`, `own_viewmodel=1`, `own_console=1`,
+  `emesh=58`, and `ecoeff=27`. ImageMagick checks against the classic
+  `20260521-151552` reference show whole-frame RMSE improving from `0.0457305`
+  to `0.0452656`; sampled wall-light crops move closer to classic while normal
+  ceiling/front-wall/side-wall crops stay unchanged.
 
 The ICC control plane is part of the baseline. Verified slices should refresh
 index, memory, git history, source-drift, production-audit, task-attempt, and
@@ -410,10 +430,10 @@ Known current visual state:
   regression by selecting the world white point from the upper scene area. It
   does not fix seams, turbulent surfaces, fullbright material fidelity, or the
   untextured weapon mesh.
-- The most recent fullbright sampling work restores a bounded unlit additive
-  contribution for true fullbright wall texels. The sampled lamp strips are
-  closer to classic but still dim, so this is not a complete material-fidelity
-  fix.
+- The most recent fullbright sampling work restores and scales a bounded unlit
+  additive contribution for true fullbright wall texels. The sampled lamp strips
+  are closer to classic but still dim, so this is not a complete
+  material-fidelity fix.
 - The earlier tone-headroom work reduces fixed-view over-bright ceiling,
   side-wall, and far-floor deltas against the classic reference.
 - The most recent viewmodel work encodes the first-person weapon through the

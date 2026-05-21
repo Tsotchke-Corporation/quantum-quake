@@ -746,8 +746,9 @@ loop with policy updates.
   boost; only fence/transparent surfaces use palette alpha as a cutout mask.
   For textures with a fullbright mask, palette indices at or above
   `QGE_SURFACE_FULLBRIGHT_INDEX` are removed from the lightmapped base sample
-  and added back through `QGE_SURFACE_FULLBRIGHT_SCALE`, matching the classic
-  unlit additive fullbright pass without a separate QGE fullscreen pass.
+  and added back through the bounded `QGE_SURFACE_FULLBRIGHT_SCALE`, moving the
+  wall-light contribution closer to the classic unlit additive fullbright pass
+  without a separate QGE fullscreen pass.
   QGE world projection uses Quake's `r_refdef.fov_x` and `r_refdef.fov_y`
   separately, so floor and ceiling projection follows the classic viewport
   aspect instead of a square-FOV approximation.

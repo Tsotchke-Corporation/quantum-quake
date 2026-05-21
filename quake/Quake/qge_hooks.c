@@ -261,7 +261,7 @@ static qboolean QGE_RenderShouldUpdateFrame(void);
 #define QGE_SURFACE_LIGHT_SCALE 1.05f
 #define QGE_SURFACE_LUMA_FLOOR 0.018f
 #define QGE_SURFACE_FULLBRIGHT_INDEX 224
-#define QGE_SURFACE_FULLBRIGHT_SCALE 1.00f
+#define QGE_SURFACE_FULLBRIGHT_SCALE 1.35f
 #define QGE_TONE_HISTOGRAM_WORLD_Y_PERCENT 72
 
 static quantum_state_t qge_render_gate_state;

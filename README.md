@@ -13,7 +13,7 @@ Three.js/WebTransport history was merged as provenance. The authoritative tree
 is the `master` QGE/QuakeSpasm layout documented here.
 
 Latest verified runtime baseline: the current QGE world fullbright sampling
-slice plus diagnostic notify cleanup, mirrored to both `origin/master` and
+scale plus diagnostic notify cleanup, mirrored to both `origin/master` and
 `origin/main`.
 
 ## Current Status
@@ -32,8 +32,8 @@ Working and routinely verified:
   render every host frame by default, seeds a far-depth ambient world
   background for missing world pixels, normalizes warp/water texture
   coordinates before palette sampling, uses the base Quake palette for ordinary
-  world texture indices, splits world fullbright texels into an unlit additive
-  contribution, keeps first-person weapon geometry out of the world tone
+  world texture indices, splits world fullbright texels into a bounded unlit
+  additive contribution, keeps first-person weapon geometry out of the world tone
   histogram, and derives render-gate display gain from deterministic state
   marginals instead of finite-shot readout counts.
 - QGE visibility shadow/parity paths with audited authority-gate telemetry.
@@ -81,7 +81,7 @@ Important known limitations:
 
 The current QGE graphics baseline is improved but still visibly glitchy. The
 latest fixed-view evidence is
-`diagnostics/quake_stream/20260521-164816/frame_001.png`. That run keeps QGE
+`diagnostics/quake_stream/20260521-170934/frame_001.png`. That run keeps QGE
 ownership of world geometry, world textures, lightmaps, HUD/console, and the
 viewmodel with `emesh=58`, `ecoeff=27`, `own_viewmodel=1`,
 `own_console=1`, and `fallback_reason=none` on captured frames. It also keeps
@@ -91,9 +91,10 @@ the previous world-tone capture
 `20260521-153315` moved the front-wall mean-luminance delta from about `-19.73`
 to `-0.92`, side-wall deltas from about `-9.64/-11.01` to `+3.08/+2.65`,
 ceiling delta from about `-11.51` to `+2.19`, and far-floor delta from about
-`-12.88` to `+4.75`. The follow-up fullbright split keeps those normal
-floor/wall/ceiling regions unchanged while moving the two sampled wall-light
-regions from about `-37.42/-28.70` below classic to about `-19.83/-12.57`.
+`-12.88` to `+4.75`. The follow-up fullbright work keeps normal
+floor/wall/ceiling regions effectively unchanged while moving sampled wall-light
+crops closer to classic; the latest fixed-view run improves whole-frame RMSE
+against the classic reference from `0.0457305` to `0.0452656`.
 
 What is still broken is just as important: light-emissive regions are closer but
 still too dim, nearby floors are slightly over-lifted, raster seams remain visible,
