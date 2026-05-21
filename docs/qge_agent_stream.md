@@ -771,11 +771,12 @@ loop with policy updates.
   without flooding into open background or occluding later entity/particle
   passes. Render logs expose the count as `gaprepair`.
   QGE also estimates the projected texture footprint for world-surface pixels
-  and applies a bounded nine-tap palette prefilter when a floor, wall, or
-  ceiling pixel covers more than `QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT` texels.
-  This approximates the classic renderer's mip selection and reduces noisy
-  distant texture crawl without replacing the QGE-owned framebuffer with classic
-  GL output. Render logs expose those filtered samples as `texfilter`.
+  and applies a bounded nine-tap palette prefilter only when a floor, wall, or
+  ceiling pixel is strongly minified past `QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT`
+  texels. Mild minification stays on the bilinear path, which keeps nearby
+  floors, walls, and ceilings from smearing into broad bands while still
+  reducing distant texture crawl. Render logs expose those filtered samples as
+  `texfilter`.
   QGE world-surface projection clips very near geometry at
   `QGE_SURFACE_NEAR_CLIP_DEPTH` so walls or ceilings close to the camera do not
   explode into full-frame strips during autonomous captures.

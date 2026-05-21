@@ -250,6 +250,10 @@ Implemented:
   coordinates before palette sampling, reducing broad flat gray bands in water
   and adjacent world captures. Thin seams and incomplete turbulent-material
   fidelity remain.
+- Texture footprint prefiltering is intentionally limited to stronger
+  minification. Mildly minified floors, walls, and ceilings stay on bilinear
+  sampling so nearby surfaces do not smear into broad bands, while distant
+  texture crawl still has a bounded palette filter.
 - Render-gate visible display gain now uses deterministic state marginals
   rather than finite-shot readout counts. The stochastic counters are still
   logged, but static floors, walls, and ceilings do not pick up frame-to-frame

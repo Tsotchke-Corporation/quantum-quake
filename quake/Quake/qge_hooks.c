@@ -95,8 +95,8 @@ static int qge_render_res = 1024;  /* Internal quantum render resolution */
 #define QGE_SPATIAL_WORLD_BACKGROUND_B 0.015f
 #define QGE_SPATIAL_SEAM_REPAIR_MIN_NEIGHBORS 3
 #define QGE_SPATIAL_SEAM_REPAIR_DEPTH_RATIO 0.25f
-#define QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT 1.35f
-#define QGE_TEXTURE_PREFILTER_MAX_FOOTPRINT 8.0f
+#define QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT 2.25f
+#define QGE_TEXTURE_PREFILTER_MAX_FOOTPRINT 4.0f
 
 /* GL texture for quantum framebuffer */
 static GLuint qge_texture = 0;
@@ -6997,7 +6997,9 @@ static qboolean QGE_SurfaceTexturePrefilterContext(
 	radius = tex_footprint * 0.5f;
 	if (radius < 1.0f)
 		radius = 1.0f;
-	step = (int)ceilf(radius);
+	step = (int)floorf(radius + 0.5f);
+	if (step < 1)
+		step = 1;
 
 	cx = (int)floorf(tex_s * ctx->tex_width_f);
 	cy = (int)floorf(tex_t * ctx->tex_height_f);
