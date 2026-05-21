@@ -113,7 +113,11 @@ bash tools/quake_graphics_stream.sh
 ## Documentation Map
 
 Start with [docs/README.md](docs/README.md) for the curated documentation map.
-The most useful current documents are:
+The authoritative current-state snapshot is
+[docs/qge_state_of_development.md](docs/qge_state_of_development.md); it covers
+branch consolidation, verified runtime surfaces, known visual/gameplay gaps,
+Noesis no-script reality, and the evidence baseline. The most useful current
+documents are:
 
 - [QGE state of development](docs/qge_state_of_development.md)
 - [QGE engine architecture](docs/qge_engine_architecture.md)

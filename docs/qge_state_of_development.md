@@ -6,6 +6,28 @@ This document is the operational state snapshot for Quantum Quake. It is meant
 to answer what exists now, what has evidence, what remains incomplete, and how
 the repository should be handled after branch consolidation.
 
+## Executive Summary
+
+Quantum Quake is currently a QuakeSpasm-based QGE integration lab with live
+diagnostic harnesses. The project has working runtime hooks, traces, tests, and
+bounded authority experiments, but it is not yet a finished player-facing Quake
+distribution.
+
+The strongest current areas are QGE runtime evidence, traceability, controlled
+visibility/projectile/audio paths, and repeatable stream diagnostics. The most
+visible weak areas are QGE world rendering fidelity and Noesis general gameplay.
+Noesis now moves in no-script harness runs through the engine-side autonomous
+controller, but it is not learning from experience and should not be described
+as a trained Quake player.
+
+The latest verified branch state is:
+
+- `master` is the primary branch locally and remotely.
+- Remote `HEAD` resolves to `refs/heads/master`.
+- `origin/main` has already been merged into `master` for ancestry.
+- The active runtime tree is the C/QuakeSpasm/QGE tree, not the older
+  JavaScript/WebTransport history.
+
 ## Branch And Repository State
 
 - `master` is the primary development branch for Quantum Quake.
@@ -18,6 +40,48 @@ the repository should be handled after branch consolidation.
 - The JavaScript/WebTransport history is useful provenance, but it is not the
   active runtime tree for this project unless deliberately re-imported under a
   non-conflicting directory in a future task.
+- Do not delete `origin/main` as part of normal cleanup without an explicit
+  destructive-branch-change request; it is harmless as merged provenance.
+
+## Recent Verified Baseline
+
+Recent verified slices on `master` establish the current baseline:
+
+- `53cd998` improves QGE floor/wall/ceiling rendering by preserving spatial
+  raster detail for final display, enabling default bilinear sampling, fixing
+  normal-world palette opacity, and clipping very near surfaces at
+  `QGE_SURFACE_NEAR_CLIP_DEPTH`.
+- `43e906f` makes Noesis no-script autonomous control the default stream mode.
+  Scripted route fixtures remain opt-in regression tools.
+- `99b136d`, `351c593`, and nearby rendering commits stabilize QGE stream
+  startup, world-surface coverage, and surface-budget behavior.
+- `529ab0c` merges the historical `main` branch into `master`.
+
+Useful live evidence anchors:
+
+- `diagnostics/quake_stream/20260520-200246/frame_001.png`: current improved
+  QGE world-rendering capture after the detail, opacity, and near-clip fixes.
+- `diagnostics/quake_stream/20260520-191730/frame_001.png` and
+  `diagnostics/quake_stream/20260520-193513/frame_001.png`: older blockier QGE
+  world captures used as visual comparisons.
+- `diagnostics/agent_stream/20260520-191730/noesis/qge_noesis_summary.json`:
+  no-script Noesis autonomous movement evidence with no action script lines.
+
+The ICC control plane is part of the baseline. Verified slices should refresh
+index, memory, git history, source-drift, production-audit, task-attempt, and
+attempt-eval artifacts before push.
+
+## Domain Ownership Matrix
+
+| Domain | Current State | Authority Posture | Main Gap |
+|---|---|---|---|
+| Core runtime and trace | Working test-backed QGE runtime, event spine, and binary traces | Evidence and shadow ownership | Public API boundary and trace v2 coverage |
+| Rendering | QGE primary path renders live captures with telemetry | Diagnostic primary render, classic remains visual reference | Vanilla-quality floors, walls, ceilings, sky, water, particles, and seams |
+| Visibility | Shadow/parity telemetry and controlled authority smoke | Bounded audited writeback only | Map breadth, dynamic cases, and user-visible quantum modes |
+| Projectiles/physics | Shadow state, branch state, writeback gates, collision oracle | Controlled authority gates | Full gameplay authority and quantum-native effects |
+| Audio | Post-mix and source-mode telemetry with smoke evidence | Diagnostic/source authority experiments | Complete source authority and player-facing effects |
+| AI/Noesis | No-script autonomous controller and opt-in scripted fixtures | Harness-only autonomous assist, not learning | General play, route recovery, target choice, and training loop |
+| Documentation/claims | Claims ledger, state doc, architecture docs, ICC attempts | Evidence-gated wording | Keeping docs synchronized after each verified slice |
 
 ## Implemented Runtime Surfaces
 
@@ -79,6 +143,10 @@ Known current visual state:
   default because recent live captures showed whole-frame blur.
 - Edge sampling was rejected as a default because it produced blurred/line
   artifacts and much higher frame cost.
+- The current renderer should be described as improved, not fixed. In the
+  latest live capture the world is less blocky and avoids the worst dark holes
+  and near-plane strips, but floors, walls, and ceilings still do not match
+  vanilla Quake fidelity.
 
 Next rendering priorities:
 
@@ -90,6 +158,8 @@ Next rendering priorities:
   classic/QGE captures.
 - Add focused tests for surface coverage, seam stability, and texture sampling
   behavior.
+- Add paired capture tooling that can score QGE frames against the classic
+  renderer for known `e1m1` viewpoints.
 
 ### Visibility
 
@@ -158,6 +228,45 @@ Partial or pending:
   `e1m1` smoke.
 - Target selection, route recovery, and post-second-kill continuation remain
   active work.
+- If Noesis appears stationary, first check the run manifest and summary:
+  `input.noesis_scripted` should be `0`, `input.noesis_autonomous` should be
+  `1`, the action trace should have zero route-script lines, and route movement
+  should appear in `gameplay.route.total_distance` plus
+  `assist.movement_injected_sample_count`. If all movement counters are zero,
+  the no-script autonomous hint or server assist did not engage.
+
+## What Counts As Progress
+
+A change is not considered verified just because it looks better once. For this
+repo, progress means a narrow code/docs change plus at least one of:
+
+- a focused unit or contract test that would fail without the change,
+- a successful live graphics or Noesis stream with preserved diagnostics,
+- a trace, manifest, screenshot, or summary JSON path cited in the attempt,
+- an ICC task-attempt record and passing attempt-eval report.
+
+Visual work should explicitly say whether it improves fixed-view captures,
+autonomous movement captures, or both. Noesis work should explicitly say whether
+it uses no-script autonomous control or an opt-in scripted fixture.
+
+## Common Failure Modes
+
+- **Noesis sits still:** verify the no-script path is active and that
+  `qge_noesis_autonomous` plus `qge_noesis_assist` are present in the stream
+  configuration. A default no-script run should not rely on
+  `tools/noesis_quake_policy.sh`.
+- **Noesis moves but does not improve:** this is expected for now. The current
+  controller is reactive; there is no weight update, replay training, or policy
+  optimizer in the loop.
+- **QGE graphics look smeared:** check whether `QGE_RENDER_DISPLAY_FILTER=1`
+  was enabled. It can hide noise but over-blurred recent live frames.
+- **QGE graphics show black holes:** check normal texture palette opacity and
+  transparent/fence classification before treating it as a DWT problem.
+- **QGE graphics show full-frame wall strips:** inspect near-plane clipping,
+  camera proximity, and projected polygon depth before tuning DWT thresholds.
+- **A branch appears stale:** fetch first, then verify `origin/HEAD` and
+  `git merge-base --is-ancestor origin/main master`; do not assume branch names
+  alone reflect the active runtime.
 
 ## Claims Policy
 
@@ -238,3 +347,5 @@ ICC checks used for verified slices:
 - Update docs and contracts when a runtime behavior becomes intentional.
 - Record ICC attempts for verified gameplay, rendering, or production-hardening
   slices.
+- Keep Noesis no-script by default. Use scripted route files only when the task
+  is explicitly a regression fixture or policy-command-buffer test.

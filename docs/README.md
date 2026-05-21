@@ -7,14 +7,30 @@ state, claims policy, stream/harness operation, and long-range research plans.
 ## Start Here
 
 - [QGE state of development](qge_state_of_development.md): current implemented
-  systems, known gaps, verification commands, and branch consolidation status.
+  systems, known gaps, recent verified baseline, branch consolidation status,
+  failure-mode triage, and verification commands. Treat this as the
+  authoritative project snapshot.
 - [QGE engine architecture](qge_engine_architecture.md): reusable engine model,
   ownership stages, runtime domains, artifact contract, and conformance target.
 - [QGE agent media stream](qge_agent_stream.md): live graphics/audio/Noesis
-  diagnostic harness, manifest contract, environment variables, and stream
-  artifacts.
+  diagnostic harness, manifest contract, no-script Noesis triage, environment
+  variables, and stream artifacts.
 - [QGE claims ledger](qge_claims_ledger.md): rules for supported wording and
   evidence requirements.
+
+## Current Reality Check
+
+- `master` is the primary branch; the historical `main` branch is merged
+  provenance, not the active runtime tree.
+- QGE has test-backed runtime, trace, visibility, projectile, audio, and
+  rendering surfaces, but classic Quake remains the reference for full
+  conformance.
+- QGE primary rendering is improved but not visually complete. Floors, walls,
+  and ceilings still need seam, material, and vanilla-fidelity work.
+- Default Noesis runs are no-script autonomous diagnostics. Noesis is not yet
+  learning Quake from experience, and scripted route fixtures are opt-in.
+- Claims need evidence from tests, traces, screenshots, summaries, or ICC
+  attempts.
 
 ## Research And Roadmap
 

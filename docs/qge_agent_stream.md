@@ -544,6 +544,27 @@ it does not run `tools/noesis_quake_policy.sh` or any built-in route plan. Set
 cached-policy provider. An explicit `QGE_NOESIS_CMD` still takes precedence over
 `QGE_NOESIS_ACTIONS_FILE`, and both take precedence over the scripted default.
 
+### Noesis No-Script Triage
+
+For default no-script runs, `input/noesis_actions.txt` being empty is expected.
+That means no cached route script was translated. Movement should instead show
+up in engine-owned telemetry:
+
+- manifest input fields should report `noesis_scripted=0`,
+  `noesis_autonomous=1`, and `noesis_assist=2` unless the run deliberately
+  overrides them;
+- `noesis/qge_noesis_summary.json` should report nonzero
+  `gameplay.route.total_distance` or displacement;
+- `gameplay.assist.movement_injected_sample_count` should be nonzero when the
+  autonomous controller is steering the server usercmd;
+- `noesis/gameplay_outcomes.ndjson` should contain `sample` records with
+  `assist.movement_injected` or visible route displacement.
+
+If all of those are zero, Noesis did not learn to stay still; the autonomous
+controller failed to engage or the stream launched without the intended Noesis
+mode. Current Noesis is a reactive controller with telemetry, not a training
+loop with policy updates.
+
 ## Common Environment Variables
 
 - `QGE_AGENT_STREAM_DIR`: override the agent stream output directory.
