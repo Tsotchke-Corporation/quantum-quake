@@ -5643,17 +5643,25 @@ static void QGE_SpatialAddPixelColorDepthIndex(int idx,
 											   const qge_rgb_sample_t *color,
 											   float depth);
 
-QGE_HOT_INLINE void QGE_SpatialKeepMaxRGB(float *rbuf,
-										  float *gbuf,
-										  float *bbuf,
-										  int idx,
-										  float r,
-										  float g,
-										  float b)
+QGE_HOT_INLINE void QGE_SpatialKeepLumaOwnerRGB(float *rbuf,
+												float *gbuf,
+												float *bbuf,
+												int idx,
+												float r,
+												float g,
+												float b)
 {
-	if (r > rbuf[idx]) rbuf[idx] = r;
-	if (g > gbuf[idx]) gbuf[idx] = g;
-	if (b > bbuf[idx]) bbuf[idx] = b;
+	float current_luma;
+	float sample_luma;
+
+	current_luma = 0.299f * rbuf[idx] + 0.587f * gbuf[idx] +
+				   0.114f * bbuf[idx];
+	sample_luma = 0.299f * r + 0.587f * g + 0.114f * b;
+	if (sample_luma > current_luma) {
+		rbuf[idx] = r;
+		gbuf[idx] = g;
+		bbuf[idx] = b;
+	}
 }
 
 static void QGE_SpatialAddPixelColorDepth(int x,
@@ -5708,8 +5716,8 @@ static void QGE_SpatialAddPixelColorDepthIndex(int idx,
 			bbuf[idx] = sample.b;
 			depth_buffer[idx] = depth;
 		} else {
-			QGE_SpatialKeepMaxRGB(rbuf, gbuf, bbuf, idx,
-								  sample.r, sample.g, sample.b);
+			QGE_SpatialKeepLumaOwnerRGB(rbuf, gbuf, bbuf, idx,
+										 sample.r, sample.g, sample.b);
 			if (depth < current_depth)
 				depth_buffer[idx] = depth;
 		}
@@ -5802,7 +5810,7 @@ static void QGE_SpatialAddPixelRGBDepthIndex(int idx,
 		bbuf[idx] = b;
 		depth_buffer[idx] = depth;
 	} else {
-		QGE_SpatialKeepMaxRGB(rbuf, gbuf, bbuf, idx, r, g, b);
+		QGE_SpatialKeepLumaOwnerRGB(rbuf, gbuf, bbuf, idx, r, g, b);
 		if (depth < current_depth)
 			depth_buffer[idx] = depth;
 	}
@@ -5834,7 +5842,7 @@ static inline void QGE_SpatialAddPixelRGBDepthPositivePrepared(int idx,
 		bbuf[idx] = b;
 		depth_buffer[idx] = depth;
 	} else {
-		QGE_SpatialKeepMaxRGB(rbuf, gbuf, bbuf, idx, r, g, b);
+		QGE_SpatialKeepLumaOwnerRGB(rbuf, gbuf, bbuf, idx, r, g, b);
 		if (depth < current_depth)
 			depth_buffer[idx] = depth;
 	}

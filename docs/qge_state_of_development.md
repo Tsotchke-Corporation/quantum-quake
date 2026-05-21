@@ -239,9 +239,10 @@ Implemented:
   Texture and lightmap samples still provide local shading, but adjacent floor,
   wall, and ceiling faces are less likely to appear as rectangular exposure
   blocks.
-- Same-depth world samples use max-channel ownership with a tight
-  `QGE_SPATIAL_DEPTH_EPSILON`, which reduces seam brightening without treating
-  nearby distinct faces as the same surface.
+- Same-depth world samples use whole-sample luma ownership with a tight
+  `QGE_SPATIAL_DEPTH_EPSILON`, which reduces seam brightening and avoids
+  synthetic per-channel color combinations without treating nearby distinct
+  faces as the same surface.
 - QGE spatial rendering now seeds a far-depth ambient world background before
   world rasterization. Pixels not covered by the current visible surface set no
   longer collapse into hard black voids when the classic 3D fallback is

@@ -760,11 +760,12 @@ loop with policy updates.
   the frame snapshot clears its prior visible-surface entries before recording
   the authoritative set, preventing duplicate world panels from being rasterized
   as ghosted floor/wall/ceiling rectangles.
-  Same-depth world samples use max-channel ownership instead of additive
-  accumulation, so coplanar seams and shared triangle edges do not brighten into
-  translucent-looking wall or doorway panels. The depth tie window is the tight
-  `QGE_SPATIAL_DEPTH_EPSILON`, so adjacent but distinct BSP faces keep normal
-  nearest-surface ownership instead of bleeding through each other.
+  Same-depth world samples use whole-sample luma ownership instead of additive
+  accumulation or per-channel maxima, so coplanar seams and shared triangle
+  edges do not brighten into synthetic translucent-looking wall or doorway
+  panels. The depth tie window is the tight `QGE_SPATIAL_DEPTH_EPSILON`, so
+  adjacent but distinct BSP faces keep normal nearest-surface ownership instead
+  of bleeding through each other.
   After world rasterization, a bounded far-depth seam repair fills only
   background pixels surrounded by at least
   `QGE_SPATIAL_SEAM_REPAIR_MIN_NEIGHBORS` real world samples. Repaired pixels
