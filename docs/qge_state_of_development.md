@@ -71,6 +71,11 @@ Useful live evidence anchors:
   world captures used as visual comparisons.
 - `diagnostics/agent_stream/20260520-191730/noesis/qge_noesis_summary.json`:
   no-script Noesis autonomous movement evidence with no action script lines.
+- `diagnostics/agent_stream/20260520-210235/noesis/qge_noesis_summary.json`:
+  fresh no-script Noesis evidence on the current renderer build:
+  `noesis_scripted=0`, action trace line count `0`, route distance `6535.963`,
+  `movement_injected_sample_count=279`, one pickup, one kill, and no terminal
+  stall.
 
 The ICC control plane is part of the baseline. Verified slices should refresh
 index, memory, git history, source-drift, production-audit, task-attempt, and
