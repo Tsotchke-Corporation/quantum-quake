@@ -28,8 +28,9 @@ The latest verified branch state is:
 - Remote `HEAD` resolves to `refs/heads/master`.
 - `origin/main` is fast-forwarded to the same commit as `origin/master` for
   compatibility after the historical merge.
-- Current verified head is `a584125` (`Improve Noesis autonomous exploration`),
-  mirrored to both `origin/master` and `origin/main`.
+- Latest verified runtime baseline is `656caf4` (`Stabilize QGE render gate
+  display gain`), mirrored to both `origin/master` and `origin/main` before this
+  documentation refresh.
 - The active runtime tree is the C/QuakeSpasm/QGE tree, not the older
   JavaScript/WebTransport history.
 
@@ -54,6 +55,21 @@ The latest verified branch state is:
 
 Recent verified slices on `master` establish the current baseline:
 
+- `656caf4` stabilizes QGE render-gate display gain by deriving the visible
+  gain values from deterministic quantum-state marginal probabilities instead
+  of finite-shot readout counts. Finite-shot readout and edge counters remain in
+  the logs as measurement telemetry, but static floors, walls, and ceilings no
+  longer shimmer just because a different shot distribution was sampled on the
+  next frame.
+- `8c52e0c` makes QGE primary rendering refresh every host frame by default.
+  The stream tools default `QGE_RENDER_UPDATE_INTERVAL` to `1`, eliminating the
+  previous stale-frame reuse that made floors, walls, ceilings, entities, and
+  the viewmodel appear frozen or desynchronized unless the harness overrode the
+  interval.
+- `d0cfc8e` improves QGE world texture stability by closing narrow
+  floor/wall/ceiling coverage gaps and adding bounded palette prefiltering for
+  large projected texture footprints. This reduces noisy aliasing on close BSP
+  surfaces without claiming vanilla material conformance.
 - `a584125` adds targetless local exploration for no-script Noesis autonomous
   control. When no monster target is engaged, the server-side controller probes
   forward/left/right clearance, checks for floor and non-lethal contents ahead,
@@ -71,18 +87,30 @@ Recent verified slices on `master` establish the current baseline:
   gating, hidden-target cooldowns, and reduced hidden-target wall push keep the
   no-script controller from ignoring visible enemies or grinding indefinitely
   into blocked hidden targets.
-- `5da523e`, `edad050`, `e0c8e36`, `59c8d0f`, and `53cd998` are the current
-  rendering baseline: preserved-detail QGE display, no-floor tone mapping,
-  normal-world palette opacity fixes, bilinear surface/lightmap sampling,
-  duplicate snapshot clearing, near-plane clipping, FOV-aware world projection,
-  non-additive same-depth ownership, lower world-surface ambient floors,
-  tighter depth tie windows, and reduced per-face exposure patches.
+- `5da523e`, `edad050`, `e0c8e36`, `59c8d0f`, and `53cd998` are earlier
+  rendering baseline slices: preserved-detail QGE display, no-floor tone
+  mapping, normal-world palette opacity fixes, bilinear surface/lightmap
+  sampling, duplicate snapshot clearing, near-plane clipping, FOV-aware world
+  projection, non-additive same-depth ownership, lower world-surface ambient
+  floors, tighter depth tie windows, and reduced per-face exposure patches.
 - The historical `origin/main` history is merged for ancestry and the remote
   `origin/main` branch now matches `origin/master`; `master` remains the primary
   branch and remote `HEAD`.
 
 Useful live evidence anchors:
 
+- `diagnostics/quake_stream/20260521-112111/frame_001.png` plus
+  `diagnostics/quake_stream/20260521-112111/quantum_quake.log`: fixed-view QGE
+  graphics evidence after `656caf4`. Across 14 render frames, `gate_p`,
+  `gate_edge`, `gate_gain`, `edge_gain`, `material_gain`, and `gate_rgb` each
+  have one unique value, while `readout_ones` and `edge_ones` still vary. This
+  is the current proof that visible render-gate gain is stable without dropping
+  finite-shot measurement telemetry.
+- `diagnostics/quake_stream/20260521-111059/frame_001.png` plus
+  `diagnostics/quake_stream/20260521-111059/quantum_quake.log`: fixed-view QGE
+  graphics evidence after `8c52e0c`. The stream used the tool defaults and logs
+  `update_interval=1`, `reuse=0`, QGE ownership of world/textures/lightmaps and
+  viewmodel after HUD warm-up, and no QGE-render fallback reason.
 - `diagnostics/agent_stream/20260521-020917/noesis/qge_noesis_summary.json`:
   no-target `start` map evidence after `a584125`: `noesis_scripted=0`,
   `noesis_autonomous=1`, `target_count=0`, survived with no terminal stall,
@@ -179,6 +207,10 @@ Implemented:
 - Surface-budget telemetry and default scene surface budget increased to 512
   after fixed-view `e1m1` diagnostics showed the old 128 limit dropped visible
   floor/wall/ceiling surfaces.
+- QGE primary rendering updates every host frame by default. Stream tools
+  default `QGE_RENDER_UPDATE_INTERVAL` to `1`, and the latest fixed-view
+  evidence reports `reuse=0`, so renderer-owned world geometry and viewmodel
+  output do not freeze behind the live camera.
 - Detail-preserving QGE render output: the full RGB raster is kept while sparse
   DWT coefficients are encoded, then used as the default final display signal so
   floor/wall/ceiling detail is not dominated by sparse-block reconstruction.
@@ -218,6 +250,10 @@ Implemented:
   coordinates before palette sampling, reducing broad flat gray bands in water
   and adjacent world captures. Thin seams and incomplete turbulent-material
   fidelity remain.
+- Render-gate visible display gain now uses deterministic state marginals
+  rather than finite-shot readout counts. The stochastic counters are still
+  logged, but static floors, walls, and ceilings do not pick up frame-to-frame
+  brightness or color shimmer from measurement shot noise.
 - Render logs report surface counts, snapshot misses, ownership fields, native
   IDWT counts, fallback reasons, and timing splits.
 
@@ -225,13 +261,21 @@ Known current visual state:
 
 - The most recent coverage work fixes large missing-world holes in fixed-view
   captures.
+- The most recent default-update work fixes stale-frame reuse in the stream
+  harness, so QGE-owned floors, walls, ceilings, entities, and the viewmodel
+  move with the camera by default instead of only refreshing every eighth host
+  frame.
+- The most recent render-gate work fixes one class of static-scene shimmer:
+  finite-shot readout counts still vary in telemetry, but the visible display
+  gain is stable for an unchanged camera.
 - Floors, walls, and ceilings still need conformance work: raster seams,
   warped/noisy surfaces, gray/turbulent seams, and incomplete vanilla-material
   fidelity remain, even after default bilinear sampling, preserved-detail
   highlight headroom, flattened raster fill, duplicate-snapshot clearing,
-  ambient world background fill, and warp coordinate normalization reduce sparse
-  DWT block bands, tone-floor artifacts, exposure panels, ghost panels, black
-  voids, and broad water bands.
+  ambient world background fill, warp coordinate normalization, every-frame
+  refresh, and deterministic render-gate display gain reduce sparse DWT block
+  bands, tone-floor artifacts, exposure panels, ghost panels, black voids,
+  broad water bands, stale-frame artifacts, and shot-noise shimmer.
 - This means the current QGE graphics path is useful for diagnostics and
   iterative comparison, but it should still be called visibly glitchy for
   player-facing floor, wall, and ceiling fidelity.
@@ -389,6 +433,15 @@ it uses no-script autonomous control or an opt-in scripted fixture.
   memory, or policy optimizer in the loop.
 - **QGE graphics look smeared:** check whether `QGE_RENDER_DISPLAY_FILTER=1`
   was enabled. It can hide noise but over-blurred recent live frames.
+- **QGE graphics look frozen or lagged:** verify the stream is using the
+  current default `QGE_RENDER_UPDATE_INTERVAL=1`. Logs should report
+  `update_interval=1` and `reuse=0` for a fresh primary render every host
+  frame.
+- **QGE graphics shimmer on a static camera:** inspect render-gate logs. After
+  `656caf4`, `gate_p`, `gate_edge`, `gate_gain`, `edge_gain`,
+  `material_gain`, and `gate_rgb` should be stable for an unchanged scene even
+  though `readout_ones` and `edge_ones` continue to vary as finite-shot
+  measurement telemetry.
 - **QGE graphics show black holes:** check normal texture palette opacity and
   transparent/fence classification before treating it as a DWT problem.
 - **QGE graphics show full-frame wall strips:** inspect near-plane clipping,
@@ -446,6 +499,9 @@ QGE_STREAM_WAIT_FRAMES=12 QGE_STREAM_PLAYER=none QGE_RENDER=2 \
 QGE_RENDER_UPDATE_INTERVAL=1 QGE_STREAM_SOUND=0 \
 bash tools/quake_graphics_stream.sh
 ```
+
+`QGE_RENDER_UPDATE_INTERVAL=1` is now the default; keep it explicit in evidence
+commands when the purpose is to prove every-frame QGE refresh.
 
 Safe Noesis gameplay capture:
 

@@ -12,8 +12,9 @@ fast-forwarded to the same commit for compatibility after the older unrelated
 Three.js/WebTransport history was merged as provenance. The authoritative tree
 is the `master` QGE/QuakeSpasm layout documented here.
 
-Current verified head: `a584125` (`Improve Noesis autonomous exploration`),
-mirrored to both `origin/master` and `origin/main`.
+Latest verified runtime baseline: `656caf4` (`Stabilize QGE render gate display
+gain`), mirrored to both `origin/master` and `origin/main` before this
+documentation refresh.
 
 ## Current Status
 
@@ -27,9 +28,11 @@ Working and routinely verified:
 - A macOS QuakeSpasm application build with QGE hooks and cvars.
 - Sparse DWT QGE primary rendering with world-surface, material, lightmap,
   entity, HUD/console ownership telemetry, native IDWT evidence, and explicit
-  fallback reasons. The latest graphics slice seeds a far-depth ambient world
-  background for missing world pixels and normalizes warp/water texture
-  coordinates before palette sampling.
+  fallback reasons. The current graphics baseline updates the QGE primary
+  render every host frame by default, seeds a far-depth ambient world
+  background for missing world pixels, normalizes warp/water texture
+  coordinates before palette sampling, and derives render-gate display gain
+  from deterministic state marginals instead of finite-shot readout counts.
 - QGE visibility shadow/parity paths with audited authority-gate telemetry.
 - QGE projectile shadow/writeback/collision-oracle evidence paths with replay
   and persistence-boundary trace records.
@@ -49,10 +52,10 @@ Important known limitations:
   improved world-surface coverage, Quake-FOV world projection, bilinear
   surface/light sampling, darker lightmap-preserving surface shading, and
   preserved spatial detail for the final display while still running the sparse
-  DWT path for evidence. The raster fill gain is kept nearly uniform across
-  adjacent BSP faces so per-face exposure blocks are reduced. Floors, walls,
-  and ceilings are less blocky and less washed out, but can still show raster
-  seams and incomplete vanilla-material fidelity.
+  DWT path for evidence. QGE now refreshes every host frame by default and
+  removes finite-shot render-gate shimmer from static floors, walls, and
+  ceilings. Remaining issues are now more clearly projection/material problems:
+  raster seams, warp/water seams, and incomplete vanilla-material fidelity.
 - Noesis is not yet learning Quake from experience and does not yet have a
   map-level world model. Current no-script runs use a reactive server-side
   controller with an explicit autonomous assist hint, target feedback,
@@ -98,6 +101,9 @@ QGE_STREAM_WAIT_FRAMES=12 QGE_STREAM_PLAYER=none QGE_RENDER=2 \
 QGE_RENDER_UPDATE_INTERVAL=1 QGE_STREAM_SOUND=0 \
 bash tools/quake_graphics_stream.sh
 ```
+
+`QGE_RENDER_UPDATE_INTERVAL=1` is the default, but it is left in this command
+to make fixed-view graphics evidence explicit.
 
 Run a harnessed Noesis gameplay smoke:
 

@@ -89,7 +89,10 @@ Current implementation status:
 
 - QGE primary rendering is active in diagnostics, but it is not yet vanilla
   complete. Floors, walls, and ceilings still show visible seams, noisy
-  projection/tone artifacts, and incomplete material fidelity.
+  projection/tone artifacts, and incomplete material fidelity. The current
+  baseline refreshes QGE primary output every host frame and uses deterministic
+  render-gate state marginals for visible display gain, so stale-frame reuse
+  and finite-shot shimmer are no longer treated as acceptable default behavior.
 - Noesis gameplay evidence currently comes from a no-script, server-autonomous
   controller with local steering, combat assist telemetry, wall-contact
   heuristics, and hidden-target cooldowns. It is not a learned policy yet.
