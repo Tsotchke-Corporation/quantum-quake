@@ -12,9 +12,8 @@ fast-forwarded to the same commit for compatibility after the older unrelated
 Three.js/WebTransport history was merged as provenance. The authoritative tree
 is the `master` QGE/QuakeSpasm layout documented here.
 
-Latest verified runtime baseline: the current tone-headroom QGE renderer slice
-after `b1b7578` (`Use base palette for QGE world textures`), mirrored to both
-`origin/master` and `origin/main`.
+Latest verified runtime baseline: the current world-tone histogram QGE renderer
+slice, mirrored to both `origin/master` and `origin/main`.
 
 ## Current Status
 
@@ -32,8 +31,9 @@ Working and routinely verified:
   render every host frame by default, seeds a far-depth ambient world
   background for missing world pixels, normalizes warp/water texture
   coordinates before palette sampling, uses the base Quake palette for ordinary
-  world texture indices, and derives render-gate display gain from
-  deterministic state marginals instead of finite-shot readout counts.
+  world texture indices, keeps first-person weapon geometry out of the world
+  tone histogram, and derives render-gate display gain from deterministic state
+  marginals instead of finite-shot readout counts.
 - QGE visibility shadow/parity paths with audited authority-gate telemetry.
 - QGE projectile shadow/writeback/collision-oracle evidence paths with replay
   and persistence-boundary trace records.
@@ -57,8 +57,9 @@ Important known limitations:
   removes finite-shot render-gate shimmer from static floors, walls, and
   ceilings, and no longer globally boosts high palette indices into noisy
   floor speckles. Remaining issues are now more clearly projection/material
-  problems: over-bright side walls/ceilings, raster seams, warp/water seams,
-  viewmodel fidelity, and incomplete vanilla-material fidelity.
+  problems: residual tone mismatch, raster seams, warp/water seams, fullbright
+  material fidelity, viewmodel fidelity, and incomplete vanilla-material
+  fidelity.
 - Noesis is not yet learning Quake from experience and does not yet have a
   map-level world model. Current no-script runs use a reactive server-side
   controller with an explicit autonomous assist hint, target feedback,
@@ -77,26 +78,23 @@ Important known limitations:
 ## Current Renderer Evidence
 
 The current QGE graphics baseline is improved but still visibly glitchy. The
-latest fixed-view evidence is
-`diagnostics/quake_stream/20260521-143859/frame_001.png`. That run reports QGE
+latest activation-only fixed-view evidence is
+`diagnostics/quake_stream/20260521-153315/frame_001.png`. That run reports QGE
 ownership of world geometry, world textures, lightmaps, and the viewmodel with
-no fallback reason. The matching region comparison against the classic
-`20260521-125448` reference shows the previous QGE ceiling mean-luminance delta
-falling from about `+9.07` to `+2.30`, side-wall deltas from about
-`+9.79/+9.90` to `+3.83/+3.67`, and far-floor delta from about `+7.36` to
-`+3.70` after increasing direct-spatial tone white headroom.
-The follow-up activation-only fixed-view capture
-`diagnostics/quake_stream/20260521-150734/frame_001.png` keeps full QGE
-ownership and replaces the old synthetic first-person viewmodel glyph with
-alias-model mesh output (`emesh=58`, `ecoeff=27`, `own_viewmodel=1`,
-`fallback_reason=none`).
+`emesh=58`, `ecoeff=27`, `own_viewmodel=1`, and `fallback_reason=none`. Against
+the classic `20260521-151552` reference, keeping the lower viewmodel/HUD band
+out of the direct-display tone histogram moves the front-wall mean-luminance
+delta from about `-19.73` to `-0.92`, side-wall deltas from about
+`-9.64/-11.01` to `+3.08/+2.65`, ceiling delta from about `-11.51` to `+2.19`,
+and far-floor delta from about `-12.88` to `+4.75` compared with the previous
+QGE viewmodel capture at `20260521-150734`.
 
-What is still broken is just as important: side walls and ceilings are still
-too bright, raster seams remain visible, turbulent water/warp materials are not
-vanilla-quality, and the viewmodel is still an untextured QGE mesh rather than
-a faithful classic weapon material. Treat the renderer as a diagnostic primary
-path with useful ownership telemetry, not as a finished replacement for classic
-Quake rendering.
+What is still broken is just as important: light-emissive regions are still too
+dim, nearby floors are slightly over-lifted, raster seams remain visible,
+turbulent water/warp materials are not vanilla-quality, and the viewmodel is
+still an untextured QGE mesh rather than a faithful classic weapon material.
+Treat the renderer as a diagnostic primary path with useful ownership telemetry,
+not as a finished replacement for classic Quake rendering.
 
 ## Quick Start
 

@@ -28,9 +28,8 @@ The latest verified branch state is:
 - Remote `HEAD` resolves to `refs/heads/master`.
 - `origin/main` is fast-forwarded to the same commit as `origin/master` for
   compatibility after the historical merge.
-- Latest verified runtime baseline is the current tone-headroom QGE renderer
-  slice after `b1b7578` (`Use base palette for QGE world textures`), mirrored
-  to both `origin/master` and `origin/main`.
+- Latest verified runtime baseline is the current world-tone histogram QGE
+  renderer slice, mirrored to both `origin/master` and `origin/main`.
 - The active runtime tree is the C/QuakeSpasm/QGE tree, not the older
   JavaScript/WebTransport history.
 
@@ -55,6 +54,19 @@ The latest verified branch state is:
 
 Recent verified slices on `master` establish the current baseline:
 
+- The current world-tone histogram QGE renderer slice keeps the lower
+  first-person viewmodel/HUD band out of direct-display tone-map histogram
+  selection while still converting the full frame. Activation-only fixed-view
+  evidence at `diagnostics/quake_stream/20260521-153315/frame_001.png` keeps QGE
+  ownership of world geometry, textures, lightmaps, and the viewmodel with
+  `emesh=58`, `ecoeff=27`, `own_viewmodel=1`, and `fallback_reason=none`.
+  Region checks against the classic `20260521-151552` reference show the
+  previous QGE viewmodel capture's front-wall mean-luminance delta moving from
+  about `-19.73` to `-0.92`, side-wall deltas from about `-9.64/-11.01` to
+  `+3.08/+2.65`, ceiling delta from about `-11.51` to `+2.19`, and far-floor
+  delta from about `-12.88` to `+4.75`. Light-emissive regions remain too dim,
+  nearby floors are slightly over-lifted, and raster/material/viewmodel fidelity
+  remain open.
 - The current tone-headroom QGE renderer slice increases
   `QGE_NO_FLOOR_TONE_WHITE_HEADROOM` to keep preserved-detail world surfaces
   from over-brightening the fixed-view scene. Fixed-view evidence at
@@ -202,6 +214,14 @@ Useful live evidence anchors:
   about `2.71` to `2.47`, while the run keeps QGE texture and lightmap
   ownership. Side walls and ceilings remain visibly too bright, so this is a
   targeted floor/noise improvement rather than a renderer-complete claim.
+- `diagnostics/quake_stream/20260521-153315/frame_001.png`: activation-only QGE
+  capture after excluding the lower first-person viewmodel/HUD band from the
+  direct-display tone histogram. The stable frame reports `fallback_reason=none`,
+  `own_world=1`, `own_textures=1`, `own_lightmaps=1`, `own_viewmodel=1`,
+  `emesh=58`, and `ecoeff=27`. Region checks against the classic
+  `20260521-151552` reference show walls and ceilings moving from strongly too
+  dark to near the classic luma range, while fullbright lamp regions remain too
+  dim and nearby floors are slightly over-lifted.
 
 The ICC control plane is part of the baseline. Verified slices should refresh
 index, memory, git history, source-drift, production-audit, task-attempt, and
@@ -264,6 +284,11 @@ Implemented:
   headroom, so ordinary dark texture samples are not converted into black holes
   and bright floors/ceilings do not wash out as quickly while the scene still
   gets the brightness lift needed for live capture.
+- When the first-person viewmodel is present, direct-display tone mapping builds
+  its histogram from the upper `QGE_TONE_HISTOGRAM_WORLD_Y_PERCENT` percent of
+  the frame. The full frame still displays, but the lower weapon/HUD band no
+  longer forces the world white point to leave floors, walls, and ceilings too
+  dark.
 - Bilinear texture and lightmap sampling is enabled by default for QGE primary
   captures; the nearest-sample path remains available for faster diagnostics.
 - Normal floor, wall, and ceiling textures no longer inherit the global
@@ -284,6 +309,9 @@ Implemented:
   `QGE_NO_FLOOR_TONE_WHITE_HEADROOM`, reducing fixed-view over-bright ceiling,
   side-wall, and floor regions while preserving the no-median-floor display
   path.
+- The direct-display tone histogram excludes the lower viewmodel/HUD band when a
+  viewmodel is encoded, which brings wall and ceiling brightness much closer to
+  the classic fixed-view reference without changing the displayed frame.
 - QGE polygon raster fill now uses a near-uniform world gain instead of
   multiplying every texel on a BSP face by that face's coarse brightness score.
   Texture and lightmap samples still provide local shading, but adjacent floor,
@@ -331,9 +359,12 @@ Known current visual state:
 - The most recent render-gate work fixes one class of static-scene shimmer:
   finite-shot readout counts still vary in telemetry, but the visible display
   gain is stable for an unchanged camera.
-- The most recent tone-headroom work reduces the fixed-view over-bright
-  ceiling, side-wall, and far-floor deltas against the classic reference, but
-  does not fix seams, turbulent surfaces, or vanilla material fidelity.
+- The most recent tone-histogram work fixes the post-viewmodel dark-world
+  regression by selecting the world white point from the upper scene area. It
+  does not fix seams, turbulent surfaces, fullbright material fidelity, or the
+  untextured weapon mesh.
+- The earlier tone-headroom work reduces fixed-view over-bright ceiling,
+  side-wall, and far-floor deltas against the classic reference.
 - The most recent viewmodel work encodes the first-person weapon through the
   alias-model mesh path (`emesh=58` in the `20260521-150734` capture) instead
   of the old synthetic center-line glyph. It is still an untextured QGE mesh,
@@ -344,7 +375,8 @@ Known current visual state:
   highlight headroom, flattened raster fill, duplicate-snapshot clearing,
   ambient world background fill, warp coordinate normalization, every-frame
   refresh, deterministic render-gate display gain, direct-spatial tone headroom,
-  and stratified footprint filtering reduce sparse DWT block bands,
+  viewmodel-aware tone histogram selection, and stratified footprint filtering
+  reduce sparse DWT block bands,
   tone-floor artifacts, exposure panels, ghost panels, black voids, broad water
   bands, stale-frame artifacts, shot-noise shimmer, and over-bright world
   surfaces.

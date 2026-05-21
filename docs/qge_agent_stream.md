@@ -809,6 +809,11 @@ loop with policy updates.
   so bright floors and ceilings keep texture and stronger lightmap contrast
   instead of washing out to flat white; set it lower to inspect raw inverse-DWT
   contribution.
+  When a first-person viewmodel is encoded, direct-display tone mapping builds
+  its brightness histogram from only the upper
+  `QGE_TONE_HISTOGRAM_WORLD_Y_PERCENT` percent of the frame. The full frame is
+  still converted and displayed, but the lower weapon/HUD band no longer pushes
+  the world white point down and leaves floors, walls, and ceilings too dark.
   `QGE_RENDER_DISPLAY_FILTER=0` skips neighbor smoothing during display-buffer
   conversion because live captures showed the smoothed display can over-blur the
   whole world frame; set it to `1` for noisy-capture experiments.

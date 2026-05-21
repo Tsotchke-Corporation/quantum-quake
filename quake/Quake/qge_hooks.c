@@ -260,6 +260,7 @@ static qboolean QGE_RenderShouldUpdateFrame(void);
 #define QGE_SURFACE_LIGHT_AMBIENT 0.10f
 #define QGE_SURFACE_LIGHT_SCALE 1.05f
 #define QGE_SURFACE_LUMA_FLOOR 0.018f
+#define QGE_TONE_HISTOGRAM_WORLD_Y_PERCENT 72
 
 static quantum_state_t qge_render_gate_state;
 static qboolean qge_render_gate_initialized = false;
@@ -8916,6 +8917,7 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 	double abs_total = 0.0;
 	int active = 0;
 	int hist_active = 0;
+	int hist_pixel_limit = total_pixels;
 	int hist_stride = 1;
 	int median_target;
 	int white_target;
@@ -8981,9 +8983,14 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 
 	if (direct_display && total_pixels >= 512 * 512)
 		hist_stride = 4;
+	if (direct_display && qge_scene_viewmodel_encoded > 0 && qge_render_res > 0) {
+		int hist_rows = (qge_render_res * QGE_TONE_HISTOGRAM_WORLD_Y_PERCENT) / 100;
+		if (hist_rows > 0 && hist_rows < qge_render_res)
+			hist_pixel_limit = hist_rows * qge_render_res;
+	}
 
 	hist_scale = (float)(QGE_TONE_BINS - 1) / max_abs;
-	for (i = 0; i < total_pixels; i += hist_stride) {
+	for (i = 0; i < hist_pixel_limit; i += hist_stride) {
 		float v = qge_render_buffer[i];
 		if (v > 0.0001f) {
 			int bin = (int)(v * hist_scale);
@@ -8994,6 +9001,18 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 		}
 	}
 	if (hist_active <= 0 && hist_stride > 1) {
+		for (i = 0; i < hist_pixel_limit; i++) {
+			float v = qge_render_buffer[i];
+			if (v > 0.0001f) {
+				int bin = (int)(v * hist_scale);
+				if (bin < 0) bin = 0;
+				if (bin >= QGE_TONE_BINS) bin = QGE_TONE_BINS - 1;
+				hist[bin]++;
+				hist_active++;
+			}
+		}
+	}
+	if (hist_active <= 0 && hist_pixel_limit < total_pixels) {
 		for (i = 0; i < total_pixels; i++) {
 			float v = qge_render_buffer[i];
 			if (v > 0.0001f) {
