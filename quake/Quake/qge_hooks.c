@@ -97,7 +97,8 @@ static int qge_render_res = 1024;  /* Internal quantum render resolution */
 #define QGE_SPATIAL_SEAM_REPAIR_DEPTH_RATIO 0.25f
 #define QGE_TEXTURE_BILINEAR_MIN_FOOTPRINT 1.15f
 #define QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT 2.25f
-#define QGE_TEXTURE_PREFILTER_MAX_FOOTPRINT 4.0f
+#define QGE_TEXTURE_PREFILTER_GRID_FOOTPRINT 3.25f
+#define QGE_TEXTURE_PREFILTER_MAX_FOOTPRINT 6.0f
 
 /* GL texture for quantum framebuffer */
 static GLuint qge_texture = 0;
@@ -253,7 +254,7 @@ static qboolean QGE_RenderShouldUpdateFrame(void);
 #define QGE_RENDER_TRACE_FLAG_NATIVE_IDWT_FALLBACK 0x00040000u
 #define QGE_RENDER_TRACE_FLAG_CPU_IDWT 0x00080000u
 #define QGE_TONE_LUT_SIZE 4096
-#define QGE_NO_FLOOR_TONE_WHITE_HEADROOM 4.50f
+#define QGE_NO_FLOOR_TONE_WHITE_HEADROOM 7.50f
 #define QGE_SURFACE_TEXTURE_AMBIENT 0.06f
 #define QGE_SURFACE_TEXTURE_SCALE 0.94f
 #define QGE_SURFACE_LIGHT_AMBIENT 0.10f
@@ -7012,6 +7013,39 @@ static qboolean QGE_SurfaceTexturePrefilterContext(
 
 	cx = (int)floorf(tex_s * ctx->tex_width_f);
 	cy = (int)floorf(tex_t * ctx->tex_height_f);
+
+	if (tex_footprint >= QGE_TEXTURE_PREFILTER_GRID_FOOTPRINT) {
+		float center_x = tex_s * ctx->tex_width_f;
+		float center_y = tex_t * ctx->tex_height_f;
+		float cell = tex_footprint * 0.25f;
+
+		for (int gy = 0; gy < 4; gy++) {
+			float sample_y = center_y - radius + ((float)gy + 0.5f) * cell;
+			int py = (int)floorf(sample_y);
+
+			for (int gx = 0; gx < 4; gx++) {
+				float sample_x =
+					center_x - radius + ((float)gx + 0.5f) * cell;
+				int px = (int)floorf(sample_x);
+
+				QGE_SurfaceTextureAccumulateTexel(ctx, px, py, 1.0f,
+												  &r, &g, &b, &alpha);
+			}
+		}
+
+		if (alpha <= 0.01f) {
+			color->r = 0.0f;
+			color->g = 0.0f;
+			color->b = 0.0f;
+			return false;
+		}
+		color->r = r / alpha;
+		color->g = g / alpha;
+		color->b = b / alpha;
+		QGE_RGBClamp(color);
+		qge_scene_texture_prefilter_samples++;
+		return true;
+	}
 
 	/* Nine-tap footprint filter approximates classic mip selection for CPU QGE. */
 	QGE_SurfaceTextureAccumulateTexel(ctx, cx, cy, 0.2500f,

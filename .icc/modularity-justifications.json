@@ -9,7 +9,7 @@
       "status": "temporary_legacy_boundary",
       "task_id": "qge_domain_ownership_swarm",
       "reason": "This file is the current compatibility boundary between the upstream QuakeSpasm runtime and QGE-owned rendering, visibility, Noesis, physics, audio, and telemetry hooks. Keeping the hooks co-located avoids splitting hot frame-state code before the engine ownership seams are stable.",
-      "mitigation": "New work should keep changes narrowly scoped, covered by tests and stream evidence, and move stable subsystems into focused modules when the QGE ownership boundary no longer needs direct access to Quake renderer and server internals."
+      "mitigation": "New work should keep changes narrowly scoped, covered by tests and stream evidence, and move stable subsystems into focused modules when the QGE ownership boundary no longer needs direct access to Quake renderer and server internals. The active renderer extraction candidates are world texture/lightmap sampling, tone/display conversion, and stream evidence emission; graphics fixes that touch qge_hooks.c should update the state docs with live capture evidence until those helpers are split."
     },
     {
       "path": "tools/qge_noesis_summary.py",

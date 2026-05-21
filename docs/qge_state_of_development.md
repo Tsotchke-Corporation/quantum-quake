@@ -159,6 +159,15 @@ Useful live evidence anchors:
 - `diagnostics/quake_stream/20260521-021006/frame_001.png`: current live QGE
   frame from the latest Noesis run. Use it as a practical smoke reference, not
   as a vanilla-conformance claim; visible floor/wall/ceiling artifacts remain.
+- `diagnostics/quake_stream/20260521-131825/frame_001.png`: fixed-view QGE
+  capture after stronger direct-spatial tone headroom and the stratified
+  footprint prefilter. The stable frame reports `fallback_reason=none`,
+  `own_world=1`, `own_textures=1`, `own_lightmaps=1`, `own_viewmodel=1`,
+  `res=1024`, and `texfilter=110668`. Region checks against the classic
+  `20260521-125448` reference show ceiling mean luminance dropping from about
+  `47` to `30`, front-wall mean from about `51` to `32`, and side-wall mean
+  from about `56` to `36`, moving the QGE frame closer to classic while
+  preserving QGE ownership.
 
 The ICC control plane is part of the baseline. Verified slices should refresh
 index, memory, git history, source-drift, production-audit, task-attempt, and
@@ -282,9 +291,11 @@ Known current visual state:
   fidelity remain, even after default bilinear sampling, preserved-detail
   highlight headroom, flattened raster fill, duplicate-snapshot clearing,
   ambient world background fill, warp coordinate normalization, every-frame
-  refresh, and deterministic render-gate display gain reduce sparse DWT block
-  bands, tone-floor artifacts, exposure panels, ghost panels, black voids,
-  broad water bands, stale-frame artifacts, and shot-noise shimmer.
+  refresh, deterministic render-gate display gain, direct-spatial tone headroom,
+  and stratified footprint filtering reduce sparse DWT block bands,
+  tone-floor artifacts, exposure panels, ghost panels, black voids, broad water
+  bands, stale-frame artifacts, shot-noise shimmer, and over-bright world
+  surfaces.
 - This means the current QGE graphics path is useful for diagnostics and
   iterative comparison, but it should still be called visibly glitchy for
   player-facing floor, wall, and ceiling fidelity.
@@ -442,6 +453,11 @@ it uses no-script autonomous control or an opt-in scripted fixture.
   memory, or policy optimizer in the loop.
 - **QGE graphics look smeared:** check whether `QGE_RENDER_DISPLAY_FILTER=1`
   was enabled. It can hide noise but over-blurred recent live frames.
+- **QGE graphics look over-bright or noisy:** use a 1024 fixed-view capture as
+  the first reference. The current direct-spatial path uses
+  `QGE_NO_FLOOR_TONE_WHITE_HEADROOM` plus a stratified footprint filter for
+  strongly minified floor, wall, and ceiling samples; lower-resolution 512
+  smokes are useful for speed but make the surface artifacts look worse.
 - **QGE graphics look frozen or lagged:** verify the stream is using the
   current default `QGE_RENDER_UPDATE_INTERVAL=1`. Logs should report
   `update_interval=1` and `reuse=0` for a fresh primary render every host
