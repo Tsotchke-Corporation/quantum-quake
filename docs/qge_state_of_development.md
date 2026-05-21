@@ -76,6 +76,13 @@ Useful live evidence anchors:
   `noesis_scripted=0`, action trace line count `0`, route distance `6535.963`,
   `movement_injected_sample_count=279`, one pickup, one kill, and no terminal
   stall.
+- `diagnostics/agent_stream/20260520-212112/noesis/qge_noesis_summary.json`:
+  no-script Noesis wall-follow evidence after the autonomous wall-contact
+  tuning: `noesis_scripted=0`, action trace line count `0`, three kills,
+  `72.0` inferred damage, no damage taken, and no terminal stall. The matching
+  frame at `diagnostics/quake_stream/20260520-212112/frame_001.png` still shows
+  close-geometry QGE rendering artifacts, so this is a gameplay improvement and
+  not a rendering-quality completion claim.
 
 The ICC control plane is part of the baseline. Verified slices should refresh
 index, memory, git history, source-drift, production-audit, task-attempt, and
@@ -241,6 +248,9 @@ Partial or pending:
   `e1m1` smoke.
 - Target selection, route recovery, and post-second-kill continuation remain
   active work.
+- No-script wall-contact behavior now holds a bounded wall-follow side instead
+  of oscillating every few frames, but it can still wander against geometry
+  after combat and needs a real navigation/search policy.
 - If Noesis appears stationary, first check the run manifest and summary:
   `input.noesis_scripted` should be `0`, `input.noesis_autonomous` should be
   `1`, the action trace should have zero route-script lines, and route movement

@@ -202,12 +202,16 @@ static int qge_noesis_assist_locked_frames_total = 0;
 static qboolean qge_noesis_assist_target_locked = false;
 static qboolean qge_noesis_assist_target_switched = false;
 static qboolean qge_noesis_assist_switch_fire_suppressed = false;
+static int qge_noesis_assist_wall_follow_until_frame = -1;
+static float qge_noesis_assist_wall_follow_side = 1.0f;
 
 #define QGE_NOESIS_AIM_ALIGNED_DEG 12.0f
 #define QGE_NOESIS_VIEW_HOLD_DEG 6.0f
 #define QGE_NOESIS_HIDDEN_CHASE_DISTANCE 768.0f
 #define QGE_NOESIS_AUTONOMOUS_CHASE_DISTANCE 1152.0f
-#define QGE_NOESIS_WALL_TRAP_CLEAR 16.0f
+#define QGE_NOESIS_WALL_TRAP_CLEAR 40.0f
+#define QGE_NOESIS_WALL_SLIDE_CLEAR 56.0f
+#define QGE_NOESIS_WALL_FOLLOW_FRAMES 24
 #define QGE_NOESIS_TARGET_LOCK_FRAMES 45
 #define QGE_NOESIS_TARGET_LOCK_MAX_DISTANCE 1152.0f
 
@@ -810,6 +814,8 @@ static void QGE_GameplayOutcomeResetState(void)
 	qge_noesis_assist_target_lock_until_frame = -1;
 	qge_noesis_assist_target_switches_total = 0;
 	qge_noesis_assist_locked_frames_total = 0;
+	qge_noesis_assist_wall_follow_until_frame = -1;
+	qge_noesis_assist_wall_follow_side = 1.0f;
 	qge_noesis_current_phase[0] = 0;
 	qge_gameplay_prev_health = 0;
 	qge_gameplay_prev_armor = 0;
@@ -1021,6 +1027,29 @@ static float QGE_NoesisAssistHiddenChaseDistance(void)
 		strcmp(qge_noesis_current_phase, "e1m1_door_slide") == 0)
 		return 0.0f;
 	return QGE_NOESIS_HIDDEN_CHASE_DISTANCE;
+}
+
+static float QGE_NoesisAssistWallFollowSide(float left_clear,
+											float right_clear)
+{
+	qboolean expired =
+		qge_frame_count > qge_noesis_assist_wall_follow_until_frame;
+	qboolean blocked_left =
+		qge_noesis_assist_wall_follow_side < 0.0f &&
+		left_clear < QGE_NOESIS_WALL_TRAP_CLEAR &&
+		right_clear > left_clear + 8.0f;
+	qboolean blocked_right =
+		qge_noesis_assist_wall_follow_side > 0.0f &&
+		right_clear < QGE_NOESIS_WALL_TRAP_CLEAR &&
+		left_clear > right_clear + 8.0f;
+
+	if (expired || blocked_left || blocked_right) {
+		qge_noesis_assist_wall_follow_side =
+			left_clear >= right_clear ? -1.0f : 1.0f;
+		qge_noesis_assist_wall_follow_until_frame =
+			qge_frame_count + QGE_NOESIS_WALL_FOLLOW_FRAMES;
+	}
+	return qge_noesis_assist_wall_follow_side;
 }
 
 static void QGE_NoesisAssistSetRelativeMove(usercmd_t *move,
@@ -1254,6 +1283,7 @@ void QGE_NoesisAssistClientThink(client_t *client,
 	if (!enemy) {
 		qge_noesis_assist_locked_target_id = 0;
 		qge_noesis_assist_target_lock_until_frame = -1;
+		qge_noesis_assist_wall_follow_until_frame = -1;
 		return;
 	}
 	selected_target_id = NUM_FOR_EDICT(enemy);
@@ -1313,16 +1343,19 @@ void QGE_NoesisAssistClientThink(client_t *client,
 												   anglemod(aim[YAW] + 45.0f));
 		right_clear = QGE_NoesisAssistTraceDistance(player,
 													anglemod(aim[YAW] - 45.0f));
-		if (relative_forward > 0.0f && forward_clear < 56.0f) {
+		if (relative_forward > 0.0f &&
+			forward_clear < QGE_NOESIS_WALL_SLIDE_CLEAR) {
+			float wall_follow_side =
+				QGE_NoesisAssistWallFollowSide(left_clear, right_clear);
 			if (forward_clear < QGE_NOESIS_WALL_TRAP_CLEAR &&
 				left_clear < QGE_NOESIS_WALL_TRAP_CLEAR &&
 				right_clear < QGE_NOESIS_WALL_TRAP_CLEAR) {
 				relative_forward = -220.0f;
-				relative_side = (qge_frame_count & 16) ? 320.0f : -320.0f;
+				relative_side = wall_follow_side * 320.0f;
 			}
 			else {
-				relative_side = left_clear >= right_clear ? -320.0f : 320.0f;
-				relative_forward = 180.0f;
+				relative_side = wall_follow_side * 320.0f;
+				relative_forward = visible ? 120.0f : 40.0f;
 			}
 		}
 		else if (visible && distance < 512.0f && relative_side == 0.0f) {
