@@ -12,9 +12,10 @@ fast-forwarded to the same commit for compatibility after the older unrelated
 Three.js/WebTransport history was merged as provenance. The authoritative tree
 is the `master` QGE/QuakeSpasm layout documented here.
 
-Latest verified runtime baseline: the current QGE moderate-minification texture
-prefilter, alias-skin viewmodel path, world fullbright sampling scale, and
-diagnostic notify cleanup, mirrored to both `origin/master` and `origin/main`.
+Latest verified runtime baseline: the current QGE one-texel bilinear world
+texture smoothing, moderate-minification texture prefilter, alias-skin viewmodel
+path, world fullbright sampling scale, and diagnostic notify cleanup, mirrored
+to both `origin/master` and `origin/main`.
 
 ## Current Status
 
@@ -34,8 +35,9 @@ Working and routinely verified:
   coordinates before palette sampling, uses the base Quake palette for ordinary
   world texture indices, splits world fullbright texels into a bounded unlit
   additive contribution, applies a bounded footprint prefilter to moderately
-  minified world texels, samples alias-model skin texels for the first-person
-  weapon mesh, keeps first-person weapon geometry out of the world tone
+  minified world texels, moves one-texel wall/ceiling samples onto the bilinear
+  palette path to reduce crawl, samples alias-model skin texels for the
+  first-person weapon mesh, keeps first-person weapon geometry out of the world tone
   histogram, and derives render-gate display gain from deterministic state
   marginals instead of finite-shot readout counts.
 - QGE visibility shadow/parity paths with audited authority-gate telemetry.
@@ -102,7 +104,15 @@ the flat gold weapon mesh with skin-sampled alias triangles and improves
 whole-frame RMSE again to `0.0349406`. The moderate-minification prefilter
 follow-up raises filtered world-texel coverage to roughly `193k` samples,
 reduces the mid-floor blur-difference metric from `0.00841979` to
-`0.00792546`, and improves whole-frame RMSE again to `0.0343281`.
+`0.00792546`, and improves whole-frame RMSE again to `0.0343281`. The
+one-texel bilinear follow-up targets the remaining wall/ceiling crawl: in the
+`20260521-180918` fixed-view capture, ceiling blur-difference drops from
+`0.00469063` to `0.00234635`, left/right wall drops from
+`0.00347071`/`0.00373587` to `0.00172187`/`0.00203961`, and front-wall drops
+from `0.0027016` to `0.00168355`. Whole-frame RMSE is mixed across the three
+captured frames (`0.0341756` on frame 2, `0.0347847` on frames 1/3), so this is
+a targeted wall/ceiling stability improvement rather than a complete renderer
+conformance win.
 
 What is still broken is just as important: light-emissive regions are closer but
 still too dim, nearby floors are slightly over-lifted, raster seams remain visible,

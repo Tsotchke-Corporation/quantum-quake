@@ -28,10 +28,10 @@ The latest verified branch state is:
 - Remote `HEAD` resolves to `refs/heads/master`.
 - `origin/main` is fast-forwarded to the same commit as `origin/master` for
   compatibility after the historical merge.
-- Latest verified runtime baseline is the current QGE moderate-minification
-  texture prefilter, alias-skin viewmodel path, world fullbright sampling scale,
-  and diagnostic notify cleanup, mirrored to both `origin/master` and
-  `origin/main`.
+- Latest verified runtime baseline is the current QGE one-texel bilinear world
+  texture smoothing, moderate-minification texture prefilter, alias-skin
+  viewmodel path, world fullbright sampling scale, and diagnostic notify
+  cleanup, mirrored to both `origin/master` and `origin/main`.
 - The active runtime tree is the C/QuakeSpasm/QGE tree, not the older
   JavaScript/WebTransport history.
 
@@ -56,7 +56,24 @@ The latest verified branch state is:
 
 Recent verified slices on `master` establish the current baseline:
 
-- The current QGE moderate-minification texture prefilter slice lowers
+- The current QGE one-texel bilinear world texture slice lowers
+  `QGE_TEXTURE_BILINEAR_MIN_FOOTPRINT` to the clamped one-texel footprint so
+  wall, ceiling, and floor samples that previously used nearest palette lookup
+  enter the bilinear palette path before the stronger minification prefilter is
+  needed. Fixed-view evidence at
+  `diagnostics/quake_stream/20260521-180918/frame_002.png` keeps QGE ownership
+  of world geometry, textures, lightmaps, HUD/console, and the viewmodel with
+  `own_console=1`, `own_viewmodel=1`, `emesh=58`, `ecoeff=27`, and
+  `fallback_reason=none` on captured frames. Against the previous
+  `20260521-174755` QGE baseline, ceiling blur-difference drops from
+  `0.00469063` to `0.00234635`, left/right wall drops from
+  `0.00347071`/`0.00373587` to `0.00172187`/`0.00203961`, and front-wall drops
+  from `0.0027016` to `0.00168355`. Whole-frame RMSE against the classic
+  `20260521-151552` reference is mixed across the three-frame capture
+  (`0.0341756` on frame 2, `0.0347847` on frames 1/3), so this is recorded as a
+  targeted wall/ceiling crawl reduction rather than a complete renderer
+  conformance fix.
+- The previous QGE moderate-minification texture prefilter slice lowers
   `QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT` so the existing nine-tap world texture
   footprint filter engages on moderately minified floor, wall, and ceiling
   texels while magnified and near one-texel samples stay on the bilinear path.
@@ -444,10 +461,10 @@ Implemented:
   and near one-texel floors, walls, and ceilings stay on bilinear sampling so
   nearby surfaces do not smear into broad bands, while moderate and distant
   texture crawl use bounded palette filters.
-- Magnified and one-texel world texture samples stay on nearest palette lookup
-  even when bilinear sampling is enabled. This keeps close floors, walls, and
-  ceilings sharper while leaving bilinear/minification handling available for
-  distance and slanted surfaces.
+- One-texel world texture samples now enter the bilinear palette path when
+  bilinear sampling is enabled. Truly magnified samples below that footprint can
+  still use nearest lookup, while distance and slanted surfaces keep the bounded
+  bilinear/minification handling.
 - QGE world texture sampling now uses the base Quake palette for ordinary
   palette indices instead of globally boosting indices `>=224` as fullbright.
   Fullbright texture metadata remains tracked separately, avoiding noisy
@@ -485,6 +502,11 @@ Known current visual state:
   filter at moderate minification (`QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT 1.75f`),
   improving the fixed-view RMSE to `0.0343281` and reducing mid-floor texture
   crawl without accepting the blurrier rejected `1.35f` threshold.
+- The most recent one-texel bilinear work engages bilinear palette sampling at
+  the clamped one-texel footprint (`QGE_TEXTURE_BILINEAR_MIN_FOOTPRINT 1.00f`).
+  It cuts measured side-wall, front-wall, and ceiling high-frequency crawl in
+  the fixed-view capture, but whole-frame RMSE remains mixed because weapon and
+  world conformance are still not complete.
 - The earlier tone-headroom work reduces fixed-view over-bright ceiling,
   side-wall, and far-floor deltas against the classic reference.
 - The most recent viewmodel work samples Quake alias-model skin texels for the
@@ -498,7 +520,8 @@ Known current visual state:
   ambient world background fill, warp coordinate normalization, every-frame
   refresh, deterministic render-gate display gain, direct-spatial tone headroom,
   viewmodel-aware tone histogram selection, fullbright texture splitting,
-  alias-skin viewmodel sampling, moderate-minification prefiltering, and
+  alias-skin viewmodel sampling, one-texel bilinear sampling,
+  moderate-minification prefiltering, and
   stratified footprint filtering reduce sparse DWT block bands, tone-floor
   artifacts, exposure panels, ghost panels, black voids, broad water bands,
   stale-frame artifacts, shot-noise shimmer, and over-bright world surfaces, but

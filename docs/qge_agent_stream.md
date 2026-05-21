@@ -736,10 +736,10 @@ loop with policy updates.
   a command queue; if that probe fails, QGE falls back to the CPU/NEON path
   instead of accepting a no-op native reconstruction.
   `QGE_RENDER_BILINEAR_SAMPLES=1` uses bilinear texture/light samples in the
-  quantum rasterizer for minified pixels, while magnified and one-texel footprint
-  pixels stay on nearest palette sampling so nearby floor, wall, and ceiling
-  textures keep sharper Quake-like definition; set it to `0` for faster raw
-  sampling diagnostics. The bilinear path samples prepared surface texture and
+  quantum rasterizer for one-texel and minified pixels, while truly magnified
+  pixels below the clamped one-texel footprint stay on nearest palette sampling;
+  set it to `0` for faster raw sampling diagnostics. The bilinear path samples
+  prepared surface texture and
   lightmap context directly so smoother diagnostic captures do not pay the old
   helper-call overhead per pixel. Normal world textures keep palette-index
   texels opaque and use the base Quake palette without a global fullbright
