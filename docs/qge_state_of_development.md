@@ -28,9 +28,10 @@ The latest verified branch state is:
 - Remote `HEAD` resolves to `refs/heads/master`.
 - `origin/main` is fast-forwarded to the same commit as `origin/master` for
   compatibility after the historical merge.
-- Latest verified runtime baseline is the current QGE alias-skin viewmodel
-  path, world fullbright sampling scale, and diagnostic notify cleanup,
-  mirrored to both `origin/master` and `origin/main`.
+- Latest verified runtime baseline is the current QGE moderate-minification
+  texture prefilter, alias-skin viewmodel path, world fullbright sampling scale,
+  and diagnostic notify cleanup, mirrored to both `origin/master` and
+  `origin/main`.
 - The active runtime tree is the C/QuakeSpasm/QGE tree, not the older
   JavaScript/WebTransport history.
 
@@ -55,6 +56,19 @@ The latest verified branch state is:
 
 Recent verified slices on `master` establish the current baseline:
 
+- The current QGE moderate-minification texture prefilter slice lowers
+  `QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT` so the existing nine-tap world texture
+  footprint filter engages on moderately minified floor, wall, and ceiling
+  texels while magnified and near one-texel samples stay on the bilinear path.
+  Fixed-view evidence at `diagnostics/quake_stream/20260521-174755/frame_001.png`
+  keeps QGE ownership of world geometry, textures, lightmaps, HUD/console, and
+  the viewmodel with `own_console=1`, `own_viewmodel=1`, `emesh=58`,
+  `ecoeff=27`, and `fallback_reason=none` on captured frames. Against the
+  classic `20260521-151552` reference, whole-frame RMSE improves from
+  `0.0349406` in the alias-skin baseline to `0.0343281`; the mid-floor
+  blur-difference metric drops from `0.00841979` to `0.00792546`, and the
+  over-broad `1.35f` threshold was rejected because it lost that RMSE gain
+  without improving side-wall crops.
 - The current QGE alias-skin viewmodel slice projects Quake alias-model skin
   coordinates through the QGE triangle path and bilinear-samples
   `hdr->texels[skin]` for the first-person weapon mesh instead of filling that
@@ -303,6 +317,15 @@ Useful live evidence anchors:
   in the previous fullbright-wall-material capture to `0.0349406`; fixed-view
   world crops are unchanged apart from foreground weapon overlap, and the
   first-person weapon is no longer the flat gold mesh.
+- `diagnostics/quake_stream/20260521-174755/frame_001.png`: fixed-view QGE
+  capture after engaging the existing nine-tap footprint prefilter on moderately
+  minified world texels. The captured frames keep `fallback_reason=none`,
+  `own_world=1`, `own_textures=1`, `own_lightmaps=1`, `own_viewmodel=1`,
+  `own_console=1`, `emesh=58`, and `ecoeff=27`, with `texfilter` around
+  `193k` samples. ImageMagick checks against the classic `20260521-151552`
+  reference show whole-frame RMSE improving from `0.0349406` to `0.0343281`,
+  while the mid-floor blur-difference metric drops from `0.00841979` to
+  `0.00792546`.
 
 The ICC control plane is part of the baseline. Verified slices should refresh
 index, memory, git history, source-drift, production-audit, task-attempt, and
@@ -417,10 +440,10 @@ Implemented:
   coordinates before palette sampling, reducing broad flat gray bands in water
   and adjacent world captures. Thin seams and incomplete turbulent-material
   fidelity remain.
-- Texture footprint prefiltering is intentionally limited to stronger
-  minification. Mildly minified floors, walls, and ceilings stay on bilinear
-  sampling so nearby surfaces do not smear into broad bands, while distant
-  texture crawl still has a bounded palette filter.
+- Texture footprint prefiltering now starts at moderate minification. Magnified
+  and near one-texel floors, walls, and ceilings stay on bilinear sampling so
+  nearby surfaces do not smear into broad bands, while moderate and distant
+  texture crawl use bounded palette filters.
 - Magnified and one-texel world texture samples stay on nearest palette lookup
   even when bilinear sampling is enabled. This keeps close floors, walls, and
   ceilings sharper while leaving bilinear/minification handling available for
@@ -458,6 +481,10 @@ Known current visual state:
   additive contribution for true fullbright wall texels. The sampled lamp strips
   are closer to classic but still dim, so this is not a complete
   material-fidelity fix.
+- The most recent world-texture prefilter work engages the nine-tap footprint
+  filter at moderate minification (`QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT 1.75f`),
+  improving the fixed-view RMSE to `0.0343281` and reducing mid-floor texture
+  crawl without accepting the blurrier rejected `1.35f` threshold.
 - The earlier tone-headroom work reduces fixed-view over-bright ceiling,
   side-wall, and far-floor deltas against the classic reference.
 - The most recent viewmodel work samples Quake alias-model skin texels for the
@@ -471,11 +498,11 @@ Known current visual state:
   ambient world background fill, warp coordinate normalization, every-frame
   refresh, deterministic render-gate display gain, direct-spatial tone headroom,
   viewmodel-aware tone histogram selection, fullbright texture splitting,
-  alias-skin viewmodel sampling, and stratified footprint filtering reduce
-  sparse DWT block bands, tone-floor artifacts, exposure panels, ghost panels,
-  black voids, broad water bands, stale-frame artifacts, shot-noise shimmer, and
-  over-bright world surfaces, but they do not make the QGE renderer visually
-  complete.
+  alias-skin viewmodel sampling, moderate-minification prefiltering, and
+  stratified footprint filtering reduce sparse DWT block bands, tone-floor
+  artifacts, exposure panels, ghost panels, black voids, broad water bands,
+  stale-frame artifacts, shot-noise shimmer, and over-bright world surfaces, but
+  they do not make the QGE renderer visually complete.
 - This means the current QGE graphics path is useful for diagnostics and
   iterative comparison, but it should still be called visibly glitchy for
   player-facing floor, wall, and ceiling fidelity.

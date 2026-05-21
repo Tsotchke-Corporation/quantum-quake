@@ -785,12 +785,12 @@ loop with policy updates.
   passes. Render logs expose the count as `gaprepair`.
   QGE also estimates the projected texture footprint for world-surface pixels
   and applies a bounded palette prefilter only when a floor, wall, or ceiling
-  pixel is strongly minified past `QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT` texels.
-  Mild minification uses the nine-tap path; stronger minification uses a
+  pixel is minified past `QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT` texels.
+  Moderate minification uses the nine-tap path; stronger minification uses a
   stratified 4x4 footprint grid so distant floors and ceilings do not alias into
-  sparse crawl patterns. Nearby floors, walls, and ceilings stay on the bilinear
-  path so they do not smear into broad bands. Render logs expose those filtered
-  samples as `texfilter`.
+  sparse crawl patterns. Magnified and near one-texel floors, walls, and
+  ceilings stay on the bilinear path so they do not smear into broad bands.
+  Render logs expose those filtered samples as `texfilter`.
   QGE world-surface projection clips very near geometry at
   `QGE_SURFACE_NEAR_CLIP_DEPTH` so walls or ceilings close to the camera do not
   explode into full-frame strips during autonomous captures.
