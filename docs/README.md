@@ -23,7 +23,7 @@ state, claims policy, stream/harness operation, and long-range research plans.
 - `master` is the primary branch; `origin/HEAD` points at `origin/master`, and
   `origin/main` is fast-forwarded to the same commit for compatibility. The
   active runtime tree is the C/QuakeSpasm/QGE tree on `master`. Latest verified
-  runtime baseline is `c34681e` (`Improve QGE one-texel texture filtering`),
+  runtime baseline is the current world-surface blue-balance renderer slice,
   mirrored to both `origin/master` and `origin/main`.
 - QGE has test-backed runtime, trace, visibility, projectile, audio, and
   rendering surfaces, but classic Quake remains the reference for full
@@ -35,12 +35,12 @@ state, claims policy, stream/harness operation, and long-range research plans.
   render-gate display gain from deterministic state marginals, base-palette
   ordinary world textures, bounded fullbright wall texel contribution,
   moderate-minification texture prefiltering, one-texel bilinear wall/ceiling
-  smoothing, and alias-skin first-person weapon sampling. The latest fixed-view
-  evidence is `diagnostics/quake_stream/20260521-180918/frame_002.png`; it cuts
-  measured ceiling and wall high-frequency crawl relative to
-  `20260521-174755`, but floors, walls, and ceilings are still not
-  vanilla-quality. Remaining renderer gaps include nearby floor noise,
-  residual brightness mismatch, raster seams, warp/water seams, viewmodel
+  smoothing, bounded world-surface blue balance, and alias-skin first-person
+  weapon sampling. The latest fixed-view evidence is
+  `diagnostics/quake_stream/20260521-183949/frame_001.png`; it cuts measured
+  blue lift relative to `20260521-180918`, but floors, walls, and ceilings are
+  still not vanilla-quality. Remaining renderer gaps include nearby floor
+  brightness/color mismatch, raster seams, warp/water seams, viewmodel
   lighting/placement/material parity, and vanilla-material fidelity.
 
 ## Renderer Evidence Snapshot
@@ -60,6 +60,9 @@ renderer fixes, not as one finished renderer claim:
 - `20260521-180918`: one-texel bilinear capture; reduced side-wall,
   front-wall, and ceiling crawl, with mixed whole-frame RMSE across the three
   captured frames.
+- `20260521-183949`: world-surface blue-balance capture; reduced blue lift in
+  floor, ceiling, and front-wall crops and improved fixed-view RMSE to
+  `0.0340944`.
 - Default Noesis runs are no-script autonomous diagnostics with server-side
   movement/combat feedback plus local clearance, floor, and hazard probes when
   no target is engaged. Noesis is not yet learning Quake from experience, has

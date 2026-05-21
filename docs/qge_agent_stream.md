@@ -756,7 +756,9 @@ loop with policy updates.
   `QGE_SURFACE_LIGHT_AMBIENT` floors plus a wider
   `QGE_NO_FLOOR_TONE_WHITE_HEADROOM`, so dark floors, walls, and ceilings keep
   lightmap contrast without pushing side walls and ceilings as far above the
-  classic reference.
+  classic reference. World-surface sampling also applies the bounded
+  `QGE_SURFACE_WORLD_BLUE_BALANCE` to the blue channel because fixed-view QGE
+  crops were consistently too blue against the classic reference.
   Render-gate display gain is derived from deterministic state marginals rather
   than finite-shot readout counts, so static floors, walls, and ceilings do not
   flicker just because `quantum_render_gate_shots` sampled a different basis

@@ -28,10 +28,11 @@ The latest verified branch state is:
 - Remote `HEAD` resolves to `refs/heads/master`.
 - `origin/main` is fast-forwarded to the same commit as `origin/master` for
   compatibility after the historical merge.
-- Latest verified runtime baseline is the current QGE one-texel bilinear world
-  texture smoothing, moderate-minification texture prefilter, alias-skin
-  viewmodel path, world fullbright sampling scale, and diagnostic notify
-  cleanup, mirrored to both `origin/master` and `origin/main`.
+- Latest verified runtime baseline is the current QGE world-surface blue
+  balance, one-texel bilinear world texture smoothing, moderate-minification
+  texture prefilter, alias-skin viewmodel path, world fullbright sampling scale,
+  and diagnostic notify cleanup, mirrored to both `origin/master` and
+  `origin/main`.
 - The active runtime tree is the C/QuakeSpasm/QGE tree, not the older
   JavaScript/WebTransport history.
 
@@ -56,7 +57,21 @@ The latest verified branch state is:
 
 Recent verified slices on `master` establish the current baseline:
 
-- The current QGE one-texel bilinear world texture slice lowers
+- The current QGE world-surface blue-balance slice applies
+  `QGE_SURFACE_WORLD_BLUE_BALANCE` during BSP surface sampling because the QGE
+  fixed-view floor, ceiling, and wall crops were consistently too blue against
+  the classic reference. Fixed-view evidence at
+  `diagnostics/quake_stream/20260521-183949/frame_001.png` keeps QGE ownership
+  of world geometry, textures, lightmaps, HUD/console, and the viewmodel with
+  `own_console=1`, `own_viewmodel=1`, `emesh=58`, `ecoeff=27`, and
+  `fallback_reason=none` on captured frames. Against the previous
+  `20260521-180918` QGE baseline, whole-frame RMSE improves from `0.0341756`
+  to `0.0340944`; ceiling blue mean moves from `6.52138%` to `5.71603%`, the
+  center far-floor blue mean from `7.68358%` to `6.74801%`, and the front-wall
+  blue mean from `7.1062%` to `6.23555%`. Side-wall blue becomes slightly low,
+  so this is a conservative color-balance improvement rather than a complete
+  material/lighting fix.
+- The previous QGE one-texel bilinear world texture slice lowers
   `QGE_TEXTURE_BILINEAR_MIN_FOOTPRINT` to the clamped one-texel footprint so
   wall, ceiling, and floor samples that previously used nearest palette lookup
   enter the bilinear palette path before the stronger minification prefilter is
@@ -343,6 +358,14 @@ Useful live evidence anchors:
   reference show whole-frame RMSE improving from `0.0349406` to `0.0343281`,
   while the mid-floor blur-difference metric drops from `0.00841979` to
   `0.00792546`.
+- `diagnostics/quake_stream/20260521-183949/frame_001.png`: fixed-view QGE
+  capture after applying the bounded world-surface blue balance. The captured
+  frames keep `fallback_reason=none`, `own_world=1`, `own_textures=1`,
+  `own_lightmaps=1`, `own_viewmodel=1`, `own_console=1`, `emesh=58`, and
+  `ecoeff=27`. ImageMagick checks against the classic `20260521-151552`
+  reference show whole-frame RMSE improving from `0.0341756` to `0.0340944`
+  relative to the previous one-texel bilinear frame, while blue-heavy floor,
+  ceiling, and front-wall crops move closer to classic.
 
 The ICC control plane is part of the baseline. Verified slices should refresh
 index, memory, git history, source-drift, production-audit, task-attempt, and
@@ -507,6 +530,11 @@ Known current visual state:
   It cuts measured side-wall, front-wall, and ceiling high-frequency crawl in
   the fixed-view capture, but whole-frame RMSE remains mixed because weapon and
   world conformance are still not complete.
+- The most recent world-surface blue-balance work applies
+  `QGE_SURFACE_WORLD_BLUE_BALANCE 0.88f`, improving the fixed-view RMSE to
+  `0.0340944` and pulling floor, ceiling, and front-wall blue means closer to
+  classic. Side-wall blue is now slightly low, so this remains a bounded
+  color-balance fix rather than full material fidelity.
 - The earlier tone-headroom work reduces fixed-view over-bright ceiling,
   side-wall, and far-floor deltas against the classic reference.
 - The most recent viewmodel work samples Quake alias-model skin texels for the

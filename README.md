@@ -12,10 +12,10 @@ fast-forwarded to the same commit for compatibility after the older unrelated
 Three.js/WebTransport history was merged as provenance. The authoritative tree
 is the `master` QGE/QuakeSpasm layout documented here.
 
-Latest verified runtime baseline: the current QGE one-texel bilinear world
-texture smoothing, moderate-minification texture prefilter, alias-skin viewmodel
-path, world fullbright sampling scale, and diagnostic notify cleanup, mirrored
-to both `origin/master` and `origin/main`.
+Latest verified runtime baseline: the current QGE world-surface blue balance,
+one-texel bilinear world texture smoothing, moderate-minification texture
+prefilter, alias-skin viewmodel path, world fullbright sampling scale, and
+diagnostic notify cleanup, mirrored to both `origin/master` and `origin/main`.
 
 ## Current Status
 
@@ -36,8 +36,9 @@ Working and routinely verified:
   world texture indices, splits world fullbright texels into a bounded unlit
   additive contribution, applies a bounded footprint prefilter to moderately
   minified world texels, moves one-texel wall/ceiling samples onto the bilinear
-  palette path to reduce crawl, samples alias-model skin texels for the
-  first-person weapon mesh, keeps first-person weapon geometry out of the world tone
+  palette path to reduce crawl, applies a bounded world-surface blue balance
+  against the classic fixed-view reference, samples alias-model skin texels for
+  the first-person weapon mesh, keeps first-person weapon geometry out of the world tone
   histogram, and derives render-gate display gain from deterministic state
   marginals instead of finite-shot readout counts.
 - QGE visibility shadow/parity paths with audited authority-gate telemetry.
@@ -112,7 +113,10 @@ one-texel bilinear follow-up targets the remaining wall/ceiling crawl: in the
 from `0.0027016` to `0.00168355`. Whole-frame RMSE is mixed across the three
 captured frames (`0.0341756` on frame 2, `0.0347847` on frames 1/3), so this is
 a targeted wall/ceiling stability improvement rather than a complete renderer
-conformance win.
+conformance win. The world-surface blue-balance follow-up at
+`20260521-183949` reduces blue lift in floor, ceiling, and front-wall crops and
+improves the fixed-view whole-frame RMSE again to `0.0340944`; it is still a
+bounded color-conformance step, not a complete material or lighting fix.
 
 What is still broken is just as important: light-emissive regions are closer but
 still too dim, nearby floors are slightly over-lifted, raster seams remain visible,

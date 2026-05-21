@@ -260,6 +260,7 @@ static qboolean QGE_RenderShouldUpdateFrame(void);
 #define QGE_SURFACE_LIGHT_AMBIENT 0.10f
 #define QGE_SURFACE_LIGHT_SCALE 1.05f
 #define QGE_SURFACE_LUMA_FLOOR 0.018f
+#define QGE_SURFACE_WORLD_BLUE_BALANCE 0.88f
 #define QGE_SURFACE_FULLBRIGHT_INDEX 224
 #define QGE_SURFACE_FULLBRIGHT_SCALE 1.35f
 #define QGE_TONE_HISTOGRAM_WORLD_Y_PERCENT 72
@@ -6778,7 +6779,8 @@ static void QGE_PrepareSurfaceSampleContext(qge_surface_sample_context_t *ctx,
 	}
 	ctx->color_gain_r = gain * qge_render_gate_color_gain[QGE_DWT_R];
 	ctx->color_gain_g = gain * qge_render_gate_color_gain[QGE_DWT_G];
-	ctx->color_gain_b = gain * qge_render_gate_color_gain[QGE_DWT_B];
+	ctx->color_gain_b = gain * qge_render_gate_color_gain[QGE_DWT_B] *
+						QGE_SURFACE_WORLD_BLUE_BALANCE;
 }
 
 QGE_HOT_INLINE qge_rgb_sample_t QGE_SurfaceLightColorContext(
