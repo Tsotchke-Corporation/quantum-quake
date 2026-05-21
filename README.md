@@ -40,10 +40,11 @@ Working and routinely verified:
 Important known limitations:
 
 - `quantum_render 2` is not visually complete. The current renderer has
-  improved world-surface coverage, defaults to bilinear surface/light sampling,
-  and uses preserved spatial detail for the final display while still running
-  the sparse DWT path for evidence. Floors, walls, and ceilings are less
-  blocky, but can still show raster seams and incomplete vanilla-material
+  improved world-surface coverage, Quake-FOV world projection, bilinear
+  surface/light sampling, darker lightmap-preserving surface shading, and
+  preserved spatial detail for the final display while still running the sparse
+  DWT path for evidence. Floors, walls, and ceilings are less blocky and less
+  washed out, but can still show raster seams and incomplete vanilla-material
   fidelity.
 - Noesis is not yet learning Quake from experience. Current no-script runs use
   a reactive server-side controller with an explicit autonomous assist hint,

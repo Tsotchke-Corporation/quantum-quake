@@ -60,6 +60,14 @@ Recent verified slices on `master` establish the current baseline:
   preserved-detail QGE display, no-floor tone mapping, normal-world palette
   opacity fixes, bilinear surface/lightmap sampling, duplicate snapshot
   clearing, and near-plane clipping for close world surfaces.
+- This rendering slice adds Quake FOV-aware world projection,
+  non-additive same-depth ownership, lower world-surface ambient floors, and a
+  tighter depth tie window. The fixed-view QGE capture at
+  `diagnostics/quake_stream/20260520-232353/frame_001.png` reduces RMSE against
+  the fixed-view classic reference at
+  `diagnostics/quake_stream/20260520-215105/frame_001.png` from about `0.210`
+  on the FOV-only probe to about `0.088`; it is a real improvement, but visible
+  BSP face panels and material fidelity gaps still remain.
 - `0809057` and earlier no-script movement commits improve autonomous
   wall-contact steering, but do not make Noesis a learned Quake player.
 - The historical `origin/main` history is merged for ancestry and the remote
@@ -102,6 +110,12 @@ Useful live evidence anchors:
   capture after preserved-detail highlight headroom and authoritative-snapshot
   clearing; render logs show `snapshot_surfaces` matching `scene_surfaces`
   instead of the prior doubled snapshot surface count.
+- `diagnostics/quake_stream/20260520-232353/frame_001.png`: fixed-view QGE
+  capture after FOV-aware projection, darker lightmap-preserving surface
+  shading, non-additive depth ties, and tighter depth ownership. The world is
+  substantially closer to the classic fixed-view reference, but the remaining
+  wall/doorway face panels are still visible and should stay on the rendering
+  backlog.
 - `diagnostics/agent_stream/20260520-215458/noesis/qge_noesis_summary.json`:
   no-script Noesis evidence on the same renderer build:
   `noesis_scripted=0`, action trace line count `0`, total route distance
@@ -173,6 +187,13 @@ Implemented:
 - QGE world-surface projection now clips at `QGE_SURFACE_NEAR_CLIP_DEPTH`
   instead of one unit from the camera, reducing giant over-projected wall and
   ceiling strips when the autonomous player is very close to level geometry.
+- QGE world-surface projection now uses Quake's horizontal and vertical FOV
+  separately, and world shading uses lower texture/light ambient floors with
+  wider tone headroom so floors, walls, and ceilings keep more lightmap
+  contrast instead of washing into bright BSP panels.
+- Same-depth world samples use max-channel ownership with a tight
+  `QGE_SPATIAL_DEPTH_EPSILON`, which reduces seam brightening without treating
+  nearby distinct faces as the same surface.
 - Render logs report surface counts, snapshot misses, ownership fields, native
   IDWT counts, fallback reasons, and timing splits.
 
@@ -195,9 +216,9 @@ Known current visual state:
 - Edge sampling was rejected as a default because it produced blurred/line
   artifacts and much higher frame cost.
 - The current renderer should be described as improved, not fixed. In the
-  latest live capture the world is less blocky and avoids the worst dark holes
-  and near-plane strips, but floors, walls, and ceilings still do not match
-  vanilla Quake fidelity.
+  latest fixed-view capture the world projection, contrast, and brightness are
+  much closer to classic Quake, but floors, walls, and ceilings still do not
+  match vanilla Quake fidelity.
 
 Next rendering priorities:
 

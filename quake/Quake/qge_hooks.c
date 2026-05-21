@@ -88,7 +88,7 @@ static float* qge_spatial_depth_buffer = NULL;
 static int qge_render_res = 1024;  /* Internal quantum render resolution */
 
 #define QGE_SPATIAL_DEPTH_FAR 1.0e30f
-#define QGE_SPATIAL_DEPTH_EPSILON 2.0f
+#define QGE_SPATIAL_DEPTH_EPSILON 0.25f
 #define QGE_SURFACE_NEAR_CLIP_DEPTH 8.0f
 
 /* GL texture for quantum framebuffer */
@@ -235,7 +235,12 @@ static qboolean QGE_RenderShouldUpdateFrame(void);
 #define QGE_RENDER_TRACE_FLAG_NATIVE_IDWT_FALLBACK 0x00040000u
 #define QGE_RENDER_TRACE_FLAG_CPU_IDWT 0x00080000u
 #define QGE_TONE_LUT_SIZE 4096
-#define QGE_NO_FLOOR_TONE_WHITE_HEADROOM 3.00f
+#define QGE_NO_FLOOR_TONE_WHITE_HEADROOM 4.50f
+#define QGE_SURFACE_TEXTURE_AMBIENT 0.06f
+#define QGE_SURFACE_TEXTURE_SCALE 0.94f
+#define QGE_SURFACE_LIGHT_AMBIENT 0.10f
+#define QGE_SURFACE_LIGHT_SCALE 1.05f
+#define QGE_SURFACE_LUMA_FLOOR 0.018f
 
 static quantum_state_t qge_render_gate_state;
 static qboolean qge_render_gate_initialized = false;
@@ -4746,16 +4751,25 @@ void QGE_SceneSubmitWorldSurface(qmodel_t *model, msurface_t *surf)
 static qboolean QGE_ProjectPoint(const vec3_t world, float *x, float *y, float *depth)
 {
 	vec3_t view_delta;
-	float dist, scale;
+	float dist, x_scale, y_scale;
+	float fov_x = r_refdef.fov_x;
+	float fov_y = r_refdef.fov_y;
 
 	VectorSubtract(world, r_refdef.vieworg, view_delta);
 	dist = DotProduct(view_delta, vpn);
 	if (dist < QGE_SURFACE_NEAR_CLIP_DEPTH)
 		return false;
 
-	scale = (float)qge_render_res / (dist * 2.0f);
-	*x = (float)qge_render_res * 0.5f + DotProduct(view_delta, vright) * scale;
-	*y = (float)qge_render_res * 0.5f - DotProduct(view_delta, vup) * scale;
+	if (fov_x < 1.0f || fov_x > 170.0f)
+		fov_x = 90.0f;
+	if (fov_y < 1.0f || fov_y > 170.0f)
+		fov_y = 75.0f;
+	x_scale = ((float)qge_render_res * 0.5f) /
+			  (dist * tanf(fov_x * (float)M_PI / 360.0f));
+	y_scale = ((float)qge_render_res * 0.5f) /
+			  (dist * tanf(fov_y * (float)M_PI / 360.0f));
+	*x = (float)qge_render_res * 0.5f + DotProduct(view_delta, vright) * x_scale;
+	*y = (float)qge_render_res * 0.5f - DotProduct(view_delta, vup) * y_scale;
 	*depth = dist;
 	return true;
 }
@@ -5188,6 +5202,19 @@ static void QGE_SpatialAddPixelColorDepthIndex(int idx,
 											   const qge_rgb_sample_t *color,
 											   float depth);
 
+QGE_HOT_INLINE void QGE_SpatialKeepMaxRGB(float *rbuf,
+										  float *gbuf,
+										  float *bbuf,
+										  int idx,
+										  float r,
+										  float g,
+										  float b)
+{
+	if (r > rbuf[idx]) rbuf[idx] = r;
+	if (g > gbuf[idx]) gbuf[idx] = g;
+	if (b > bbuf[idx]) bbuf[idx] = b;
+}
+
 static void QGE_SpatialAddPixelColorDepth(int x,
 										  int y,
 										  const qge_rgb_sample_t *color,
@@ -5240,9 +5267,8 @@ static void QGE_SpatialAddPixelColorDepthIndex(int idx,
 			bbuf[idx] = sample.b;
 			depth_buffer[idx] = depth;
 		} else {
-			rbuf[idx] += sample.r;
-			gbuf[idx] += sample.g;
-			bbuf[idx] += sample.b;
+			QGE_SpatialKeepMaxRGB(rbuf, gbuf, bbuf, idx,
+								  sample.r, sample.g, sample.b);
 			if (depth < current_depth)
 				depth_buffer[idx] = depth;
 		}
@@ -5277,13 +5303,14 @@ static void QGE_SpatialAddPixelColorDepthIndex(int idx,
 				bbuf[idx] = sample.b;
 			depth_buffer[idx] = depth;
 		} else {
-			encode[idx] += value;
+			if (value > encode[idx])
+				encode[idx] = value;
 			if (rbuf)
-				rbuf[idx] += sample.r;
+				rbuf[idx] = fmaxf(rbuf[idx], sample.r);
 			if (gbuf)
-				gbuf[idx] += sample.g;
+				gbuf[idx] = fmaxf(gbuf[idx], sample.g);
 			if (bbuf)
-				bbuf[idx] += sample.b;
+				bbuf[idx] = fmaxf(bbuf[idx], sample.b);
 			if (depth < current_depth)
 				depth_buffer[idx] = depth;
 		}
@@ -5334,9 +5361,7 @@ static void QGE_SpatialAddPixelRGBDepthIndex(int idx,
 		bbuf[idx] = b;
 		depth_buffer[idx] = depth;
 	} else {
-		rbuf[idx] += r;
-		gbuf[idx] += g;
-		bbuf[idx] += b;
+		QGE_SpatialKeepMaxRGB(rbuf, gbuf, bbuf, idx, r, g, b);
 		if (depth < current_depth)
 			depth_buffer[idx] = depth;
 	}
@@ -5368,9 +5393,7 @@ static inline void QGE_SpatialAddPixelRGBDepthPositivePrepared(int idx,
 		bbuf[idx] = b;
 		depth_buffer[idx] = depth;
 	} else {
-		rbuf[idx] += r;
-		gbuf[idx] += g;
-		bbuf[idx] += b;
+		QGE_SpatialKeepMaxRGB(rbuf, gbuf, bbuf, idx, r, g, b);
 		if (depth < current_depth)
 			depth_buffer[idx] = depth;
 	}
@@ -6526,20 +6549,26 @@ QGE_HOT_INLINE qge_rgb_sample_t QGE_SurfaceSampleColorContext(
 	}
 	light_color = QGE_SurfaceLightColorContext(ctx, sample);
 
-	out.r = (0.18f + tex_color.r * 0.82f) *
-			(0.30f + light_color.r * 0.90f) * ctx->color_gain_r;
-	out.g = (0.18f + tex_color.g * 0.82f) *
-			(0.30f + light_color.g * 0.90f) * ctx->color_gain_g;
-	out.b = (0.18f + tex_color.b * 0.82f) *
-			(0.30f + light_color.b * 0.90f) * ctx->color_gain_b;
+	out.r = (QGE_SURFACE_TEXTURE_AMBIENT +
+			 tex_color.r * QGE_SURFACE_TEXTURE_SCALE) *
+			(QGE_SURFACE_LIGHT_AMBIENT +
+			 light_color.r * QGE_SURFACE_LIGHT_SCALE) * ctx->color_gain_r;
+	out.g = (QGE_SURFACE_TEXTURE_AMBIENT +
+			 tex_color.g * QGE_SURFACE_TEXTURE_SCALE) *
+			(QGE_SURFACE_LIGHT_AMBIENT +
+			 light_color.g * QGE_SURFACE_LIGHT_SCALE) * ctx->color_gain_g;
+	out.b = (QGE_SURFACE_TEXTURE_AMBIENT +
+			 tex_color.b * QGE_SURFACE_TEXTURE_SCALE) *
+			(QGE_SURFACE_LIGHT_AMBIENT +
+			 light_color.b * QGE_SURFACE_LIGHT_SCALE) * ctx->color_gain_b;
 	out.r = QGE_ClampSpatialSignal(out.r);
 	out.g = QGE_ClampSpatialSignal(out.g);
 	out.b = QGE_ClampSpatialSignal(out.b);
 	luma = QGE_RGBLuma(&out);
-	if (luma < 0.05f) {
-		out.r += 0.05f;
-		out.g += 0.05f;
-		out.b += 0.05f;
+	if (luma < QGE_SURFACE_LUMA_FLOOR) {
+		out.r += QGE_SURFACE_LUMA_FLOOR;
+		out.g += QGE_SURFACE_LUMA_FLOOR;
+		out.b += QGE_SURFACE_LUMA_FLOOR;
 	}
 	return out;
 }

@@ -722,10 +722,22 @@ loop with policy updates.
   so smoother diagnostic captures do not pay the old helper-call overhead per
   pixel. Normal world textures keep palette-index texels opaque; only
   fence/transparent surfaces use palette alpha as a cutout mask.
+  QGE world projection uses Quake's `r_refdef.fov_x` and `r_refdef.fov_y`
+  separately, so floor and ceiling projection follows the classic viewport
+  aspect instead of a square-FOV approximation.
+  QGE world-surface shading uses the lower `QGE_SURFACE_TEXTURE_AMBIENT` and
+  `QGE_SURFACE_LIGHT_AMBIENT` floors plus a wider
+  `QGE_NO_FLOOR_TONE_WHITE_HEADROOM`, so dark floors, walls, and ceilings keep
+  lightmap contrast instead of washing into translucent BSP-face panels.
   When audited QGE visibility authority replaces the classic PVS surface set,
   the frame snapshot clears its prior visible-surface entries before recording
   the authoritative set, preventing duplicate world panels from being rasterized
   as ghosted floor/wall/ceiling rectangles.
+  Same-depth world samples use max-channel ownership instead of additive
+  accumulation, so coplanar seams and shared triangle edges do not brighten into
+  translucent-looking wall or doorway panels. The depth tie window is the tight
+  `QGE_SPATIAL_DEPTH_EPSILON`, so adjacent but distinct BSP faces keep normal
+  nearest-surface ownership instead of bleeding through each other.
   QGE world-surface projection clips very near geometry at
   `QGE_SURFACE_NEAR_CLIP_DEPTH` so walls or ceilings close to the camera do not
   explode into full-frame strips during autonomous captures.
