@@ -228,6 +228,7 @@ static qboolean qge_noesis_assist_hidden_wall_timeout = false;
 #define QGE_NOESIS_HIDDEN_WALL_STALL_FRAMES 30
 #define QGE_NOESIS_TARGET_LOCK_FRAMES 45
 #define QGE_NOESIS_TARGET_LOCK_MAX_DISTANCE 1152.0f
+#define QGE_NOESIS_VISIBLE_BREAK_HIDDEN_LOCK_DISTANCE 512.0f
 
 static int QGE_RenderUpdateInterval(void);
 static qboolean QGE_RenderShouldUpdateFrame(void);
@@ -1188,11 +1189,14 @@ static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
 {
 	edict_t *best_visible = NULL;
 	edict_t *best_nearest = NULL;
+	edict_t *locked_target = NULL;
 	vec3_t best_visible_aim;
 	vec3_t best_nearest_aim;
+	vec3_t locked_aim;
 	float best_visible_distance = 999999.0f;
 	float best_visible_aim_error = 999999.0f;
 	float best_nearest_distance = 999999.0f;
+	float locked_distance = -1.0f;
 
 	if (visible_out)
 		*visible_out = false;
@@ -1211,7 +1215,6 @@ static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
 		qge_frame_count <= qge_noesis_assist_target_lock_until_frame) {
 		edict_t *locked = EDICT_NUM(qge_noesis_assist_locked_target_id);
 		vec3_t delta;
-		vec3_t locked_aim;
 		float distance;
 		float hidden_chase_distance;
 		qboolean visible;
@@ -1228,15 +1231,19 @@ static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
 												  visible) &&
 				distance <= QGE_NOESIS_TARGET_LOCK_MAX_DISTANCE &&
 				(visible || distance <= hidden_chase_distance)) {
-				if (visible_out)
-					*visible_out = visible;
-				if (distance_out)
-					*distance_out = distance;
-				if (aim_point_out)
-					VectorCopy(locked_aim, aim_point_out);
-				if (locked_out)
-					*locked_out = true;
-				return locked;
+				locked_target = locked;
+				locked_distance = distance;
+				if (visible) {
+					if (visible_out)
+						*visible_out = true;
+					if (distance_out)
+						*distance_out = distance;
+					if (aim_point_out)
+						VectorCopy(locked_aim, aim_point_out);
+					if (locked_out)
+						*locked_out = true;
+					return locked;
+				}
 			}
 		}
 	}
@@ -1294,6 +1301,17 @@ static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
 	}
 
 	if (best_visible) {
+		if (locked_target &&
+			best_visible_distance >
+			QGE_NOESIS_VISIBLE_BREAK_HIDDEN_LOCK_DISTANCE) {
+			if (distance_out)
+				*distance_out = locked_distance;
+			if (aim_point_out)
+				VectorCopy(locked_aim, aim_point_out);
+			if (locked_out)
+				*locked_out = true;
+			return locked_target;
+		}
 		if (visible_out)
 			*visible_out = true;
 		if (distance_out)
@@ -1301,6 +1319,15 @@ static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
 		if (aim_point_out)
 			VectorCopy(best_visible_aim, aim_point_out);
 		return best_visible;
+	}
+	if (locked_target) {
+		if (distance_out)
+			*distance_out = locked_distance;
+		if (aim_point_out)
+			VectorCopy(locked_aim, aim_point_out);
+		if (locked_out)
+			*locked_out = true;
+		return locked_target;
 	}
 	if (best_nearest) {
 		if (distance_out)
