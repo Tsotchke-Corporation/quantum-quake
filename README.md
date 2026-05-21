@@ -12,10 +12,11 @@ fast-forwarded to the same commit for compatibility after the older unrelated
 Three.js/WebTransport history was merged as provenance. The authoritative tree
 is the `master` QGE/QuakeSpasm layout documented here.
 
-Latest verified runtime baseline: the current QGE world-surface blue balance,
-one-texel bilinear world texture smoothing, moderate-minification texture
-prefilter, alias-skin viewmodel path, world fullbright sampling scale, and
-diagnostic notify cleanup, mirrored to both `origin/master` and `origin/main`.
+Latest verified runtime baseline: the current QGE world texture-detail restore,
+world-surface blue balance, one-texel bilinear world texture smoothing,
+moderate-minification texture prefilter, alias-skin viewmodel path, world fullbright sampling scale,
+and diagnostic notify cleanup, mirrored to both `origin/master` and
+`origin/main`.
 
 ## Current Status
 
@@ -37,10 +38,11 @@ Working and routinely verified:
   additive contribution, applies a bounded footprint prefilter to moderately
   minified world texels, moves one-texel wall/ceiling samples onto the bilinear
   palette path to reduce crawl, applies a bounded world-surface blue balance
-  against the classic fixed-view reference, samples alias-model skin texels for
-  the first-person weapon mesh, keeps first-person weapon geometry out of the world tone
-  histogram, and derives render-gate display gain from deterministic state
-  marginals instead of finite-shot readout counts.
+  against the classic fixed-view reference, restores a bounded amount of
+  texture detail around per-texture palette means, samples alias-model skin
+  texels for the first-person weapon mesh, keeps first-person weapon geometry
+  out of the world tone histogram, and derives render-gate display gain from
+  deterministic state marginals instead of finite-shot readout counts.
 - QGE visibility shadow/parity paths with audited authority-gate telemetry.
 - QGE projectile shadow/writeback/collision-oracle evidence paths with replay
   and persistence-boundary trace records.
@@ -86,7 +88,7 @@ Important known limitations:
 
 The current QGE graphics baseline is improved but still visibly glitchy. The
 latest fixed-view evidence is
-`diagnostics/quake_stream/20260521-174755/frame_001.png`. That run keeps QGE
+`diagnostics/quake_stream/20260521-190448/frame_001.png`. That run keeps QGE
 ownership of world geometry, world textures, lightmaps, HUD/console, and the
 viewmodel with `emesh=58`, `ecoeff=27`, `own_viewmodel=1`,
 `own_console=1`, and `fallback_reason=none` on captured frames. It also keeps
@@ -116,7 +118,13 @@ a targeted wall/ceiling stability improvement rather than a complete renderer
 conformance win. The world-surface blue-balance follow-up at
 `20260521-183949` reduces blue lift in floor, ceiling, and front-wall crops and
 improves the fixed-view whole-frame RMSE again to `0.0340944`; it is still a
-bounded color-conformance step, not a complete material or lighting fix.
+bounded color-conformance step, not a complete material or lighting fix. The
+texture-detail follow-up at `20260521-190448` restores a conservative amount of
+palette texture contrast after bilinear/prefilter sampling: whole-frame RMSE
+improves to `0.0339437`, world high-frequency texture energy rises from `88.8%`
+to `92.8%` of the classic reference, and the ceiling/side-wall/front-wall
+high-frequency ratios improve from `75.2%`/`70.3%`/`78.8%`/`65.1%` to
+`80.7%`/`74.8%`/`82.9%`/`69.3%`.
 
 What is still broken is just as important: light-emissive regions are closer but
 still too dim, nearby floors are slightly over-lifted, raster seams remain visible,

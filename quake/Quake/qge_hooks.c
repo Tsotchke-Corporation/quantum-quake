@@ -261,6 +261,8 @@ static qboolean QGE_RenderShouldUpdateFrame(void);
 #define QGE_SURFACE_LIGHT_SCALE 1.05f
 #define QGE_SURFACE_LUMA_FLOOR 0.018f
 #define QGE_SURFACE_WORLD_BLUE_BALANCE 0.88f
+#define QGE_SURFACE_TEXTURE_DETAIL_RESTORE 0.16f
+#define QGE_SURFACE_TEXTURE_DETAIL_HIGHLIGHT_SCALE 0.35f
 #define QGE_SURFACE_FULLBRIGHT_INDEX 224
 #define QGE_SURFACE_FULLBRIGHT_SCALE 1.35f
 #define QGE_TONE_HISTOGRAM_WORLD_Y_PERCENT 72
@@ -402,6 +404,10 @@ typedef struct {
 	qboolean has_fullbright;
 	qboolean has_warp;
 	char texture_name[16];
+	float texture_mean_r;
+	float texture_mean_g;
+	float texture_mean_b;
+	float texture_contrast;
 	vec3_t mins;
 	vec3_t maxs;
 	vec3_t centroid;
@@ -592,6 +598,10 @@ typedef struct {
 	unsigned int texture_format;
 	qboolean has_fullbright;
 	qboolean has_warp;
+	float mean_r;
+	float mean_g;
+	float mean_b;
+	float contrast;
 } qge_texture_signal_cache_t;
 
 static qge_texture_signal_cache_t qge_texture_signal_cache[QGE_MAX_TEXTURE_SIGNAL_CACHE];
@@ -713,6 +723,8 @@ typedef struct {
 static qge_rgb_sample_t qge_palette_lut[256];
 static qboolean qge_palette_opaque[256];
 static qboolean qge_palette_lut_ready = false;
+static void QGE_InitPaletteLut(void);
+QGE_HOT_INLINE float QGE_RGBLuma(const qge_rgb_sample_t *color);
 
 typedef struct {
 	const qge_scene_surface_t *surface;
@@ -4830,8 +4842,15 @@ static unsigned int QGE_TextureSignalBuild(const texture_t *tex,
 										   qge_texture_signal_cache_t *out)
 {
 	const gltexture_t *glt;
+	const byte *pixels;
 	unsigned int hash = 2166136261u;
 	qge_texture_signal_cache_t local;
+	double sum_r = 0.0;
+	double sum_g = 0.0;
+	double sum_b = 0.0;
+	double sum_luma = 0.0;
+	double sum_luma_sq = 0.0;
+	int pixel_count = 0;
 
 	if (!tex)
 		return hash;
@@ -4861,6 +4880,42 @@ static unsigned int QGE_TextureSignalBuild(const texture_t *tex,
 		hash = QGE_HashStep(hash, tex->warpimage->source_crc ^ 0x5a5au);
 	}
 
+	pixels = (const byte *)(tex + 1);
+	if (pixels && tex->width > 0 && tex->height > 0) {
+		QGE_InitPaletteLut();
+		for (int i = 0; i < tex->width * tex->height; i++) {
+			int palette_index = pixels[i];
+			const qge_rgb_sample_t *color;
+			float luma;
+
+			if (!qge_palette_opaque[palette_index])
+				continue;
+			color = &qge_palette_lut[palette_index];
+			luma = QGE_RGBLuma(color);
+			sum_r += color->r;
+			sum_g += color->g;
+			sum_b += color->b;
+			sum_luma += luma;
+			sum_luma_sq += (double)luma * (double)luma;
+			pixel_count++;
+		}
+	}
+	if (pixel_count > 0) {
+		double inv_count = 1.0 / (double)pixel_count;
+		double mean_luma = sum_luma * inv_count;
+		double variance = sum_luma_sq * inv_count - mean_luma * mean_luma;
+
+		if (variance < 0.0)
+			variance = 0.0;
+		local.mean_r = (float)(sum_r * inv_count);
+		local.mean_g = (float)(sum_g * inv_count);
+		local.mean_b = (float)(sum_b * inv_count);
+		local.contrast = (float)sqrt(variance);
+	} else {
+		local.mean_r = local.mean_g = local.mean_b = 0.50f;
+		local.contrast = 0.0f;
+	}
+
 	local.valid = true;
 	local.texture_hash = hash;
 	if (out)
@@ -4880,6 +4935,10 @@ static void QGE_ApplyTextureSignal(const qge_texture_signal_cache_t *signal,
 	dst->texture_format = signal->texture_format;
 	dst->has_fullbright = signal->has_fullbright;
 	dst->has_warp = signal->has_warp;
+	dst->texture_mean_r = signal->mean_r;
+	dst->texture_mean_g = signal->mean_g;
+	dst->texture_mean_b = signal->mean_b;
+	dst->texture_contrast = signal->contrast;
 }
 
 static unsigned int QGE_SurfaceTextureSignal(const texture_t *tex,
@@ -7292,6 +7351,47 @@ QGE_HOT_INLINE qboolean QGE_SurfaceTextureColorContext(
 	return true;
 }
 
+QGE_HOT_INLINE void QGE_SurfaceRestoreTextureDetail(
+	const qge_surface_sample_context_t *ctx,
+	const qge_projected_sample_t *sample,
+	qge_rgb_sample_t *color)
+{
+	const qge_scene_surface_t *surface;
+	float amount;
+
+	if (!ctx || !sample || !color)
+		return;
+	if (ctx->sky || ctx->warp || ctx->fence)
+		return;
+	surface = ctx->surface;
+	if (!surface || surface->texture_contrast <= 0.001f)
+		return;
+	if (sample->tex_footprint < QGE_TEXTURE_BILINEAR_MIN_FOOTPRINT)
+		return;
+
+	amount = QGE_SURFACE_TEXTURE_DETAIL_RESTORE;
+	if (sample->tex_footprint < QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT)
+		amount *= 0.65f;
+	else if (sample->tex_footprint >= QGE_TEXTURE_PREFILTER_GRID_FOOTPRINT)
+		amount *= 0.55f;
+	if (amount <= 0.0f)
+		return;
+
+	{
+		float dr = color->r - surface->texture_mean_r;
+		float dg = color->g - surface->texture_mean_g;
+		float db = color->b - surface->texture_mean_b;
+
+		color->r += dr * amount *
+			(dr > 0.0f ? QGE_SURFACE_TEXTURE_DETAIL_HIGHLIGHT_SCALE : 1.0f);
+		color->g += dg * amount *
+			(dg > 0.0f ? QGE_SURFACE_TEXTURE_DETAIL_HIGHLIGHT_SCALE : 1.0f);
+		color->b += db * amount *
+			(db > 0.0f ? QGE_SURFACE_TEXTURE_DETAIL_HIGHLIGHT_SCALE : 1.0f);
+	}
+	QGE_RGBClamp(color);
+}
+
 QGE_HOT_INLINE qge_rgb_sample_t QGE_SurfaceSampleColorContext(
 	const qge_surface_sample_context_t *ctx,
 	const qge_projected_sample_t *sample)
@@ -7328,6 +7428,7 @@ QGE_HOT_INLINE qge_rgb_sample_t QGE_SurfaceSampleColorContext(
 		out.b = 0.0f;
 		return out;
 	}
+	QGE_SurfaceRestoreTextureDetail(ctx, sample, &tex_color);
 	light_color = QGE_SurfaceLightColorContext(ctx, sample);
 
 	out.r = (QGE_SURFACE_TEXTURE_AMBIENT +

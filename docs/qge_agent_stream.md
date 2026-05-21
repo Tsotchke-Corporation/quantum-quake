@@ -758,7 +758,12 @@ loop with policy updates.
   lightmap contrast without pushing side walls and ceilings as far above the
   classic reference. World-surface sampling also applies the bounded
   `QGE_SURFACE_WORLD_BLUE_BALANCE` to the blue channel because fixed-view QGE
-  crops were consistently too blue against the classic reference.
+  crops were consistently too blue against the classic reference. Texture
+  signal cache entries also store per-texture palette means and contrast, and
+  filtered BSP samples apply `QGE_SURFACE_TEXTURE_DETAIL_RESTORE` around those
+  means after bilinear/prefilter sampling. The restore uses the smaller
+  `QGE_SURFACE_TEXTURE_DETAIL_HIGHLIGHT_SCALE` for highlight-side deltas so
+  wall and ceiling grooves recover detail without washing out the far floor.
   Render-gate display gain is derived from deterministic state marginals rather
   than finite-shot readout counts, so static floors, walls, and ceilings do not
   flicker just because `quantum_render_gate_shots` sampled a different basis
@@ -791,7 +796,9 @@ loop with policy updates.
   Moderate minification uses the nine-tap path; stronger minification uses a
   stratified 4x4 footprint grid so distant floors and ceilings do not alias into
   sparse crawl patterns. Magnified and near one-texel floors, walls, and
-  ceilings stay on the bilinear path so they do not smear into broad bands.
+  ceilings stay on the bilinear path so they do not smear into broad bands, and
+  the bounded texture-detail restore recovers some contrast lost by those
+  filters without disabling anti-crawl sampling.
   Render logs expose those filtered samples as `texfilter`.
   QGE world-surface projection clips very near geometry at
   `QGE_SURFACE_NEAR_CLIP_DEPTH` so walls or ceilings close to the camera do not
