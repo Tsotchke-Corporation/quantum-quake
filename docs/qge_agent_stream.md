@@ -226,10 +226,10 @@ is accounted for by QGE ownership telemetry. The trace also records
 `render_2d_overlay` probes for those mirrored draw calls.
 
 `quantum_render_update_interval` controls how often the expensive 1024-frame
-QGE field is regenerated. The default interval is `8`, which reuses the last
-QGE texture between updates while still drawing at the requested resolution.
-Skipped frames also avoid collecting world surfaces for the QGE encoder. Set
-`QGE_RENDER_UPDATE_INTERVAL=1` for strict every-frame profiling.
+QGE field is regenerated. The default interval is `1`, so primary QGE rendering
+updates every host frame while the player moves. Higher values deliberately
+reuse stale world textures between updates and are useful only for reuse-cost
+profiling.
 
 For CPU-only profiling, keep `QGE_RENDER_RES` fixed and compare these fields
 across runs. A slow 1024 run is usually dominated by `raster`, not by the
@@ -417,7 +417,7 @@ keeps scripted movement disabled by default, stores `input/noesis_actions.txt` a
 `-nomouse` unless `QGE_STREAM_MOUSE=1`, targets `QGE_STREAM_DISPLAY` like the
 stream harness, and pins the same high-resolution CPU render defaults: 1024
 internal render resolution, no bilinear/edge/display smoothing, and
-`QGE_RENDER_UPDATE_INTERVAL=8` unless overridden. The crash watcher records
+`QGE_RENDER_UPDATE_INTERVAL=1` unless overridden. The crash watcher records
 process exit status in its final `QGE_CRASH_WATCH_EXIT`,
 `QGE_CRASH_WATCH_TIMEOUT`, or `QGE_CRASH_WATCH_DONE` line so direct app aborts
 and watchdog kills are not mistaken for clean runs. When QuakeSpasm emits a
@@ -796,9 +796,10 @@ loop with policy updates.
   `QGE_RENDER_DISPLAY_FILTER=0` skips neighbor smoothing during display-buffer
   conversion because live captures showed the smoothed display can over-blur the
   whole world frame; set it to `1` for noisy-capture experiments.
-  `QGE_RENDER_UPDATE_INTERVAL=8` updates the full QGE frame every eighth host
-  frame and reuses the last texture between updates; set it to `1` to update
-  every frame. Values above `16` are clamped.
+  `QGE_RENDER_UPDATE_INTERVAL=1` updates the full QGE frame every host frame so
+  floors, walls, ceilings, entities, and the viewmodel move with the camera.
+  Higher values deliberately reuse the last texture between updates for
+  profiling; values above `16` are clamped.
   `QGE_RENDER_RES` and `QGE_RENDER_THRESHOLD` are also passed as early
   `-qgerenderres` / `-qgerenderthreshold` launch arguments so DWT buffers are
   allocated at the requested size before `autoexec.cfg` runs.
