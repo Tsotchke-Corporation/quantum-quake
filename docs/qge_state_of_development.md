@@ -83,6 +83,17 @@ Useful live evidence anchors:
   frame at `diagnostics/quake_stream/20260520-212112/frame_001.png` still shows
   close-geometry QGE rendering artifacts, so this is a gameplay improvement and
   not a rendering-quality completion claim.
+- `diagnostics/quake_stream/20260520-215105/frame_001.png`: fixed-view classic
+  reference capture used to distinguish real E1M1 brush panels from QGE
+  rendering artifacts.
+- `diagnostics/quake_stream/20260520-215412/frame_001.png`: fixed-view QGE
+  capture after preserved-detail highlight headroom and authoritative-snapshot
+  clearing; render logs show `snapshot_surfaces` matching `scene_surfaces`
+  instead of the prior doubled snapshot surface count.
+- `diagnostics/agent_stream/20260520-215458/noesis/qge_noesis_summary.json`:
+  no-script Noesis evidence on the same renderer build:
+  `noesis_scripted=0`, action trace line count `0`, total route distance
+  `7147.375`, max displacement `1093.127`, one kill, and no terminal stall.
 
 The ICC control plane is part of the baseline. Verified slices should refresh
 index, memory, git history, source-drift, production-audit, task-attempt, and
@@ -134,15 +145,19 @@ Implemented:
 - Detail-preserving QGE render output: the full RGB raster is kept while sparse
   DWT coefficients are encoded, then used as the default final display signal so
   floor/wall/ceiling detail is not dominated by sparse-block reconstruction.
-- Full preserved-detail display uses a no-floor tone map so ordinary dark
-  texture samples are not converted into black holes while the scene still gets
-  the brightness lift needed for live capture.
+- Full preserved-detail display uses a no-floor tone map with highlight
+  headroom, so ordinary dark texture samples are not converted into black holes
+  and bright floors/ceilings do not wash out as quickly while the scene still
+  gets the brightness lift needed for live capture.
 - Bilinear texture and lightmap sampling is enabled by default for QGE primary
   captures; the nearest-sample path remains available for faster diagnostics.
 - Normal floor, wall, and ceiling textures no longer inherit the global
   transparent palette rule. Palette alpha is now reserved for fence/transparent
   world surfaces so ordinary world texels do not punch dark holes through the
   raster.
+- Audited visibility-authority rendering now clears the earlier classic PVS
+  visible-surface snapshot before recording the authoritative surface set, so
+  QGE does not double-rasterize world panels as ghosted rectangles.
 - QGE world-surface projection now clips at `QGE_SURFACE_NEAR_CLIP_DEPTH`
   instead of one unit from the camera, reducing giant over-projected wall and
   ceiling strips when the autonomous player is very close to level geometry.
@@ -155,8 +170,9 @@ Known current visual state:
   captures.
 - Floors, walls, and ceilings still need conformance work: raster seams,
   warped/noisy surfaces, and incomplete vanilla-material fidelity remain, even
-  after default bilinear sampling and preserved-detail no-floor output reduce
-  sparse DWT block bands and tone-floor artifacts.
+  after default bilinear sampling, preserved-detail highlight headroom, and
+  duplicate-snapshot clearing reduce sparse DWT block bands, tone-floor
+  artifacts, and ghost panels.
 - `QGE_RENDER_BILINEAR_SAMPLES=0` and `QGE_RENDER_DETAIL_MIX=0` remain useful
   for isolating raw sparse DWT and nearest-sample behavior during diagnostics.
 - `QGE_RENDER_DISPLAY_FILTER=1` can smooth noisy captures, but it is not the

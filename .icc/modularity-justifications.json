@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "thresholds": {
+    "max_file_lines": 2000
+  },
+  "justifications": [
+    {
+      "path": "quake/Quake/qge_hooks.c",
+      "status": "temporary_legacy_boundary",
+      "task_id": "qge_domain_ownership_swarm",
+      "reason": "This file is the current compatibility boundary between the upstream QuakeSpasm runtime and QGE-owned rendering, visibility, Noesis, physics, audio, and telemetry hooks. Keeping the hooks co-located avoids splitting hot frame-state code before the engine ownership seams are stable.",
+      "mitigation": "New work should keep changes narrowly scoped, covered by tests and stream evidence, and move stable subsystems into focused modules when the QGE ownership boundary no longer needs direct access to Quake renderer and server internals."
+    }
+  ]
+}

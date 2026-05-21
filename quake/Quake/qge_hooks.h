@@ -31,6 +31,7 @@ void QGE_Shutdown(void);
 /* Per-frame begin/end — called from _Host_Frame() */
 void QGE_FrameBegin(void);
 void QGE_FrameEnd(void);
+void QGE_FrameSnapshotClearVisibleSurfaces(void);
 
 /* ============================================================================
  * Quantum RNG

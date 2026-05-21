@@ -227,6 +227,7 @@ static qboolean QGE_RenderShouldUpdateFrame(void);
 #define QGE_RENDER_TRACE_FLAG_NATIVE_IDWT_FALLBACK 0x00040000u
 #define QGE_RENDER_TRACE_FLAG_CPU_IDWT 0x00080000u
 #define QGE_TONE_LUT_SIZE 4096
+#define QGE_NO_FLOOR_TONE_WHITE_HEADROOM 3.00f
 
 static quantum_state_t qge_render_gate_state;
 static qboolean qge_render_gate_initialized = false;
@@ -3371,6 +3372,19 @@ static void QGE_FrameSnapshotBeginCurrent(void)
 							 QGE_ServerTimeMsec(),
 							 (int64_t)(cl.time * 1000.0));
 	QGE_FrameSnapshotSetCameraAndWorld(snapshot);
+}
+
+void QGE_FrameSnapshotClearVisibleSurfaces(void)
+{
+	qge_frame_snapshot_t *snapshot;
+
+	if (!qge_ctx)
+		return;
+	snapshot = qge_get_frame_snapshot(qge_ctx);
+	if (!snapshot || snapshot->sealed)
+		return;
+	snapshot->visible_surface_count = 0;
+	snapshot->dropped_visible_surfaces = 0;
 }
 
 static void QGE_FrameSnapshotAddVisibleSurface(const qge_scene_surface_t *surface)
@@ -8155,6 +8169,8 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 	floor_val = no_floor_tone ? 0.0f : median * 0.85f;
 	if (white <= floor_val + 0.0001f)
 		white = max_abs;
+	if (no_floor_tone && direct_display)
+		white *= QGE_NO_FLOOR_TONE_WHITE_HEADROOM;
 	inv_range = 1.0f / (white - floor_val + 0.0001f);
 
 	qge_last_tone_floor = floor_val;

@@ -717,6 +717,10 @@ loop with policy updates.
   so smoother diagnostic captures do not pay the old helper-call overhead per
   pixel. Normal world textures keep palette-index texels opaque; only
   fence/transparent surfaces use palette alpha as a cutout mask.
+  When audited QGE visibility authority replaces the classic PVS surface set,
+  the frame snapshot clears its prior visible-surface entries before recording
+  the authoritative set, preventing duplicate world panels from being rasterized
+  as ghosted floor/wall/ceiling rectangles.
   QGE world-surface projection clips very near geometry at
   `QGE_SURFACE_NEAR_CLIP_DEPTH` so walls or ceilings close to the camera do not
   explode into full-frame strips during autonomous captures.
@@ -728,8 +732,11 @@ loop with policy updates.
   keeps floor, wall, and ceiling texture detail from collapsing into sparse
   block bands while still running and logging the sparse DWT path. At the
   default full mix, display conversion uses the existing tone curve without the
-  median-derived black floor that can crush darker texture samples to black; set
-  it lower to inspect raw inverse-DWT contribution.
+  median-derived black floor that can crush darker texture samples to black, and
+  leaves `QGE_NO_FLOOR_TONE_WHITE_HEADROOM` above the sampled white point so
+  bright floors and ceilings keep texture and stronger lightmap contrast instead
+  of washing out to flat white; set it lower to inspect raw inverse-DWT
+  contribution.
   `QGE_RENDER_DISPLAY_FILTER=0` skips neighbor smoothing during display-buffer
   conversion because live captures showed the smoothed display can over-blur the
   whole world frame; set it to `1` for noisy-capture experiments.

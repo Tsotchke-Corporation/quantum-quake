@@ -101,6 +101,7 @@ static int R_ApplyQGEVisibilityAuthority (qmodel_t *model,
 	applied = 0;
 	R_ClearTextureChains(model, chain_world);
 	QGE_SceneBegin();
+	QGE_FrameSnapshotClearVisibleSurfaces();
 	r_visframecount++;
 
 	for (i = 0, surf = model->surfaces; i < limit; i++, surf++)
