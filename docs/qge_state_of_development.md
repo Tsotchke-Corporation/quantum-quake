@@ -1,6 +1,6 @@
 # QGE State Of Development
 
-Status date: 2026-05-20.
+Status date: 2026-05-21.
 
 This document is the operational state snapshot for Quantum Quake. It is meant
 to answer what exists now, what has evidence, what remains incomplete, and how
@@ -14,11 +14,13 @@ bounded authority experiments, but it is not yet a finished player-facing Quake
 distribution.
 
 The strongest current areas are QGE runtime evidence, traceability, controlled
-visibility/projectile/audio paths, and repeatable stream diagnostics. The most
-visible weak areas are QGE world rendering fidelity and Noesis general gameplay.
-Noesis now moves in no-script harness runs through the engine-side autonomous
-controller, but it is not learning from experience and should not be described
-as a trained Quake player.
+visibility/projectile/audio paths, repeatable stream diagnostics, and the ICC
+control plane around verified changes. The most visible weak areas are still QGE
+world rendering fidelity and Noesis general gameplay. Noesis now moves in
+no-script harness runs through an engine-side autonomous controller with local
+wall, floor, and hazard probes, but it is not learning from experience and
+should not be described as a trained Quake player or as having a robust
+map-level planner.
 
 The latest verified branch state is:
 
@@ -26,6 +28,8 @@ The latest verified branch state is:
 - Remote `HEAD` resolves to `refs/heads/master`.
 - `origin/main` is fast-forwarded to the same commit as `origin/master` for
   compatibility after the historical merge.
+- Current verified head is `a584125` (`Improve Noesis autonomous exploration`),
+  mirrored to both `origin/master` and `origin/main`.
 - The active runtime tree is the C/QuakeSpasm/QGE tree, not the older
   JavaScript/WebTransport history.
 
@@ -50,44 +54,52 @@ The latest verified branch state is:
 
 Recent verified slices on `master` establish the current baseline:
 
-- `1c1acc3` adds hidden-target cooldowns for no-script Noesis autonomous
-  control. A hidden target that does not become visible within the timeout is
-  temporarily cooled down so the controller can reacquire another target
-  instead of running the player into the same wall or obstruction indefinitely.
-- `c4ec5f0` reduces hidden-target wall push by removing forward pressure when
-  the target-facing wall probes are blocked and the target is not visible.
-- `e0c8e36`, `59c8d0f`, and `53cd998` are the current rendering baseline:
-  preserved-detail QGE display, no-floor tone mapping, normal-world palette
-  opacity fixes, bilinear surface/lightmap sampling, duplicate snapshot
-  clearing, and near-plane clipping for close world surfaces.
-- This rendering slice adds Quake FOV-aware world projection,
-  non-additive same-depth ownership, lower world-surface ambient floors, and a
-  tighter depth tie window. The fixed-view QGE capture at
-  `diagnostics/quake_stream/20260520-232353/frame_001.png` reduces RMSE against
-  the fixed-view classic reference at
-  `diagnostics/quake_stream/20260520-215105/frame_001.png` from about `0.210`
-  on the FOV-only probe to about `0.088`; it is a real improvement, but visible
-  BSP face panels and material fidelity gaps still remain.
-- `0809057` and earlier no-script movement commits improve autonomous
-  wall-contact steering, but do not make Noesis a learned Quake player.
+- `a584125` adds targetless local exploration for no-script Noesis autonomous
+  control. When no monster target is engaged, the server-side controller probes
+  forward/left/right clearance, checks for floor and non-lethal contents ahead,
+  then moves, turns, or slides away from wall contacts without using a cached
+  route script. This directly addresses the "Noesis sits still" failure mode,
+  but it is still reactive local navigation, not learned world planning.
+- `76ae4da` improves QGE world render coverage by seeding a far-depth ambient
+  world background before rasterization and normalizing raw warp/water texture
+  coordinates before palette sampling. The verified live run removed the hard
+  black voids seen when classic 3D was suppressed and reduced the wide gray
+  warp band to a thinner seam, but floor, wall, ceiling, water, and material
+  fidelity still need conformance work.
+- `c93dcc9`, `889b25e`, `1c1acc3`, and `c4ec5f0` are the current Noesis combat
+  and target-fixation baseline: visible-target arbitration, hidden wall-stall
+  gating, hidden-target cooldowns, and reduced hidden-target wall push keep the
+  no-script controller from ignoring visible enemies or grinding indefinitely
+  into blocked hidden targets.
+- `5da523e`, `edad050`, `e0c8e36`, `59c8d0f`, and `53cd998` are the current
+  rendering baseline: preserved-detail QGE display, no-floor tone mapping,
+  normal-world palette opacity fixes, bilinear surface/lightmap sampling,
+  duplicate snapshot clearing, near-plane clipping, FOV-aware world projection,
+  non-additive same-depth ownership, lower world-surface ambient floors,
+  tighter depth tie windows, and reduced per-face exposure patches.
 - The historical `origin/main` history is merged for ancestry and the remote
   `origin/main` branch now matches `origin/master`; `master` remains the primary
   branch and remote `HEAD`.
 
 Useful live evidence anchors:
 
-- `diagnostics/agent_stream/20260520-223950/noesis/qge_noesis_summary.json`:
-  latest no-script Noesis autonomous evidence after hidden-target cooldowns:
-  `noesis_scripted=0`, action trace line count `0`, `claim_scope` is
-  `server_autonomous`, three kills, `48.0` inferred damage, no damage taken,
-  score `81.574`, no terminal stall, `target_count=5`, and two
-  `hidden_chase_timeout` events that forced target reacquisition.
-- `diagnostics/agent_stream/20260520-221936/noesis/qge_noesis_summary.json`:
-  no-script evidence after hidden wall-push reduction and before hidden-target
-  cooldowns: action trace line count `0`, one kill, `24.0` inferred damage,
-  `16.0` damage taken, route distance `8085.643`, and no terminal stall. This
-  run showed that wall pushing had been reduced but target fixation was still a
-  gameplay problem.
+- `diagnostics/agent_stream/20260521-020917/noesis/qge_noesis_summary.json`:
+  no-target `start` map evidence after `a584125`: `noesis_scripted=0`,
+  `noesis_autonomous=1`, `target_count=0`, survived with no terminal stall,
+  route distance `7005.019`, stationary fraction `0.0035`, 42 leaf transitions,
+  movement injected on 280 samples, and view turns on 143 samples. This is the
+  current proof that Noesis does not sit still when no route script or monster
+  target is available.
+- `diagnostics/agent_stream/20260521-021006/noesis/qge_noesis_summary.json`:
+  E1M1 no-script evidence after `a584125`: `claim_scope` is
+  `server_autonomous`, three kills, `56.0` inferred damage, no damage taken,
+  route distance `7962.604`, 82 leaf transitions, no terminal stall, and one
+  hidden-chase timeout. This shows the targetless exploration fallback did not
+  break the existing E1M1 combat smoke.
+- `diagnostics/agent_stream/20260521-013044/noesis/qge_noesis_summary.json`:
+  live evidence for `76ae4da`: no-script E1M1 smoke passed with three kills,
+  `48.0` inferred damage, no damage taken, no terminal stall, and the graphics
+  run showed the black void removed with the broad gray warp band reduced.
 - `diagnostics/quake_stream/20260520-191730/frame_001.png` and
   `diagnostics/quake_stream/20260520-193513/frame_001.png`: older blockier QGE
   world captures used as visual comparisons.
@@ -116,10 +128,9 @@ Useful live evidence anchors:
   substantially closer to the classic fixed-view reference, but the remaining
   wall/doorway face panels are still visible and should stay on the rendering
   backlog.
-- `diagnostics/agent_stream/20260520-215458/noesis/qge_noesis_summary.json`:
-  no-script Noesis evidence on the same renderer build:
-  `noesis_scripted=0`, action trace line count `0`, total route distance
-  `7147.375`, max displacement `1093.127`, one kill, and no terminal stall.
+- `diagnostics/quake_stream/20260521-021006/frame_001.png`: current live QGE
+  frame from the latest Noesis run. Use it as a practical smoke reference, not
+  as a vanilla-conformance claim; visible floor/wall/ceiling artifacts remain.
 
 The ICC control plane is part of the baseline. Verified slices should refresh
 index, memory, git history, source-drift, production-audit, task-attempt, and
@@ -134,7 +145,7 @@ attempt-eval artifacts before push.
 | Visibility | Shadow/parity telemetry and controlled authority smoke | Bounded audited writeback only | Map breadth, dynamic cases, and user-visible quantum modes |
 | Projectiles/physics | Shadow state, branch state, writeback gates, collision oracle | Controlled authority gates | Full gameplay authority and quantum-native effects |
 | Audio | Post-mix and source-mode telemetry with smoke evidence | Diagnostic/source authority experiments | Complete source authority and player-facing effects |
-| AI/Noesis | No-script autonomous controller, wall-contact heuristics, hidden-target cooldowns, and opt-in scripted fixtures | Harness-only autonomous assist, not learning | General play, navigation, target choice, and training loop |
+| AI/Noesis | No-script autonomous controller, target arbitration, wall/floor/hazard probes, hidden-target cooldowns, and opt-in scripted fixtures | Harness-only autonomous assist, not learning | Map-level planning, learned policy updates, general play, and robust navigation |
 | Documentation/claims | Claims ledger, state doc, architecture docs, ICC attempts | Evidence-gated wording | Keeping docs synchronized after each verified slice |
 
 ## Implemented Runtime Surfaces
@@ -199,6 +210,14 @@ Implemented:
 - Same-depth world samples use max-channel ownership with a tight
   `QGE_SPATIAL_DEPTH_EPSILON`, which reduces seam brightening without treating
   nearby distinct faces as the same surface.
+- QGE spatial rendering now seeds a far-depth ambient world background before
+  world rasterization. Pixels not covered by the current visible surface set no
+  longer collapse into hard black voids when the classic 3D fallback is
+  suppressed for QGE diagnostics.
+- Warp and water world surfaces normalize Quake raw `SURF_DRAWTURB` texture
+  coordinates before palette sampling, reducing broad flat gray bands in water
+  and adjacent world captures. Thin seams and incomplete turbulent-material
+  fidelity remain.
 - Render logs report surface counts, snapshot misses, ownership fields, native
   IDWT counts, fallback reasons, and timing splits.
 
@@ -207,10 +226,12 @@ Known current visual state:
 - The most recent coverage work fixes large missing-world holes in fixed-view
   captures.
 - Floors, walls, and ceilings still need conformance work: raster seams,
-  warped/noisy surfaces, and incomplete vanilla-material fidelity remain, even
-  after default bilinear sampling, preserved-detail highlight headroom,
-  flattened raster fill, and duplicate-snapshot clearing reduce sparse DWT
-  block bands, tone-floor artifacts, exposure panels, and ghost panels.
+  warped/noisy surfaces, gray/turbulent seams, and incomplete vanilla-material
+  fidelity remain, even after default bilinear sampling, preserved-detail
+  highlight headroom, flattened raster fill, duplicate-snapshot clearing,
+  ambient world background fill, and warp coordinate normalization reduce sparse
+  DWT block bands, tone-floor artifacts, exposure panels, ghost panels, black
+  voids, and broad water bands.
 - This means the current QGE graphics path is useful for diagnostics and
   iterative comparison, but it should still be called visibly glitchy for
   player-facing floor, wall, and ceiling fidelity.
@@ -299,10 +320,16 @@ Implemented:
 - Hidden-target cooldown feedback for no-script autonomous runs: a hidden target
   that does not become visible within the timeout is cooled down briefly so
   target reacquisition can try another enemy.
-- Recent `e1m1` no-script harnesses can produce safe three-kill smoke runs
-  without mouse capture, window activation, or route action scripts. The current
-  strongest evidence is
-  `diagnostics/agent_stream/20260520-223950/noesis/qge_noesis_summary.json`.
+- Targetless local exploration for no-script autonomous runs: when no target is
+  engaged, the controller probes forward/left/right clearance, checks that
+  there is floor and no lava/slime ahead, moves through open space, and
+  turns/slides away from wall contacts without using a cached route script.
+- Recent `start` and `e1m1` no-script harnesses can move safely without mouse
+  capture, window activation, or route action scripts. The current targetless
+  movement evidence is
+  `diagnostics/agent_stream/20260521-020917/noesis/qge_noesis_summary.json`;
+  the current E1M1 combat evidence is
+  `diagnostics/agent_stream/20260521-021006/noesis/qge_noesis_summary.json`.
 
 Partial or pending:
 
@@ -311,12 +338,13 @@ Partial or pending:
   fixtures rather than learned play.
 - It does not yet demonstrate robust, general Quake skill outside the bounded
   `e1m1` smoke.
-- Target selection, real navigation/search, post-kill continuation, and
-  learned policy updates remain active work.
+- Target selection, real navigation/search, spatial memory, frontier selection,
+  avoided-hazard memory, post-kill continuation, and learned policy updates
+  remain active work.
 - No-script wall-contact behavior now has bounded wall-follow, hidden wall-push
-  reduction, and hidden-target cooldowns, but it can still look confused because
-  it is steering from local probes and reactive target feedback rather than a
-  map-level navigation plan.
+  reduction, hidden-target cooldowns, and floor/hazard checks, but it can still
+  look confused because it is steering from local probes and reactive target
+  feedback rather than a map-level navigation plan.
 - If Noesis appears stationary, first check the run manifest and summary:
   `input.noesis_scripted` should be `0`, `input.noesis_autonomous` should be
   `1`, the action trace should have zero route-script lines, and route movement
@@ -352,10 +380,13 @@ it uses no-script autonomous control or an opt-in scripted fixture.
 - **Noesis sits still:** verify the no-script path is active and that
   `qge_noesis_autonomous` plus `qge_noesis_assist` are present in the stream
   configuration. A default no-script run should not rely on
-  `tools/noesis_quake_policy.sh`.
+  `tools/noesis_quake_policy.sh`. The current `start` map targetless baseline is
+  `diagnostics/agent_stream/20260521-020917/noesis/qge_noesis_summary.json`,
+  where `target_count=0` but route distance is `7005.019`; a new stationary run
+  should be treated as an autonomous-assist engagement regression.
 - **Noesis moves but does not improve:** this is expected for now. The current
-  controller is reactive; there is no weight update, replay training, or policy
-  optimizer in the loop.
+  controller is reactive; there is no weight update, replay training, spatial
+  memory, or policy optimizer in the loop.
 - **QGE graphics look smeared:** check whether `QGE_RENDER_DISPLAY_FILTER=1`
   was enabled. It can hide noise but over-blurred recent live frames.
 - **QGE graphics show black holes:** check normal texture palette opacity and

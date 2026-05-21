@@ -150,6 +150,38 @@
         "baseline_id"
       ],
       "status": "planned"
+    },
+    {
+      "accepted_evidence": [
+        "Noesis stream manifest reports noesis_scripted=0 and noesis_autonomous=1",
+        "input/noesis_actions.txt is empty or contains only metadata for the no-script run",
+        "qge_noesis_summary.json reports route, combat, assist, and terminal-stall metrics",
+        "gameplay_outcomes.ndjson contains assist samples backing movement and target telemetry"
+      ],
+      "allowed_wording": "Noesis can run bounded no-script autonomous diagnostics with reactive server-side exploration and combat telemetry.",
+      "claim_id": "ai.noesis_autonomous_diagnostics",
+      "claim_type": "systems",
+      "classical_baseline": "scripted fixture runs and classic Quake reference behavior remain separate baselines",
+      "disallowed_wording": "Noesis has learned to play Quake or has a robust map-level world model.",
+      "failure_conditions": [
+        "noesis_scripted is enabled for a claimed no-script run",
+        "route movement is inferred without gameplay summary counters",
+        "training, learned policy updates, or general play are claimed without a replay/update loop and held-out evaluation"
+      ],
+      "input_model": "Quake server state, local clearance/floor/hazard probes, target visibility, aim error, and assist telemetry",
+      "output_observable": "route movement, target engagement, damage, kills, ammo use, and terminal-stall metrics",
+      "problem_statement": "Bound the evidence for current Noesis autonomy without overstating it as learned gameplay.",
+      "quantum_algorithm": "none required; this is a harness and AI-control evidence claim",
+      "required_trace_fields": [
+        "noesis_scripted",
+        "noesis_autonomous",
+        "assist.active_sample_count",
+        "assist.movement_injected_sample_count",
+        "route.total_distance",
+        "route.terminal_stall",
+        "combat.kills"
+      ],
+      "status": "partial"
     }
   ]
 }

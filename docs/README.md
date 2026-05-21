@@ -22,17 +22,21 @@ state, claims policy, stream/harness operation, and long-range research plans.
 
 - `master` is the primary branch; `origin/HEAD` points at `origin/master`, and
   `origin/main` is fast-forwarded to the same commit for compatibility. The
-  active runtime tree is the C/QuakeSpasm/QGE tree on `master`.
+  active runtime tree is the C/QuakeSpasm/QGE tree on `master`. Current verified
+  head is `a584125`, mirrored to both `origin/master` and `origin/main`.
 - QGE has test-backed runtime, trace, visibility, projectile, audio, and
   rendering surfaces, but classic Quake remains the reference for full
   conformance.
 - QGE primary rendering is improved but not visually complete. The current
   fixed-view renderer has better FOV alignment, depth ownership, and
-  lightmap-preserving contrast, but floors, walls, and ceilings still need
-  seam, material, and vanilla-fidelity work.
+  lightmap-preserving contrast, plus an ambient far-depth world background and
+  normalized warp/water texture sampling. Floors, walls, and ceilings still
+  need seam, material, and vanilla-fidelity work.
 - Default Noesis runs are no-script autonomous diagnostics with server-side
-  movement/combat feedback. Noesis is not yet learning Quake from experience,
-  and scripted route fixtures are opt-in regression tools.
+  movement/combat feedback plus local clearance, floor, and hazard probes when
+  no target is engaged. Noesis is not yet learning Quake from experience, has
+  no robust map-level planning model yet, and scripted route fixtures are opt-in
+  regression tools.
 - Claims need evidence from tests, traces, screenshots, summaries, or ICC
   attempts.
 

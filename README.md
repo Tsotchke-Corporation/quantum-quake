@@ -12,6 +12,9 @@ fast-forwarded to the same commit for compatibility after the older unrelated
 Three.js/WebTransport history was merged as provenance. The authoritative tree
 is the `master` QGE/QuakeSpasm layout documented here.
 
+Current verified head: `a584125` (`Improve Noesis autonomous exploration`),
+mirrored to both `origin/master` and `origin/main`.
+
 ## Current Status
 
 This is an active research and systems-engineering project, not a finished
@@ -24,7 +27,9 @@ Working and routinely verified:
 - A macOS QuakeSpasm application build with QGE hooks and cvars.
 - Sparse DWT QGE primary rendering with world-surface, material, lightmap,
   entity, HUD/console ownership telemetry, native IDWT evidence, and explicit
-  fallback reasons.
+  fallback reasons. The latest graphics slice seeds a far-depth ambient world
+  background for missing world pixels and normalizes warp/water texture
+  coordinates before palette sampling.
 - QGE visibility shadow/parity paths with audited authority-gate telemetry.
 - QGE projectile shadow/writeback/collision-oracle evidence paths with replay
   and persistence-boundary trace records.
@@ -33,7 +38,8 @@ Working and routinely verified:
 - Noesis harness play on `e1m1` with no-script autonomous server control by
   default, opt-in keyboard-style action-plan fixtures for regression tests,
   engine-side assist telemetry, route/combat outcome summaries, stale hidden
-  target cooldowns, and ICC evidence sidecars.
+  target cooldowns, local wall/floor/hazard probes when no target is engaged,
+  and ICC evidence sidecars.
 - Reproducible diagnostic streams under `diagnostics/agent_stream/` and
   `diagnostics/quake_stream/`.
 
@@ -47,10 +53,11 @@ Important known limitations:
   adjacent BSP faces so per-face exposure blocks are reduced. Floors, walls,
   and ceilings are less blocky and less washed out, but can still show raster
   seams and incomplete vanilla-material fidelity.
-- Noesis is not yet learning Quake from experience. Current no-script runs use
-  a reactive server-side controller with an explicit autonomous assist hint,
-  target feedback, and wall-contact heuristics; scripted route fixtures are
-  opt-in regression tools, not the default gameplay path.
+- Noesis is not yet learning Quake from experience and does not yet have a
+  map-level world model. Current no-script runs use a reactive server-side
+  controller with an explicit autonomous assist hint, target feedback,
+  wall-contact heuristics, and local floor/hazard probes; scripted route
+  fixtures are opt-in regression tools, not the default gameplay path.
 - QGE is not yet the sole owner of all vanilla Quake media. Sky, water/warp,
   full conformance lighting, particles, sprites, menus, and all edge cases are
   still in progress.

@@ -35,6 +35,10 @@ Required fields:
   classical baselines.
 - Practical hardware advantage is not an allowed current claim.
 - Full-frame quantum readout is not an allowed current claim.
+- Noesis learning or trained-player claims are not allowed yet. Current Noesis
+  wording must describe no-script autonomous diagnostics, local reactive
+  exploration, and explicit harness evidence unless a future change adds a real
+  replay/training/update loop with held-out evaluation.
 
 ## Review Rule
 
