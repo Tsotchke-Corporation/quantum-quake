@@ -28,8 +28,8 @@ The latest verified branch state is:
 - Remote `HEAD` resolves to `refs/heads/master`.
 - `origin/main` is fast-forwarded to the same commit as `origin/master` for
   compatibility after the historical merge.
-- Latest verified runtime baseline is the current world-tone histogram QGE
-  renderer slice, mirrored to both `origin/master` and `origin/main`.
+- Latest verified runtime baseline is the current QGE world fullbright sampling
+  slice, mirrored to both `origin/master` and `origin/main`.
 - The active runtime tree is the C/QuakeSpasm/QGE tree, not the older
   JavaScript/WebTransport history.
 
@@ -54,6 +54,19 @@ The latest verified branch state is:
 
 Recent verified slices on `master` establish the current baseline:
 
+- The current QGE world fullbright sampling slice splits world texture palette
+  indices `>=224` into an unlit additive contribution when the texture has a
+  fullbright mask, while normal texture indices remain in the lightmapped base
+  sample. Activation-only fixed-view evidence at
+  `diagnostics/quake_stream/20260521-155209/frame_001.png` keeps QGE ownership
+  of world geometry, textures, lightmaps, and the viewmodel with
+  `emesh=58`, `ecoeff=27`, `own_viewmodel=1`, and `fallback_reason=none`.
+  Region checks against the classic `20260521-151552` reference show the
+  sampled wall-light deltas improving from about `-37.42/-28.70` after the
+  world-tone slice to about `-19.83/-12.57`, while the normal wall/floor/ceiling
+  regions remain effectively unchanged. Light-emissive regions are still dimmer
+  than classic, but this fixes the missing unlit fullbright contribution without
+  adding a separate fullscreen pass.
 - The current world-tone histogram QGE renderer slice keeps the lower
   first-person viewmodel/HUD band out of direct-display tone-map histogram
   selection while still converting the full frame. Activation-only fixed-view
@@ -222,6 +235,14 @@ Useful live evidence anchors:
   `20260521-151552` reference show walls and ceilings moving from strongly too
   dark to near the classic luma range, while fullbright lamp regions remain too
   dim and nearby floors are slightly over-lifted.
+- `diagnostics/quake_stream/20260521-155209/frame_001.png`: activation-only QGE
+  capture after splitting fullbright wall texels into an unlit additive sample.
+  The stable frame reports `fallback_reason=none`, `own_world=1`,
+  `own_textures=1`, `own_lightmaps=1`, `own_viewmodel=1`, `emesh=58`, and
+  `ecoeff=27`. Region checks against the classic `20260521-151552` reference
+  show wall-light deltas improving from about `-37.42/-28.70` to
+  `-19.83/-12.57` while front wall, floors, side walls, and ceiling stay within
+  the previous world-tone range.
 
 The ICC control plane is part of the baseline. Verified slices should refresh
 index, memory, git history, source-drift, production-audit, task-attempt, and
@@ -295,6 +316,11 @@ Implemented:
   transparent palette rule. Palette alpha is now reserved for fence/transparent
   world surfaces so ordinary world texels do not punch dark holes through the
   raster.
+- World textures with fullbright masks now split palette indices
+  `>=QGE_SURFACE_FULLBRIGHT_INDEX` out of the lightmapped base color and add
+  them back through `QGE_SURFACE_FULLBRIGHT_SCALE`, matching classic Quake's
+  additive fullbright behavior more closely without changing ordinary texture
+  sampling.
 - Audited visibility-authority rendering now clears the earlier classic PVS
   visible-surface snapshot before recording the authoritative surface set, so
   QGE does not double-rasterize world panels as ghosted rectangles.
@@ -341,6 +367,9 @@ Implemented:
   palette indices instead of globally boosting indices `>=224` as fullbright.
   Fullbright texture metadata remains tracked separately, avoiding noisy
   emissive speckles on normal floors, walls, and ceilings.
+- On surfaces that actually have a fullbright texture, QGE now samples those
+  high palette indices as an unlit additive contribution instead of multiplying
+  them only by the lightmap.
 - Render-gate visible display gain now uses deterministic state marginals
   rather than finite-shot readout counts. The stochastic counters are still
   logged, but static floors, walls, and ceilings do not pick up frame-to-frame
@@ -363,6 +392,10 @@ Known current visual state:
   regression by selecting the world white point from the upper scene area. It
   does not fix seams, turbulent surfaces, fullbright material fidelity, or the
   untextured weapon mesh.
+- The most recent fullbright sampling work restores a bounded unlit additive
+  contribution for true fullbright wall texels. The sampled lamp strips are
+  closer to classic but still dim, so this is not a complete material-fidelity
+  fix.
 - The earlier tone-headroom work reduces fixed-view over-bright ceiling,
   side-wall, and far-floor deltas against the classic reference.
 - The most recent viewmodel work encodes the first-person weapon through the
@@ -375,8 +408,8 @@ Known current visual state:
   highlight headroom, flattened raster fill, duplicate-snapshot clearing,
   ambient world background fill, warp coordinate normalization, every-frame
   refresh, deterministic render-gate display gain, direct-spatial tone headroom,
-  viewmodel-aware tone histogram selection, and stratified footprint filtering
-  reduce sparse DWT block bands,
+  viewmodel-aware tone histogram selection, fullbright texture splitting, and
+  stratified footprint filtering reduce sparse DWT block bands,
   tone-floor artifacts, exposure panels, ghost panels, black voids, broad water
   bands, stale-frame artifacts, shot-noise shimmer, and over-bright world
   surfaces.

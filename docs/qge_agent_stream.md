@@ -744,6 +744,10 @@ loop with policy updates.
   helper-call overhead per pixel. Normal world textures keep palette-index
   texels opaque and use the base Quake palette without a global fullbright
   boost; only fence/transparent surfaces use palette alpha as a cutout mask.
+  For textures with a fullbright mask, palette indices at or above
+  `QGE_SURFACE_FULLBRIGHT_INDEX` are removed from the lightmapped base sample
+  and added back through `QGE_SURFACE_FULLBRIGHT_SCALE`, matching the classic
+  unlit additive fullbright pass without a separate QGE fullscreen pass.
   QGE world projection uses Quake's `r_refdef.fov_x` and `r_refdef.fov_y`
   separately, so floor and ceiling projection follows the classic viewport
   aspect instead of a square-FOV approximation.

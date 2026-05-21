@@ -12,7 +12,7 @@ fast-forwarded to the same commit for compatibility after the older unrelated
 Three.js/WebTransport history was merged as provenance. The authoritative tree
 is the `master` QGE/QuakeSpasm layout documented here.
 
-Latest verified runtime baseline: the current world-tone histogram QGE renderer
+Latest verified runtime baseline: the current QGE world fullbright sampling
 slice, mirrored to both `origin/master` and `origin/main`.
 
 ## Current Status
@@ -31,8 +31,9 @@ Working and routinely verified:
   render every host frame by default, seeds a far-depth ambient world
   background for missing world pixels, normalizes warp/water texture
   coordinates before palette sampling, uses the base Quake palette for ordinary
-  world texture indices, keeps first-person weapon geometry out of the world
-  tone histogram, and derives render-gate display gain from deterministic state
+  world texture indices, splits world fullbright texels into an unlit additive
+  contribution, keeps first-person weapon geometry out of the world tone
+  histogram, and derives render-gate display gain from deterministic state
   marginals instead of finite-shot readout counts.
 - QGE visibility shadow/parity paths with audited authority-gate telemetry.
 - QGE projectile shadow/writeback/collision-oracle evidence paths with replay
@@ -79,18 +80,19 @@ Important known limitations:
 
 The current QGE graphics baseline is improved but still visibly glitchy. The
 latest activation-only fixed-view evidence is
-`diagnostics/quake_stream/20260521-153315/frame_001.png`. That run reports QGE
+`diagnostics/quake_stream/20260521-155209/frame_001.png`. That run reports QGE
 ownership of world geometry, world textures, lightmaps, and the viewmodel with
 `emesh=58`, `ecoeff=27`, `own_viewmodel=1`, and `fallback_reason=none`. Against
-the classic `20260521-151552` reference, keeping the lower viewmodel/HUD band
-out of the direct-display tone histogram moves the front-wall mean-luminance
-delta from about `-19.73` to `-0.92`, side-wall deltas from about
-`-9.64/-11.01` to `+3.08/+2.65`, ceiling delta from about `-11.51` to `+2.19`,
-and far-floor delta from about `-12.88` to `+4.75` compared with the previous
-QGE viewmodel capture at `20260521-150734`.
+the classic `20260521-151552` reference, the previous world-tone capture
+`20260521-153315` moved the front-wall mean-luminance delta from about `-19.73`
+to `-0.92`, side-wall deltas from about `-9.64/-11.01` to `+3.08/+2.65`,
+ceiling delta from about `-11.51` to `+2.19`, and far-floor delta from about
+`-12.88` to `+4.75`. The follow-up fullbright split keeps those normal
+floor/wall/ceiling regions unchanged while moving the two sampled wall-light
+regions from about `-37.42/-28.70` below classic to about `-19.83/-12.57`.
 
-What is still broken is just as important: light-emissive regions are still too
-dim, nearby floors are slightly over-lifted, raster seams remain visible,
+What is still broken is just as important: light-emissive regions are closer but
+still too dim, nearby floors are slightly over-lifted, raster seams remain visible,
 turbulent water/warp materials are not vanilla-quality, and the viewmodel is
 still an untextured QGE mesh rather than a faithful classic weapon material.
 Treat the renderer as a diagnostic primary path with useful ownership telemetry,

@@ -260,6 +260,8 @@ static qboolean QGE_RenderShouldUpdateFrame(void);
 #define QGE_SURFACE_LIGHT_AMBIENT 0.10f
 #define QGE_SURFACE_LIGHT_SCALE 1.05f
 #define QGE_SURFACE_LUMA_FLOOR 0.018f
+#define QGE_SURFACE_FULLBRIGHT_INDEX 224
+#define QGE_SURFACE_FULLBRIGHT_SCALE 1.00f
 #define QGE_TONE_HISTOGRAM_WORLD_Y_PERCENT 72
 
 static quantum_state_t qge_render_gate_state;
@@ -736,6 +738,7 @@ typedef struct {
 	qboolean sky;
 	qboolean fence;
 	qboolean warp;
+	qboolean fullbright;
 	qboolean tex_power2;
 	float color_gain_r;
 	float color_gain_g;
@@ -6783,6 +6786,7 @@ static void QGE_PrepareSurfaceSampleContext(qge_surface_sample_context_t *ctx,
 	ctx->sky = surface && (surface->flags & SURF_DRAWSKY);
 	ctx->fence = surface && (surface->flags & SURF_DRAWFENCE);
 	ctx->warp = surface && (surface->flags & SURF_DRAWTURB);
+	ctx->fullbright = surface && surface->has_fullbright;
 	ctx->tex_power2 = ctx->tex_width && ctx->tex_height &&
 					  ((ctx->tex_width & ctx->tex_width_mask) == 0u) &&
 					  ((ctx->tex_height & ctx->tex_height_mask) == 0u);
@@ -6943,6 +6947,40 @@ static int QGE_SurfaceTextureWrappedCoord(int value, unsigned int size,
 	return value;
 }
 
+QGE_HOT_INLINE void QGE_SurfaceTextureAccumulatePalette(
+	const qge_surface_sample_context_t *ctx,
+	int palette_index,
+	float weight,
+	float *r,
+	float *g,
+	float *b,
+	float *alpha,
+	float *fullbright_r,
+	float *fullbright_g,
+	float *fullbright_b)
+{
+	qboolean fullbright_texel;
+
+	if (!ctx || !r || !g || !b || !alpha || weight <= 0.0f)
+		return;
+	if (!QGE_SurfaceTexturePaletteOpaque(ctx, palette_index))
+		return;
+
+	fullbright_texel = ctx->fullbright &&
+		palette_index >= QGE_SURFACE_FULLBRIGHT_INDEX &&
+		fullbright_r && fullbright_g && fullbright_b;
+	if (fullbright_texel) {
+		*fullbright_r += qge_palette_lut[palette_index].r * weight;
+		*fullbright_g += qge_palette_lut[palette_index].g * weight;
+		*fullbright_b += qge_palette_lut[palette_index].b * weight;
+	} else {
+		*r += qge_palette_lut[palette_index].r * weight;
+		*g += qge_palette_lut[palette_index].g * weight;
+		*b += qge_palette_lut[palette_index].b * weight;
+	}
+	*alpha += weight;
+}
+
 static void QGE_SurfaceTextureAccumulateTexel(
 	const qge_surface_sample_context_t *ctx,
 	int x,
@@ -6951,11 +6989,14 @@ static void QGE_SurfaceTextureAccumulateTexel(
 	float *r,
 	float *g,
 	float *b,
-	float *alpha)
+	float *alpha,
+	float *fullbright_r,
+	float *fullbright_g,
+	float *fullbright_b)
 {
 	int palette_index;
 
-	if (!ctx || !ctx->tex_pixels || !r || !g || !b || !alpha || weight <= 0.0f)
+	if (!ctx || !ctx->tex_pixels)
 		return;
 
 	x = QGE_SurfaceTextureWrappedCoord(x, ctx->tex_width,
@@ -6965,13 +7006,10 @@ static void QGE_SurfaceTextureAccumulateTexel(
 									   ctx->tex_height_mask,
 									   ctx->tex_power2);
 	palette_index = ctx->tex_pixels[y * (int)ctx->tex_width + x];
-	if (!QGE_SurfaceTexturePaletteOpaque(ctx, palette_index))
-		return;
-
-	*r += qge_palette_lut[palette_index].r * weight;
-	*g += qge_palette_lut[palette_index].g * weight;
-	*b += qge_palette_lut[palette_index].b * weight;
-	*alpha += weight;
+	QGE_SurfaceTextureAccumulatePalette(ctx, palette_index, weight,
+										r, g, b, alpha,
+										fullbright_r, fullbright_g,
+										fullbright_b);
 }
 
 static qboolean QGE_SurfaceTexturePrefilterContext(
@@ -6979,11 +7017,15 @@ static qboolean QGE_SurfaceTexturePrefilterContext(
 	float tex_s,
 	float tex_t,
 	float tex_footprint,
-	qge_rgb_sample_t *color)
+	qge_rgb_sample_t *color,
+	qge_rgb_sample_t *fullbright)
 {
 	float r = 0.0f;
 	float g = 0.0f;
 	float b = 0.0f;
+	float fullbright_r = 0.0f;
+	float fullbright_g = 0.0f;
+	float fullbright_b = 0.0f;
 	float alpha = 0.0f;
 	float radius;
 	int cx;
@@ -6993,6 +7035,11 @@ static qboolean QGE_SurfaceTexturePrefilterContext(
 	if (!ctx || !color || !ctx->tex_pixels ||
 		tex_footprint < QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT)
 		return false;
+	if (fullbright) {
+		fullbright->r = 0.0f;
+		fullbright->g = 0.0f;
+		fullbright->b = 0.0f;
+	}
 
 	if (tex_s < 0.0f || tex_s >= 1.0f) {
 		tex_s = tex_s - floorf(tex_s);
@@ -7030,7 +7077,10 @@ static qboolean QGE_SurfaceTexturePrefilterContext(
 				int px = (int)floorf(sample_x);
 
 				QGE_SurfaceTextureAccumulateTexel(ctx, px, py, 1.0f,
-												  &r, &g, &b, &alpha);
+												  &r, &g, &b, &alpha,
+												  &fullbright_r,
+												  &fullbright_g,
+												  &fullbright_b);
 			}
 		}
 
@@ -7044,29 +7094,44 @@ static qboolean QGE_SurfaceTexturePrefilterContext(
 		color->g = g / alpha;
 		color->b = b / alpha;
 		QGE_RGBClamp(color);
+		if (fullbright) {
+			fullbright->r = fullbright_r / alpha;
+			fullbright->g = fullbright_g / alpha;
+			fullbright->b = fullbright_b / alpha;
+			QGE_RGBClamp(fullbright);
+		}
 		qge_scene_texture_prefilter_samples++;
 		return true;
 	}
 
 	/* Nine-tap footprint filter approximates classic mip selection for CPU QGE. */
 	QGE_SurfaceTextureAccumulateTexel(ctx, cx, cy, 0.2500f,
-									  &r, &g, &b, &alpha);
+									  &r, &g, &b, &alpha,
+									  &fullbright_r, &fullbright_g, &fullbright_b);
 	QGE_SurfaceTextureAccumulateTexel(ctx, cx - step, cy, 0.1250f,
-									  &r, &g, &b, &alpha);
+									  &r, &g, &b, &alpha,
+									  &fullbright_r, &fullbright_g, &fullbright_b);
 	QGE_SurfaceTextureAccumulateTexel(ctx, cx + step, cy, 0.1250f,
-									  &r, &g, &b, &alpha);
+									  &r, &g, &b, &alpha,
+									  &fullbright_r, &fullbright_g, &fullbright_b);
 	QGE_SurfaceTextureAccumulateTexel(ctx, cx, cy - step, 0.1250f,
-									  &r, &g, &b, &alpha);
+									  &r, &g, &b, &alpha,
+									  &fullbright_r, &fullbright_g, &fullbright_b);
 	QGE_SurfaceTextureAccumulateTexel(ctx, cx, cy + step, 0.1250f,
-									  &r, &g, &b, &alpha);
+									  &r, &g, &b, &alpha,
+									  &fullbright_r, &fullbright_g, &fullbright_b);
 	QGE_SurfaceTextureAccumulateTexel(ctx, cx - step, cy - step, 0.0625f,
-									  &r, &g, &b, &alpha);
+									  &r, &g, &b, &alpha,
+									  &fullbright_r, &fullbright_g, &fullbright_b);
 	QGE_SurfaceTextureAccumulateTexel(ctx, cx + step, cy - step, 0.0625f,
-									  &r, &g, &b, &alpha);
+									  &r, &g, &b, &alpha,
+									  &fullbright_r, &fullbright_g, &fullbright_b);
 	QGE_SurfaceTextureAccumulateTexel(ctx, cx - step, cy + step, 0.0625f,
-									  &r, &g, &b, &alpha);
+									  &r, &g, &b, &alpha,
+									  &fullbright_r, &fullbright_g, &fullbright_b);
 	QGE_SurfaceTextureAccumulateTexel(ctx, cx + step, cy + step, 0.0625f,
-									  &r, &g, &b, &alpha);
+									  &r, &g, &b, &alpha,
+									  &fullbright_r, &fullbright_g, &fullbright_b);
 
 	if (alpha <= 0.01f) {
 		color->r = 0.0f;
@@ -7078,6 +7143,12 @@ static qboolean QGE_SurfaceTexturePrefilterContext(
 	color->g = g / alpha;
 	color->b = b / alpha;
 	QGE_RGBClamp(color);
+	if (fullbright) {
+		fullbright->r = fullbright_r / alpha;
+		fullbright->g = fullbright_g / alpha;
+		fullbright->b = fullbright_b / alpha;
+		QGE_RGBClamp(fullbright);
+	}
 	qge_scene_texture_prefilter_samples++;
 	return true;
 }
@@ -7087,7 +7158,8 @@ QGE_HOT_INLINE qboolean QGE_SurfaceTextureColorContext(
 	float tex_s,
 	float tex_t,
 	float tex_footprint,
-	qge_rgb_sample_t *color)
+	qge_rgb_sample_t *color,
+	qge_rgb_sample_t *fullbright)
 {
 	int x0, y0;
 	int palette_index;
@@ -7097,6 +7169,11 @@ QGE_HOT_INLINE qboolean QGE_SurfaceTextureColorContext(
 	color->r = 0.75f;
 	color->g = 0.75f;
 	color->b = 0.75f;
+	if (fullbright) {
+		fullbright->r = 0.0f;
+		fullbright->g = 0.0f;
+		fullbright->b = 0.0f;
+	}
 
 	if (!ctx || !ctx->tex)
 		return true;
@@ -7118,7 +7195,8 @@ QGE_HOT_INLINE qboolean QGE_SurfaceTextureColorContext(
 	}
 	if (!ctx->warp && tex_footprint >= QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT)
 		return QGE_SurfaceTexturePrefilterContext(ctx, tex_s, tex_t,
-												  tex_footprint, color);
+												  tex_footprint, color,
+												  fullbright);
 
 	if (ctx->bilinear && tex_footprint >= QGE_TEXTURE_BILINEAR_MIN_FOOTPRINT) {
 		float fx, fy;
@@ -7127,8 +7205,10 @@ QGE_HOT_INLINE qboolean QGE_SurfaceTextureColorContext(
 		float w00, w10, w01, w11;
 		float alpha = 0.0f;
 		float r = 0.0f, g = 0.0f, b = 0.0f;
+		float fullbright_r = 0.0f;
+		float fullbright_g = 0.0f;
+		float fullbright_b = 0.0f;
 		int p00, p10, p01, p11;
-		qboolean a00, a10, a01, a11;
 
 		if (tex_s < 0.0f || tex_s >= 1.0f) {
 			tex_s = tex_s - floorf(tex_s);
@@ -7167,45 +7247,38 @@ QGE_HOT_INLINE qboolean QGE_SurfaceTextureColorContext(
 		p10 = ctx->tex_pixels[y0 * (int)ctx->tex_width + x1];
 		p01 = ctx->tex_pixels[y1 * (int)ctx->tex_width + x0];
 		p11 = ctx->tex_pixels[y1 * (int)ctx->tex_width + x1];
-		a00 = QGE_SurfaceTexturePaletteOpaque(ctx, p00);
-		a10 = QGE_SurfaceTexturePaletteOpaque(ctx, p10);
-		a01 = QGE_SurfaceTexturePaletteOpaque(ctx, p01);
-		a11 = QGE_SurfaceTexturePaletteOpaque(ctx, p11);
-		w00 = (1.0f - tx_frac) * (1.0f - ty_frac) * (a00 ? 1.0f : 0.0f);
-		w10 = tx_frac * (1.0f - ty_frac) * (a10 ? 1.0f : 0.0f);
-		w01 = (1.0f - tx_frac) * ty_frac * (a01 ? 1.0f : 0.0f);
-		w11 = tx_frac * ty_frac * (a11 ? 1.0f : 0.0f);
-		alpha = w00 + w10 + w01 + w11;
+		w00 = (1.0f - tx_frac) * (1.0f - ty_frac);
+		w10 = tx_frac * (1.0f - ty_frac);
+		w01 = (1.0f - tx_frac) * ty_frac;
+		w11 = tx_frac * ty_frac;
+		QGE_SurfaceTextureAccumulatePalette(ctx, p00, w00, &r, &g, &b,
+											&alpha, &fullbright_r,
+											&fullbright_g, &fullbright_b);
+		QGE_SurfaceTextureAccumulatePalette(ctx, p10, w10, &r, &g, &b,
+											&alpha, &fullbright_r,
+											&fullbright_g, &fullbright_b);
+		QGE_SurfaceTextureAccumulatePalette(ctx, p01, w01, &r, &g, &b,
+											&alpha, &fullbright_r,
+											&fullbright_g, &fullbright_b);
+		QGE_SurfaceTextureAccumulatePalette(ctx, p11, w11, &r, &g, &b,
+											&alpha, &fullbright_r,
+											&fullbright_g, &fullbright_b);
 		if (alpha <= 0.01f) {
 			color->r = 0.0f;
 			color->g = 0.0f;
 			color->b = 0.0f;
 			return false;
 		}
-		if (a00) {
-			r += qge_palette_lut[p00].r * w00;
-			g += qge_palette_lut[p00].g * w00;
-			b += qge_palette_lut[p00].b * w00;
-		}
-		if (a10) {
-			r += qge_palette_lut[p10].r * w10;
-			g += qge_palette_lut[p10].g * w10;
-			b += qge_palette_lut[p10].b * w10;
-		}
-		if (a01) {
-			r += qge_palette_lut[p01].r * w01;
-			g += qge_palette_lut[p01].g * w01;
-			b += qge_palette_lut[p01].b * w01;
-		}
-		if (a11) {
-			r += qge_palette_lut[p11].r * w11;
-			g += qge_palette_lut[p11].g * w11;
-			b += qge_palette_lut[p11].b * w11;
-		}
 		color->r = r / alpha;
 		color->g = g / alpha;
 		color->b = b / alpha;
 		QGE_RGBClamp(color);
+		if (fullbright) {
+			fullbright->r = fullbright_r / alpha;
+			fullbright->g = fullbright_g / alpha;
+			fullbright->b = fullbright_b / alpha;
+			QGE_RGBClamp(fullbright);
+		}
 		return true;
 	}
 
@@ -7236,7 +7309,15 @@ QGE_HOT_INLINE qboolean QGE_SurfaceTextureColorContext(
 		return false;
 	}
 
-	*color = qge_palette_lut[palette_index];
+	if (fullbright && ctx->fullbright &&
+		palette_index >= QGE_SURFACE_FULLBRIGHT_INDEX) {
+		color->r = 0.0f;
+		color->g = 0.0f;
+		color->b = 0.0f;
+		*fullbright = qge_palette_lut[palette_index];
+	} else {
+		*color = qge_palette_lut[palette_index];
+	}
 	return true;
 }
 
@@ -7245,6 +7326,7 @@ QGE_HOT_INLINE qge_rgb_sample_t QGE_SurfaceSampleColorContext(
 	const qge_projected_sample_t *sample)
 {
 	qge_rgb_sample_t tex_color;
+	qge_rgb_sample_t fullbright_color;
 	qge_rgb_sample_t light_color;
 	qge_rgb_sample_t out;
 	float luma;
@@ -7264,8 +7346,12 @@ QGE_HOT_INLINE qge_rgb_sample_t QGE_SurfaceSampleColorContext(
 		return out;
 	}
 
+	fullbright_color.r = 0.0f;
+	fullbright_color.g = 0.0f;
+	fullbright_color.b = 0.0f;
 	if (!QGE_SurfaceTextureColorContext(ctx, sample->tex_s, sample->tex_t,
-										sample->tex_footprint, &tex_color)) {
+										sample->tex_footprint, &tex_color,
+										&fullbright_color)) {
 		out.r = 0.0f;
 		out.g = 0.0f;
 		out.b = 0.0f;
@@ -7285,6 +7371,14 @@ QGE_HOT_INLINE qge_rgb_sample_t QGE_SurfaceSampleColorContext(
 			 tex_color.b * QGE_SURFACE_TEXTURE_SCALE) *
 			(QGE_SURFACE_LIGHT_AMBIENT +
 			 light_color.b * QGE_SURFACE_LIGHT_SCALE) * ctx->color_gain_b;
+	if (ctx->fullbright) {
+		out.r += fullbright_color.r * QGE_SURFACE_FULLBRIGHT_SCALE *
+				 ctx->color_gain_r;
+		out.g += fullbright_color.g * QGE_SURFACE_FULLBRIGHT_SCALE *
+				 ctx->color_gain_g;
+		out.b += fullbright_color.b * QGE_SURFACE_FULLBRIGHT_SCALE *
+				 ctx->color_gain_b;
+	}
 	out.r = QGE_ClampSpatialSignal(out.r);
 	out.g = QGE_ClampSpatialSignal(out.g);
 	out.b = QGE_ClampSpatialSignal(out.b);
