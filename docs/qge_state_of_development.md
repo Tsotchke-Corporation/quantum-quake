@@ -28,9 +28,9 @@ The latest verified branch state is:
 - Remote `HEAD` resolves to `refs/heads/master`.
 - `origin/main` is fast-forwarded to the same commit as `origin/master` for
   compatibility after the historical merge.
-- Latest verified runtime baseline is the current QGE world fullbright sampling
-  scale plus diagnostic notify cleanup, mirrored to both `origin/master` and
-  `origin/main`.
+- Latest verified runtime baseline is the current QGE alias-skin viewmodel
+  path, world fullbright sampling scale, and diagnostic notify cleanup,
+  mirrored to both `origin/master` and `origin/main`.
 - The active runtime tree is the C/QuakeSpasm/QGE tree, not the older
   JavaScript/WebTransport history.
 
@@ -55,6 +55,18 @@ The latest verified branch state is:
 
 Recent verified slices on `master` establish the current baseline:
 
+- The current QGE alias-skin viewmodel slice projects Quake alias-model skin
+  coordinates through the QGE triangle path and bilinear-samples
+  `hdr->texels[skin]` for the first-person weapon mesh instead of filling that
+  mesh with flat synthetic color. Fixed-view evidence at
+  `diagnostics/quake_stream/20260521-173303/frame_001.png` keeps QGE ownership
+  of world geometry, textures, lightmaps, HUD/console, and the viewmodel with
+  `own_console=1`, `own_viewmodel=1`, `emesh=58`, `ecoeff=27`, and
+  `fallback_reason=none` on captured frames. Against the classic
+  `20260521-151552` reference, whole-frame RMSE improves from `0.0452656` in
+  the fullbright-wall-material baseline to `0.0349406`; fixed-view world crops
+  are unchanged apart from the foreground weapon overlap, and the weapon is no
+  longer the flat gold placeholder mesh.
 - The current QGE world fullbright scale slice raises
   `QGE_SURFACE_FULLBRIGHT_SCALE` to keep true fullbright wall texels closer to
   classic Quake's unlit additive contribution without changing ordinary
@@ -114,12 +126,13 @@ Recent verified slices on `master` establish the current baseline:
   far-floor delta from about `+7.36` to `+3.70`. Raster seams, turbulent
   material fidelity, residual wall/ceiling brightness, and viewmodel fidelity
   remain open.
-- The current viewmodel mesh slice replaces the synthetic first-person weapon
+- The current viewmodel mesh slice replaced the synthetic first-person weapon
   glyph with bounded alias-model mesh encoding. Activation-only fixed-view
   evidence at `diagnostics/quake_stream/20260521-150734/frame_001.png` reports
   `emesh=58`, `ecoeff=27`, `own_viewmodel=1`, and `fallback_reason=none`.
-  The viewmodel is still not vanilla-faithful or texture-sampled like classic
-  Quake, but it is now real model geometry instead of the placeholder line art.
+  The later alias-skin slice samples the original Quake skin texels for that
+  mesh, but classic weapon lighting, placement, and material parity remain
+  incomplete.
 - `b1b7578` makes ordinary QGE world texture sampling use the base Quake
   palette instead of globally boosting high palette indices as fullbright.
   Fixed-view evidence at `diagnostics/quake_stream/20260521-135044/frame_001.png`
@@ -281,6 +294,15 @@ Useful live evidence anchors:
   `20260521-151552` reference show whole-frame RMSE improving from `0.0457305`
   to `0.0452656`; sampled wall-light crops move closer to classic while normal
   ceiling/front-wall/side-wall crops stay unchanged.
+- `diagnostics/quake_stream/20260521-173303/frame_001.png`: fixed-view QGE
+  capture after sampling alias-model skin texels for the first-person weapon
+  mesh. The captured frames keep `fallback_reason=none`, `own_world=1`,
+  `own_textures=1`, `own_lightmaps=1`, `own_viewmodel=1`, `own_console=1`,
+  `emesh=58`, and `ecoeff=27`. ImageMagick checks against the classic
+  `20260521-151552` reference show whole-frame RMSE improving from `0.0452656`
+  in the previous fullbright-wall-material capture to `0.0349406`; fixed-view
+  world crops are unchanged apart from foreground weapon overlap, and the
+  first-person weapon is no longer the flat gold mesh.
 
 The ICC control plane is part of the baseline. Verified slices should refresh
 index, memory, git history, source-drift, production-audit, task-attempt, and
@@ -328,7 +350,9 @@ Implemented:
   and entity coefficient paths.
 - The first-person viewmodel uses alias-model mesh encoding with a larger
   bounded triangle budget instead of the previous synthetic center-line glyph
-  when alias mesh metadata is available.
+  when alias mesh metadata is available, and the QGE alias path projects
+  alias-model skin texels so the weapon mesh samples the original Quake skin
+  instead of a flat diagnostic color.
 - Surface-budget telemetry and default scene surface budget increased to 512
   after fixed-view `e1m1` diagnostics showed the old 128 limit dropped visible
   floor/wall/ceiling surfaces.
@@ -428,29 +452,30 @@ Known current visual state:
   gain is stable for an unchanged camera.
 - The most recent tone-histogram work fixes the post-viewmodel dark-world
   regression by selecting the world white point from the upper scene area. It
-  does not fix seams, turbulent surfaces, fullbright material fidelity, or the
-  untextured weapon mesh.
+  does not fix seams, turbulent surfaces, fullbright material fidelity, or full
+  classic weapon rendering parity.
 - The most recent fullbright sampling work restores and scales a bounded unlit
   additive contribution for true fullbright wall texels. The sampled lamp strips
   are closer to classic but still dim, so this is not a complete
   material-fidelity fix.
 - The earlier tone-headroom work reduces fixed-view over-bright ceiling,
   side-wall, and far-floor deltas against the classic reference.
-- The most recent viewmodel work encodes the first-person weapon through the
-  alias-model mesh path (`emesh=58` in the `20260521-150734` capture) instead
-  of the old synthetic center-line glyph. It is still an untextured QGE mesh,
-  not a faithful classic weapon material.
+- The most recent viewmodel work samples Quake alias-model skin texels for the
+  first-person weapon mesh (`emesh=58` and RMSE `0.0349406` in the
+  `20260521-173303` capture) instead of the old flat-color QGE mesh. It still
+  needs classic lighting, placement, and material parity.
 - Floors, walls, and ceilings still need conformance work: raster seams,
   warped/noisy surfaces, gray/turbulent seams, and incomplete vanilla-material
-  fidelity remain, even after default bilinear sampling, preserved-detail
+  fidelity remain. Default bilinear sampling, preserved-detail
   highlight headroom, flattened raster fill, duplicate-snapshot clearing,
   ambient world background fill, warp coordinate normalization, every-frame
   refresh, deterministic render-gate display gain, direct-spatial tone headroom,
-  viewmodel-aware tone histogram selection, fullbright texture splitting, and
-  stratified footprint filtering reduce sparse DWT block bands,
-  tone-floor artifacts, exposure panels, ghost panels, black voids, broad water
-  bands, stale-frame artifacts, shot-noise shimmer, and over-bright world
-  surfaces.
+  viewmodel-aware tone histogram selection, fullbright texture splitting,
+  alias-skin viewmodel sampling, and stratified footprint filtering reduce
+  sparse DWT block bands, tone-floor artifacts, exposure panels, ghost panels,
+  black voids, broad water bands, stale-frame artifacts, shot-noise shimmer, and
+  over-bright world surfaces, but they do not make the QGE renderer visually
+  complete.
 - This means the current QGE graphics path is useful for diagnostics and
   iterative comparison, but it should still be called visibly glitchy for
   player-facing floor, wall, and ceiling fidelity.

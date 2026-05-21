@@ -12,9 +12,9 @@ fast-forwarded to the same commit for compatibility after the older unrelated
 Three.js/WebTransport history was merged as provenance. The authoritative tree
 is the `master` QGE/QuakeSpasm layout documented here.
 
-Latest verified runtime baseline: the current QGE world fullbright sampling
-scale plus diagnostic notify cleanup, mirrored to both `origin/master` and
-`origin/main`.
+Latest verified runtime baseline: the current QGE alias-skin viewmodel path,
+world fullbright sampling scale, and diagnostic notify cleanup, mirrored to
+both `origin/master` and `origin/main`.
 
 ## Current Status
 
@@ -33,7 +33,8 @@ Working and routinely verified:
   background for missing world pixels, normalizes warp/water texture
   coordinates before palette sampling, uses the base Quake palette for ordinary
   world texture indices, splits world fullbright texels into a bounded unlit
-  additive contribution, keeps first-person weapon geometry out of the world tone
+  additive contribution, samples alias-model skin texels for the first-person
+  weapon mesh, keeps first-person weapon geometry out of the world tone
   histogram, and derives render-gate display gain from deterministic state
   marginals instead of finite-shot readout counts.
 - QGE visibility shadow/parity paths with audited authority-gate telemetry.
@@ -81,7 +82,7 @@ Important known limitations:
 
 The current QGE graphics baseline is improved but still visibly glitchy. The
 latest fixed-view evidence is
-`diagnostics/quake_stream/20260521-170934/frame_001.png`. That run keeps QGE
+`diagnostics/quake_stream/20260521-173303/frame_001.png`. That run keeps QGE
 ownership of world geometry, world textures, lightmaps, HUD/console, and the
 viewmodel with `emesh=58`, `ecoeff=27`, `own_viewmodel=1`,
 `own_console=1`, and `fallback_reason=none` on captured frames. It also keeps
@@ -94,12 +95,15 @@ ceiling delta from about `-11.51` to `+2.19`, and far-floor delta from about
 `-12.88` to `+4.75`. The follow-up fullbright work keeps normal
 floor/wall/ceiling regions effectively unchanged while moving sampled wall-light
 crops closer to classic; the latest fixed-view run improves whole-frame RMSE
-against the classic reference from `0.0457305` to `0.0452656`.
+against the classic reference from `0.0457305` to `0.0452656`. The alias-skin
+viewmodel follow-up leaves the fixed-view world crops unchanged while replacing
+the flat gold weapon mesh with skin-sampled alias triangles and improves
+whole-frame RMSE again to `0.0349406`.
 
 What is still broken is just as important: light-emissive regions are closer but
 still too dim, nearby floors are slightly over-lifted, raster seams remain visible,
-turbulent water/warp materials are not vanilla-quality, and the viewmodel is
-still an untextured QGE mesh rather than a faithful classic weapon material.
+turbulent water/warp materials are not vanilla-quality, and the viewmodel still
+needs classic lighting, placement, and material parity beyond skin sampling.
 Treat the renderer as a diagnostic primary path with useful ownership telemetry,
 not as a finished replacement for classic Quake rendering.
 

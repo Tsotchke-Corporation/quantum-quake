@@ -831,9 +831,10 @@ loop with policy updates.
   profiling; values above `16` are clamped.
   Alias-model mesh encoding also covers the first-person viewmodel with
   `QGE_MAX_ALIAS_VIEWMODEL_TRIS`, replacing the old synthetic center-line
-  viewmodel glyph when alias mesh metadata is available. This is still a
-  geometry-colored QGE mesh path; classic weapon texture/material fidelity
-  remains a separate renderer gap.
+  viewmodel glyph when alias mesh metadata is available. The QGE alias path now
+  projects Quake alias-model skin texels and bilinear-samples `hdr->texels` for
+  the first-person weapon mesh. Classic weapon lighting, placement, and
+  material parity remain separate renderer gaps.
   `QGE_RENDER_RES` and `QGE_RENDER_THRESHOLD` are also passed as early
   `-qgerenderres` / `-qgerenderthreshold` launch arguments so DWT buffers are
   allocated at the requested size before `autoexec.cfg` runs.

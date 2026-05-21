@@ -8143,6 +8143,7 @@ static void QGE_AliasVertexToWorld(const qge_snapshot_edict_t *edict,
 static qboolean QGE_ProjectAliasVertex(const qge_snapshot_edict_t *edict,
 									   const aliashdr_t *hdr,
 									   const trivertx_t *vertex,
+									   const aliasmesh_t *mesh,
 									   qge_projected_vertex_t *out)
 {
 	vec3_t world;
@@ -8156,11 +8157,189 @@ static qboolean QGE_ProjectAliasVertex(const qge_snapshot_edict_t *edict,
 	out->x = sx;
 	out->y = sy;
 	out->depth = sd;
-	out->tex_s = 0.0f;
-	out->tex_t = 0.0f;
+	out->tex_s = (mesh && hdr->skinwidth > 0) ?
+		(mesh->st[0] + 0.5f) / (float)hdr->skinwidth : 0.0f;
+	out->tex_t = (mesh && hdr->skinheight > 0) ?
+		(mesh->st[1] + 0.5f) / (float)hdr->skinheight : 0.0f;
 	out->light_s = 0.0f;
 	out->light_t = 0.0f;
 	return true;
+}
+
+static qboolean QGE_AliasSkinSample(const aliashdr_t *hdr,
+									int skin,
+									float tex_s,
+									float tex_t,
+									qboolean alpha_holey,
+									qge_rgb_sample_t *out)
+{
+	const byte *pixels;
+	float fx, fy;
+	int x0, y0, x1, y1;
+	float tx_frac, ty_frac;
+	float r = 0.0f;
+	float g = 0.0f;
+	float b = 0.0f;
+	float alpha = 0.0f;
+
+	if (!hdr || !out || hdr->skinwidth <= 0 || hdr->skinheight <= 0)
+		return false;
+	if (skin < 0 || skin >= hdr->numskins)
+		skin = 0;
+	if (hdr->texels[skin] <= 0)
+		return false;
+
+	QGE_InitPaletteLut();
+	pixels = (const byte *)hdr + hdr->texels[skin];
+	if (tex_s < 0.0f || tex_s >= 1.0f) {
+		tex_s = tex_s - floorf(tex_s);
+		if (tex_s < 0.0f)
+			tex_s += 1.0f;
+	}
+	if (tex_t < 0.0f || tex_t >= 1.0f) {
+		tex_t = tex_t - floorf(tex_t);
+		if (tex_t < 0.0f)
+			tex_t += 1.0f;
+	}
+
+	fx = tex_s * (float)hdr->skinwidth - 0.5f;
+	fy = tex_t * (float)hdr->skinheight - 0.5f;
+	x0 = (int)floorf(fx);
+	y0 = (int)floorf(fy);
+	x1 = x0 + 1;
+	y1 = y0 + 1;
+	tx_frac = fx - floorf(fx);
+	ty_frac = fy - floorf(fy);
+
+	for (int iy = 0; iy < 2; iy++) {
+		int sy = iy ? y1 : y0;
+		float wy = iy ? ty_frac : 1.0f - ty_frac;
+		if (sy < 0)
+			sy += hdr->skinheight;
+		else if (sy >= hdr->skinheight)
+			sy -= hdr->skinheight;
+
+		for (int ix = 0; ix < 2; ix++) {
+			int sx = ix ? x1 : x0;
+			float wx = ix ? tx_frac : 1.0f - tx_frac;
+			float weight = wx * wy;
+			int palette_index;
+
+			if (sx < 0)
+				sx += hdr->skinwidth;
+			else if (sx >= hdr->skinwidth)
+				sx -= hdr->skinwidth;
+			palette_index = pixels[sy * hdr->skinwidth + sx];
+			if (alpha_holey && palette_index == 255)
+				continue;
+			r += qge_palette_lut[palette_index].r * weight;
+			g += qge_palette_lut[palette_index].g * weight;
+			b += qge_palette_lut[palette_index].b * weight;
+			alpha += weight;
+		}
+	}
+
+	if (alpha <= 0.01f)
+		return false;
+	out->r = r / alpha;
+	out->g = g / alpha;
+	out->b = b / alpha;
+	QGE_RGBClamp(out);
+	return true;
+}
+
+static void QGE_FillAliasTriangleTextured(const qge_projected_vertex_t *a,
+										  const qge_projected_vertex_t *b,
+										  const qge_projected_vertex_t *c,
+										  const aliashdr_t *hdr,
+										  int skin,
+										  qboolean alpha_holey,
+										  qboolean viewmodel,
+										  const qge_rgb_sample_t *shade_color)
+{
+	int x1, y1, x2, y2;
+	float *depth_buffer = qge_spatial_depth_buffer;
+	float *rbuf = qge_spatial_color_buffer[QGE_DWT_R];
+	float *gbuf = qge_spatial_color_buffer[QGE_DWT_G];
+	float *bbuf = qge_spatial_color_buffer[QGE_DWT_B];
+	qge_projected_triangle_sampler_t sampler;
+	qge_projected_triangle_t tri;
+	qboolean prepared_rgb_depth = depth_buffer && rbuf && gbuf && bbuf;
+	float shade;
+
+	if (!a || !b || !c || !hdr || !shade_color)
+		return;
+	if (fabsf(QGE_ProjectedTriangleArea2D(a, b, c)) < 0.35f)
+		return;
+	if (!QGE_PrepareProjectedTriangleSampler(a, b, c, &sampler))
+		return;
+	tri.v[0] = *a;
+	tri.v[1] = *b;
+	tri.v[2] = *c;
+
+	shade = QGE_RGBLuma(shade_color) * (viewmodel ? 1.55f : 1.85f);
+	if (shade < 0.28f)
+		shade = 0.28f;
+	if (shade > 1.18f)
+		shade = 1.18f;
+
+	x1 = (int)floorf(fminf(fminf(a->x, b->x), c->x));
+	y1 = (int)floorf(fminf(fminf(a->y, b->y), c->y));
+	x2 = (int)ceilf(fmaxf(fmaxf(a->x, b->x), c->x));
+	y2 = (int)ceilf(fmaxf(fmaxf(a->y, b->y), c->y));
+	if (x1 < 0) x1 = 0;
+	if (y1 < 0) y1 = 0;
+	if (x2 >= qge_render_res) x2 = qge_render_res - 1;
+	if (y2 >= qge_render_res) y2 = qge_render_res - 1;
+	if (x2 < x1 || y2 < y1)
+		return;
+
+	for (int y = y1; y <= y2; y++) {
+		float sample_y = (float)y + 0.5f;
+		int sx1 = x1;
+		int sx2 = x2;
+		float w0, w1;
+
+		if (!QGE_ProjectedTriangleRowSpan(&tri, sample_y, &sx1, &sx2))
+			continue;
+		if (sx1 < x1) sx1 = x1;
+		if (sx2 > x2) sx2 = x2;
+		if (sx2 < sx1)
+			continue;
+
+		w0 = sampler.w0_origin +
+			 sampler.w0_dx * ((float)sx1 + 0.5f) +
+			 sampler.w0_dy * sample_y;
+		w1 = sampler.w1_origin +
+			 sampler.w1_dx * ((float)sx1 + 0.5f) +
+			 sampler.w1_dy * sample_y;
+
+		for (int x = sx1; x <= sx2;
+			 x++, w0 += sampler.w0_dx, w1 += sampler.w1_dx) {
+			qge_projected_sample_t sample;
+			qge_rgb_sample_t tex_color;
+			float r, g, b;
+
+			if (!QGE_ProjectedTriangleSampleWeightsUnchecked(&sampler, w0, w1,
+															 &sample))
+				continue;
+			if (!QGE_AliasSkinSample(hdr, skin, sample.tex_s, sample.tex_t,
+									 alpha_holey, &tex_color))
+				continue;
+			r = tex_color.r * shade;
+			g = tex_color.g * shade;
+			b = tex_color.b * shade;
+			if (prepared_rgb_depth) {
+				QGE_SpatialAddPixelRGBDepthPositivePrepared(
+					y * qge_render_res + x, r, g, b, sample.depth,
+					depth_buffer, rbuf, gbuf, bbuf);
+			} else {
+				QGE_SpatialAddPixelRGBDepthIndex(y * qge_render_res + x,
+												 r, g, b, sample.depth);
+			}
+		}
+	}
+	qge_scene_entity_mesh_triangles++;
 }
 
 static void QGE_FillEntityTriangleColor(const qge_projected_vertex_t *a,
@@ -8255,9 +8434,12 @@ static qboolean QGE_EncodeAliasModelMeshCoefficients(
 	const trivertx_t *poseverts_data;
 	int frame, pose, tri_count, stride;
 	int tri_budget;
+	int skin = 0;
 	int encoded = 0;
 	qge_rgb_sample_t fill = QGE_RGBScaled(color, 0.24f);
 	qge_rgb_sample_t edge = QGE_RGBScaled(color, 0.85f);
+	qboolean viewmodel = QGE_IsSnapshotViewmodel(edict);
+	qboolean alpha_holey;
 
 	if (!edict || !ref || !ref->debug_cookie)
 		return false;
@@ -8265,6 +8447,7 @@ static qboolean QGE_EncodeAliasModelMeshCoefficients(
 	model = (qmodel_t *)(uintptr_t)ref->debug_cookie;
 	if (!model || model->type != mod_alias || !model->cache.data)
 		return false;
+	alpha_holey = (model->flags & MF_HOLEY) ? true : false;
 	hdr = (aliashdr_t *)model->cache.data;
 	if (hdr->numframes <= 0 || hdr->numindexes < 3 ||
 		hdr->numverts_vbo <= 0 || !hdr->vertexes ||
@@ -8283,8 +8466,8 @@ static qboolean QGE_EncodeAliasModelMeshCoefficients(
 	poseverts_data = (const trivertx_t *)((const byte *)hdr + hdr->vertexes) +
 		pose * hdr->numverts;
 	tri_count = hdr->numindexes / 3;
-	tri_budget = QGE_IsSnapshotViewmodel(edict) ?
-		QGE_MAX_ALIAS_VIEWMODEL_TRIS : QGE_MAX_ALIAS_ENTITY_TRIS;
+	tri_budget = viewmodel ? QGE_MAX_ALIAS_VIEWMODEL_TRIS :
+		QGE_MAX_ALIAS_ENTITY_TRIS;
 	stride = (tri_count + tri_budget - 1) / tri_budget;
 	if (stride < 1)
 		stride = 1;
@@ -8307,6 +8490,7 @@ static qboolean QGE_EncodeAliasModelMeshCoefficients(
 			}
 			if (!QGE_ProjectAliasVertex(edict, hdr,
 										&poseverts_data[vertex_index],
+										&desc[mesh_index],
 										&pv[i])) {
 				projected = false;
 				break;
@@ -8315,7 +8499,12 @@ static qboolean QGE_EncodeAliasModelMeshCoefficients(
 		if (!projected)
 			continue;
 
-		QGE_FillEntityTriangleColor(&pv[0], &pv[1], &pv[2], &fill);
+		if (hdr->texels[skin] > 0)
+			QGE_FillAliasTriangleTextured(&pv[0], &pv[1], &pv[2],
+										  hdr, skin, alpha_holey,
+										  viewmodel, &color);
+		else
+			QGE_FillEntityTriangleColor(&pv[0], &pv[1], &pv[2], &fill);
 		if ((encoded & 7) == 0) {
 			QGE_EntityCoeffLine(pv[0].x, pv[0].y, pv[1].x, pv[1].y,
 								&edge, fminf(fminf(pv[0].depth, pv[1].depth),
