@@ -662,10 +662,11 @@ loop with policy updates.
   all target-facing wall probes are blocked under `QGE_NOESIS_WALL_TRAP_CLEAR`,
   the controller backs out and strafes instead of continuing to push forward.
   Partial wall contacts under `QGE_NOESIS_WALL_SLIDE_CLEAR` keep the clearer-side
-  strafe but reduce forward pressure so no-script movement is less likely to
-  park the camera against nearby floors, walls, or ceilings. The clearer-side
-  choice is held for `QGE_NOESIS_WALL_FOLLOW_FRAMES` frames so a blocked hidden
-  target does not make the controller flip-flop in place.
+  strafe but remove forward pressure for hidden targets, so no-script movement
+  is less likely to park the camera against nearby floors, walls, or ceilings
+  while trying to chase an enemy through solid geometry. The clearer-side choice
+  is held for `QGE_NOESIS_WALL_FOLLOW_FRAMES` frames so a blocked hidden target
+  does not make the controller flip-flop in place.
   Mode `1` aims and fires at visible monsters while preserving any existing
   movement command. For mode `1`, visible targets are ranked by
   current aim error first and distance second, so a scan does not abandon the

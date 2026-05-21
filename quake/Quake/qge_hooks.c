@@ -1356,7 +1356,7 @@ void QGE_NoesisAssistClientThink(client_t *client,
 			}
 			else {
 				relative_side = wall_follow_side * 320.0f;
-				relative_forward = visible ? 120.0f : 40.0f;
+				relative_forward = visible ? 120.0f : 0.0f;
 			}
 		}
 		else if (visible && distance < 512.0f && relative_side == 0.0f) {
