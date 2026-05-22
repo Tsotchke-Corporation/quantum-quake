@@ -104,6 +104,11 @@ static int qge_render_res = 1024;  /* Internal quantum render resolution */
 #define QGE_ALIAS_VIEWMODEL_BRIGHTNESS 0.18f
 #define QGE_ALIAS_VIEWMODEL_SHADE_GAIN 1.05f
 #define QGE_ALIAS_VIEWMODEL_SHADE_MIN 0.14f
+#define QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_BASE 0.74f
+#define QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_SCALE 0.09f
+#define QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_MIN 0.50f
+#define QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_MAX 0.92f
+#define QGE_ALIAS_VIEWMODEL_EDGE_SCALE 0.40f
 #define QGE_ALIAS_SHADE_MAX 1.18f
 
 /* GL texture for quantum framebuffer */
@@ -8251,10 +8256,46 @@ static void QGE_AliasVertexToWorld(const qge_snapshot_edict_t *edict,
 	world[2] = edict->origin.z + z2;
 }
 
+static float QGE_AliasViewmodelNormalShade(const qge_snapshot_edict_t *edict,
+										   const trivertx_t *vertex)
+{
+	const float *normal;
+	int quantized_angle;
+	float radians_angle;
+	float sx, sy, sz;
+	float inv_len;
+	float dot;
+	float shade;
+
+	if (!edict || !vertex || vertex->lightnormalindex >= NUMVERTEXNORMALS)
+		return 1.0f;
+
+	quantized_angle = ((int)(edict->angles.y * (16.0f / 360.0f))) & 15;
+	radians_angle = (float)quantized_angle * (2.0f * (float)M_PI / 16.0f);
+	sx = cosf(-radians_angle);
+	sy = sinf(-radians_angle);
+	sz = 1.0f;
+	inv_len = 1.0f / sqrtf(sx * sx + sy * sy + sz * sz);
+	sx *= inv_len;
+	sy *= inv_len;
+	sz *= inv_len;
+
+	normal = r_avertexnormals[vertex->lightnormalindex];
+	dot = normal[0] * sx + normal[1] * sy + normal[2] * sz;
+	shade = QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_BASE +
+		QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_SCALE * dot;
+	if (shade < QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_MIN)
+		shade = QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_MIN;
+	if (shade > QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_MAX)
+		shade = QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_MAX;
+	return shade;
+}
+
 static qboolean QGE_ProjectAliasVertex(const qge_snapshot_edict_t *edict,
 									   const aliashdr_t *hdr,
 									   const trivertx_t *vertex,
 									   const aliasmesh_t *mesh,
+									   qboolean viewmodel,
 									   qge_projected_vertex_t *out)
 {
 	vec3_t world;
@@ -8272,7 +8313,8 @@ static qboolean QGE_ProjectAliasVertex(const qge_snapshot_edict_t *edict,
 		(mesh->st[0] + 0.5f) / (float)hdr->skinwidth : 0.0f;
 	out->tex_t = (mesh && hdr->skinheight > 0) ?
 		(mesh->st[1] + 0.5f) / (float)hdr->skinheight : 0.0f;
-	out->light_s = 0.0f;
+	out->light_s = viewmodel ?
+		QGE_AliasViewmodelNormalShade(edict, vertex) : 1.0f;
 	out->light_t = 0.0f;
 	return true;
 }
@@ -8435,6 +8477,7 @@ static void QGE_FillAliasTriangleTextured(const qge_projected_vertex_t *a,
 			 x++, w0 += sampler.w0_dx, w1 += sampler.w1_dx) {
 			qge_projected_sample_t sample;
 			qge_rgb_sample_t tex_color;
+			float normal_shade;
 			float r, g, b;
 
 			if (!QGE_ProjectedTriangleSampleWeightsUnchecked(&sampler, w0, w1,
@@ -8443,9 +8486,14 @@ static void QGE_FillAliasTriangleTextured(const qge_projected_vertex_t *a,
 			if (!QGE_AliasSkinSample(hdr, skin, sample.tex_s, sample.tex_t,
 									 alpha_holey, &tex_color))
 				continue;
-			r = tex_color.r * shade;
-			g = tex_color.g * shade;
-			b = tex_color.b * shade;
+			normal_shade = viewmodel ? sample.light_s : 1.0f;
+			if (normal_shade < QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_MIN)
+				normal_shade = QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_MIN;
+			if (normal_shade > QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_MAX)
+				normal_shade = QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_MAX;
+			r = tex_color.r * shade * normal_shade;
+			g = tex_color.g * shade * normal_shade;
+			b = tex_color.b * shade * normal_shade;
 			if (prepared_rgb_depth) {
 				QGE_SpatialAddPixelRGBDepthPositivePrepared(
 					y * qge_render_res + x, r, g, b, sample.depth,
@@ -8554,8 +8602,9 @@ static qboolean QGE_EncodeAliasModelMeshCoefficients(
 	int skin = 0;
 	int encoded = 0;
 	qge_rgb_sample_t fill = QGE_RGBScaled(color, 0.24f);
-	qge_rgb_sample_t edge = QGE_RGBScaled(color, 0.85f);
 	qboolean viewmodel = QGE_IsSnapshotViewmodel(edict);
+	qge_rgb_sample_t edge = QGE_RGBScaled(color, viewmodel ?
+		QGE_ALIAS_VIEWMODEL_EDGE_SCALE : 0.85f);
 	qboolean alpha_holey;
 
 	if (!edict || !ref || !ref->debug_cookie)
@@ -8608,6 +8657,7 @@ static qboolean QGE_EncodeAliasModelMeshCoefficients(
 			if (!QGE_ProjectAliasVertex(edict, hdr,
 										&poseverts_data[vertex_index],
 										&desc[mesh_index],
+										viewmodel,
 										&pv[i])) {
 				projected = false;
 				break;

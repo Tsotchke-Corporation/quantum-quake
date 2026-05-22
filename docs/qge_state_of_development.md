@@ -58,15 +58,15 @@ The latest verified branch state is:
 Recent verified slices on `master` establish the current baseline:
 
 - The current QGE viewmodel-lighting slice gives the first-person alias path
-  its own bounded brightness, shade gain, and shade floor. Fixed-view evidence
-  at `diagnostics/quake_graphics/20260522-121419/metrics.md` compares against
-  the `20260522-115852` viewmodel-lighting baseline: `viewmodel` RMSE drops
-  from `0.094513` to `0.072401`, the broad `world` crop improves by
-  `-0.003998`, and candidate drift remains `0.000000`. Cumulative comparison
-  against the display-contrast `20260522-034256` baseline puts `viewmodel` at
-  `0.072401` RMSE and `viewmodel_core` at `0.124881` RMSE, down from
-  `0.161956` and `0.279478` respectively. This remains a bounded foreground
-  lighting fix rather than a complete weapon-material fix.
+  its own bounded brightness, shade gain, shade floor, alias-normal fill
+  shaping, and lower first-person edge intensity. Fixed-view evidence at
+  `diagnostics/quake_graphics/20260522-124349/metrics.md` compares against the
+  `20260522-121419` viewmodel-lighting baseline: `viewmodel` RMSE drops from
+  `0.072401` to `0.044634`, `viewmodel_core` drops from `0.092357` to
+  `0.056752`, `viewmodel_core` luma nearly matches classic (`0.104936` versus
+  `0.104856`), and candidate drift remains `0.000000`. Named world-only crops
+  remain unchanged. This remains a bounded foreground lighting fix rather than
+  a complete weapon-material fix.
 - The current QGE display-contrast slice applies bounded luma contrast after
   tone mapping so the fixed-view renderer no longer lifts dark ceiling/floor
   regions while compressing brighter walls and corridors. Fixed-view evidence
@@ -587,7 +587,8 @@ Known current visual state:
   first-person weapon mesh (`emesh=58` and RMSE `0.0349406` in the
   `20260521-173303` capture) instead of the old flat-color QGE mesh. The latest
   viewmodel-lighting passes lower first-person alias brightness and shade floor,
-  but classic placement and material parity remain open.
+  shape fill from alias `lightnormalindex`, and reduce first-person edge
+  intensity, but classic placement and material parity remain open.
 - Floors, walls, and ceilings still need conformance work: raster seams,
   warped/noisy surfaces, gray/turbulent seams, and incomplete vanilla-material
   fidelity remain. Default bilinear sampling, preserved-detail

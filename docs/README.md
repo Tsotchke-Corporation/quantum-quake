@@ -38,11 +38,11 @@ state, claims policy, stream/harness operation, and long-range research plans.
   smoothing, bounded world-surface blue balance, bounded texture-detail
   restoration, alias-skin first-person weapon sampling, deterministic
   flat-lightstyle fixed-view scoring, a bounded display luma-contrast pass, and
-  a bounded first-person viewmodel-lighting pass.
+  bounded first-person viewmodel-lighting and normal-shade passes.
   The latest fixed-view evidence is
-  `diagnostics/quake_graphics/20260522-121419/metrics.md`; it improves the
-  foreground weapon and broad world crops against `20260522-115852`, while
-  named world crops stay nearly flat.
+  `diagnostics/quake_graphics/20260522-124349/metrics.md`; it improves the
+  foreground weapon against `20260522-121419`, while named world-only crops
+  stay flat.
   Floors, walls, and ceilings are still not vanilla-quality.
   Remaining renderer gaps include nearby floor brightness/color mismatch,
   raster seams, warp/water seams, viewmodel placement/material parity, and
@@ -87,6 +87,11 @@ renderer fixes, not as one finished renderer claim:
   first-person-only constants again. Against `20260522-115852`, `viewmodel`
   RMSE drops from `0.094513` to `0.072401`, the broad `world` crop improves by
   `-0.003998`, and candidate drift remains `0.000000`.
+- `20260522-124349`: alias-normal viewmodel capture; shapes first-person alias
+  fill with `lightnormalindex` and lowers first-person edge intensity. Against
+  `20260522-121419`, `viewmodel` RMSE drops from `0.072401` to `0.044634`,
+  `viewmodel_core` drops from `0.092357` to `0.056752`, and named world-only
+  crops remain unchanged with zero candidate drift.
 - `tools/qge_world_frame_metrics.py`: dependency-free PNG scorer for fixed
   floor, wall, ceiling, corridor, upper-playfield, and viewmodel crops. Use it
   when numpy/Pillow are not installed; `tools/quake_graphics_harness.sh` falls
