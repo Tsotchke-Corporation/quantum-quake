@@ -1,0 +1,203 @@
+# QGE Publishable Results Research
+
+Status date: 2026-05-22.
+
+This memo summarizes the external quantum-game landscape and the strongest
+publishable path for Quantum Quake. It is intentionally conservative: the goal
+is to beat prior work without overstating what Moonlab/QGE has already proven.
+
+## External Baseline
+
+### Quandoom
+
+Quandoom is the closest public comparison point. Its own project page describes
+it as a port of the first level of DOOM to a single QASM circuit. The reported
+scale is roughly 72,000 qubits and 80 million gates, with the last 64,000
+qubits measured into a 320 x 200 binary display. The author also states that no
+current quantum computer can run it and that it is simulated on a classical
+computer at roughly 10-20 FPS.
+
+Important limitations from the project page and paper:
+
+- first level only
+- binary pixels rather than color
+- no sound or music
+- x-ray rendering from reversibility constraints
+- simplified gameplay, including constrained enemy movement and hitscan imp
+  fireballs
+- designed to be classically simulable
+
+Sources:
+
+- https://github.com/Lumorti/Quandoom
+- https://arxiv.org/abs/2412.12162
+
+### Other Quantum-Game Work
+
+The broader quantum-game literature is mostly educational or prototype-scale:
+
+- Quantum Game Jam reports 68 prototypes from 2014-2019, including games about
+  quantum mechanics, games for quantum research, and games utilizing quantum
+  computers.
+- Flying Unicorn is a small Qiskit game that discusses Grover search and
+  physical IBMQ execution/performance.
+- Quantum Forge is a modern quantum-mechanics game framework with web and Unity
+  tooling, plus quantum-game outreach and game-jam work.
+
+These are relevant, but they are not evidence of a full classic FPS engine being
+ported into a quantum-engine authority model.
+
+Sources:
+
+- https://arxiv.org/abs/2408.09014
+- https://arxiv.org/abs/1910.08238
+- https://quantum.dev/
+
+### Hardware Reality
+
+Quandoom's published scale is far beyond current hardware. For context,
+Quantinuum's Helios launch materials describe a 98-physical-qubit trapped-ion
+commercial system, and IBM's roadmap discusses a 2029 Starling system targeting
+200 logical qubits and circuits of about 100 million gates. That makes full
+hardware execution of a 72,000-qubit game circuit a future-facing benchmark
+claim, not a current hardware result.
+
+Sources:
+
+- https://www.quantinuum.com/press-releases/quantinuum-announces-commercial-launch-of-new-helios-quantum-computer-that-offers-unprecedented-accuracy-to-enable-generative-quantum-ai-genqai
+- https://www.ibm.com/quantum/blog/large-scale-ftqc
+
+## Quantum Quake Position
+
+Quantum Quake should not compete by claiming "we also made a giant static game
+circuit." The stronger claim is different:
+
+> Quantum Quake is a live classic-FPS conformance port whose authoritative game
+> domains are being moved into a Moonlab-backed QGE runtime, with per-frame
+> ownership counters, traces, replay, strict fallback evidence, and classic
+> Quake retained only as host/reference oracle.
+
+This is materially different from Quandoom:
+
+- Quandoom is a static QASM recreation of one DOOM level.
+- Quantum Quake is a live QuakeSpasm/QGE runtime integration.
+- Quandoom measures a binary screen from a circuit.
+- Quantum Quake tracks world registry, frame snapshots, rendering, visibility,
+  physics/projectiles, AI, audio, RNG, and UI/media ownership.
+- Quandoom's strongest result is "DOOM as a quantum circuit."
+- Quantum Quake's strongest publishable result should be "a classic FPS runtime
+  ported into a Moonlab-owned game-engine authority model."
+
+## Publishable Claim To Target
+
+The most defensible near-term paper/demo claim is:
+
+> We present Quantum Quake, a Moonlab-backed quantum game-engine conformance
+> port of Quake, and a strict runtime ownership matrix showing which gameplay,
+> rendering, media, visibility, physics, AI, RNG, and UI domains are actually
+> QGE/Moonlab-owned frame by frame.
+
+Do not claim:
+
+- quantum advantage
+- hardware execution of the whole game
+- complete vanilla fidelity
+- full port completion before ICC `qge_vanilla_runtime_complete` passes
+
+Do claim, once proven:
+
+- first evidence-backed classic FPS engine conformance port into a
+  Moonlab-backed quantum game-engine authority model
+- reproducible classic-vs-QGE capture matrix
+- strict no-hidden-classic-output counters
+- per-domain fallback accounting
+- resource and trace evidence for Moonlab-compatible runtime workloads
+
+## Required Results Package
+
+Minimum publishable artifact package:
+
+1. Strict ownership matrix
+   - ICC target: `qge_vanilla_quake_conformance`
+   - Required pass: `qge_vanilla_runtime_complete`
+   - Evidence: `qge_vanilla_capture_matrix_complete`
+   - Must show no hidden classic production authority for claimed domains.
+
+2. Runtime traces
+   - QGE trace file for each capture.
+   - Runtime summaries for render, visibility, physics/projectiles, audio, AI,
+     RNG, and UI/media.
+   - Explicit fallback reasons for every non-owned domain.
+
+3. Visual evidence
+   - Classic reference frame set.
+   - QGE/Moonlab primary framebuffer frame set.
+   - Region metrics for world, upper-playfield, viewmodel, floor, walls,
+     ceiling, and corridor.
+
+4. Domain ownership table
+   - render: world, textures, lightmaps, alias/viewmodel, sprites, particles,
+     sky/water/warp, HUD/console/menu
+   - simulation: RNG, AI decisions, projectile/physics, visibility
+   - media: audio post-mix and per-source authority
+
+5. Comparator table against Quandoom
+   - level scope
+   - color/audio
+   - live engine integration
+   - runtime authority model
+   - trace/replay
+   - fallback accounting
+   - simulator and hardware resource envelope
+
+## Immediate Engineering Wedge
+
+ICC says the top blocker is not another renderer luma tweak. The blocker is:
+
+```text
+qge_vanilla_runtime_complete -> produce_ready_vanilla_capture_matrix
+```
+
+The next hard work should therefore be:
+
+1. Make `tools/qge_vanilla_capture_matrix.py` emit a stricter whole-game
+   ownership matrix, not only graphics readiness.
+2. Add per-domain required counters for claimed Moonlab authority:
+   render, UI, audio, RNG, visibility, physics/projectiles, AI, particles, and
+   media.
+3. Make the matrix fail closed when classic output or state authority is hidden.
+4. Re-run ICC:
+
+```sh
+/Users/tyr/Desktop/infinite_context_coder/bin/icc completion-oracle \
+  --repo quantum_quake \
+  --target qge_vanilla_quake_conformance \
+  --trace-dir diagnostics/quake_graphics/<capture> \
+  --format markdown
+```
+
+5. Only after the oracle passes, write the paper/demo abstract.
+
+## Paper Shape
+
+Working title:
+
+```text
+Quantum Quake: A Moonlab-Owned Runtime Authority Model for a Classic FPS
+```
+
+Core sections:
+
+- Prior work: Quandoom and quantum game prototypes.
+- System: Quake host, QGE authority layer, Moonlab runtime, trace/replay.
+- Ownership matrix: how each domain is proven or blocked.
+- Rendering case study: fixed-view world/viewmodel conformance metrics.
+- Runtime case studies: RNG, visibility, projectile authority gates, audio.
+- Resource model: qubits/gates/shots/backend requirements per domain.
+- Limitations: no hardware full-game claim, no quantum advantage claim, vanilla
+  fidelity incomplete, strict matrix not passed until ICC says so.
+
+This is how Quantum Quake can beat Quandoom honestly: not by being a larger
+novelty circuit, but by becoming the first evidence-backed classic FPS runtime
+whose game authority is systematically moved into a Moonlab-backed quantum game
+engine.

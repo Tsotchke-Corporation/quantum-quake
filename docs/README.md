@@ -14,6 +14,9 @@ state, claims policy, stream/harness operation, and long-range research plans.
   contract. The target is the entire game running under QGE/Moonlab authority;
   classic Quake is only host, compatibility shell, and reference oracle for
   domains claimed as Moonlab-owned.
+- [QGE publishable results research](qge_publishable_results_research.md):
+  external baseline research against Quandoom and other quantum-game work, plus
+  the concrete results package needed for a defensible paper/demo.
 - [QGE engine architecture](qge_engine_architecture.md): reusable engine model,
   ownership stages, runtime domains, artifact contract, and conformance target.
 - [QGE agent media stream](qge_agent_stream.md): live graphics/audio/Noesis
