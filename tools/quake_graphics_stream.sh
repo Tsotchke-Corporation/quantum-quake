@@ -168,6 +168,9 @@ fi
 if [[ "$fire_test" == "1" && "$stream_player" == "noesis" && -z "${QGE_NOESIS_SCRIPTED+x}" ]]; then
   noesis_scripted=1
 fi
+if [[ "$fire_test" == "1" && "$stream_player" == "noesis" && -z "${QGE_NOESIS_ASSIST+x}" ]]; then
+  noesis_assist=0
+fi
 if [[ "$fire_test" == "1" && "$stream_player" == "noesis" &&
       "$fire_min_start_wait" -gt 0 &&
       "$noesis_start_wait" -lt "$fire_min_start_wait" ]]; then
@@ -203,6 +206,29 @@ if (( timeout_seconds > 0 )); then
   max_seconds="$timeout_seconds"
 else
   max_seconds=$((90 + frames * waits_per_frame / 10))
+fi
+engine_capture_wait=""
+if [[ "$engine_capture" == "1" ]]; then
+  if [[ -n "$capture_wait_override" ]]; then
+    engine_capture_wait="$capture_wait_override"
+  else
+    engine_capture_wait="$waits_per_frame"
+    if [[ "$fire_test" == "1" ]]; then
+      engine_capture_wait=$((waits_per_frame * 2 / 3))
+      if (( engine_capture_wait < 8 )); then
+        engine_capture_wait="$waits_per_frame"
+      fi
+    fi
+    if [[ "$stream_player" == "noesis" ]]; then
+      noesis_capture_min=$((noesis_start_wait + 4))
+      if (( noesis_min_capture_wait > noesis_capture_min )); then
+        noesis_capture_min="$noesis_min_capture_wait"
+      fi
+      if (( engine_capture_wait < noesis_capture_min )); then
+        engine_capture_wait="$noesis_capture_min"
+      fi
+    fi
+  fi
 fi
 game_status=0
 game_timed_out=0
@@ -317,6 +343,10 @@ write_agent_manifest() {
   local trace_bytes=0
   local manifest_trace_summary_file=""
   local manifest_agent_trace_summary_file=""
+  local manifest_engine_capture_wait="null"
+  if [[ -n "$engine_capture_wait" ]]; then
+    manifest_engine_capture_wait="$engine_capture_wait"
+  fi
   if [[ "$status" == "running" ]]; then
     run_status="running"
     run_success=0
@@ -356,6 +386,7 @@ write_agent_manifest() {
   "frames_captured": $manifest_frame_count,
   "waits_per_frame": $waits_per_frame,
   "engine_capture": $engine_capture,
+  "engine_capture_wait": $manifest_engine_capture_wait,
   "run": {
     "status": $(json_string "$run_status"),
     "success": $run_success,
@@ -769,6 +800,13 @@ trap restore_autoexec EXIT
   echo "map $map_name"
   if [[ "$stream_player" == "noesis" ]]; then
     emit_noesis_player_script
+    if [[ "$engine_capture" == "1" && "$noesis_scripted" == "1" ]]; then
+      noesis_capture_hold_waits=$((engine_capture_wait + frames + 8))
+      echo "echo QGE_NOESIS_CAPTURE_HOLD waits=$noesis_capture_hold_waits"
+      for _ in $(seq 1 "$noesis_capture_hold_waits"); do
+        echo "wait"
+      done
+    fi
   elif [[ "$fire_test" == "1" ]]; then
     for _ in $(seq 1 40); do
       echo "wait"
@@ -830,7 +868,7 @@ echo "Streaming Quantum Quake graphics diagnostics"
 echo "  outdir=$outdir"
 echo "  agent_stream=$agent_stream"
 echo "  quantum_render=$render_value quantum_render_res=$render_res quantum_render_threshold=$render_threshold edge_gain=$render_edge_gain material_gain=$render_material_gain bilinear_samples=$render_bilinear_samples edge_samples=$render_edge_samples detail_mix=$render_detail_mix display_filter=$render_display_filter update_interval=$render_update_interval flatlightstyles=$flatlightstyles sprite_test=$sprite_test quantum_physics=$physics_value quantum_projectiles=$projectiles_value quantum_physics_authoritative=$physics_authoritative quantum_particles=$particles_value quantum_ai=$ai_value quantum_vis=$vis_value"
-echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound snd_quantum=$sound_quantum_mode snd_quantum_source_authority=$sound_source_authority trace=$trace replay=$replay_trace replay_strict=$replay_strict fire_test=$fire_test fire_min_start_wait=$fire_min_start_wait fire_min_frames=$fire_min_frames scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_scripted=$noesis_scripted noesis_autonomous=$noesis_autonomous noesis_require_combat=$noesis_require_combat noesis_max_wait=$noesis_max_wait noesis_min_log_phases=$noesis_min_log_phases noesis_min_gameplay_samples=$noesis_min_gameplay_samples noesis_min_route_distance=$noesis_min_route_distance noesis_min_capture_wait=$noesis_min_capture_wait noesis_assist=$noesis_assist"
+echo "  map=$map_name frames=$frames waits_per_frame=$waits_per_frame engine_capture_wait=$engine_capture_wait timeout=${max_seconds}s fullscreen=$fullscreen display=$stream_display sound=$sound snd_quantum=$sound_quantum_mode snd_quantum_source_authority=$sound_source_authority trace=$trace replay=$replay_trace replay_strict=$replay_strict fire_test=$fire_test fire_min_start_wait=$fire_min_start_wait fire_min_frames=$fire_min_frames scene_surface_budget=$scene_surface_budget launch=$launch_mode engine_capture=$engine_capture mouse=$stream_mouse player=$stream_player noesis_plan=$noesis_plan noesis_scripted=$noesis_scripted noesis_autonomous=$noesis_autonomous noesis_require_combat=$noesis_require_combat noesis_max_wait=$noesis_max_wait noesis_min_log_phases=$noesis_min_log_phases noesis_min_gameplay_samples=$noesis_min_gameplay_samples noesis_min_route_distance=$noesis_min_route_distance noesis_min_capture_wait=$noesis_min_capture_wait noesis_assist=$noesis_assist"
 echo "QGE_AGENT_STREAM $agent_stream"
 
 print_log_updates() {
@@ -1026,26 +1064,6 @@ fi
 run_args+=(-qgestreamdir "$agent_stream")
 run_args+=(-qgerenderres "$render_res" -qgerenderthreshold "$render_threshold")
 if [[ "$engine_capture" == "1" ]]; then
-  if [[ -n "$capture_wait_override" ]]; then
-    engine_capture_wait="$capture_wait_override"
-  else
-    engine_capture_wait="$waits_per_frame"
-    if [[ "$fire_test" == "1" ]]; then
-      engine_capture_wait=$((waits_per_frame * 2 / 3))
-      if (( engine_capture_wait < 8 )); then
-        engine_capture_wait="$waits_per_frame"
-      fi
-    fi
-    if [[ "$stream_player" == "noesis" ]]; then
-      noesis_capture_min=$((noesis_start_wait + 4))
-      if (( noesis_min_capture_wait > noesis_capture_min )); then
-        noesis_capture_min="$noesis_min_capture_wait"
-      fi
-      if (( engine_capture_wait < noesis_capture_min )); then
-        engine_capture_wait="$noesis_capture_min"
-      fi
-    fi
-  fi
   run_args+=(-qgeautocapture "$frames" -qgecapturewait "$engine_capture_wait")
 fi
 if [[ "$sound" != "1" ]]; then
@@ -1244,6 +1262,7 @@ Agent events: $agent_events_file
 Agent video frames: $agent_video_dir
 Agent audio raw: $agent_audio_raw
 Engine auto capture: $engine_capture
+Engine capture wait: $engine_capture_wait
 Autoexec used: $outdir/autoexec.cfg.used
 EOF
 

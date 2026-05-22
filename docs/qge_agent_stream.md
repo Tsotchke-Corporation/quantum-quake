@@ -58,8 +58,10 @@ wait to at least `QGE_STREAM_FIRE_MIN_START_WAIT` (default `48`) and engine
 captures to at least `QGE_STREAM_FIRE_MIN_FRAMES` (default `8`). These defaults
 let the scripted rocket spawn after full signon and keep the run alive long
 enough for projectile authority warmup, writeback, and pre-impact oracle trace
-records. Set either minimum to `0` only when intentionally testing a shorter
-input or capture path.
+records. The fire-test Noesis path defaults `QGE_NOESIS_ASSIST` to `0` so the
+assist layer cannot suppress the scripted attack; set it explicitly when
+intentionally testing assisted fire control. Set either minimum to `0` only when
+intentionally testing a shorter input or capture path.
 
 Projectile branch, writeback, and collision-oracle selections also emit
 `save_or_demo` measurement records. These records carry the selected branch or
@@ -148,8 +150,9 @@ The stream directory is intentionally simple and tail-friendly:
   `runtime_evidence.single_trace_ready` and per-domain AI, audio, visibility,
   and projectile evidence counts. Visibility readiness requires an applied
   `vis_authority_apply` record, not only shadow/gate telemetry. Projectile
-  evidence includes `save_demo_boundary_count` and per-kind save/demo counts
-  for writeback, branch, and collision-oracle persistence boundaries.
+  evidence includes `active_projectiles_max`, `save_demo_boundary_count`, and
+  per-kind save/demo counts for writeback, branch, and collision-oracle
+  persistence boundaries.
 - `qge_agent_stream_icc_evidence.jsonl`: ICC-native evidence entries for the
   manifest, events file, Noesis input traces, latest video frame, raw audio,
   audio metadata, trace artifact, trace summary, frame count, run outcome,
@@ -307,6 +310,9 @@ For the default Noesis player, the implicit capture frame is never earlier than
 whichever is larger. This keeps short screenshot smokes from quitting before the
 E1M1 route/combat plan has enough engine-owned gameplay samples. An explicit
 `QGE_STREAM_CAPTURE_WAIT` continues to mean exactly the frame requested.
+Scripted Noesis runs also append a `QGE_NOESIS_CAPTURE_HOLD` wait block when
+engine auto-capture is active, so fire/combat scripts cannot exhaust the command
+buffer one or two frames before `-qgeautocapture` writes the evidence PNGs.
 
 The launch watchdog defaults to `90 + QGE_STREAM_FRAMES *
 QGE_STREAM_WAIT_FRAMES / 10` seconds. Set `QGE_STREAM_TIMEOUT_SECONDS` for
@@ -349,6 +355,13 @@ even when numpy/Pillow are installed. The graphics harness defaults
 `QGE_HARNESS_FLATLIGHTSTYLES=1`, passing `QGE_STREAM_FLATLIGHTSTYLES` through
 the stream autoexec as `r_flatlightstyles`, so fixed-view captures compare
 renderer output instead of animated lightstyle phase.
+For all-domain Moonlab evidence, the paired harness forwards
+`QGE_HARNESS_TRACE`, `QGE_HARNESS_FIRE_TEST`, `QGE_HARNESS_SPRITE_TEST`,
+`QGE_HARNESS_PARTICLES`, `QGE_HARNESS_SND_QUANTUM`,
+`QGE_HARNESS_SND_QUANTUM_SOURCE_AUTHORITY`, and
+`QGE_HARNESS_PHYSICS_AUTHORITATIVE` into each stream run so
+`vanilla_capture_matrix.json` can evaluate audio, sprite, particle, projectile,
+and render workload ownership in one artifact.
 The paired `tools/qge_vanilla_capture_matrix.py` sidecar copies each mode's
 agent-stream run and trace summary from `*.agent_stream.json`; an explicit
 agent-stream run failure blocks `ready_for_complete_claim`. It also preserves

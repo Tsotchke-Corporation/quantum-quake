@@ -2930,6 +2930,8 @@ class TraceSummaryTests(unittest.TestCase):
                 evidence["projectile"]["authority_gate_count"],
                 2,
             )
+            self.assertEqual(evidence["projectile"]["active_projectiles"], 1)
+            self.assertEqual(evidence["projectile"]["active_projectiles_max"], 1)
             self.assertEqual(
                 evidence["projectile"]["writeback_decision_count"],
                 1,
@@ -3129,9 +3131,10 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
                 "projectile": {
                     "ready": True,
                     "authority_gate_count": 1,
-                    "active_projectiles": 1,
+                    "active_projectiles": 0,
+                    "active_projectiles_max": 1,
                     "writeback_decision_count": 1,
-                    "off_reason": "none",
+                    "off_reason": "no_projectiles",
                 },
             }
             vanilla_matrix.write_json(
@@ -3165,7 +3168,21 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
                     "own_viewmodel=1 own_hud=1 own_console=1 "
                     if mode == "quantum" else ""
                 )
+                warmup = ""
+                if mode == "quantum":
+                    warmup = (
+                        f"QGE render frame=0 render={render_value} fallback=0 "
+                        f"surrogate=0 classic3d=0 classic2d=1 viewmodel=1 "
+                        f"owner={owner} suppressed3d=1 suppressed2d=0 "
+                        "own_world=1 own_textures=1 own_lightmaps=1 "
+                        "own_entities=1 own_sprites=1 own_particles=1 "
+                        "own_viewmodel=1 own_hud=0 own_console=1 "
+                        "poly=3 tris=6 edgefills=2 gate_kernel=1 gates=26 "
+                        "shots=64 primary_fb=1 native_idwt=1 cpu_idwt=0 "
+                        "idwt_backend=native fallback_reason=classic2d_unowned\n"
+                    )
                 (capture_dir / f"{mode}.log").write_text(
+                    warmup +
                     f"QGE render frame=1 render={render_value} fallback=0 "
                     f"surrogate=0 classic3d=0 classic2d=0 viewmodel=1 "
                     f"owner={owner} suppressed3d=1 suppressed2d=1 "
@@ -3192,6 +3209,9 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
             self.assertTrue(summary["ready_for_complete_claim"])
             self.assertEqual(summary["qge_primary_owner"], "qge_3d")
             self.assertTrue(summary["qge_classic_output_hidden"])
+            self.assertTrue(summary["qge_classic_output_seen_any_frame"])
+            self.assertEqual(summary["classic2d_count"], 1)
+            self.assertEqual(summary["classic2d_latest"], 0)
             self.assertTrue(summary["qge_asset_ownership_complete"])
             self.assertEqual(summary["qge_asset_ownership"]["own_world"], 1)
             self.assertTrue(summary["runtime_evidence_ready"])
@@ -3219,6 +3239,22 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
                 "qge_vanilla_capture_matrix_complete",
             )
             self.assertEqual(icc["status"], "success")
+
+            vanilla_matrix.write_json(
+                capture_dir / "classic.qge_perf_summary.json",
+                {
+                    "status": "blocked",
+                    "aggregate": {
+                        "engine_average_quantum_ms_max": None,
+                        "render_time_ms_max": None,
+                        "threshold_failures": [],
+                        "metric_evidence_present": False,
+                    },
+                },
+            )
+            summary = vanilla_matrix.build_matrix(args)["conformance_summary"]
+            self.assertTrue(summary["performance_sidecars_success"])
+            self.assertTrue(summary["ready_for_complete_claim"])
 
     def test_missing_asset_ownership_blocks_complete_claim(self) -> None:
         metrics = {

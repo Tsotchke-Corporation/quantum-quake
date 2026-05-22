@@ -458,6 +458,10 @@ def build_runtime_evidence(summary: dict) -> dict:
                 int(projectile_gate.get("last_subject_id", 0) or 0)
                 if projectile_gate else 0
             ),
+            "active_projectiles_max": (
+                int(projectile_gate.get("subject_id_max", 0) or 0)
+                if projectile_gate else 0
+            ),
             "shadow_samples": (
                 int(projectile_gate.get("active_basis_max", 0) or 0)
                 if projectile_gate else 0
@@ -732,6 +736,7 @@ def parse_trace(path: str) -> dict:
                     "max_probability_max": max_probability,
                     "first_server_time_msec": server_time,
                     "last_subject_id": subject_id,
+                    "subject_id_max": subject_id,
                 }
                 probe_groups[key] = group
 
@@ -753,6 +758,7 @@ def parse_trace(path: str) -> dict:
             group["total_probability_max"] = max(group["total_probability_max"], total_probability)
             group["max_probability_max"] = max(group["max_probability_max"], max_probability)
             group["last_subject_id"] = subject_id
+            group["subject_id_max"] = max(group["subject_id_max"], subject_id)
 
     summary = {
         "path": path,

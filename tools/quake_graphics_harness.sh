@@ -26,6 +26,13 @@ launch_mode="${QGE_STREAM_LAUNCH:-auto}"
 sound="${QGE_HARNESS_SOUND:-0}"
 baseline_candidate="${QGE_HARNESS_BASELINE_CANDIDATE:-}"
 force_world_metrics="${QGE_HARNESS_FORCE_WORLD_METRICS:-0}"
+trace="${QGE_HARNESS_TRACE:-${QGE_STREAM_TRACE:-0}}"
+fire_test="${QGE_HARNESS_FIRE_TEST:-${QGE_STREAM_FIRE_TEST:-0}}"
+sprite_test="${QGE_HARNESS_SPRITE_TEST:-${QGE_STREAM_SPRITE_TEST:-0}}"
+particles="${QGE_HARNESS_PARTICLES:-${QGE_PARTICLES:-0}}"
+snd_quantum="${QGE_HARNESS_SND_QUANTUM:-${QGE_STREAM_SND_QUANTUM:-1}}"
+snd_source_authority="${QGE_HARNESS_SND_QUANTUM_SOURCE_AUTHORITY:-${QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY:-0}}"
+physics_authoritative="${QGE_HARNESS_PHYSICS_AUTHORITATIVE:-${QGE_PHYSICS_AUTHORITATIVE:-0}}"
 
 normalize_bool() {
   if [[ "${1:-}" == "1" ]]; then
@@ -70,6 +77,13 @@ width="$(normalize_positive_int "$width" 800)"
 height="$(normalize_positive_int "$height" 600)"
 sound="$(normalize_bool "$sound")"
 force_world_metrics="$(normalize_bool "$force_world_metrics")"
+trace="$(normalize_bool "$trace")"
+fire_test="$(normalize_bool "$fire_test")"
+sprite_test="$(normalize_bool "$sprite_test")"
+particles="$(normalize_nonnegative_int "$particles" 0)"
+snd_quantum="$(normalize_nonnegative_int "$snd_quantum" 1)"
+snd_source_authority="$(normalize_bool "$snd_source_authority")"
+physics_authoritative="$(normalize_bool "$physics_authoritative")"
 
 image_metrics_available=1
 if (( force_world_metrics )); then
@@ -119,9 +133,14 @@ capture_mode() {
        QGE_STREAM_HEIGHT="$height" \
        QGE_STREAM_LAUNCH="$launch_mode" \
        QGE_STREAM_SOUND="$sound" \
+       QGE_STREAM_TRACE="$trace" \
+       QGE_STREAM_FIRE_TEST="$fire_test" \
+       QGE_STREAM_SPRITE_TEST="$sprite_test" \
+       QGE_STREAM_SND_QUANTUM="$snd_quantum" \
+       QGE_STREAM_SND_QUANTUM_SOURCE_AUTHORITY="$snd_source_authority" \
+       QGE_PHYSICS_AUTHORITATIVE="$physics_authoritative" \
        QGE_STREAM_FULLSCREEN=0 \
-       QGE_STREAM_FIRE_TEST=0 \
-       QGE_PARTICLES=0 \
+       QGE_PARTICLES="$particles" \
        bash tools/quake_graphics_stream.sh > "$stream_stdout" 2>&1; then
     cat "$stream_stdout" >&2
     return 1
@@ -206,6 +225,13 @@ Waits before each capture: $waits_per_frame
 Window: ${width}x${height}
 Launch mode: $launch_mode
 Sound streaming requested: $sound
+Trace requested: $trace
+Fire test: $fire_test
+Sprite test: $sprite_test
+Particles: $particles
+Sound quantum mode: $snd_quantum
+Sound source authority: $snd_source_authority
+Physics authoritative: $physics_authoritative
 
 Classic reference:
   quantum_render $classic_render

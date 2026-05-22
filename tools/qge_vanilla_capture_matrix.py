@@ -193,7 +193,10 @@ def build_moonlab_domain_readiness(
     visibility_gate_count = int_from(visibility.get("authority_gate_count"))
     visibility_apply_count = int_from(visibility.get("authority_apply_count"))
     projectile_gate_count = int_from(projectile.get("authority_gate_count"))
-    projectile_active_count = int_from(projectile.get("active_projectiles"))
+    projectile_active_count = max(
+        int_from(projectile.get("active_projectiles")),
+        int_from(projectile.get("active_projectiles_max")),
+    )
     projectile_decision_count = max(
         int_from(projectile.get("writeback_decision_count")),
         int_from(projectile.get("impact_measurement_count")),
@@ -225,6 +228,10 @@ def build_moonlab_domain_readiness(
                 "surrogate_count": summary.get("qge_surface_surrogates"),
                 "classic_output_hidden": summary.get(
                     "qge_classic_output_hidden"),
+                "classic2d_latest": summary.get("classic2d_latest"),
+                "classic3d_latest": summary.get("classic3d_latest"),
+                "classic_output_seen_any_frame": summary.get(
+                    "qge_classic_output_seen_any_frame"),
                 "owner": summary.get("qge_primary_owner"),
                 "viewmodel_encoded": summary.get("viewmodel_encoded"),
             },
@@ -302,6 +309,10 @@ def build_moonlab_domain_readiness(
                 "ready": projectile.get("ready"),
                 "authority_gate_count": projectile_gate_count,
                 "active_projectiles": projectile_active_count,
+                "active_projectiles_latest": projectile.get(
+                    "active_projectiles"),
+                "active_projectiles_max": projectile.get(
+                    "active_projectiles_max"),
                 "decision_or_measurement_count": projectile_decision_count,
                 "off_reason": projectile.get("off_reason"),
             },
@@ -501,6 +512,19 @@ def explicit_performance_failure(performance: dict[str, Any],
     return False
 
 
+def classic_reference_performance_ok(performance: dict[str, Any],
+                                     agent_run: dict[str, Any]) -> bool:
+    if performance.get("error"):
+        return False
+    status = performance_status(performance, agent_run)
+    failures = performance.get("threshold_failures")
+    if isinstance(failures, list) and failures:
+        return False
+    if isinstance(status, str) and status in ("fail", "failed", "error"):
+        return False
+    return True
+
+
 def trace_summary_path(capture_dir: Path,
                        mode: str,
                        agent_run: dict[str, Any]) -> Path | None:
@@ -648,7 +672,7 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
         not explicit_agent_run_failure(qge_agent_run)
     )
     performance_sidecars_success = (
-        not explicit_performance_failure(classic_perf, classic_agent_run) and
+        classic_reference_performance_ok(classic_perf, classic_agent_run) and
         not explicit_performance_failure(qge_perf, qge_agent_run)
     )
     qge_render = qge.get("runtime", {}).get("qge_render", {})
@@ -668,10 +692,15 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
     classic2d = counter_max(qge_render, qge_render_max, "classic2d")
     suppressed3d = counter_max(qge_render, qge_render_max, "suppressed3d")
     suppressed2d = counter_max(qge_render, qge_render_max, "suppressed2d")
+    classic3d_latest = int_from(qge_render.get("classic3d"))
+    classic2d_latest = int_from(qge_render.get("classic2d"))
+    suppressed3d_latest = int_from(qge_render.get("suppressed3d"))
+    suppressed2d_latest = int_from(qge_render.get("suppressed2d"))
+    classic_output_seen_any_frame = classic3d > 0 or classic2d > 0
     ownership = asset_ownership_summary(qge_render, qge_render_max)
     classic_output_hidden = (
-        classic3d == 0 and classic2d == 0 and
-        suppressed3d > 0 and suppressed2d > 0
+        classic3d_latest == 0 and classic2d_latest == 0 and
+        suppressed3d_latest > 0 and suppressed2d_latest > 0
     )
     qge_render_gate_kernel = counter_max(qge_render, qge_render_max,
                                          "gate_kernel")
@@ -719,10 +748,16 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
         "fallback_count": fallback_count,
         "classic3d_count": classic3d,
         "classic2d_count": classic2d,
+        "classic3d_latest": classic3d_latest,
+        "classic2d_latest": classic2d_latest,
         "viewmodel_encoded": viewmodel,
         "qge_primary_owner": qge_render.get("owner"),
         "qge_suppressed_classic3d": suppressed3d,
         "qge_suppressed_classic2d": suppressed2d,
+        "qge_suppressed_classic3d_latest": suppressed3d_latest,
+        "qge_suppressed_classic2d_latest": suppressed2d_latest,
+        "qge_classic_output_seen_any_frame": (
+            classic_output_seen_any_frame),
         "qge_classic_output_hidden": classic_output_hidden,
         "qge_asset_ownership": ownership["counters"],
         "qge_asset_ownership_fields_present": (
@@ -843,6 +878,11 @@ def build_icc_evidence(matrix: dict[str, Any],
         "surrogate_count": summary["qge_surface_surrogates"],
         "culled_count": summary["qge_surface_culled"],
         "classic3d_count": summary["classic3d_count"],
+        "classic2d_count": summary.get("classic2d_count"),
+        "classic3d_latest": summary.get("classic3d_latest"),
+        "classic2d_latest": summary.get("classic2d_latest"),
+        "qge_classic_output_seen_any_frame": summary.get(
+            "qge_classic_output_seen_any_frame"),
         "classic_agent_run_status": summary.get("classic_agent_run_status"),
         "qge_agent_run_status": summary.get("qge_agent_run_status"),
         "classic_agent_startup_issue": summary.get("classic_agent_startup_issue"),
