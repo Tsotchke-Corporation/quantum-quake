@@ -37,15 +37,16 @@ state, claims policy, stream/harness operation, and long-range research plans.
   moderate-minification texture prefiltering, one-texel bilinear wall/ceiling
   smoothing, bounded world-surface blue balance, bounded texture-detail
   restoration, alias-skin first-person weapon sampling, deterministic
-  flat-lightstyle fixed-view scoring, and a bounded display luma-contrast pass.
+  flat-lightstyle fixed-view scoring, a bounded display luma-contrast pass, and
+  a bounded first-person viewmodel-lighting pass.
   The latest fixed-view evidence is
-  `diagnostics/quake_graphics/20260522-034256/metrics.md`; it improves every
-  named world crop against the flat-lightstyle `20260522-031254` QGE baseline,
-  while the broad world crop gets harsher because visible texture/edge energy
-  increased. Floors, walls, and ceilings are still not vanilla-quality.
+  `diagnostics/quake_graphics/20260522-115852/metrics.md`; it improves the
+  foreground weapon and broad world crops against `20260522-034256`, while a
+  few named world crops move slightly through DWT reconstruction coupling.
+  Floors, walls, and ceilings are still not vanilla-quality.
   Remaining renderer gaps include nearby floor brightness/color mismatch,
-  raster seams, warp/water seams, viewmodel lighting/placement/material parity,
-  and vanilla-material fidelity.
+  raster seams, warp/water seams, viewmodel placement/material parity, and
+  vanilla-material fidelity.
 
 ## Renderer Evidence Snapshot
 
@@ -76,6 +77,12 @@ renderer fixes, not as one finished renderer claim:
   texture/edge energy and first-person weapon overlap. The follow-up
   `world_upper` crop improves by `-0.007318` RMSE, while `viewmodel` worsens by
   `+0.034692`.
+- `20260522-115852`: viewmodel-lighting capture; lowers first-person alias
+  brightness and shade floor. Against `20260522-034256`, `viewmodel` RMSE drops
+  from `0.161956` to `0.094513`, `viewmodel_core` drops from `0.279478` to
+  `0.163137`, and the broad `world` crop improves by `-0.012916`; a few named
+  world crops move by about `+0.001` to `+0.002` through DWT reconstruction
+  coupling.
 - `tools/qge_world_frame_metrics.py`: dependency-free PNG scorer for fixed
   floor, wall, ceiling, corridor, upper-playfield, and viewmodel crops. Use it
   when numpy/Pillow are not installed; `tools/quake_graphics_harness.sh` falls

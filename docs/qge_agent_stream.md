@@ -864,7 +864,10 @@ loop with policy updates.
   `QGE_MAX_ALIAS_VIEWMODEL_TRIS`, replacing the old synthetic center-line
   viewmodel glyph when alias mesh metadata is available. The QGE alias path now
   projects Quake alias-model skin texels and bilinear-samples `hdr->texels` for
-  the first-person weapon mesh. Classic weapon lighting, placement, and
+  the first-person weapon mesh. First-person aliases use a separate bounded
+  `QGE_ALIAS_VIEWMODEL_BRIGHTNESS`, `QGE_ALIAS_VIEWMODEL_SHADE_GAIN`, and
+  `QGE_ALIAS_VIEWMODEL_SHADE_MIN` so foreground weapon lighting can be tuned
+  without changing ordinary alias entities. Classic weapon placement and
   material parity remain separate renderer gaps.
   `QGE_RENDER_RES` and `QGE_RENDER_THRESHOLD` are also passed as early
   `-qgerenderres` / `-qgerenderthreshold` launch arguments so DWT buffers are

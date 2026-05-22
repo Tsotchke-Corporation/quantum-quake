@@ -96,7 +96,7 @@ Important known limitations:
 
 The current QGE graphics baseline is improved but still visibly glitchy. The
 latest fixed-view frame-set evidence is
-`diagnostics/quake_graphics/20260522-034256/metrics.md`. That run keeps QGE
+`diagnostics/quake_graphics/20260522-115852/metrics.md`. That run keeps QGE
 ownership of world geometry, world textures, lightmaps, HUD/console, and the
 viewmodel with `own_world=1`, `own_textures=1`, `own_lightmaps=1`,
 `own_viewmodel=1`, `own_console=1`, and `fallback_reason=none` on captured
@@ -143,12 +143,20 @@ increases by `+0.003629` because the output now preserves more visible
 texture/edge energy and the broad crop includes the first-person weapon band.
 The follow-up crop audit separates that signal: `world_upper` improves by
 `-0.007318` RMSE while the `viewmodel` crop regresses by `+0.034692`, making
-the next renderer target explicit.
+the next renderer target explicit. The bounded viewmodel-lighting follow-up at
+`20260522-115852` gives the first-person alias path its own brightness and
+shade floor: against `20260522-034256`, the `viewmodel` crop RMSE drops from
+`0.161956` to `0.094513`, `viewmodel_core` drops from `0.279478` to
+`0.163137`, and the broad `world` crop improves by `-0.012916`. Some named
+world crops move by roughly `+0.001` to `+0.002` through global DWT
+reconstruction coupling, so this is a targeted viewmodel lighting improvement,
+not a complete weapon/material fix.
 
 What is still broken is just as important: light-emissive regions are closer but
 still too dim, nearby floors are slightly over-lifted, raster seams remain visible,
 turbulent water/warp materials are not vanilla-quality, and the viewmodel still
-needs classic lighting, placement, and material parity beyond skin sampling.
+needs classic placement and material parity beyond skin sampling and coarse
+lighting balance.
 Treat the renderer as a diagnostic primary path with useful ownership telemetry,
 not as a finished replacement for classic Quake rendering.
 

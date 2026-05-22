@@ -99,6 +99,12 @@ static int qge_render_res = 1024;  /* Internal quantum render resolution */
 #define QGE_TEXTURE_PREFILTER_MIN_FOOTPRINT 1.75f
 #define QGE_TEXTURE_PREFILTER_GRID_FOOTPRINT 3.25f
 #define QGE_TEXTURE_PREFILTER_MAX_FOOTPRINT 6.0f
+#define QGE_ALIAS_ENTITY_SHADE_GAIN 1.85f
+#define QGE_ALIAS_ENTITY_SHADE_MIN 0.28f
+#define QGE_ALIAS_VIEWMODEL_BRIGHTNESS 0.24f
+#define QGE_ALIAS_VIEWMODEL_SHADE_GAIN 1.25f
+#define QGE_ALIAS_VIEWMODEL_SHADE_MIN 0.18f
+#define QGE_ALIAS_SHADE_MAX 1.18f
 
 /* GL texture for quantum framebuffer */
 static GLuint qge_texture = 0;
@@ -8074,7 +8080,7 @@ static float QGE_SnapshotEntityBrightness(const qge_snapshot_edict_t *edict,
 	else if (model_kind == QGE_RESOURCE_BSP_MODEL)
 		brightness = 0.20f;
 	if (QGE_IsSnapshotViewmodel(edict))
-		brightness = 0.36f;
+		brightness = QGE_ALIAS_VIEWMODEL_BRIGHTNESS;
 	if (edict->effects & (EF_BRIGHTFIELD | EF_MUZZLEFLASH | EF_BRIGHTLIGHT |
 						  EF_DIMLIGHT | EF_QEX_QUADLIGHT | EF_QEX_PENTALIGHT |
 						  EF_QEX_CANDLELIGHT))
@@ -8370,6 +8376,8 @@ static void QGE_FillAliasTriangleTextured(const qge_projected_vertex_t *a,
 	qge_projected_triangle_sampler_t sampler;
 	qge_projected_triangle_t tri;
 	qboolean prepared_rgb_depth = depth_buffer && rbuf && gbuf && bbuf;
+	float shade_gain;
+	float shade_min;
 	float shade;
 
 	if (!a || !b || !c || !hdr || !shade_color)
@@ -8382,11 +8390,15 @@ static void QGE_FillAliasTriangleTextured(const qge_projected_vertex_t *a,
 	tri.v[1] = *b;
 	tri.v[2] = *c;
 
-	shade = QGE_RGBLuma(shade_color) * (viewmodel ? 1.55f : 1.85f);
-	if (shade < 0.28f)
-		shade = 0.28f;
-	if (shade > 1.18f)
-		shade = 1.18f;
+	shade_gain = viewmodel ? QGE_ALIAS_VIEWMODEL_SHADE_GAIN :
+		QGE_ALIAS_ENTITY_SHADE_GAIN;
+	shade_min = viewmodel ? QGE_ALIAS_VIEWMODEL_SHADE_MIN :
+		QGE_ALIAS_ENTITY_SHADE_MIN;
+	shade = QGE_RGBLuma(shade_color) * shade_gain;
+	if (shade < shade_min)
+		shade = shade_min;
+	if (shade > QGE_ALIAS_SHADE_MAX)
+		shade = QGE_ALIAS_SHADE_MAX;
 
 	x1 = (int)floorf(fminf(fminf(a->x, b->x), c->x));
 	y1 = (int)floorf(fminf(fminf(a->y, b->y), c->y));
