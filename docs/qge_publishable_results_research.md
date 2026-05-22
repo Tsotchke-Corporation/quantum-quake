@@ -27,6 +27,18 @@ Important limitations from the project page and paper:
   fireballs
 - designed to be classically simulable
 
+The important technical critique is not that particular gates are "fake".
+Hadamard, Toffoli, and T-gate decompositions are valid quantum-circuit
+building blocks. The weak claim is that a 70,000+ qubit monolithic game circuit
+is presented as a quantum-computer port while being intentionally structured for
+classical simulation. A general 70,000-qubit dense or materially entangled state
+would require an impossible `2^70000` amplitude space; laptop playback at
+10-20 FPS necessarily means the simulator is exploiting restricted circuit
+structure, not simulating an arbitrary quantum state at that width. A
+review-safe comparison should therefore describe Quandoom as a static
+gate-list/reversible-circuit game benchmark, not as evidence of a live
+dense-entangled quantum game runtime.
+
 Sources:
 
 - https://github.com/Lumorti/Quandoom
@@ -87,6 +99,31 @@ This is materially different from Quandoom:
 - Quandoom's strongest result is "DOOM as a quantum circuit."
 - Quantum Quake's strongest publishable result should be "a classic FPS runtime
   ported into a Moonlab-owned game-engine authority model."
+
+## Real Quantum Computing Bar
+
+For Quantum Quake, "real quantum computing" must mean more than a QASM-shaped
+artifact. A claimed Moonlab-owned domain needs evidence that:
+
+- the domain uses a named Moonlab representation: small exact state vector,
+  MPS/CA-MPS, Clifford/Pauli frame, Grover/search, QRNG, noise/mitigation, or a
+  hardware-backed backend when available
+- the trace records resource shape: qubits/registers, gates or kernel steps,
+  shots, measurements, backend, fallback reason, and frame/domain ownership
+- the state has quantum semantics that matter: phase, interference,
+  measurement, entanglement/correlation, noise, or amplitude amplification
+  changes the output or decision
+- the result is not reducible to a scalar cvar, lookup table, or purely
+  classical replay without losing the claimed behavior
+- the host consumes the Moonlab/QGE result as authority for that domain
+- the resource envelope is honest: small dense registers where dense state is
+  realistic, tensor-network/sparse forms for larger correlated fields, and
+  70,000-qubit dense-state fiction is forbidden
+
+This means Quantum Quake should be built as many runtime quantum kernels and
+state fields with explicit ownership, not as one enormous all-game circuit. That
+is the route that can eventually deploy selected kernels to real quantum
+hardware through Moonlab while preserving a full-game simulator path.
 
 ## Publishable Claim To Target
 
