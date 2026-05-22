@@ -68,6 +68,10 @@ renderer fixes, not as one finished renderer claim:
 - `20260521-190448`: texture-detail restore capture; raises world
   high-frequency texture energy from `88.8%` to `92.8%` of the classic
   reference and improves fixed-view RMSE to `0.0339437`.
+- `tools/qge_world_frame_metrics.py`: dependency-free PNG scorer for fixed
+  floor, wall, ceiling, and corridor crops. Use it when numpy/Pillow are not
+  installed; `tools/quake_graphics_harness.sh` falls back to it automatically
+  and still writes `metrics.json` / `metrics.md`.
 - Default Noesis runs are no-script autonomous diagnostics with server-side
   movement/combat feedback plus local clearance, floor, and hazard probes when
   no target is engaged. Noesis is not yet learning Quake from experience, has

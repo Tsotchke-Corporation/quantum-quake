@@ -23,6 +23,7 @@ import qge_perf_summary as perf_summary  # noqa: E402
 import qge_publication_pack as publication_pack  # noqa: E402
 import qge_trace_summary as trace_summary  # noqa: E402
 import qge_vanilla_capture_matrix as vanilla_matrix  # noqa: E402
+import qge_world_frame_metrics as world_frame_metrics  # noqa: E402
 
 
 def minimal_oracle_scene() -> dict:
@@ -319,6 +320,34 @@ class ImageMetricsTests(unittest.TestCase):
         self.assertIn("# QGE Image Metrics", markdown)
         self.assertIn("| PSNR dB | inf |", markdown)
         self.assertIn("| Edge F1 | 1.000000 |", markdown)
+
+    def test_world_frame_metrics_without_optional_dependencies(self) -> None:
+        reference = world_frame_metrics.ImageData(
+            2,
+            2,
+            [
+                [(0.0, 0.0, 0.0), (0.4, 0.4, 0.4)],
+                [(0.2, 0.2, 0.2), (0.6, 0.6, 0.6)],
+            ],
+        )
+        candidate = world_frame_metrics.ImageData(
+            2,
+            2,
+            [
+                [(0.0, 0.0, 0.0), (0.5, 0.5, 0.5)],
+                [(0.2, 0.2, 0.2), (0.7, 0.7, 0.7)],
+            ],
+        )
+
+        metrics = world_frame_metrics.compare_images(
+            reference, candidate, {"all": (0, 0, 2, 2)}
+        )
+        region = metrics["regions"]["all"]
+        self.assertEqual(metrics["schema"], "qge.world_frame_metrics.v0")
+        self.assertEqual(region["pixel_count"], 4)
+        self.assertGreater(region["rmse_rgb"], 0.0)
+        self.assertGreater(region["candidate_luma_mean"], region["reference_luma_mean"])
+        self.assertIn("QGE World Frame Metrics", world_frame_metrics.markdown_report(metrics))
 
 
 class PerformanceSummaryTests(unittest.TestCase):

@@ -335,8 +335,10 @@ visible entities.
 stream harness and copies each run's Noesis action and command traces into the
 comparison artifact directory. It probes `tools/qge_image_metrics.py
 --check-deps` before launching either capture because the comparison metrics
-require numpy and Pillow; if either dependency is unavailable, the harness exits
-before starting the app.
+require numpy and Pillow. If either dependency is unavailable, the harness now
+continues with `tools/qge_world_frame_metrics.py`, a standard-library PNG
+fallback that reports fixed world-region RMSE, luma means, and high-frequency
+texture-energy ratios for floor, wall, ceiling, and corridor crops.
 The paired `tools/qge_vanilla_capture_matrix.py` sidecar copies each mode's
 agent-stream run and trace summary from `*.agent_stream.json`; an explicit
 agent-stream run failure blocks `ready_for_complete_claim`. It also preserves
@@ -800,6 +802,11 @@ loop with policy updates.
   the bounded texture-detail restore recovers some contrast lost by those
   filters without disabling anti-crawl sampling.
   Render logs expose those filtered samples as `texfilter`.
+  For renderer triage without optional Python packages, compare fixed-view
+  classic/QGE frames with
+  `python3 tools/qge_world_frame_metrics.py --reference classic.png --candidate quantum.png`;
+  it emits the dependency-free `qge.world_frame_metrics.v0` schema used to track
+  floor, wall, ceiling, and corridor crops.
   QGE world-surface projection clips very near geometry at
   `QGE_SURFACE_NEAR_CLIP_DEPTH` so walls or ceilings close to the camera do not
   explode into full-frame strips during autonomous captures.

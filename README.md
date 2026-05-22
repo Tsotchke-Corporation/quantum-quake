@@ -83,6 +83,10 @@ Important known limitations:
 - Live graphics harnesses launch a local Quake app. Safe runs used by agents
   set `QGE_STREAM_MOUSE=0` and `QGE_STREAM_ACTIVATE=0` unless a human is
   intentionally testing interactivity.
+- Fixed-view renderer comparisons no longer depend solely on optional
+  numpy/Pillow tooling. `tools/qge_world_frame_metrics.py` uses only the Python
+  standard library to score floor, wall, ceiling, and corridor PNG crops, and
+  the paired graphics harness falls back to it automatically.
 
 ## Current Renderer Evidence
 

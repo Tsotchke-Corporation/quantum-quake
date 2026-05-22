@@ -593,6 +593,11 @@ Known current visual state:
   default because recent live captures showed whole-frame blur.
 - Edge sampling was rejected as a default because it produced blurred/line
   artifacts and much higher frame cost.
+- `tools/qge_world_frame_metrics.py` now provides dependency-free fixed-region
+  PNG metrics for renderer triage. It emits `qge.world_frame_metrics.v0`
+  evidence for world, ceiling, side-wall, front-wall, floor, and corridor crops,
+  and the paired graphics harness falls back to it when numpy/Pillow are not
+  available.
 - The current renderer should be described as improved, not fixed. In the
   latest fixed-view capture the world projection, contrast, and brightness are
   much closer to classic Quake, but floors, walls, and ceilings still do not
@@ -606,8 +611,8 @@ Next rendering priorities:
   classic/QGE captures.
 - Add focused tests for surface coverage, seam stability, and texture sampling
   behavior.
-- Add paired capture tooling that can score QGE frames against the classic
-  renderer for known `e1m1` viewpoints.
+- Extend the paired capture scoring from fixed `e1m1` crops into a small visual
+  regression set with multiple viewpoints and explicit pass/fail thresholds.
 
 ### Visibility
 

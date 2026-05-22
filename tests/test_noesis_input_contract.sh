@@ -88,6 +88,8 @@ grep -Fq 'waits_per_frame="$(normalize_positive_int "$waits_per_frame" 90)"' "$r
 grep -Fq 'width="$(normalize_positive_int "$width" 800)"' "$repo_root/tools/quake_graphics_harness.sh"
 grep -q -- '--check-deps' "$repo_root/tools/qge_image_metrics.py"
 grep -Fq 'python3 tools/qge_image_metrics.py --check-deps' "$repo_root/tools/quake_graphics_harness.sh"
+grep -q 'qge_world_frame_metrics.py' "$repo_root/tools/quake_graphics_harness.sh"
+grep -q 'qge.world_frame_metrics.v0' "$repo_root/tools/qge_world_frame_metrics.py"
 grep -q 'numpy and Pillow' "$repo_root/docs/qge_agent_stream.md"
 grep -q '"timeout_seconds": \$max_seconds' "$repo_root/tools/quake_graphics_stream.sh"
 grep -q 'agent_event "process_exit"' "$repo_root/tools/quake_graphics_stream.sh"

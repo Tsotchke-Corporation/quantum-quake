@@ -63,9 +63,10 @@ width="$(normalize_positive_int "$width" 800)"
 height="$(normalize_positive_int "$height" 600)"
 sound="$(normalize_bool "$sound")"
 
+image_metrics_available=1
 if ! python3 tools/qge_image_metrics.py --check-deps; then
-  echo "qge_image_metrics dependencies are unavailable; install numpy and Pillow for graphics harness metrics." >&2
-  exit 1
+  image_metrics_available=0
+  echo "qge_image_metrics dependencies are unavailable; falling back to stdlib world-frame metrics." >&2
 fi
 
 if [[ ! -x "$app_bin" ]]; then
@@ -144,11 +145,21 @@ capture_mode() {
 classic_png="$(capture_mode classic "$classic_render")"
 quantum_png="$(capture_mode quantum "$quantum_render")"
 
-python3 tools/qge_image_metrics.py \
-  --reference "$classic_png" \
-  --candidate "$quantum_png" \
-  --json "$outdir/metrics.json" \
-  --markdown "$outdir/metrics.md"
+if (( image_metrics_available )); then
+  python3 tools/qge_image_metrics.py \
+    --reference "$classic_png" \
+    --candidate "$quantum_png" \
+    --json "$outdir/metrics.json" \
+    --markdown "$outdir/metrics.md"
+  metrics_tool="qge_image_metrics.py"
+else
+  python3 tools/qge_world_frame_metrics.py \
+    --reference "$classic_png" \
+    --candidate "$quantum_png" \
+    --json "$outdir/metrics.json" \
+    --markdown "$outdir/metrics.md"
+  metrics_tool="qge_world_frame_metrics.py"
+fi
 
 python3 tools/qge_vanilla_capture_matrix.py "$outdir" \
   --out "$outdir/vanilla_capture_matrix.json" \
@@ -198,6 +209,7 @@ QGE candidate:
   performance ICC: $outdir/quantum.qge_perf_icc_evidence.json
 
 Metrics:
+  tool: $metrics_tool
   JSON: $outdir/metrics.json
   Markdown: $outdir/metrics.md
 
