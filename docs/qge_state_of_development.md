@@ -61,13 +61,12 @@ Recent verified slices on `master` establish the current baseline:
   its own bounded brightness, shade gain, shade floor, alias-normal fill
   shaping, lower first-person edge intensity, and a slower viewmodel-only edge
   cadence. Fixed-view evidence at
-  `diagnostics/quake_graphics/20260522-134809/metrics.md` compares against the
-  `20260522-124349` alias-normal baseline: `viewmodel` RMSE drops from
-  `0.044634` to `0.041117`, `viewmodel_core` drops from `0.056752` to
-  `0.052033`, viewmodel high-frequency ratio drops from `2.710` to `2.457`,
-  and candidate drift remains `0.000000`. Named world-only crops remain
-  unchanged. This remains a bounded foreground lighting/detail fix rather than
-  a complete weapon-material fix.
+  `diagnostics/quake_graphics/20260522-152252/metrics.md` compares against the
+  `20260522-134809` edge-cadence baseline: `viewmodel` RMSE drops from
+  `0.041117` to `0.037606`, viewmodel high-frequency ratio drops from `2.457`
+  to `2.186`, and candidate drift remains `0.000000`. Named world-only crops
+  remain unchanged. This remains a bounded foreground lighting/detail fix
+  rather than a complete weapon-material fix.
 - The current QGE display-contrast slice applies bounded luma contrast after
   tone mapping so the fixed-view renderer no longer lifts dark ceiling/floor
   regions while compressing brighter walls and corridors. Fixed-view evidence

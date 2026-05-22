@@ -96,7 +96,7 @@ Important known limitations:
 
 The current QGE graphics baseline is improved but still visibly glitchy. The
 latest fixed-view frame-set evidence is
-`diagnostics/quake_graphics/20260522-134809/metrics.md`. That run keeps QGE
+`diagnostics/quake_graphics/20260522-152252/metrics.md`. That run keeps QGE
 ownership of world geometry, world textures, lightmaps, HUD/console, and the
 viewmodel with `own_world=1`, `own_textures=1`, `own_lightmaps=1`,
 `own_viewmodel=1`, `own_console=1`, and `fallback_reason=none` on captured
@@ -166,6 +166,10 @@ preserves the named world-only crops while reducing viewmodel diagnostic edge
 over-detail: against `20260522-124349`, `viewmodel` RMSE drops from
 `0.044634` to `0.041117`, `viewmodel_core` drops from `0.056752` to
 `0.052033`, and viewmodel high-frequency ratio drops from `2.710` to `2.457`.
+The sparser edge-cadence/fill follow-up at `20260522-152252` keeps the named
+world-only crops unchanged while dropping `viewmodel` RMSE from `0.041117` to
+`0.037606` and high-frequency ratio from `2.457` to `2.186` against
+`20260522-134809`.
 Candidate drift remains `0.000000`.
 
 What is still broken is just as important: light-emissive regions are closer but
