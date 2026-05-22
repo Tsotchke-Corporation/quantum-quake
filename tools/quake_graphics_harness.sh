@@ -23,6 +23,8 @@ width="${QGE_STREAM_WIDTH:-800}"
 height="${QGE_STREAM_HEIGHT:-600}"
 launch_mode="${QGE_STREAM_LAUNCH:-auto}"
 sound="${QGE_HARNESS_SOUND:-0}"
+baseline_candidate="${QGE_HARNESS_BASELINE_CANDIDATE:-}"
+force_world_metrics="${QGE_HARNESS_FORCE_WORLD_METRICS:-0}"
 
 normalize_bool() {
   if [[ "${1:-}" == "1" ]]; then
@@ -62,9 +64,13 @@ scene_surface_budget="$(normalize_positive_int "$scene_surface_budget" 512)"
 width="$(normalize_positive_int "$width" 800)"
 height="$(normalize_positive_int "$height" 600)"
 sound="$(normalize_bool "$sound")"
+force_world_metrics="$(normalize_bool "$force_world_metrics")"
 
 image_metrics_available=1
-if ! python3 tools/qge_image_metrics.py --check-deps; then
+if (( force_world_metrics )); then
+  image_metrics_available=0
+  echo "QGE_HARNESS_FORCE_WORLD_METRICS=1; using stdlib world-frame metrics." >&2
+elif ! python3 tools/qge_image_metrics.py --check-deps; then
   image_metrics_available=0
   echo "qge_image_metrics dependencies are unavailable; falling back to stdlib world-frame metrics." >&2
 fi
@@ -90,6 +96,7 @@ capture_mode() {
   local stream_dir
   local agent_stream
   local frame_path
+  local frames_dir="$outdir/${mode}_frames"
 
   echo "Capturing $mode frame with quantum_render=$render_value" >&2
   if ! QGE_STREAM_FRAMES="$frames" \
@@ -127,6 +134,11 @@ capture_mode() {
   fi
 
   cp "$frame_path" "$outdir/${mode}.png"
+  mkdir -p "$frames_dir"
+  for captured_frame in "$stream_dir"/frame_*.png; do
+    [[ -f "$captured_frame" ]] || continue
+    cp "$captured_frame" "$frames_dir/$(basename "$captured_frame")"
+  done
   cp "$stream_dir/README.txt" "$outdir/${mode}.README.txt" 2>/dev/null || true
   cp "$stream_dir/quantum_quake.log" "$outdir/${mode}.log" 2>/dev/null || true
   cp "$stream_dir/open.log" "$outdir/${mode}.open.log" 2>/dev/null || true
@@ -153,11 +165,22 @@ if (( image_metrics_available )); then
     --markdown "$outdir/metrics.md"
   metrics_tool="qge_image_metrics.py"
 else
-  python3 tools/qge_world_frame_metrics.py \
-    --reference "$classic_png" \
-    --candidate "$quantum_png" \
-    --json "$outdir/metrics.json" \
+  world_reference="$classic_png"
+  world_candidate="$quantum_png"
+  if (( frames > 1 )); then
+    world_reference="$outdir/classic_frames"
+    world_candidate="$outdir/quantum_frames"
+  fi
+  world_metric_args=(
+    --reference "$world_reference"
+    --candidate "$world_candidate"
+    --json "$outdir/metrics.json"
     --markdown "$outdir/metrics.md"
+  )
+  if [[ -n "$baseline_candidate" ]]; then
+    world_metric_args+=(--baseline-candidate "$baseline_candidate")
+  fi
+  python3 tools/qge_world_frame_metrics.py "${world_metric_args[@]}"
   metrics_tool="qge_world_frame_metrics.py"
 fi
 
@@ -181,6 +204,7 @@ Sound streaming requested: $sound
 Classic reference:
   quantum_render $classic_render
   image: $classic_png
+  frames: $outdir/classic_frames
   log: $outdir/classic.log
   stream stdout: $outdir/classic.stream.txt
   agent stream manifest: $outdir/classic.agent_stream.json
@@ -199,6 +223,7 @@ QGE candidate:
   quantum_render_edge_samples $render_edge_samples
   quantum_scene_surface_budget $scene_surface_budget
   image: $quantum_png
+  frames: $outdir/quantum_frames
   log: $outdir/quantum.log
   stream stdout: $outdir/quantum.stream.txt
   agent stream manifest: $outdir/quantum.agent_stream.json
@@ -210,6 +235,8 @@ QGE candidate:
 
 Metrics:
   tool: $metrics_tool
+  baseline candidate: ${baseline_candidate:-none}
+  force world metrics: $force_world_metrics
   JSON: $outdir/metrics.json
   Markdown: $outdir/metrics.md
 

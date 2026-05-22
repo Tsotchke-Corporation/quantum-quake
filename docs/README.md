@@ -71,7 +71,8 @@ renderer fixes, not as one finished renderer claim:
 - `tools/qge_world_frame_metrics.py`: dependency-free PNG scorer for fixed
   floor, wall, ceiling, and corridor crops. Use it when numpy/Pillow are not
   installed; `tools/quake_graphics_harness.sh` falls back to it automatically
-  and still writes `metrics.json` / `metrics.md`.
+  and still writes `metrics.json` / `metrics.md`. It can average `frame_*.png`
+  directories and emit baseline-candidate deltas for renderer experiments.
 - Default Noesis runs are no-script autonomous diagnostics with server-side
   movement/combat feedback plus local clearance, floor, and hazard probes when
   no target is engaged. Noesis is not yet learning Quake from experience, has

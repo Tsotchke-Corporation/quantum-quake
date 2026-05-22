@@ -85,8 +85,10 @@ Important known limitations:
   intentionally testing interactivity.
 - Fixed-view renderer comparisons no longer depend solely on optional
   numpy/Pillow tooling. `tools/qge_world_frame_metrics.py` uses only the Python
-  standard library to score floor, wall, ceiling, and corridor PNG crops, and
-  the paired graphics harness falls back to it automatically.
+  standard library to score floor, wall, ceiling, and corridor PNG crops. It
+  also averages frame directories and can compare a new QGE run against a
+  baseline candidate for per-region deltas; the paired graphics harness falls
+  back to it automatically.
 
 ## Current Renderer Evidence
 

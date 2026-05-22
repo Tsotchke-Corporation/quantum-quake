@@ -338,7 +338,13 @@ comparison artifact directory. It probes `tools/qge_image_metrics.py
 require numpy and Pillow. If either dependency is unavailable, the harness now
 continues with `tools/qge_world_frame_metrics.py`, a standard-library PNG
 fallback that reports fixed world-region RMSE, luma means, and high-frequency
-texture-energy ratios for floor, wall, ceiling, and corridor crops.
+texture-energy ratios for floor, wall, ceiling, and corridor crops. The
+harness copies every captured `frame_*.png` into per-mode frame directories; in
+fallback mode, multi-frame captures are averaged instead of scoring only the
+last screenshot. Set `QGE_HARNESS_BASELINE_CANDIDATE` to a previous QGE PNG or
+frame directory to include baseline deltas in `metrics.json` and `metrics.md`.
+Set `QGE_HARNESS_FORCE_WORLD_METRICS=1` to exercise the standard-library scorer
+even when numpy/Pillow are installed.
 The paired `tools/qge_vanilla_capture_matrix.py` sidecar copies each mode's
 agent-stream run and trace summary from `*.agent_stream.json`; an explicit
 agent-stream run failure blocks `ready_for_complete_claim`. It also preserves
@@ -805,8 +811,9 @@ loop with policy updates.
   For renderer triage without optional Python packages, compare fixed-view
   classic/QGE frames with
   `python3 tools/qge_world_frame_metrics.py --reference classic.png --candidate quantum.png`;
-  it emits the dependency-free `qge.world_frame_metrics.v0` schema used to track
-  floor, wall, ceiling, and corridor crops.
+  it emits the dependency-free `qge.world_frame_metrics.v0` schema for single
+  frames and `qge.world_frame_metrics.frames.v0` for frame directories or
+  baseline-candidate comparisons.
   QGE world-surface projection clips very near geometry at
   `QGE_SURFACE_NEAR_CLIP_DEPTH` so walls or ceilings close to the camera do not
   explode into full-frame strips during autonomous captures.

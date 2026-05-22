@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import json
+import struct
 import sys
 import tempfile
 import unittest
+import zlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -24,6 +26,31 @@ import qge_publication_pack as publication_pack  # noqa: E402
 import qge_trace_summary as trace_summary  # noqa: E402
 import qge_vanilla_capture_matrix as vanilla_matrix  # noqa: E402
 import qge_world_frame_metrics as world_frame_metrics  # noqa: E402
+
+
+def write_rgb_png(path: Path, rows: list[list[tuple[int, int, int]]]) -> None:
+    height = len(rows)
+    width = len(rows[0]) if rows else 0
+    raw = bytearray()
+    for row in rows:
+        raw.append(0)
+        for red, green, blue in row:
+            raw.extend((red, green, blue))
+
+    def chunk(name: bytes, payload: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(payload)) +
+            name +
+            payload +
+            struct.pack(">I", zlib.crc32(name + payload) & 0xFFFFFFFF)
+        )
+
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n" +
+        chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)) +
+        chunk(b"IDAT", zlib.compress(bytes(raw))) +
+        chunk(b"IEND", b"")
+    )
 
 
 def minimal_oracle_scene() -> dict:
@@ -348,6 +375,41 @@ class ImageMetricsTests(unittest.TestCase):
         self.assertGreater(region["rmse_rgb"], 0.0)
         self.assertGreater(region["candidate_luma_mean"], region["reference_luma_mean"])
         self.assertIn("QGE World Frame Metrics", world_frame_metrics.markdown_report(metrics))
+
+    def test_world_frame_metrics_frame_set_baseline_delta(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            candidate_dir = tmpdir / "candidate"
+            baseline_dir = tmpdir / "baseline"
+            candidate_dir.mkdir()
+            baseline_dir.mkdir()
+            reference = tmpdir / "reference.png"
+            write_rgb_png(reference, [
+                [(0, 0, 0), (80, 80, 80)],
+                [(160, 160, 160), (240, 240, 240)],
+            ])
+            for frame in (1, 2):
+                write_rgb_png(candidate_dir / f"frame_{frame:03d}.png", [
+                    [(4, 4, 4), (84, 84, 84)],
+                    [(164, 164, 164), (244, 244, 244)],
+                ])
+                write_rgb_png(baseline_dir / f"frame_{frame:03d}.png", [
+                    [(16, 16, 16), (96, 96, 96)],
+                    [(176, 176, 176), (255, 255, 255)],
+                ])
+
+            metrics = world_frame_metrics.compare_frame_set(
+                reference,
+                candidate_dir,
+                {"all": (0, 0, 2, 2)},
+                baseline_dir,
+            )
+            region = metrics["regions"]["all"]
+            self.assertEqual(metrics["schema"], "qge.world_frame_metrics.frames.v0")
+            self.assertEqual(metrics["frame_count"], 2)
+            self.assertLess(region["rmse_rgb"], region["baseline_rmse_rgb"])
+            self.assertLess(region["delta_rmse_rgb"], 0.0)
+            self.assertIn("Delta RMSE", world_frame_metrics.markdown_report(metrics))
 
 
 class PerformanceSummaryTests(unittest.TestCase):

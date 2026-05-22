@@ -27,6 +27,7 @@ DEFAULT_REGIONS: dict[str, tuple[int, int, int, int]] = {
 
 
 Pixel = tuple[float, float, float]
+RegionMap = dict[str, tuple[int, int, int, int]]
 
 
 @dataclass(frozen=True)
@@ -148,6 +149,10 @@ def mean_rgb(pixels: list[Pixel]) -> list[float]:
     return [mean([pixel[channel] for pixel in pixels]) for channel in range(3)]
 
 
+def mean_rgb_lists(values: list[list[float]]) -> list[float]:
+    return [mean([item[channel] for item in values]) for channel in range(3)]
+
+
 def rmse_rgb(reference: list[Pixel], candidate: list[Pixel]) -> float:
     count = min(len(reference), len(candidate))
     if count <= 0:
@@ -199,7 +204,7 @@ def parse_region(value: str) -> tuple[str, tuple[int, int, int, int]]:
 def compare_images(
     reference: ImageData,
     candidate: ImageData,
-    regions: dict[str, tuple[int, int, int, int]],
+    regions: RegionMap,
 ) -> dict:
     metrics: dict[str, object] = {
         "schema": "qge.world_frame_metrics.v0",
@@ -231,7 +236,118 @@ def compare_images(
     return metrics
 
 
+def expand_png_paths(path: Path) -> list[Path]:
+    if path.is_dir():
+        paths = sorted(path.glob("frame_*.png"))
+        if not paths:
+            paths = sorted(path.glob("*.png"))
+    else:
+        paths = [path]
+    if not paths:
+        raise ValueError(f"{path} does not contain PNG frames")
+    return paths
+
+
+def reference_path_for_frame(reference_paths: list[Path], index: int) -> Path:
+    if len(reference_paths) == 1:
+        return reference_paths[0]
+    if index >= len(reference_paths):
+        raise ValueError("reference and candidate frame counts do not match")
+    return reference_paths[index]
+
+
+def average_region_metrics(frame_metrics: list[dict], region_name: str) -> dict:
+    entries = [metrics["regions"][region_name] for metrics in frame_metrics]
+    first = entries[0]
+    return {
+        "region": first["region"],
+        "pixel_count": int(mean([entry["pixel_count"] for entry in entries])),
+        "rmse_rgb": mean([entry["rmse_rgb"] for entry in entries]),
+        "reference_mean_rgb": mean_rgb_lists(
+            [entry["reference_mean_rgb"] for entry in entries]
+        ),
+        "candidate_mean_rgb": mean_rgb_lists(
+            [entry["candidate_mean_rgb"] for entry in entries]
+        ),
+        "reference_luma_mean": mean(
+            [entry["reference_luma_mean"] for entry in entries]
+        ),
+        "candidate_luma_mean": mean(
+            [entry["candidate_luma_mean"] for entry in entries]
+        ),
+        "reference_hf_luma": mean([entry["reference_hf_luma"] for entry in entries]),
+        "candidate_hf_luma": mean([entry["candidate_hf_luma"] for entry in entries]),
+        "hf_luma_ratio": mean([entry["hf_luma_ratio"] for entry in entries]),
+    }
+
+
+def compare_frame_set(
+    reference_path: Path,
+    candidate_path: Path,
+    regions: RegionMap,
+    baseline_candidate_path: Path | None = None,
+) -> dict:
+    reference_paths = expand_png_paths(reference_path)
+    candidate_paths = expand_png_paths(candidate_path)
+    if len(reference_paths) > 1 and len(reference_paths) != len(candidate_paths):
+        raise ValueError("reference and candidate frame counts do not match")
+
+    frame_metrics: list[dict] = []
+    for index, candidate_frame in enumerate(candidate_paths):
+        frame_metrics.append(compare_images(
+            load_png_rgb(reference_path_for_frame(reference_paths, index)),
+            load_png_rgb(candidate_frame),
+            regions,
+        ))
+
+    metrics: dict[str, object] = {
+        "schema": "qge.world_frame_metrics.frames.v0",
+        "reference": str(reference_path),
+        "candidate": str(candidate_path),
+        "frame_count": len(candidate_paths),
+        "regions": {
+            name: average_region_metrics(frame_metrics, name)
+            for name in regions
+        },
+    }
+
+    if baseline_candidate_path:
+        baseline_paths = expand_png_paths(baseline_candidate_path)
+        if len(baseline_paths) != len(candidate_paths):
+            raise ValueError("baseline and candidate frame counts do not match")
+        baseline_frame_metrics: list[dict] = []
+        for index, baseline_frame in enumerate(baseline_paths):
+            baseline_frame_metrics.append(compare_images(
+                load_png_rgb(reference_path_for_frame(reference_paths, index)),
+                load_png_rgb(baseline_frame),
+                regions,
+            ))
+        metrics["baseline_candidate"] = str(baseline_candidate_path)
+        baseline_regions = {
+            name: average_region_metrics(baseline_frame_metrics, name)
+            for name in regions
+        }
+        metrics["baseline_regions"] = baseline_regions
+        for name, data in metrics["regions"].items():
+            baseline = baseline_regions[name]
+            data["baseline_rmse_rgb"] = baseline["rmse_rgb"]
+            data["delta_rmse_rgb"] = data["rmse_rgb"] - baseline["rmse_rgb"]
+            data["baseline_candidate_luma_mean"] = baseline["candidate_luma_mean"]
+            data["delta_candidate_luma_mean"] = (
+                data["candidate_luma_mean"] - baseline["candidate_luma_mean"]
+            )
+            data["baseline_hf_luma_ratio"] = baseline["hf_luma_ratio"]
+            data["delta_hf_luma_ratio"] = (
+                data["hf_luma_ratio"] - baseline["hf_luma_ratio"]
+            )
+
+    return metrics
+
+
 def markdown_report(metrics: dict) -> str:
+    if metrics["schema"] == "qge.world_frame_metrics.frames.v0":
+        return markdown_frame_set_report(metrics)
+
     lines = [
         "# QGE World Frame Metrics",
         "",
@@ -249,12 +365,57 @@ def markdown_report(metrics: dict) -> str:
     return "\n".join(lines)
 
 
+def markdown_frame_set_report(metrics: dict) -> str:
+    frame_count = metrics["frame_count"]
+    has_baseline = "baseline_regions" in metrics
+    lines = [
+        "# QGE World Frame Metrics",
+        "",
+        f"Frames: {frame_count}",
+        "",
+    ]
+    if has_baseline:
+        lines.extend([
+            "| Region | Baseline RMSE | Candidate RMSE | Delta RMSE | "
+            "Ref Luma | Baseline Luma | Candidate Luma | "
+            "Baseline HF | Candidate HF | Delta HF |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ])
+        for name, data in metrics["regions"].items():
+            lines.append(
+                f"| {name} | {data['baseline_rmse_rgb']:.6f} | "
+                f"{data['rmse_rgb']:.6f} | {data['delta_rmse_rgb']:+.6f} | "
+                f"{data['reference_luma_mean']:.6f} | "
+                f"{data['baseline_candidate_luma_mean']:.6f} | "
+                f"{data['candidate_luma_mean']:.6f} | "
+                f"{data['baseline_hf_luma_ratio']:.3f} | "
+                f"{data['hf_luma_ratio']:.3f} | "
+                f"{data['delta_hf_luma_ratio']:+.3f} |"
+            )
+    else:
+        lines.extend([
+            "| Region | RGB RMSE | Luma Ref | Luma Candidate | HF Ratio | Pixels |",
+            "| --- | ---: | ---: | ---: | ---: | ---: |",
+        ])
+        for name, data in metrics["regions"].items():
+            lines.append(
+                f"| {name} | {data['rmse_rgb']:.6f} | "
+                f"{data['reference_luma_mean']:.6f} | "
+                f"{data['candidate_luma_mean']:.6f} | "
+                f"{data['hf_luma_ratio']:.3f} | {data['pixel_count']} |"
+            )
+    lines.append("")
+    return "\n".join(lines)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Compare classic and QGE fixed-view world-surface PNG frames."
     )
     parser.add_argument("--reference", required=True, type=Path)
     parser.add_argument("--candidate", required=True, type=Path)
+    parser.add_argument("--baseline-candidate", type=Path,
+                        help="Optional previous QGE frame/file set for delta metrics")
     parser.add_argument("--region", action="append", type=parse_region,
                         help="Override/add region as name:x0,y0,x1,y1")
     parser.add_argument("--json", type=Path)
@@ -267,11 +428,19 @@ def main() -> int:
     regions = dict(DEFAULT_REGIONS)
     if args.region:
         regions.update(dict(args.region))
-    metrics = compare_images(
-        load_png_rgb(args.reference),
-        load_png_rgb(args.candidate),
-        regions,
-    )
+    if args.baseline_candidate or args.reference.is_dir() or args.candidate.is_dir():
+        metrics = compare_frame_set(
+            args.reference,
+            args.candidate,
+            regions,
+            args.baseline_candidate,
+        )
+    else:
+        metrics = compare_images(
+            load_png_rgb(args.reference),
+            load_png_rgb(args.candidate),
+            regions,
+        )
     if args.json:
         args.json.write_text(json.dumps(metrics, indent=2, allow_nan=False) + "\n")
     if args.markdown:
