@@ -344,7 +344,10 @@ fallback mode, multi-frame captures are averaged instead of scoring only the
 last screenshot. Set `QGE_HARNESS_BASELINE_CANDIDATE` to a previous QGE PNG or
 frame directory to include baseline deltas in `metrics.json` and `metrics.md`.
 Set `QGE_HARNESS_FORCE_WORLD_METRICS=1` to exercise the standard-library scorer
-even when numpy/Pillow are installed.
+even when numpy/Pillow are installed. The graphics harness defaults
+`QGE_HARNESS_FLATLIGHTSTYLES=1`, passing `QGE_STREAM_FLATLIGHTSTYLES` through
+the stream autoexec as `r_flatlightstyles`, so fixed-view captures compare
+renderer output instead of animated lightstyle phase.
 The paired `tools/qge_vanilla_capture_matrix.py` sidecar copies each mode's
 agent-stream run and trace summary from `*.agent_stream.json`; an explicit
 agent-stream run failure blocks `ready_for_complete_claim`. It also preserves
@@ -813,7 +816,9 @@ loop with policy updates.
   `python3 tools/qge_world_frame_metrics.py --reference classic.png --candidate quantum.png`;
   it emits the dependency-free `qge.world_frame_metrics.v0` schema for single
   frames and `qge.world_frame_metrics.frames.v0` for frame directories or
-  baseline-candidate comparisons.
+  baseline-candidate comparisons. Frame-set reports also include reference,
+  baseline, and candidate drift columns so fixed-view flicker is visible in the
+  metrics artifact.
   QGE world-surface projection clips very near geometry at
   `QGE_SURFACE_NEAR_CLIP_DEPTH` so walls or ceilings close to the camera do not
   explode into full-frame strips during autonomous captures.

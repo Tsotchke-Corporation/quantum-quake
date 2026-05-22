@@ -591,9 +591,10 @@ Known current visual state:
 - `tools/qge_world_frame_metrics.py` now provides dependency-free fixed-region
   PNG metrics for renderer triage. It emits `qge.world_frame_metrics.v0`
   evidence for single frames and `qge.world_frame_metrics.frames.v0` evidence
-  for averaged frame directories or baseline-candidate deltas over world,
-  ceiling, side-wall, front-wall, floor, and corridor crops. The paired
-  graphics harness falls back to it when numpy/Pillow are not available.
+  for averaged frame directories, temporal drift, or baseline-candidate deltas
+  over world, ceiling, side-wall, front-wall, floor, and corridor crops. The
+  paired graphics harness falls back to it when numpy/Pillow are not available
+  and defaults to flat lightstyles for fixed-view renderer comparisons.
 - The current renderer should be described as improved, not fixed. In the
   latest fixed-view capture the world projection, contrast, and brightness are
   much closer to classic Quake, but floors, walls, and ceilings still do not

@@ -19,6 +19,7 @@ render_edge_gain="${QGE_RENDER_EDGE_GAIN:-0}"
 render_material_gain="${QGE_RENDER_MATERIAL_GAIN:-0.18}"
 render_edge_samples="${QGE_RENDER_EDGE_SAMPLES:-0}"
 scene_surface_budget="${QGE_SCENE_SURFACE_BUDGET:-512}"
+flatlightstyles="${QGE_HARNESS_FLATLIGHTSTYLES:-1}"
 width="${QGE_STREAM_WIDTH:-800}"
 height="${QGE_STREAM_HEIGHT:-600}"
 launch_mode="${QGE_STREAM_LAUNCH:-auto}"
@@ -61,6 +62,10 @@ quantum_render="$(normalize_nonnegative_int "$quantum_render" 2)"
 render_res="$(normalize_positive_int "$render_res" 1024)"
 render_edge_samples="$(normalize_nonnegative_int "$render_edge_samples" 0)"
 scene_surface_budget="$(normalize_positive_int "$scene_surface_budget" 512)"
+flatlightstyles="$(normalize_nonnegative_int "$flatlightstyles" 1)"
+if (( flatlightstyles > 2 )); then
+  flatlightstyles=2
+fi
 width="$(normalize_positive_int "$width" 800)"
 height="$(normalize_positive_int "$height" 600)"
 sound="$(normalize_bool "$sound")"
@@ -109,6 +114,7 @@ capture_mode() {
        QGE_RENDER_MATERIAL_GAIN="$render_material_gain" \
        QGE_RENDER_EDGE_SAMPLES="$render_edge_samples" \
        QGE_SCENE_SURFACE_BUDGET="$scene_surface_budget" \
+       QGE_STREAM_FLATLIGHTSTYLES="$flatlightstyles" \
        QGE_STREAM_WIDTH="$width" \
        QGE_STREAM_HEIGHT="$height" \
        QGE_STREAM_LAUNCH="$launch_mode" \
@@ -221,6 +227,7 @@ QGE candidate:
   quantum_render_edge_gain $render_edge_gain
   quantum_render_material_gain $render_material_gain
   quantum_render_edge_samples $render_edge_samples
+  r_flatlightstyles $flatlightstyles
   quantum_scene_surface_budget $scene_surface_budget
   image: $quantum_png
   frames: $outdir/quantum_frames
@@ -237,6 +244,7 @@ Metrics:
   tool: $metrics_tool
   baseline candidate: ${baseline_candidate:-none}
   force world metrics: $force_world_metrics
+  r_flatlightstyles: $flatlightstyles
   JSON: $outdir/metrics.json
   Markdown: $outdir/metrics.md
 

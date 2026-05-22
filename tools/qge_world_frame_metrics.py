@@ -281,6 +281,25 @@ def average_region_metrics(frame_metrics: list[dict], region_name: str) -> dict:
     }
 
 
+def temporal_region_rmse(paths: list[Path], regions: RegionMap) -> dict[str, float]:
+    if len(paths) < 2:
+        return {name: 0.0 for name in regions}
+
+    region_values: dict[str, list[float]] = {name: [] for name in regions}
+    previous = load_png_rgb(paths[0])
+    for path in paths[1:]:
+        current = load_png_rgb(path)
+        metrics = compare_images(previous, current, regions)
+        for name, data in metrics["regions"].items():
+            region_values[name].append(data["rmse_rgb"])
+        previous = current
+
+    return {
+        name: mean(values) if values else 0.0
+        for name, values in region_values.items()
+    }
+
+
 def compare_frame_set(
     reference_path: Path,
     candidate_path: Path,
@@ -310,6 +329,11 @@ def compare_frame_set(
             for name in regions
         },
     }
+    reference_temporal = temporal_region_rmse(reference_paths, regions)
+    candidate_temporal = temporal_region_rmse(candidate_paths, regions)
+    for name, data in metrics["regions"].items():
+        data["reference_temporal_rmse_rgb"] = reference_temporal[name]
+        data["candidate_temporal_rmse_rgb"] = candidate_temporal[name]
 
     if baseline_candidate_path:
         baseline_paths = expand_png_paths(baseline_candidate_path)
@@ -327,6 +351,9 @@ def compare_frame_set(
             name: average_region_metrics(baseline_frame_metrics, name)
             for name in regions
         }
+        baseline_temporal = temporal_region_rmse(baseline_paths, regions)
+        for name, data in baseline_regions.items():
+            data["candidate_temporal_rmse_rgb"] = baseline_temporal[name]
         metrics["baseline_regions"] = baseline_regions
         for name, data in metrics["regions"].items():
             baseline = baseline_regions[name]
@@ -339,6 +366,13 @@ def compare_frame_set(
             data["baseline_hf_luma_ratio"] = baseline["hf_luma_ratio"]
             data["delta_hf_luma_ratio"] = (
                 data["hf_luma_ratio"] - baseline["hf_luma_ratio"]
+            )
+            data["baseline_temporal_rmse_rgb"] = (
+                baseline["candidate_temporal_rmse_rgb"]
+            )
+            data["delta_temporal_rmse_rgb"] = (
+                data["candidate_temporal_rmse_rgb"] -
+                data["baseline_temporal_rmse_rgb"]
             )
 
     return metrics
@@ -378,8 +412,9 @@ def markdown_frame_set_report(metrics: dict) -> str:
         lines.extend([
             "| Region | Baseline RMSE | Candidate RMSE | Delta RMSE | "
             "Ref Luma | Baseline Luma | Candidate Luma | "
-            "Baseline HF | Candidate HF | Delta HF |",
-            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+            "Baseline HF | Candidate HF | Delta HF | "
+            "Ref Drift | Baseline Drift | Candidate Drift |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
         ])
         for name, data in metrics["regions"].items():
             lines.append(
@@ -390,19 +425,25 @@ def markdown_frame_set_report(metrics: dict) -> str:
                 f"{data['candidate_luma_mean']:.6f} | "
                 f"{data['baseline_hf_luma_ratio']:.3f} | "
                 f"{data['hf_luma_ratio']:.3f} | "
-                f"{data['delta_hf_luma_ratio']:+.3f} |"
+                f"{data['delta_hf_luma_ratio']:+.3f} | "
+                f"{data['reference_temporal_rmse_rgb']:.6f} | "
+                f"{data['baseline_temporal_rmse_rgb']:.6f} | "
+                f"{data['candidate_temporal_rmse_rgb']:.6f} |"
             )
     else:
         lines.extend([
-            "| Region | RGB RMSE | Luma Ref | Luma Candidate | HF Ratio | Pixels |",
-            "| --- | ---: | ---: | ---: | ---: | ---: |",
+            "| Region | RGB RMSE | Luma Ref | Luma Candidate | HF Ratio | Ref Drift | Candidate Drift | Pixels |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
         ])
         for name, data in metrics["regions"].items():
             lines.append(
                 f"| {name} | {data['rmse_rgb']:.6f} | "
                 f"{data['reference_luma_mean']:.6f} | "
                 f"{data['candidate_luma_mean']:.6f} | "
-                f"{data['hf_luma_ratio']:.3f} | {data['pixel_count']} |"
+                f"{data['hf_luma_ratio']:.3f} | "
+                f"{data['reference_temporal_rmse_rgb']:.6f} | "
+                f"{data['candidate_temporal_rmse_rgb']:.6f} | "
+                f"{data['pixel_count']} |"
             )
     lines.append("")
     return "\n".join(lines)

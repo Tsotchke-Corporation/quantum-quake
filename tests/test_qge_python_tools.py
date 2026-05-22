@@ -409,7 +409,39 @@ class ImageMetricsTests(unittest.TestCase):
             self.assertEqual(metrics["frame_count"], 2)
             self.assertLess(region["rmse_rgb"], region["baseline_rmse_rgb"])
             self.assertLess(region["delta_rmse_rgb"], 0.0)
+            self.assertEqual(region["candidate_temporal_rmse_rgb"], 0.0)
+            self.assertEqual(region["baseline_temporal_rmse_rgb"], 0.0)
             self.assertIn("Delta RMSE", world_frame_metrics.markdown_report(metrics))
+            self.assertIn("Candidate Drift", world_frame_metrics.markdown_report(metrics))
+
+    def test_world_frame_metrics_frame_set_temporal_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            reference_dir = tmpdir / "reference"
+            candidate_dir = tmpdir / "candidate"
+            reference_dir.mkdir()
+            candidate_dir.mkdir()
+            stable = [
+                [(0, 0, 0), (80, 80, 80)],
+                [(160, 160, 160), (240, 240, 240)],
+            ]
+            for frame in (1, 2):
+                write_rgb_png(reference_dir / f"frame_{frame:03d}.png", stable)
+            write_rgb_png(candidate_dir / "frame_001.png", stable)
+            write_rgb_png(candidate_dir / "frame_002.png", [
+                [(20, 20, 20), (80, 80, 80)],
+                [(160, 160, 160), (220, 220, 220)],
+            ])
+
+            metrics = world_frame_metrics.compare_frame_set(
+                reference_dir,
+                candidate_dir,
+                {"all": (0, 0, 2, 2)},
+            )
+            region = metrics["regions"]["all"]
+            self.assertEqual(region["reference_temporal_rmse_rgb"], 0.0)
+            self.assertGreater(region["candidate_temporal_rmse_rgb"], 0.0)
+            self.assertIn("Candidate Drift", world_frame_metrics.markdown_report(metrics))
 
 
 class PerformanceSummaryTests(unittest.TestCase):

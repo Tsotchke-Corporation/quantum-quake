@@ -87,8 +87,9 @@ Important known limitations:
   numpy/Pillow tooling. `tools/qge_world_frame_metrics.py` uses only the Python
   standard library to score floor, wall, ceiling, and corridor PNG crops. It
   also averages frame directories and can compare a new QGE run against a
-  baseline candidate for per-region deltas; the paired graphics harness falls
-  back to it automatically.
+  baseline candidate for per-region deltas and frame-to-frame drift; the
+  paired graphics harness falls back to it automatically. The paired harness
+  freezes lightstyle animation by default for reproducible fixed-view scoring.
 
 ## Current Renderer Evidence
 
