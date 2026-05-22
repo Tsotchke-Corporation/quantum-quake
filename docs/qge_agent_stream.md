@@ -867,10 +867,10 @@ loop with policy updates.
   the first-person weapon mesh. First-person aliases use a separate bounded
   `QGE_ALIAS_VIEWMODEL_BRIGHTNESS`, `QGE_ALIAS_VIEWMODEL_SHADE_GAIN`, and
   `QGE_ALIAS_VIEWMODEL_SHADE_MIN` (`0.18`, `1.05`, and `0.14` in the current
-  renderer) plus a viewmodel-only alias-normal shade and edge scale so
-  foreground weapon lighting can be tuned without changing ordinary alias
-  entities. Classic weapon placement and material parity remain separate
-  renderer gaps.
+  renderer) plus a viewmodel-only alias-normal shade, edge scale, and edge cadence
+  so foreground weapon lighting and diagnostic edge density can be
+  tuned without changing ordinary alias entities. Classic weapon placement and
+  material parity remain separate renderer gaps.
   `QGE_RENDER_RES` and `QGE_RENDER_THRESHOLD` are also passed as early
   `-qgerenderres` / `-qgerenderthreshold` launch arguments so DWT buffers are
   allocated at the requested size before `autoexec.cfg` runs.

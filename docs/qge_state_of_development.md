@@ -59,13 +59,14 @@ Recent verified slices on `master` establish the current baseline:
 
 - The current QGE viewmodel-lighting slice gives the first-person alias path
   its own bounded brightness, shade gain, shade floor, alias-normal fill
-  shaping, and lower first-person edge intensity. Fixed-view evidence at
-  `diagnostics/quake_graphics/20260522-124349/metrics.md` compares against the
-  `20260522-121419` viewmodel-lighting baseline: `viewmodel` RMSE drops from
-  `0.072401` to `0.044634`, `viewmodel_core` drops from `0.092357` to
-  `0.056752`, `viewmodel_core` luma nearly matches classic (`0.104936` versus
-  `0.104856`), and candidate drift remains `0.000000`. Named world-only crops
-  remain unchanged. This remains a bounded foreground lighting fix rather than
+  shaping, lower first-person edge intensity, and a slower viewmodel-only edge
+  cadence. Fixed-view evidence at
+  `diagnostics/quake_graphics/20260522-134809/metrics.md` compares against the
+  `20260522-124349` alias-normal baseline: `viewmodel` RMSE drops from
+  `0.044634` to `0.041117`, `viewmodel_core` drops from `0.056752` to
+  `0.052033`, viewmodel high-frequency ratio drops from `2.710` to `2.457`,
+  and candidate drift remains `0.000000`. Named world-only crops remain
+  unchanged. This remains a bounded foreground lighting/detail fix rather than
   a complete weapon-material fix.
 - The current QGE display-contrast slice applies bounded luma contrast after
   tone mapping so the fixed-view renderer no longer lifts dark ceiling/floor
@@ -588,7 +589,7 @@ Known current visual state:
   `20260521-173303` capture) instead of the old flat-color QGE mesh. The latest
   viewmodel-lighting passes lower first-person alias brightness and shade floor,
   shape fill from alias `lightnormalindex`, and reduce first-person edge
-  intensity, but classic placement and material parity remain open.
+  intensity/cadence, but classic placement and material parity remain open.
 - Floors, walls, and ceilings still need conformance work: raster seams,
   warped/noisy surfaces, gray/turbulent seams, and incomplete vanilla-material
   fidelity remain. Default bilinear sampling, preserved-detail

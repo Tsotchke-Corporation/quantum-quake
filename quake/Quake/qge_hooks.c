@@ -104,11 +104,13 @@ static int qge_render_res = 1024;  /* Internal quantum render resolution */
 #define QGE_ALIAS_VIEWMODEL_BRIGHTNESS 0.18f
 #define QGE_ALIAS_VIEWMODEL_SHADE_GAIN 1.05f
 #define QGE_ALIAS_VIEWMODEL_SHADE_MIN 0.14f
-#define QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_BASE 0.74f
+#define QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_BASE 0.76f
 #define QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_SCALE 0.09f
 #define QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_MIN 0.50f
 #define QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_MAX 0.92f
 #define QGE_ALIAS_VIEWMODEL_EDGE_SCALE 0.40f
+#define QGE_ALIAS_ENTITY_EDGE_STRIDE_MASK 7
+#define QGE_ALIAS_VIEWMODEL_EDGE_STRIDE_MASK 15
 #define QGE_ALIAS_SHADE_MAX 1.18f
 
 /* GL texture for quantum framebuffer */
@@ -8599,6 +8601,7 @@ static qboolean QGE_EncodeAliasModelMeshCoefficients(
 	const trivertx_t *poseverts_data;
 	int frame, pose, tri_count, stride;
 	int tri_budget;
+	int edge_stride_mask;
 	int skin = 0;
 	int encoded = 0;
 	qge_rgb_sample_t fill = QGE_RGBScaled(color, 0.24f);
@@ -8634,6 +8637,8 @@ static qboolean QGE_EncodeAliasModelMeshCoefficients(
 	tri_count = hdr->numindexes / 3;
 	tri_budget = viewmodel ? QGE_MAX_ALIAS_VIEWMODEL_TRIS :
 		QGE_MAX_ALIAS_ENTITY_TRIS;
+	edge_stride_mask = viewmodel ? QGE_ALIAS_VIEWMODEL_EDGE_STRIDE_MASK :
+		QGE_ALIAS_ENTITY_EDGE_STRIDE_MASK;
 	stride = (tri_count + tri_budget - 1) / tri_budget;
 	if (stride < 1)
 		stride = 1;
@@ -8672,7 +8677,7 @@ static qboolean QGE_EncodeAliasModelMeshCoefficients(
 										  viewmodel, &color);
 		else
 			QGE_FillEntityTriangleColor(&pv[0], &pv[1], &pv[2], &fill);
-		if ((encoded & 7) == 0) {
+		if ((encoded & edge_stride_mask) == 0) {
 			QGE_EntityCoeffLine(pv[0].x, pv[0].y, pv[1].x, pv[1].y,
 								&edge, fminf(fminf(pv[0].depth, pv[1].depth),
 											 pv[2].depth));
