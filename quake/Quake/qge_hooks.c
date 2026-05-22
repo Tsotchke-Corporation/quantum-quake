@@ -110,7 +110,7 @@ static int qge_render_res = 1024;  /* Internal quantum render resolution */
 #define QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_MAX 0.92f
 #define QGE_ALIAS_VIEWMODEL_EDGE_SCALE 0.40f
 #define QGE_ALIAS_ENTITY_EDGE_STRIDE_MASK 7
-#define QGE_ALIAS_VIEWMODEL_EDGE_STRIDE_MASK 31
+#define QGE_ALIAS_VIEWMODEL_EDGE_STRIDE_MASK 63
 #define QGE_ALIAS_SHADE_MAX 1.18f
 
 /* GL texture for quantum framebuffer */

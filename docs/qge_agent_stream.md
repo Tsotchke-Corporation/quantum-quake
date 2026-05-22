@@ -869,7 +869,7 @@ loop with policy updates.
   `QGE_ALIAS_VIEWMODEL_SHADE_MIN` (`0.18`, `1.05`, and `0.14` in the current
   renderer) plus a viewmodel-only alias-normal shade, edge scale, and edge cadence
   (`QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_BASE 0.78f` and
-  `QGE_ALIAS_VIEWMODEL_EDGE_STRIDE_MASK 31` in the current renderer) so
+  `QGE_ALIAS_VIEWMODEL_EDGE_STRIDE_MASK 63` in the current renderer) so
   foreground weapon lighting and diagnostic edge density can be
   tuned without changing ordinary alias entities. Classic weapon placement and
   material parity remain separate renderer gaps.

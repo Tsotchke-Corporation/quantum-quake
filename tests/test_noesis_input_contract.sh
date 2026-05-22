@@ -44,7 +44,7 @@ grep -q 'QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_BASE' "$repo_root/quake/Quake/qge_hook
 grep -q '#define QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_BASE 0.78f' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'QGE_ALIAS_VIEWMODEL_EDGE_SCALE' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'QGE_ALIAS_VIEWMODEL_EDGE_STRIDE_MASK' "$repo_root/quake/Quake/qge_hooks.c"
-grep -q '#define QGE_ALIAS_VIEWMODEL_EDGE_STRIDE_MASK 31' "$repo_root/quake/Quake/qge_hooks.c"
+grep -q '#define QGE_ALIAS_VIEWMODEL_EDGE_STRIDE_MASK 63' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'QGE_ALIAS_ENTITY_EDGE_STRIDE_MASK' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'QGE_ALIAS_VIEWMODEL_SHADE_MIN' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'alias-normal shade' "$repo_root/docs/qge_agent_stream.md"
