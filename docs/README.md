@@ -10,6 +10,10 @@ state, claims policy, stream/harness operation, and long-range research plans.
   systems, known gaps, recent verified baseline, branch consolidation status,
   failure-mode triage, and verification commands. Treat this as the
   authoritative project snapshot.
+- [Moonlab full Quake port](moonlab_full_quake_port.md): whole-game authority
+  contract. The target is the entire game running under QGE/Moonlab authority;
+  classic Quake is only host, compatibility shell, and reference oracle for
+  domains claimed as Moonlab-owned.
 - [QGE engine architecture](qge_engine_architecture.md): reusable engine model,
   ownership stages, runtime domains, artifact contract, and conformance target.
 - [QGE agent media stream](qge_agent_stream.md): live graphics/audio/Noesis
@@ -26,8 +30,9 @@ state, claims policy, stream/harness operation, and long-range research plans.
   runtime baseline is the current world texture-detail renderer slice, mirrored
   to both `origin/master` and `origin/main`.
 - QGE has test-backed runtime, trace, visibility, projectile, audio, and
-  rendering surfaces, but classic Quake remains the reference for full
-  conformance.
+  rendering surfaces, but the full-port target is stricter: every authoritative
+  game domain must run under QGE/Moonlab authority, with classic Quake retained
+  only as host, compatibility shell, and reference oracle for claimed domains.
 - QGE primary rendering is improved but not visually complete. The current
   fixed-view renderer has better FOV alignment, depth ownership,
   lightmap-preserving contrast, every-frame QGE refresh by default, an ambient

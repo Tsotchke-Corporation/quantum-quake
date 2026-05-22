@@ -1,10 +1,13 @@
 # Quantum Quake
 
 Quantum Quake is the QuakeSpasm-based conformance title for QGE, the
-Moonlab-backed Quantum Game Engine layer. The current repository is centered on
-the C engine, QGE runtime hooks, diagnostics harnesses, Noesis gameplay
-automation, and ICC evidence used to move individual game domains from shadow
-telemetry toward bounded authority.
+Moonlab-backed Quantum Game Engine layer. The project target is unambiguous:
+the entire game should run under QGE/Moonlab authority. QuakeSpasm may remain
+as host, compatibility shell, content loader, and classic reference oracle, but
+it must not be hidden production authority for domains claimed as Moonlab-owned.
+The current repository is centered on the C engine, QGE runtime hooks,
+diagnostics harnesses, Noesis gameplay automation, and ICC evidence used to
+move individual game domains from shadow telemetry toward bounded authority.
 
 The `master` branch is the primary development branch for this codebase.
 `origin/HEAD` resolves to `origin/master`, and `origin/main` is kept
@@ -58,6 +61,9 @@ Working and routinely verified:
 
 Important known limitations:
 
+- The full-port ICC target is `qge_vanilla_quake_conformance`. ICC currently
+  reports it blocked on `qge_vanilla_runtime_complete`: the strict
+  vanilla/QGE runtime ownership matrix is not yet proven.
 - `quantum_render 2` is not visually complete. The current renderer has
   improved world-surface coverage, Quake-FOV world projection, bilinear
   surface/light sampling, darker lightmap-preserving surface shading, and

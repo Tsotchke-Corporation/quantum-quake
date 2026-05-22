@@ -13,6 +13,13 @@ diagnostic harnesses. The project has working runtime hooks, traces, tests, and
 bounded authority experiments, but it is not yet a finished player-facing Quake
 distribution.
 
+The target is stronger than "quantum effects in Quake": the entire game should
+run under QGE/Moonlab authority. QuakeSpasm can remain as host, compatibility
+shell, content loader, and classic reference oracle, but not as hidden
+production authority for domains claimed as Moonlab-owned. The ICC task
+`qge_vanilla_quake_conformance` tracks this whole-game target; its current top
+blocker is the strict vanilla capture matrix proving runtime ownership counters.
+
 The strongest current areas are QGE runtime evidence, traceability, controlled
 visibility/projectile/audio paths, repeatable stream diagnostics, and the ICC
 control plane around verified changes. The most visible weak areas are still QGE

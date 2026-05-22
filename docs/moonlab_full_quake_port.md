@@ -1,26 +1,56 @@
 # Moonlab Full Quake Port
 
-Current implementation contract: see
-`docs/quantum_quake_full_architecture_plan.md`. This document is the older
-scaffold snapshot and remains useful as historical context.
+This is the whole-game authority contract for Quantum Quake. The ICC task for
+this contract is `qge_vanilla_quake_conformance`; its current top blocker is
+the strict vanilla capture matrix proving QGE/Moonlab ownership counters.
 
-This document is the implementation map for turning Quantum Quake from a
-QuakeSpasm build with quantum hooks into a real Moonlab-owned game port.
+This document defines what it means to turn Quantum Quake from a QuakeSpasm
+build with quantum hooks into a real Moonlab-owned game port.
 
 ## Goal
 
-The target is not "Quake with quantum effects". The target is Quake whose
-runtime domains are owned by QGE/Moonlab:
+The target is not "Quake with quantum effects". The target is that the entire
+game runs under QGE/Moonlab authority. QuakeSpasm may remain as host,
+compatibility shell, content loader, input/window/audio-device bridge, and
+classic reference oracle, but it must not be hidden production authority for any
+domain claimed as Moonlab-owned.
+
+For this repo, "the entire game runs in Moonlab" means every authoritative
+runtime domain is represented in QGE state, compiled through Moonlab-compatible
+runtime abstractions, traced, replayable, and guarded by explicit ownership
+counters:
 
 - graphics: BSP world, lightmaps, alias models, sprites, particles, console/HUD
 - media: mixed audio, decoded sound/music streams, temporal effects
 - simulation: entity state, toss/bounce/flymissile physics, projectile fields
 - stochastic events: QuakeC `random`, AI perturbations, particle spread
 - visibility: BSP surface selection and occlusion
+- UI and front-end game flow: menu, console, status bar, intermission, and
+  other 2D/game-state surfaces
 
-Classic Quake paths remain valuable as reference/fallback implementations, but
-they should stop being the only implementation that produces the final frame or
-the only implementation that advances relevant state.
+Classic Quake paths remain valuable as reference implementations and debugging
+oracles. A complete Moonlab port may keep them available out of band, but no
+classic path may silently produce final output, advance authoritative state, or
+mask a missing QGE/Moonlab domain in production evidence.
+
+## Authority Contract
+
+A domain is not Moonlab-owned because a hook exists. It is Moonlab-owned only
+when all of these are true:
+
+- QGE receives the complete authoritative inputs for that domain.
+- QGE stores those inputs in the world/snapshot/runtime state rather than only
+  sampling them as transient side effects.
+- Moonlab-compatible runtime code produces the domain output or decision.
+- The host consumes the QGE/Moonlab output as authority.
+- Fallback to classic is explicit in logs, traces, and ICC evidence.
+- The diagnostic harness can compare against classic without allowing classic
+  to be hidden production output.
+
+The full-port acceptance target is the ICC completion oracle
+`qge_vanilla_quake_conformance`. As of the current baseline, ICC reports that
+the trace artifacts and tests exist, but the strict ownership matrix is still
+blocked because `qge_vanilla_runtime_complete` is not proven.
 
 ## Current State
 
@@ -173,7 +203,10 @@ A complete port is credible when these are true:
   Quake PVS/BSP traversal.
 - Debug harnesses stream per-frame render, visibility, media, and physics
   counters with screenshots.
-- Classic Quake fallback stays available and parity-tested.
+- Classic Quake reference paths stay available and parity-tested out of band,
+  but hidden classic production output is a release blocker.
+- ICC `completion-oracle --target qge_vanilla_quake_conformance` reports the
+  strict runtime matrix complete.
 
 ## Immediate Implementation Order
 
