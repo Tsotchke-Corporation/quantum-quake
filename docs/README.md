@@ -41,8 +41,8 @@ state, claims policy, stream/harness operation, and long-range research plans.
   bounded first-person viewmodel-lighting, normal-shade, and edge-cadence
   passes.
   The latest fixed-view evidence is
-  `diagnostics/quake_graphics/20260522-160233/metrics.md`; it improves the
-  foreground weapon against `20260522-152252`, while named world-only crops
+  `diagnostics/quake_graphics/20260522-164822/metrics.md`; it improves the
+  foreground weapon against `20260522-160233`, while named world-only crops
   stay flat.
   Floors, walls, and ceilings are still not vanilla-quality.
   Remaining renderer gaps include nearby floor brightness/color mismatch,
@@ -107,6 +107,10 @@ renderer fixes, not as one finished renderer claim:
   world-only crops unchanged while moving `viewmodel` RMSE from `0.037606` to
   `0.033139` and high-frequency ratio from `2.186` to `1.728` against
   `20260522-152252`.
+- `20260522-164822`: compensated viewmodel edge-cadence capture; keeps named
+  world-only crops unchanged while moving `viewmodel` RMSE from `0.033139` to
+  `0.019361` and high-frequency ratio from `1.728` to `1.007` against
+  `20260522-160233`.
 - `tools/qge_world_frame_metrics.py`: dependency-free PNG scorer for fixed
   floor, wall, ceiling, corridor, upper-playfield, and viewmodel crops. Use it
   when numpy/Pillow are not installed; `tools/quake_graphics_harness.sh` falls

@@ -101,7 +101,7 @@ static int qge_render_res = 1024;  /* Internal quantum render resolution */
 #define QGE_TEXTURE_PREFILTER_MAX_FOOTPRINT 6.0f
 #define QGE_ALIAS_ENTITY_SHADE_GAIN 1.85f
 #define QGE_ALIAS_ENTITY_SHADE_MIN 0.28f
-#define QGE_ALIAS_VIEWMODEL_BRIGHTNESS 0.18f
+#define QGE_ALIAS_VIEWMODEL_BRIGHTNESS 0.19f
 #define QGE_ALIAS_VIEWMODEL_SHADE_GAIN 1.05f
 #define QGE_ALIAS_VIEWMODEL_SHADE_MIN 0.14f
 #define QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_BASE 0.78f
@@ -110,7 +110,7 @@ static int qge_render_res = 1024;  /* Internal quantum render resolution */
 #define QGE_ALIAS_VIEWMODEL_NORMAL_SHADE_MAX 0.92f
 #define QGE_ALIAS_VIEWMODEL_EDGE_SCALE 0.40f
 #define QGE_ALIAS_ENTITY_EDGE_STRIDE_MASK 7
-#define QGE_ALIAS_VIEWMODEL_EDGE_STRIDE_MASK 63
+#define QGE_ALIAS_VIEWMODEL_EDGE_STRIDE_MASK 127
 #define QGE_ALIAS_SHADE_MAX 1.18f
 
 /* GL texture for quantum framebuffer */
