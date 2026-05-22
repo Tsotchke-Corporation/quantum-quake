@@ -323,9 +323,11 @@ quake:
 	@cp -f $(CODEC_LIB_DIR)/libxmp.dylib $(APP_MACOS)/ 2>/dev/null || true
 	@# Copy SDL2 framework
 	@cp -Rn $(SDL2_FRAMEWORK_DIR)/SDL2.framework $(APP_FRAMEWORKS)/ 2>/dev/null || true
-	@# Copy NIB and resources from existing app bundle
-	@cp $(EXISTING_APP)/Contents/Resources/English.lproj/Launcher.nib $(APP_RESOURCES)/English.lproj/ 2>/dev/null || true
-	@cp $(EXISTING_APP)/Contents/Resources/QuakeSpasm.icns $(APP_RESOURCES)/ 2>/dev/null || true
+	@# Copy NIB and resources
+	@rm -rf $(APP_RESOURCES)/English.lproj/Launcher.nib
+	@cp -R quake/MacOSX/English.lproj/Launcher.nib $(APP_RESOURCES)/English.lproj/
+	@cp quake/MacOSX/QuakeSpasm.icns $(APP_RESOURCES)/ 2>/dev/null || \
+	 cp $(EXISTING_APP)/Contents/Resources/QuakeSpasm.icns $(APP_RESOURCES)/ 2>/dev/null || true
 	@# Create Info.plist
 	@/usr/libexec/PlistBuddy -c "Clear dict" $(APP_CONTENTS)/Info.plist 2>/dev/null || true
 	@/usr/libexec/PlistBuddy \
