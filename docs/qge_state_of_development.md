@@ -57,22 +57,17 @@ The latest verified branch state is:
 
 Recent verified slices on `master` establish the current baseline:
 
-- The current QGE world texture-detail slice caches palette mean/contrast for
-  each BSP texture and applies `QGE_SURFACE_TEXTURE_DETAIL_RESTORE` after
-  bilinear/prefilter sampling. The restore is asymmetric: dark grooves receive
-  the full bounded detail restore, while highlights are scaled down by
-  `QGE_SURFACE_TEXTURE_DETAIL_HIGHLIGHT_SCALE` so the far floor does not wash
-  out. Fixed-view evidence at
-  `diagnostics/quake_stream/20260521-190448/frame_001.png` keeps QGE ownership
-  of world geometry, textures, lightmaps, HUD/console, and the viewmodel with
-  `own_console=1`, `own_viewmodel=1`, `emesh=58`, `ecoeff=27`, and
-  `fallback_reason=none` on captured frames. Against the previous
-  `20260521-183949` QGE baseline, whole-frame RMSE improves from `0.0340944`
-  to `0.0339437`; world high-frequency texture energy rises from `88.8%` to
-  `92.8%` of the classic reference. Ceiling, left-wall, right-wall, and
-  front-wall high-frequency ratios move from `75.2%`, `70.3%`, `78.8%`, and
-  `65.1%` of classic to `80.7%`, `74.8%`, `82.9%`, and `69.3%`. This is a
-  bounded detail-preservation fix, not complete vanilla material fidelity.
+- The current QGE world texture-detail slice corrects the surface luma floor to
+  add only the missing lift and applies `QGE_SURFACE_TEXTURE_DETAIL_RESTORE
+  0.28f` after bilinear/prefilter sampling. The restore remains asymmetric:
+  dark grooves receive the full bounded detail restore, while highlights are
+  scaled down by `QGE_SURFACE_TEXTURE_DETAIL_HIGHLIGHT_SCALE` so the far floor
+  does not wash out. Fixed-view evidence at
+  `diagnostics/quake_graphics/20260522-024351/metrics.md` keeps QGE ownership
+  of world geometry, textures, lightmaps, HUD/console, and the viewmodel; it
+  lowers world RMSE from `0.032731` to `0.032623` versus the pushed QGE
+  baseline and improves every tracked crop except the mid-corridor, whose delta
+  is `+0.000079`.
 - The current QGE world-surface blue-balance slice applies
   `QGE_SURFACE_WORLD_BLUE_BALANCE` during BSP surface sampling because the QGE
   fixed-view floor, ceiling, and wall crops were consistently too blue against
@@ -554,7 +549,7 @@ Known current visual state:
   It cuts measured side-wall, front-wall, and ceiling high-frequency crawl in
   the fixed-view capture, but whole-frame RMSE remains mixed because weapon and
   world conformance are still not complete.
-- The most recent texture-detail work applies
+- The earlier texture-detail work applies
   `QGE_SURFACE_TEXTURE_DETAIL_RESTORE 0.16f` with asymmetric highlight scaling
   to recover some floor, wall, and ceiling texture energy after
   bilinear/prefilter sampling. It improves fixed-view RMSE to `0.0339437` and

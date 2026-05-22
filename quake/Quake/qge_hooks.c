@@ -261,7 +261,7 @@ static qboolean QGE_RenderShouldUpdateFrame(void);
 #define QGE_SURFACE_LIGHT_SCALE 1.05f
 #define QGE_SURFACE_LUMA_FLOOR 0.018f
 #define QGE_SURFACE_WORLD_BLUE_BALANCE 0.88f
-#define QGE_SURFACE_TEXTURE_DETAIL_RESTORE 0.16f
+#define QGE_SURFACE_TEXTURE_DETAIL_RESTORE 0.28f
 #define QGE_SURFACE_TEXTURE_DETAIL_HIGHLIGHT_SCALE 0.35f
 #define QGE_SURFACE_FULLBRIGHT_INDEX 224
 #define QGE_SURFACE_FULLBRIGHT_SCALE 1.35f
@@ -7456,9 +7456,9 @@ QGE_HOT_INLINE qge_rgb_sample_t QGE_SurfaceSampleColorContext(
 	out.b = QGE_ClampSpatialSignal(out.b);
 	luma = QGE_RGBLuma(&out);
 	if (luma < QGE_SURFACE_LUMA_FLOOR) {
-		out.r += QGE_SURFACE_LUMA_FLOOR;
-		out.g += QGE_SURFACE_LUMA_FLOOR;
-		out.b += QGE_SURFACE_LUMA_FLOOR;
+		out.r += QGE_SURFACE_LUMA_FLOOR - luma;
+		out.g += QGE_SURFACE_LUMA_FLOOR - luma;
+		out.b += QGE_SURFACE_LUMA_FLOOR - luma;
 	}
 	return out;
 }
