@@ -338,7 +338,8 @@ comparison artifact directory. It probes `tools/qge_image_metrics.py
 require numpy and Pillow. If either dependency is unavailable, the harness now
 continues with `tools/qge_world_frame_metrics.py`, a standard-library PNG
 fallback that reports fixed world-region RMSE, luma means, and high-frequency
-texture-energy ratios for floor, wall, ceiling, and corridor crops. The
+texture-energy ratios for floor, wall, ceiling, corridor, upper-playfield, and
+viewmodel crops. The
 harness copies every captured `frame_*.png` into per-mode frame directories; in
 fallback mode, multi-frame captures are averaged instead of scoring only the
 last screenshot. Set `QGE_HARNESS_BASELINE_CANDIDATE` to a previous QGE PNG or
@@ -818,7 +819,9 @@ loop with policy updates.
   frames and `qge.world_frame_metrics.frames.v0` for frame directories or
   baseline-candidate comparisons. Frame-set reports also include reference,
   baseline, and candidate drift columns so fixed-view flicker is visible in the
-  metrics artifact.
+  metrics artifact. The default regions keep the broad historical `world` crop
+  and also split out `world_upper` plus the lower-center `viewmodel` band, so
+  foreground weapon regressions cannot hide inside world-surface deltas.
   QGE world-surface projection clips very near geometry at
   `QGE_SURFACE_NEAR_CLIP_DEPTH` so walls or ceilings close to the camera do not
   explode into full-frame strips during autonomous captures.

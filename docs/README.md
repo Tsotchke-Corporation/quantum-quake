@@ -73,14 +73,16 @@ renderer fixes, not as one finished renderer claim:
 - `20260522-034256`: deterministic display luma-contrast capture; improves all
   named flat-lightstyle world crops against `20260522-031254` with zero
   candidate drift, while the broad world crop RMSE increases from extra visible
-  texture/edge energy.
+  texture/edge energy and first-person weapon overlap. The follow-up
+  `world_upper` crop improves by `-0.007318` RMSE, while `viewmodel` worsens by
+  `+0.034692`.
 - `tools/qge_world_frame_metrics.py`: dependency-free PNG scorer for fixed
-  floor, wall, ceiling, and corridor crops. Use it when numpy/Pillow are not
-  installed; `tools/quake_graphics_harness.sh` falls back to it automatically
-  and still writes `metrics.json` / `metrics.md`. It can average `frame_*.png`
-  directories, report frame-to-frame drift, and emit baseline-candidate deltas
-  for renderer experiments. The paired harness freezes animated lightstyles by
-  default for fixed-view scoring.
+  floor, wall, ceiling, corridor, upper-playfield, and viewmodel crops. Use it
+  when numpy/Pillow are not installed; `tools/quake_graphics_harness.sh` falls
+  back to it automatically and still writes `metrics.json` / `metrics.md`. It
+  can average `frame_*.png` directories, report frame-to-frame drift, and emit
+  baseline-candidate deltas for renderer experiments. The paired harness
+  freezes animated lightstyles by default for fixed-view scoring.
 - Default Noesis runs are no-script autonomous diagnostics with server-side
   movement/combat feedback plus local clearance, floor, and hazard probes when
   no target is engaged. Noesis is not yet learning Quake from experience, has

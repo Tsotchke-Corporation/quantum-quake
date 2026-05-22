@@ -64,7 +64,10 @@ Recent verified slices on `master` establish the current baseline:
   the flat-lightstyle `20260522-031254` QGE baseline: ceiling, side-wall,
   front-wall, center-floor, near-floor, and mid-corridor crop RMSE all improve,
   candidate drift remains `0.000000`, and the broad world crop RMSE increases
-  by `+0.003629` because visible texture/edge energy rises.
+  by `+0.003629` because visible texture/edge energy rises and the broad crop
+  includes the first-person weapon band. The follow-up crop audit separates the
+  signal: `world_upper` improves by `-0.007318` RMSE, while `viewmodel`
+  worsens by `+0.034692`.
 - The current QGE world texture-detail slice corrects the surface luma floor to
   add only the missing lift and applies `QGE_SURFACE_TEXTURE_DETAIL_RESTORE
   0.28f` after bilinear/prefilter sampling. The restore remains asymmetric:
@@ -600,9 +603,10 @@ Known current visual state:
   PNG metrics for renderer triage. It emits `qge.world_frame_metrics.v0`
   evidence for single frames and `qge.world_frame_metrics.frames.v0` evidence
   for averaged frame directories, temporal drift, or baseline-candidate deltas
-  over world, ceiling, side-wall, front-wall, floor, and corridor crops. The
-  paired graphics harness falls back to it when numpy/Pillow are not available
-  and defaults to flat lightstyles for fixed-view renderer comparisons.
+  over world, upper-playfield, ceiling, side-wall, front-wall, floor, corridor,
+  and viewmodel crops. The paired graphics harness falls back to it when
+  numpy/Pillow are not available and defaults to flat lightstyles for
+  fixed-view renderer comparisons.
 - The current renderer should be described as improved, not fixed. In the
   latest fixed-view capture the world projection, contrast, and brightness are
   much closer to classic Quake, but floors, walls, and ceilings still do not

@@ -15,6 +15,7 @@ from pathlib import Path
 
 DEFAULT_REGIONS: dict[str, tuple[int, int, int, int]] = {
     "world": (0, 0, 800, 540),
+    "world_upper": (0, 0, 800, 440),
     "ceiling": (90, 0, 710, 44),
     "left_wall": (0, 80, 100, 430),
     "right_wall": (700, 80, 800, 430),
@@ -23,6 +24,7 @@ DEFAULT_REGIONS: dict[str, tuple[int, int, int, int]] = {
     "left_near_floor": (0, 430, 240, 555),
     "right_near_floor": (560, 430, 800, 555),
     "mid_corridor": (260, 250, 545, 395),
+    "viewmodel": (320, 420, 480, 540),
 }
 
 

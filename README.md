@@ -85,11 +85,12 @@ Important known limitations:
   intentionally testing interactivity.
 - Fixed-view renderer comparisons no longer depend solely on optional
   numpy/Pillow tooling. `tools/qge_world_frame_metrics.py` uses only the Python
-  standard library to score floor, wall, ceiling, and corridor PNG crops. It
-  also averages frame directories and can compare a new QGE run against a
-  baseline candidate for per-region deltas and frame-to-frame drift; the
-  paired graphics harness falls back to it automatically. The paired harness
-  freezes lightstyle animation by default for reproducible fixed-view scoring.
+  standard library to score floor, wall, ceiling, corridor, upper-playfield,
+  and viewmodel PNG crops. It also averages frame directories and can compare a
+  new QGE run against a baseline candidate for per-region deltas and
+  frame-to-frame drift; the paired graphics harness falls back to it
+  automatically. The paired harness freezes lightstyle animation by default for
+  reproducible fixed-view scoring.
 
 ## Current Renderer Evidence
 
@@ -139,7 +140,10 @@ wall, front-wall, center-floor, near-floor, and mid-corridor crop RMSE all
 improve, with the largest deltas on center floor (`-0.011806`) and mid corridor
 (`-0.014200`). Candidate drift remains `0.000000`; the broad world crop RMSE
 increases by `+0.003629` because the output now preserves more visible
-texture/edge energy.
+texture/edge energy and the broad crop includes the first-person weapon band.
+The follow-up crop audit separates that signal: `world_upper` improves by
+`-0.007318` RMSE while the `viewmodel` crop regresses by `+0.034692`, making
+the next renderer target explicit.
 
 What is still broken is just as important: light-emissive regions are closer but
 still too dim, nearby floors are slightly over-lifted, raster seams remain visible,

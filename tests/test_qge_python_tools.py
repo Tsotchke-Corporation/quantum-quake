@@ -376,6 +376,12 @@ class ImageMetricsTests(unittest.TestCase):
         self.assertGreater(region["candidate_luma_mean"], region["reference_luma_mean"])
         self.assertIn("QGE World Frame Metrics", world_frame_metrics.markdown_report(metrics))
 
+    def test_world_frame_metrics_default_regions_split_viewmodel(self) -> None:
+        regions = world_frame_metrics.DEFAULT_REGIONS
+        self.assertEqual(regions["world"], (0, 0, 800, 540))
+        self.assertEqual(regions["world_upper"], (0, 0, 800, 440))
+        self.assertEqual(regions["viewmodel"], (320, 420, 480, 540))
+
     def test_world_frame_metrics_frame_set_baseline_delta(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmpdir = Path(tmp)
