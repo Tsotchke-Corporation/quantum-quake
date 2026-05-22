@@ -36,14 +36,16 @@ state, claims policy, stream/harness operation, and long-range research plans.
   ordinary world textures, bounded fullbright wall texel contribution,
   moderate-minification texture prefiltering, one-texel bilinear wall/ceiling
   smoothing, bounded world-surface blue balance, bounded texture-detail
-  restoration, and alias-skin first-person weapon sampling. The latest
-  fixed-view evidence is
-  `diagnostics/quake_stream/20260521-190448/frame_001.png`; it restores some
-  wall, ceiling, and floor texture energy relative to `20260521-183949`, but
-  floors, walls, and ceilings are still not vanilla-quality. Remaining renderer
-  gaps include nearby floor brightness/color mismatch, raster seams, warp/water
-  seams, viewmodel lighting/placement/material parity, and vanilla-material
-  fidelity.
+  restoration, alias-skin first-person weapon sampling, deterministic
+  flat-lightstyle fixed-view scoring, and a bounded display luma-contrast pass.
+  The latest fixed-view evidence is
+  `diagnostics/quake_graphics/20260522-034256/metrics.md`; it improves every
+  named world crop against the flat-lightstyle `20260522-031254` QGE baseline,
+  while the broad world crop gets harsher because visible texture/edge energy
+  increased. Floors, walls, and ceilings are still not vanilla-quality.
+  Remaining renderer gaps include nearby floor brightness/color mismatch,
+  raster seams, warp/water seams, viewmodel lighting/placement/material parity,
+  and vanilla-material fidelity.
 
 ## Renderer Evidence Snapshot
 
@@ -68,6 +70,10 @@ renderer fixes, not as one finished renderer claim:
 - `20260521-190448`: texture-detail restore capture; raises world
   high-frequency texture energy from `88.8%` to `92.8%` of the classic
   reference and improves fixed-view RMSE to `0.0339437`.
+- `20260522-034256`: deterministic display luma-contrast capture; improves all
+  named flat-lightstyle world crops against `20260522-031254` with zero
+  candidate drift, while the broad world crop RMSE increases from extra visible
+  texture/edge energy.
 - `tools/qge_world_frame_metrics.py`: dependency-free PNG scorer for fixed
   floor, wall, ceiling, and corridor crops. Use it when numpy/Pillow are not
   installed; `tools/quake_graphics_harness.sh` falls back to it automatically

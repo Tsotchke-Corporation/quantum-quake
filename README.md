@@ -94,13 +94,14 @@ Important known limitations:
 ## Current Renderer Evidence
 
 The current QGE graphics baseline is improved but still visibly glitchy. The
-latest fixed-view evidence is
-`diagnostics/quake_stream/20260521-190448/frame_001.png`. That run keeps QGE
+latest fixed-view frame-set evidence is
+`diagnostics/quake_graphics/20260522-034256/metrics.md`. That run keeps QGE
 ownership of world geometry, world textures, lightmaps, HUD/console, and the
-viewmodel with `emesh=58`, `ecoeff=27`, `own_viewmodel=1`,
-`own_console=1`, and `fallback_reason=none` on captured frames. It also keeps
-QGE render/snapshot milestones in the logs instead of painting them as Quake
-notify text over the world. Against the classic `20260521-151552` reference,
+viewmodel with `own_world=1`, `own_textures=1`, `own_lightmaps=1`,
+`own_viewmodel=1`, `own_console=1`, and `fallback_reason=none` on captured
+frames. It also keeps QGE render/snapshot milestones in the logs instead of
+painting them as Quake notify text over the world. Against the classic
+`20260521-151552` reference,
 the previous world-tone capture
 `20260521-153315` moved the front-wall mean-luminance delta from about `-19.73`
 to `-0.92`, side-wall deltas from about `-9.64/-11.01` to `+3.08/+2.65`,
@@ -131,7 +132,14 @@ palette texture contrast after bilinear/prefilter sampling: whole-frame RMSE
 improves to `0.0339437`, world high-frequency texture energy rises from `88.8%`
 to `92.8%` of the classic reference, and the ceiling/side-wall/front-wall
 high-frequency ratios improve from `75.2%`/`70.3%`/`78.8%`/`65.1%` to
-`80.7%`/`74.8%`/`82.9%`/`69.3%`.
+`80.7%`/`74.8%`/`82.9%`/`69.3%`. The deterministic display-contrast follow-up
+at `20260522-034256` applies a bounded luma contrast after QGE tone mapping:
+against the flat-lightstyle `20260522-031254` baseline, ceiling, left/right
+wall, front-wall, center-floor, near-floor, and mid-corridor crop RMSE all
+improve, with the largest deltas on center floor (`-0.011806`) and mid corridor
+(`-0.014200`). Candidate drift remains `0.000000`; the broad world crop RMSE
+increases by `+0.003629` because the output now preserves more visible
+texture/edge energy.
 
 What is still broken is just as important: light-emissive regions are closer but
 still too dim, nearby floors are slightly over-lifted, raster seams remain visible,

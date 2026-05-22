@@ -255,6 +255,8 @@ static qboolean QGE_RenderShouldUpdateFrame(void);
 #define QGE_RENDER_TRACE_FLAG_CPU_IDWT 0x00080000u
 #define QGE_TONE_LUT_SIZE 4096
 #define QGE_NO_FLOOR_TONE_WHITE_HEADROOM 9.50f
+#define QGE_DISPLAY_LUMA_CONTRAST 1.30f
+#define QGE_DISPLAY_LUMA_PIVOT 0.10f
 #define QGE_SURFACE_TEXTURE_AMBIENT 0.06f
 #define QGE_SURFACE_TEXTURE_SCALE 0.94f
 #define QGE_SURFACE_LIGHT_AMBIENT 0.10f
@@ -9249,6 +9251,39 @@ static void QGE_InitToneLut(void)
 	qge_tone_lut_ready = true;
 }
 
+static void QGE_ApplyDisplayLumaContrast(float *r, float *g, float *b)
+{
+	float luma;
+	float adjusted;
+	float scale;
+
+	if (!r || !g || !b)
+		return;
+	if (*r < 0.0f) *r = 0.0f;
+	if (*g < 0.0f) *g = 0.0f;
+	if (*b < 0.0f) *b = 0.0f;
+
+	luma = 0.299f * *r + 0.587f * *g + 0.114f * *b;
+	if (luma <= 0.000001f)
+		return;
+
+	adjusted = QGE_DISPLAY_LUMA_PIVOT +
+		(luma - QGE_DISPLAY_LUMA_PIVOT) * QGE_DISPLAY_LUMA_CONTRAST;
+	if (adjusted <= 0.0f) {
+		*r = 0.0f;
+		*g = 0.0f;
+		*b = 0.0f;
+		return;
+	}
+	if (adjusted > 1.0f)
+		adjusted = 1.0f;
+
+	scale = adjusted / luma;
+	*r *= scale;
+	*g *= scale;
+	*b *= scale;
+}
+
 static qboolean QGE_RenderUseSpatialNoFloorTone(void)
 {
 	return quantum_render_detail_mix.value >= 0.999f &&
@@ -9437,6 +9472,7 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 			r *= scale;
 			g *= scale;
 			b *= scale;
+			QGE_ApplyDisplayLumaContrast(&r, &g, &b);
 			if (r > 1.0f) r = 1.0f;
 			if (g > 1.0f) g = 1.0f;
 			if (b > 1.0f) b = 1.0f;
@@ -9472,6 +9508,7 @@ static void QGE_ConvertRenderBufferToDisplay(int total_pixels,
 				r *= scale;
 				g *= scale;
 				b *= scale;
+				QGE_ApplyDisplayLumaContrast(&r, &g, &b);
 				if (r > 1.0f) r = 1.0f;
 				if (g > 1.0f) g = 1.0f;
 				if (b > 1.0f) b = 1.0f;

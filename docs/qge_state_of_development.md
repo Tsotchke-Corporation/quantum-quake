@@ -57,6 +57,14 @@ The latest verified branch state is:
 
 Recent verified slices on `master` establish the current baseline:
 
+- The current QGE display-contrast slice applies bounded luma contrast after
+  tone mapping so the fixed-view renderer no longer lifts dark ceiling/floor
+  regions while compressing brighter walls and corridors. Fixed-view evidence
+  at `diagnostics/quake_graphics/20260522-034256/metrics.md` compares against
+  the flat-lightstyle `20260522-031254` QGE baseline: ceiling, side-wall,
+  front-wall, center-floor, near-floor, and mid-corridor crop RMSE all improve,
+  candidate drift remains `0.000000`, and the broad world crop RMSE increases
+  by `+0.003629` because visible texture/edge energy rises.
 - The current QGE world texture-detail slice corrects the surface luma floor to
   add only the missing lift and applies `QGE_SURFACE_TEXTURE_DETAIL_RESTORE
   0.28f` after bilinear/prefilter sampling. The restore remains asymmetric:
