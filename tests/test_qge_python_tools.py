@@ -3109,6 +3109,12 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
             vanilla_matrix.write_json(capture_dir / "metrics.json", metrics)
             runtime_evidence = {
                 "single_trace_ready": True,
+                "render": {
+                    "sparse_dwt_count": 1,
+                    "native_bridge_count": 1,
+                    "cpu_idwt_count": 0,
+                    "idwt_backend": "native",
+                },
                 "ai": {"ready": True, "decision_count": 2},
                 "audio": {
                     "ready": True,
@@ -3117,18 +3123,25 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
                 "visibility": {
                     "ready": True,
                     "authority_gate_count": 1,
+                    "authority_apply_count": 1,
                     "flags": {"authority_requested": True},
                 },
                 "projectile": {
                     "ready": True,
                     "authority_gate_count": 1,
+                    "active_projectiles": 1,
+                    "writeback_decision_count": 1,
                     "off_reason": "none",
                 },
             }
             vanilla_matrix.write_json(
                 capture_dir / "quantum.qge_trace_summary.json",
                 {
-                    "records": {"ai_decision": 2},
+                    "records": {
+                        "ai_decision": 2,
+                        "entropy": 2,
+                        "measurement": 2,
+                    },
                     "runtime_evidence": runtime_evidence,
                 },
             )
@@ -3156,7 +3169,9 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
                     f"QGE render frame=1 render={render_value} fallback=0 "
                     f"surrogate=0 classic3d=0 classic2d=0 viewmodel=1 "
                     f"owner={owner} suppressed3d=1 suppressed2d=1 "
-                    f"{ownership}poly=3 tris=6 edgefills=2\n",
+                    f"{ownership}poly=3 tris=6 edgefills=2 "
+                    f"gate_kernel=1 gates=26 shots=64 primary_fb=1 "
+                    f"native_idwt=1 cpu_idwt=0 idwt_backend=native\n",
                     encoding="utf-8",
                 )
 
@@ -3180,6 +3195,11 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
             self.assertTrue(summary["qge_asset_ownership_complete"])
             self.assertEqual(summary["qge_asset_ownership"]["own_world"], 1)
             self.assertTrue(summary["runtime_evidence_ready"])
+            self.assertTrue(summary["moonlab_authority_ready"])
+            self.assertEqual(summary["moonlab_authority_blockers"], [])
+            self.assertTrue(
+                summary["moonlab_domain_readiness"]["projectile_live_authority"]["ready"]
+            )
             self.assertTrue(
                 matrix["runtime_evidence_summary"]["single_trace_ready"]
             )
@@ -3191,6 +3211,8 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
             )
             self.assertEqual(icc["runtime_backend"], "qge_vanilla_capture_matrix")
             self.assertTrue(icc["runtime_evidence_ready"])
+            self.assertTrue(icc["moonlab_authority_ready"])
+            self.assertEqual(icc["qge_render_gates"], 26)
             self.assertEqual(icc["runtime_evidence_ai_decision_count"], 2)
             self.assertEqual(
                 icc["completion_reason"],

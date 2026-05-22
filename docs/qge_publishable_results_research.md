@@ -198,7 +198,10 @@ qge_vanilla_runtime_complete -> produce_ready_vanilla_capture_matrix
 The next hard work should therefore be:
 
 1. Make `tools/qge_vanilla_capture_matrix.py` emit a stricter whole-game
-   ownership matrix, not only graphics readiness.
+   ownership matrix, not only graphics readiness. The hard-mode matrix must
+   include `moonlab_domain_readiness`, `moonlab_authority_ready`, and explicit
+   blockers for render quantum workload, RNG/entropy, AI, visibility, audio,
+   projectile live authority, particles, sprites, and performance.
 2. Add per-domain required counters for claimed Moonlab authority:
    render, UI, audio, RNG, visibility, physics/projectiles, AI, particles, and
    media.

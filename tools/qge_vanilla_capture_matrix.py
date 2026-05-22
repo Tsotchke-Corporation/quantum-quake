@@ -133,6 +133,229 @@ def counter_max(values: dict[str, Any], max_values: dict[str, Any],
         return 0
 
 
+def int_from(value: Any, default: int = 0) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return default
+
+
+def runtime_section(runtime_evidence: dict[str, Any],
+                    name: str) -> dict[str, Any]:
+    section = runtime_evidence.get(name, {})
+    return section if isinstance(section, dict) else {}
+
+
+def records_section(trace_evidence: dict[str, Any]) -> dict[str, Any]:
+    records = trace_evidence.get("records", {})
+    return records if isinstance(records, dict) else {}
+
+
+def readiness_entry(ready: bool,
+                    evidence: dict[str, Any],
+                    blockers: list[str]) -> dict[str, Any]:
+    return {
+        "required": True,
+        "ready": ready,
+        "evidence": evidence,
+        "blockers": [] if ready else blockers,
+    }
+
+
+def build_moonlab_domain_readiness(
+    summary: dict[str, Any],
+    runtime_evidence: dict[str, Any],
+    trace_evidence: dict[str, Any],
+) -> dict[str, Any]:
+    records = records_section(trace_evidence)
+    render = runtime_section(runtime_evidence, "render")
+    ai = runtime_section(runtime_evidence, "ai")
+    audio = runtime_section(runtime_evidence, "audio")
+    visibility = runtime_section(runtime_evidence, "visibility")
+    projectile = runtime_section(runtime_evidence, "projectile")
+
+    render_gates = int_from(summary.get("qge_render_gates"))
+    render_shots = int_from(summary.get("qge_render_shots"))
+    render_primary_fb = int_from(summary.get("qge_render_primary_fb"))
+    sparse_dwt_count = int_from(render.get("sparse_dwt_count"))
+    render_native_count = int_from(render.get("native_bridge_count"))
+    render_cpu_count = int_from(render.get("cpu_idwt_count"))
+    render_workload_ready = (
+        render_gates > 0 and render_shots > 0 and
+        (render_primary_fb > 0 or sparse_dwt_count > 0) and
+        (render_native_count > 0 or render_cpu_count > 0 or sparse_dwt_count > 0)
+    )
+
+    entropy_count = int_from(records.get("entropy"))
+    measurement_count = int_from(records.get("measurement"))
+    ai_decision_count = int_from(ai.get("decision_count"))
+    audio_source_spatial_count = int_from(audio.get("source_spatial_count"))
+    visibility_gate_count = int_from(visibility.get("authority_gate_count"))
+    visibility_apply_count = int_from(visibility.get("authority_apply_count"))
+    projectile_gate_count = int_from(projectile.get("authority_gate_count"))
+    projectile_active_count = int_from(projectile.get("active_projectiles"))
+    projectile_decision_count = max(
+        int_from(projectile.get("writeback_decision_count")),
+        int_from(projectile.get("impact_measurement_count")),
+        int_from(projectile.get("branch_state_count")),
+        int_from(projectile.get("preimpact_selection_count")),
+    )
+
+    domains = {
+        "capture_artifacts": readiness_entry(
+            bool(summary.get("classic_frame_exists")) and
+            bool(summary.get("qge_frame_exists")) and
+            bool(summary.get("agent_stream_runs_success")),
+            {
+                "classic_frame_exists": summary.get("classic_frame_exists"),
+                "qge_frame_exists": summary.get("qge_frame_exists"),
+                "agent_stream_runs_success": summary.get(
+                    "agent_stream_runs_success"),
+            },
+            ["classic/qge frames and successful agent-stream runs are required"],
+        ),
+        "qge_primary_framebuffer": readiness_entry(
+            int_from(summary.get("fallback_count")) == 0 and
+            int_from(summary.get("qge_surface_surrogates")) == 0 and
+            bool(summary.get("qge_classic_output_hidden")) and
+            summary.get("qge_primary_owner") == "qge_3d" and
+            int_from(summary.get("viewmodel_encoded")) > 0,
+            {
+                "fallback_count": summary.get("fallback_count"),
+                "surrogate_count": summary.get("qge_surface_surrogates"),
+                "classic_output_hidden": summary.get(
+                    "qge_classic_output_hidden"),
+                "owner": summary.get("qge_primary_owner"),
+                "viewmodel_encoded": summary.get("viewmodel_encoded"),
+            },
+            ["QGE primary framebuffer must hide classic output and avoid fallback/surrogate surfaces"],
+        ),
+        "render_quantum_workload": readiness_entry(
+            render_workload_ready,
+            {
+                "gates": render_gates,
+                "shots": render_shots,
+                "primary_fb": render_primary_fb,
+                "sparse_dwt_count": sparse_dwt_count,
+                "native_bridge_count": render_native_count,
+                "cpu_idwt_count": render_cpu_count,
+                "idwt_backend": render.get("idwt_backend"),
+            },
+            ["render must expose nonzero gates, shots, sparse-DWT work, and a real IDWT backend"],
+        ),
+        "asset_coverage": readiness_entry(
+            bool(summary.get("qge_asset_ownership_complete")),
+            {
+                "ownership": summary.get("qge_asset_ownership"),
+                "missing_fields": summary.get(
+                    "qge_asset_ownership_missing_fields"),
+                "incomplete_fields": summary.get(
+                    "qge_asset_ownership_incomplete_fields"),
+            },
+            ["all render/media asset ownership counters must be present and nonzero"],
+        ),
+        "rng_entropy": readiness_entry(
+            entropy_count > 0 and measurement_count > 0,
+            {
+                "entropy_records": entropy_count,
+                "measurement_records": measurement_count,
+            },
+            ["trace must include entropy and measurement records"],
+        ),
+        "ai_authority": readiness_entry(
+            bool(ai.get("ready")) and ai_decision_count > 0,
+            {
+                "ready": ai.get("ready"),
+                "decision_count": ai_decision_count,
+                "record_count": ai.get("record_count"),
+            },
+            ["AI must have QGE decisions in the trace"],
+        ),
+        "visibility_authority": readiness_entry(
+            bool(visibility.get("ready")) and
+            visibility_gate_count > 0 and visibility_apply_count > 0,
+            {
+                "ready": visibility.get("ready"),
+                "authority_gate_count": visibility_gate_count,
+                "authority_apply_count": visibility_apply_count,
+                "clean_frames": visibility.get("clean_frames"),
+            },
+            ["visibility must show QGE authority gate and apply evidence"],
+        ),
+        "audio_authority": readiness_entry(
+            bool(audio.get("ready")) and audio_source_spatial_count > 0,
+            {
+                "ready": audio.get("ready"),
+                "source_spatial_count": audio_source_spatial_count,
+                "source_frame_count": audio.get("source_frame_count"),
+                "attenuation_pan_authority_count": audio.get(
+                    "attenuation_pan_authority_count"),
+            },
+            ["audio must show per-source spatial QGE authority evidence"],
+        ),
+        "projectile_live_authority": readiness_entry(
+            bool(projectile.get("ready")) and
+            projectile_gate_count > 0 and
+            projectile_active_count > 0 and
+            projectile_decision_count > 0,
+            {
+                "ready": projectile.get("ready"),
+                "authority_gate_count": projectile_gate_count,
+                "active_projectiles": projectile_active_count,
+                "decision_or_measurement_count": projectile_decision_count,
+                "off_reason": projectile.get("off_reason"),
+            },
+            ["capture must include active projectile authority, not only an idle gate"],
+        ),
+        "particles_pipeline": readiness_entry(
+            int_from(summary.get("qge_asset_ownership", {}).get(
+                "own_particles")) > 0,
+            {"own_particles": summary.get("qge_asset_ownership", {}).get(
+                "own_particles")},
+            ["particle ownership counter must be nonzero"],
+        ),
+        "sprites_pipeline": readiness_entry(
+            int_from(summary.get("qge_asset_ownership", {}).get(
+                "own_sprites")) > 0,
+            {"own_sprites": summary.get("qge_asset_ownership", {}).get(
+                "own_sprites")},
+            ["sprite ownership counter must be nonzero"],
+        ),
+        "qge_performance": readiness_entry(
+            bool(summary.get("performance_sidecars_success")),
+            {
+                "classic_status": summary.get("classic_performance_status"),
+                "qge_status": summary.get("qge_performance_status"),
+                "qge_threshold_failures": summary.get(
+                    "qge_performance_threshold_failures"),
+            },
+            ["performance sidecars must pass without threshold failures"],
+        ),
+    }
+    return domains
+
+
+def domain_blockers(domains: dict[str, Any]) -> list[str]:
+    blockers: list[str] = []
+    for name, data in domains.items():
+        if not isinstance(data, dict) or data.get("ready"):
+            continue
+        domain_blockers_value = data.get("blockers", [])
+        if not isinstance(domain_blockers_value, list):
+            domain_blockers_value = [str(domain_blockers_value)]
+        for blocker in domain_blockers_value:
+            blockers.append(f"{name}: {blocker}")
+    return blockers
+
+
+def domains_ready(domains: dict[str, Any]) -> bool:
+    return all(
+        bool(data.get("ready"))
+        for data in domains.values()
+        if isinstance(data, dict) and data.get("required", True)
+    )
+
+
 def asset_ownership_summary(render: dict[str, Any],
                             render_max: dict[str, Any]) -> dict[str, Any]:
     counters = {
@@ -353,7 +576,9 @@ def mode_entry(capture_dir: Path,
         "QGE render frame=",
         ["fallback", "surrogate", "micro", "clipped", "invalid",
          "microfill", "culled", "classic3d", "classic2d",
-         "suppressed2d", "viewmodel", *ASSET_OWNERSHIP_KEYS],
+         "suppressed3d", "suppressed2d", "viewmodel", "gate_kernel",
+         "gates", "shots", "primary_fb", "native_idwt", "cpu_idwt",
+         *ASSET_OWNERSHIP_KEYS],
     )
     scene_max = matching_key_value_max(
         log,
@@ -448,6 +673,112 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
         classic3d == 0 and classic2d == 0 and
         suppressed3d > 0 and suppressed2d > 0
     )
+    qge_render_gate_kernel = counter_max(qge_render, qge_render_max,
+                                         "gate_kernel")
+    qge_render_gates = counter_max(qge_render, qge_render_max, "gates")
+    qge_render_shots = counter_max(qge_render, qge_render_max, "shots")
+    qge_render_primary_fb = counter_max(qge_render, qge_render_max,
+                                        "primary_fb")
+    qge_render_native_idwt = counter_max(qge_render, qge_render_max,
+                                         "native_idwt")
+    qge_render_cpu_idwt = counter_max(qge_render, qge_render_max, "cpu_idwt")
+    qge_render_idwt_backend = qge_render.get("idwt_backend")
+    if not qge_render_idwt_backend:
+        qge_render_idwt_backend = qge_render_max.get("idwt_backend")
+
+    conformance_summary = {
+        "status": "evidence_only",
+        "classic_frame_exists": classic["frame"]["exists"],
+        "qge_frame_exists": qge["frame"]["exists"],
+        "classic_agent_run_status": classic_agent_run.get("run_status"),
+        "qge_agent_run_status": qge_agent_run.get("run_status"),
+        "classic_agent_startup_issue": classic_agent_run.get("startup_issue"),
+        "qge_agent_startup_issue": qge_agent_run.get("startup_issue"),
+        "agent_stream_runs_success": agent_stream_runs_success,
+        "classic_performance_status": performance_status(
+            classic_perf, classic_agent_run),
+        "qge_performance_status": performance_status(
+            qge_perf, qge_agent_run),
+        "classic_performance_engine_average_quantum_ms_max": (
+            classic_perf.get("engine_average_quantum_ms_max")),
+        "qge_performance_engine_average_quantum_ms_max": (
+            qge_perf.get("engine_average_quantum_ms_max")),
+        "classic_performance_render_time_ms_max": classic_perf.get(
+            "render_time_ms_max"),
+        "qge_performance_render_time_ms_max": qge_perf.get(
+            "render_time_ms_max"),
+        "classic_performance_threshold_failures": classic_perf.get(
+            "threshold_failures"),
+        "qge_performance_threshold_failures": qge_perf.get(
+            "threshold_failures"),
+        "performance_sidecars_success": performance_sidecars_success,
+        "runtime_evidence_ready": bool(
+            qge_runtime_evidence.get("single_trace_ready")),
+        "qge_trace_summary_file": qge_trace.get("path"),
+        "qge_trace_summary_exists": qge_trace.get("exists"),
+        "fallback_count": fallback_count,
+        "classic3d_count": classic3d,
+        "classic2d_count": classic2d,
+        "viewmodel_encoded": viewmodel,
+        "qge_primary_owner": qge_render.get("owner"),
+        "qge_suppressed_classic3d": suppressed3d,
+        "qge_suppressed_classic2d": suppressed2d,
+        "qge_classic_output_hidden": classic_output_hidden,
+        "qge_asset_ownership": ownership["counters"],
+        "qge_asset_ownership_fields_present": (
+            ownership["fields_present"]),
+        "qge_asset_ownership_missing_fields": (
+            ownership["missing_fields"]),
+        "qge_asset_ownership_incomplete_fields": (
+            ownership["incomplete_fields"]),
+        "qge_asset_ownership_complete": ownership["complete"],
+        "qge_surface_polygons": qge_render.get("poly"),
+        "qge_surface_triangles": qge_render.get("tris"),
+        "qge_surface_surrogates": surrogate_count,
+        "qge_surface_culled": max(
+            int(qge_render.get("culled", 0) or 0),
+            int(qge_render_max.get("culled", 0) or 0),
+        ),
+        "qge_surface_micro_surrogates": max(
+            int(qge_render.get("micro", 0) or 0),
+            int(qge_render_max.get("micro", 0) or 0),
+        ),
+        "qge_surface_micro_fills": max(
+            int(qge_render.get("microfill", 0) or 0),
+            int(qge_render_max.get("microfill", 0) or 0),
+        ),
+        "qge_surface_clipped_surrogates": max(
+            int(qge_render.get("clipped", 0) or 0),
+            int(qge_render_max.get("clipped", 0) or 0),
+        ),
+        "qge_edge_fills": qge_render.get("edgefills"),
+        "qge_render_gate_kernel": qge_render_gate_kernel,
+        "qge_render_gates": qge_render_gates,
+        "qge_render_shots": qge_render_shots,
+        "qge_render_primary_fb": qge_render_primary_fb,
+        "qge_render_native_idwt": qge_render_native_idwt,
+        "qge_render_cpu_idwt": qge_render_cpu_idwt,
+        "qge_render_idwt_backend": qge_render_idwt_backend,
+    }
+    moonlab_domains = build_moonlab_domain_readiness(
+        conformance_summary,
+        qge_runtime_evidence,
+        qge_trace,
+    )
+    moonlab_ready = domains_ready(moonlab_domains)
+    conformance_summary["moonlab_domain_readiness"] = moonlab_domains
+    conformance_summary["moonlab_authority_ready"] = moonlab_ready
+    conformance_summary["moonlab_authority_blockers"] = domain_blockers(
+        moonlab_domains)
+    conformance_summary["ready_for_complete_claim"] = (
+        classic["frame"]["exists"] and qge["frame"]["exists"] and
+        agent_stream_runs_success and
+        performance_sidecars_success and
+        fallback_count == 0 and surrogate_count == 0 and
+        classic_output_hidden and viewmodel > 0 and
+        ownership["complete"] and
+        moonlab_ready
+    )
 
     return {
         "schema": "qge.vanilla_capture_matrix.v0",
@@ -457,81 +788,7 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
         "modes": [classic, qge],
         "image_metrics": summarize_metrics(metrics),
         "runtime_evidence_summary": qge_runtime_evidence,
-        "conformance_summary": {
-            "status": "evidence_only",
-            "classic_frame_exists": classic["frame"]["exists"],
-            "qge_frame_exists": qge["frame"]["exists"],
-            "classic_agent_run_status": classic_agent_run.get("run_status"),
-            "qge_agent_run_status": qge_agent_run.get("run_status"),
-            "classic_agent_startup_issue": classic_agent_run.get("startup_issue"),
-            "qge_agent_startup_issue": qge_agent_run.get("startup_issue"),
-            "agent_stream_runs_success": agent_stream_runs_success,
-            "classic_performance_status": performance_status(
-                classic_perf, classic_agent_run),
-            "qge_performance_status": performance_status(
-                qge_perf, qge_agent_run),
-            "classic_performance_engine_average_quantum_ms_max": (
-                classic_perf.get("engine_average_quantum_ms_max")),
-            "qge_performance_engine_average_quantum_ms_max": (
-                qge_perf.get("engine_average_quantum_ms_max")),
-            "classic_performance_render_time_ms_max": classic_perf.get(
-                "render_time_ms_max"),
-            "qge_performance_render_time_ms_max": qge_perf.get(
-                "render_time_ms_max"),
-            "classic_performance_threshold_failures": classic_perf.get(
-                "threshold_failures"),
-            "qge_performance_threshold_failures": qge_perf.get(
-                "threshold_failures"),
-            "performance_sidecars_success": performance_sidecars_success,
-            "runtime_evidence_ready": bool(
-                qge_runtime_evidence.get("single_trace_ready")),
-            "qge_trace_summary_file": qge_trace.get("path"),
-            "qge_trace_summary_exists": qge_trace.get("exists"),
-            "fallback_count": fallback_count,
-            "classic3d_count": classic3d,
-            "classic2d_count": classic2d,
-            "viewmodel_encoded": viewmodel,
-            "qge_primary_owner": qge_render.get("owner"),
-            "qge_suppressed_classic3d": suppressed3d,
-            "qge_suppressed_classic2d": suppressed2d,
-            "qge_classic_output_hidden": classic_output_hidden,
-            "qge_asset_ownership": ownership["counters"],
-            "qge_asset_ownership_fields_present": (
-                ownership["fields_present"]),
-            "qge_asset_ownership_missing_fields": (
-                ownership["missing_fields"]),
-            "qge_asset_ownership_incomplete_fields": (
-                ownership["incomplete_fields"]),
-            "qge_asset_ownership_complete": ownership["complete"],
-            "qge_surface_polygons": qge_render.get("poly"),
-            "qge_surface_triangles": qge_render.get("tris"),
-            "qge_surface_surrogates": surrogate_count,
-            "qge_surface_culled": max(
-                int(qge_render.get("culled", 0) or 0),
-                int(qge_render_max.get("culled", 0) or 0),
-            ),
-            "qge_surface_micro_surrogates": max(
-                int(qge_render.get("micro", 0) or 0),
-                int(qge_render_max.get("micro", 0) or 0),
-            ),
-            "qge_surface_micro_fills": max(
-                int(qge_render.get("microfill", 0) or 0),
-                int(qge_render_max.get("microfill", 0) or 0),
-            ),
-            "qge_surface_clipped_surrogates": max(
-                int(qge_render.get("clipped", 0) or 0),
-                int(qge_render_max.get("clipped", 0) or 0),
-            ),
-            "qge_edge_fills": qge_render.get("edgefills"),
-            "ready_for_complete_claim": (
-                classic["frame"]["exists"] and qge["frame"]["exists"] and
-                agent_stream_runs_success and
-                performance_sidecars_success and
-                fallback_count == 0 and surrogate_count == 0 and
-                classic_output_hidden and viewmodel > 0 and
-                ownership["complete"]
-            ),
-        },
+        "conformance_summary": conformance_summary,
         "claim_posture": {
             "allowed_wording": (
                 "This capture matrix compares a classic reference frame with a "
@@ -608,8 +865,13 @@ def build_icc_evidence(matrix: dict[str, Any],
         "performance_sidecars_success": summary.get(
             "performance_sidecars_success"),
         "runtime_evidence_ready": summary.get("runtime_evidence_ready"),
+        "moonlab_authority_ready": summary.get("moonlab_authority_ready"),
+        "moonlab_authority_blockers": summary.get(
+            "moonlab_authority_blockers"),
+        "moonlab_domain_readiness": summary.get("moonlab_domain_readiness"),
         "runtime_evidence_single_trace_ready": runtime_evidence.get(
             "single_trace_ready"),
+        "runtime_evidence_render": runtime_evidence.get("render"),
         "runtime_evidence_ai_decision_count": runtime_ai.get(
             "decision_count"),
         "runtime_evidence_audio_source_spatial_count": runtime_audio.get(
@@ -622,6 +884,9 @@ def build_icc_evidence(matrix: dict[str, Any],
         "runtime_evidence_projectile": runtime_projectile,
         "qge_trace_summary_file": summary.get("qge_trace_summary_file"),
         "viewmodel_encoded": summary["viewmodel_encoded"],
+        "qge_render_gates": summary.get("qge_render_gates"),
+        "qge_render_shots": summary.get("qge_render_shots"),
+        "qge_render_idwt_backend": summary.get("qge_render_idwt_backend"),
         "ready_for_complete_claim": ready,
         "status": "success" if ready else "blocked",
     }
