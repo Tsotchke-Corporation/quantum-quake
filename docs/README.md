@@ -40,9 +40,9 @@ state, claims policy, stream/harness operation, and long-range research plans.
   flat-lightstyle fixed-view scoring, a bounded display luma-contrast pass, and
   a bounded first-person viewmodel-lighting pass.
   The latest fixed-view evidence is
-  `diagnostics/quake_graphics/20260522-115852/metrics.md`; it improves the
-  foreground weapon and broad world crops against `20260522-034256`, while a
-  few named world crops move slightly through DWT reconstruction coupling.
+  `diagnostics/quake_graphics/20260522-121419/metrics.md`; it improves the
+  foreground weapon and broad world crops against `20260522-115852`, while
+  named world crops stay nearly flat.
   Floors, walls, and ceilings are still not vanilla-quality.
   Remaining renderer gaps include nearby floor brightness/color mismatch,
   raster seams, warp/water seams, viewmodel placement/material parity, and
@@ -83,6 +83,10 @@ renderer fixes, not as one finished renderer claim:
   `0.163137`, and the broad `world` crop improves by `-0.012916`; a few named
   world crops move by about `+0.001` to `+0.002` through DWT reconstruction
   coupling.
+- `20260522-121419`: second viewmodel-lighting capture; lowers the same
+  first-person-only constants again. Against `20260522-115852`, `viewmodel`
+  RMSE drops from `0.094513` to `0.072401`, the broad `world` crop improves by
+  `-0.003998`, and candidate drift remains `0.000000`.
 - `tools/qge_world_frame_metrics.py`: dependency-free PNG scorer for fixed
   floor, wall, ceiling, corridor, upper-playfield, and viewmodel crops. Use it
   when numpy/Pillow are not installed; `tools/quake_graphics_harness.sh` falls

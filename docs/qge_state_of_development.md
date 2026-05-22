@@ -59,13 +59,14 @@ Recent verified slices on `master` establish the current baseline:
 
 - The current QGE viewmodel-lighting slice gives the first-person alias path
   its own bounded brightness, shade gain, and shade floor. Fixed-view evidence
-  at `diagnostics/quake_graphics/20260522-115852/metrics.md` compares against
-  the display-contrast `20260522-034256` QGE baseline: `viewmodel` RMSE drops
-  from `0.161956` to `0.094513`, `viewmodel_core` drops from `0.279478` to
-  `0.163137`, the broad `world` crop improves by `-0.012916`, and candidate
-  drift remains `0.000000`. A few named world crops move by roughly `+0.001` to
-  `+0.002` through global DWT reconstruction coupling, so this is a bounded
-  foreground lighting fix rather than a complete weapon-material fix.
+  at `diagnostics/quake_graphics/20260522-121419/metrics.md` compares against
+  the `20260522-115852` viewmodel-lighting baseline: `viewmodel` RMSE drops
+  from `0.094513` to `0.072401`, the broad `world` crop improves by
+  `-0.003998`, and candidate drift remains `0.000000`. Cumulative comparison
+  against the display-contrast `20260522-034256` baseline puts `viewmodel` at
+  `0.072401` RMSE and `viewmodel_core` at `0.124881` RMSE, down from
+  `0.161956` and `0.279478` respectively. This remains a bounded foreground
+  lighting fix rather than a complete weapon-material fix.
 - The current QGE display-contrast slice applies bounded luma contrast after
   tone mapping so the fixed-view renderer no longer lifts dark ceiling/floor
   regions while compressing brighter walls and corridors. Fixed-view evidence
@@ -585,7 +586,7 @@ Known current visual state:
 - The recent viewmodel work samples Quake alias-model skin texels for the
   first-person weapon mesh (`emesh=58` and RMSE `0.0349406` in the
   `20260521-173303` capture) instead of the old flat-color QGE mesh. The latest
-  viewmodel-lighting pass lowers first-person alias brightness and shade floor,
+  viewmodel-lighting passes lower first-person alias brightness and shade floor,
   but classic placement and material parity remain open.
 - Floors, walls, and ceilings still need conformance work: raster seams,
   warped/noisy surfaces, gray/turbulent seams, and incomplete vanilla-material
