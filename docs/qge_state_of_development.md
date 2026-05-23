@@ -644,16 +644,18 @@ Known current visual state:
   boundary instead of only as aggregate counts.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
-  publication pack is `diagnostics/publication_pack/20260523-040433`, with
+  publication pack is `diagnostics/publication_pack/20260523-124057`, with
   `qge_publication_artifact_pack_complete`, the e1m1 ready vanilla/QGE capture,
   vanilla ICC evidence sidecar, agent stream, oracle/claims exports, QAE
   benchmark artifacts, `resource/qge_resource_envelope.json`,
   `resource/qge_moonlab_job_specs.json`,
-  `resource/qge_moonlab_job_results.json`, and the four-map breadth counters
+  `resource/qge_moonlab_job_results.json`,
+  `resource/qge_moonlab_replay_plan.json`, and the four-map breadth counters
   plus per-target native backend proof maps. The job results complete three
   simulator jobs and two native replay jobs with zero blocked jobs and zero
   hardware submissions; `tools/qge_moonlab_job_runner.py` regenerates that
-  result evidence directly from the job-spec artifact. The resource artifacts
+  result evidence directly from the job-spec artifact, can compare it to the
+  packed expected results, and can emit the replay plan. The resource artifacts
   explicitly avoid whole-game hardware execution, hardware advantage, and
   dense-state claims. The bundled agent stream includes host launcher probes for
   the macOS AppKit/SDL bootstrap and marks `-nolauncher` UI-only launcher paths

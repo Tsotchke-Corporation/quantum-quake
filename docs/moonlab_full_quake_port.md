@@ -51,7 +51,7 @@ when all of these are true:
 
 The full-port acceptance target is the ICC completion oracle
 `qge_vanilla_quake_conformance`. As of
-`diagnostics/publication_pack/20260523-040433`, ICC reports
+`diagnostics/publication_pack/20260523-124057`, ICC reports
 `qge_vanilla_runtime_complete` ready for the bundled e1m1 QGE/vanilla capture
 matrix. That evidence proves the ownership counters for the captured workload;
 it does not by itself close renderer fidelity, all-map breadth, or whole-game
@@ -61,9 +61,13 @@ states the current Moonlab simulator/native-backend posture, and
 and benchmark jobs. `resource/qge_moonlab_job_results.json` records the local
 simulator/native replay results: three simulator jobs completed, two native
 replay jobs completed, zero blocked jobs, and zero hardware submissions.
+`resource/qge_moonlab_replay_plan.json` records the replay/validation contract
+for those selected jobs, including which artifacts must be present and which
+job remains an unsubmitted hardware candidate.
 `tools/qge_moonlab_job_runner.py` regenerates those results independently from
-the job specs so the Moonlab execution evidence is not trapped inside the pack
-builder. The pack still keeps full-game hardware execution, hardware quantum
+the job specs, can compare them with `--expect`, and can emit a replay plan
+with `--plan-out`, so the Moonlab execution evidence is not trapped inside the
+pack builder. The pack still keeps full-game hardware execution, hardware quantum
 advantage, and dense-state claims out of scope until separate hardware
 deployment evidence exists.
 
@@ -232,6 +236,7 @@ A complete port is credible when these are true:
 3. Move particles/projectile visuals from separate effects into the scene graph.
 4. Submit the QAE hardware-candidate job from `qge_moonlab_job_specs.json`
    through Moonlab hardware when available, recording backend IDs and readout
-   metadata in `qge_moonlab_job_results.json`.
+   metadata in `qge_moonlab_job_results.json` and preserving the submission
+   posture in `qge_moonlab_replay_plan.json`.
 5. Push per-source audio/media transduction from post-mix authority toward
    decoded-stream ownership.

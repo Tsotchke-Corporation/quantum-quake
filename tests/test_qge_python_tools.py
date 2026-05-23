@@ -517,6 +517,12 @@ class PublicationPackTests(unittest.TestCase):
             self.assertEqual(moonlab_job_results["blocked_job_count"], 0)
             moonlab_specs_path = jobs_tmp / "qge_moonlab_job_specs.json"
             moonlab_results_path = jobs_tmp / "qge_moonlab_job_results.json"
+            moonlab_verify_path = (
+                jobs_tmp / "qge_moonlab_job_results.verify.json"
+            )
+            moonlab_replay_plan_path = (
+                jobs_tmp / "qge_moonlab_replay_plan.json"
+            )
             publication_pack.write_json(moonlab_specs_path, moonlab_job_specs)
             moonlab_stdout = io.StringIO()
             with contextlib.redirect_stdout(moonlab_stdout):
@@ -538,6 +544,58 @@ class PublicationPackTests(unittest.TestCase):
                 moonlab_cli_results["schema"], "qge.moonlab_job_results.v0")
             self.assertEqual(
                 moonlab_cli_results["completed_simulator_job_count"], 3)
+            moonlab_replay_plan = (
+                moonlab_job_runner.build_moonlab_replay_plan(
+                    moonlab_job_specs,
+                    moonlab_cli_results,
+                    job_specs_path=moonlab_specs_path,
+                    job_results_path=moonlab_results_path,
+                )
+            )
+            self.assertEqual(
+                moonlab_replay_plan["schema"],
+                "qge.moonlab_replay_plan.v0")
+            self.assertEqual(
+                moonlab_replay_plan["selected_job_count"], 3)
+            self.assertEqual(
+                moonlab_replay_plan["hardware_submitted_job_count"], 0)
+            self.assertIn(
+                "--expect",
+                moonlab_replay_plan["pack_validation"]
+                ["verify_results_command"],
+            )
+            moonlab_verify_stdout = io.StringIO()
+            with contextlib.redirect_stdout(moonlab_verify_stdout):
+                self.assertEqual(
+                    moonlab_job_runner.main([
+                        str(moonlab_specs_path),
+                        "--out",
+                        str(moonlab_verify_path),
+                        "--expect",
+                        str(moonlab_results_path),
+                        "--plan-out",
+                        str(moonlab_replay_plan_path),
+                    ]),
+                    0,
+                )
+            self.assertIn(
+                "QGE_MOONLAB_EXPECTED_RESULTS_MATCH",
+                moonlab_verify_stdout.getvalue(),
+            )
+            self.assertIn(
+                "QGE_MOONLAB_REPLAY_PLAN",
+                moonlab_verify_stdout.getvalue(),
+            )
+            replay_plan_json = publication_pack.load_json(
+                moonlab_replay_plan_path)
+            self.assertEqual(
+                replay_plan_json["schema"], "qge.moonlab_replay_plan.v0")
+            self.assertEqual(replay_plan_json["selected_job_count"], 3)
+            self.assertEqual(
+                replay_plan_json["jobs"][0]["validation_checks"][0]
+                ["status"],
+                "pass",
+            )
 
         manifest = {
             "pack_dir": "pack",
@@ -557,6 +615,9 @@ class PublicationPackTests(unittest.TestCase):
                     },
                     "moonlab_job_results": {
                         "path": "resource/qge_moonlab_job_results.json"
+                    },
+                    "moonlab_replay_plan": {
+                        "path": "resource/qge_moonlab_replay_plan.json"
                     },
                 },
                 "vanilla": {
@@ -592,6 +653,13 @@ class PublicationPackTests(unittest.TestCase):
                     "overall_status": "simulator_complete_hardware_not_submitted",
                     "completed_simulator_job_count": 3,
                     "completed_native_replay_job_count": 2,
+                    "hardware_submitted_job_count": 0,
+                    "blocked_job_count": 0,
+                },
+                "moonlab_replay_plan_summary": {
+                    "schema": "qge.moonlab_replay_plan.v0",
+                    "selected_job_count": 3,
+                    "hardware_candidate_job_count": 1,
                     "hardware_submitted_job_count": 0,
                     "blocked_job_count": 0,
                 },
@@ -633,6 +701,12 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(
             icc["moonlab_job_results_file"],
             "resource/qge_moonlab_job_results.json")
+        self.assertEqual(
+            icc["moonlab_replay_plan_file"],
+            "resource/qge_moonlab_replay_plan.json")
+        self.assertEqual(
+            icc["moonlab_replay_plan_schema"],
+            "qge.moonlab_replay_plan.v0")
         self.assertEqual(icc["moonlab_selected_job_count"], 3)
         self.assertEqual(icc["moonlab_hardware_candidate_job_count"], 1)
         self.assertEqual(icc["moonlab_completed_simulator_job_count"], 3)

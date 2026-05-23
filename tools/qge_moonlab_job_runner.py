@@ -253,6 +253,183 @@ def build_moonlab_job_results(
     }
 
 
+def replay_scope_for_job(job: dict[str, Any]) -> str:
+    domain = job.get("domain")
+    if domain == "render_primary_framebuffer":
+        return (
+            "replay captured sparse-DWT framebuffer/native-backend evidence; "
+            "not a full-frame hardware job"
+        )
+    if domain == "light_transport_qae_benchmark":
+        return (
+            "replay bounded Moonlab simulator benchmark; hardware candidate "
+            "remains unsubmitted until backend metadata exists"
+        )
+    if domain == "runtime_backend_probes":
+        return (
+            "replay native runtime-boundary evidence from performance and "
+            "breadth artifacts"
+        )
+    return "replay selected Moonlab job evidence from required artifacts"
+
+
+def result_jobs_by_id(
+    moonlab_job_results: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    result_jobs = moonlab_job_results.get("jobs", [])
+    if not isinstance(result_jobs, list):
+        return {}
+    indexed: dict[str, dict[str, Any]] = {}
+    for job in result_jobs:
+        if not isinstance(job, dict):
+            continue
+        job_id = job.get("job_id")
+        if isinstance(job_id, str):
+            indexed[job_id] = job
+    return indexed
+
+
+def validation_checks_for_job(
+    spec_job: dict[str, Any],
+    result_job: dict[str, Any],
+) -> list[dict[str, Any]]:
+    missing = result_job.get("missing_required_artifacts", [])
+    if not isinstance(missing, list):
+        missing = []
+    result_status = result_job.get("result_status")
+    backend_results = result_job.get("backend_results", [])
+    if not isinstance(backend_results, list):
+        backend_results = []
+    native_backend_completed = any(
+        isinstance(item, dict) and
+        item.get("backend_kind") == "native_backend_replay" and
+        item.get("status") == "completed"
+        for item in backend_results
+    )
+    checks = [
+        {
+            "check": "required_artifacts_present",
+            "status": "pass" if not missing else "fail",
+            "missing_required_artifacts": missing,
+        },
+        {
+            "check": "job_result_not_blocked",
+            "status": "pass"
+            if result_status != "blocked_missing_required_artifact"
+            else "fail",
+            "result_status": result_status,
+        },
+    ]
+    if spec_job.get("kind") == "moonlab_simulator_native_backend_replay":
+        checks.append({
+            "check": "native_backend_replay_recorded",
+            "status": "pass" if native_backend_completed else "fail",
+        })
+    if bool(spec_job.get("hardware_candidate")):
+        checks.append({
+            "check": "hardware_submission_separated_from_simulator_result",
+            "status": "pass"
+            if result_job.get("hardware_submission_status") == "not_submitted"
+            else "fail",
+            "hardware_submission_status": result_job.get(
+                "hardware_submission_status"),
+        })
+    return checks
+
+
+def build_moonlab_replay_plan(
+    moonlab_job_specs: dict[str, Any],
+    moonlab_job_results: dict[str, Any],
+    *,
+    job_specs_path: Path | None = None,
+    job_results_path: Path | None = None,
+) -> dict[str, Any]:
+    spec_jobs = moonlab_job_specs.get("jobs", [])
+    if not isinstance(spec_jobs, list):
+        spec_jobs = []
+    result_index = result_jobs_by_id(moonlab_job_results)
+    replay_jobs = []
+    for job in spec_jobs:
+        if not isinstance(job, dict):
+            continue
+        job_id = job.get("job_id")
+        result_job = result_index.get(job_id, {}) if isinstance(job_id, str) else {}
+        required = dict_or_empty(job.get("required_artifacts"))
+        backend_targets = job.get("backend_targets", [])
+        if not isinstance(backend_targets, list):
+            backend_targets = []
+        replay_jobs.append({
+            "job_id": job_id,
+            "domain": job.get("domain"),
+            "kind": job.get("kind"),
+            "result_status": result_job.get("result_status"),
+            "hardware_candidate": bool(job.get("hardware_candidate")),
+            "hardware_submission_status": job.get("hardware_submission_status"),
+            "backend_targets": backend_targets,
+            "required_artifacts": required,
+            "required_artifact_names": sorted(required.keys()),
+            "required_artifact_count": len(required),
+            "missing_required_artifacts": result_job.get(
+                "missing_required_artifacts", []),
+            "replay_scope": replay_scope_for_job(job),
+            "validation_checks": validation_checks_for_job(job, result_job),
+        })
+
+    default_specs = job_specs_path or Path("resource/qge_moonlab_job_specs.json")
+    default_results = (
+        job_results_path or Path("resource/qge_moonlab_job_results.json")
+    )
+    return {
+        "schema": "qge.moonlab_replay_plan.v0",
+        "source_schema": moonlab_job_specs.get("schema"),
+        "results_schema": moonlab_job_results.get("schema"),
+        "posture": moonlab_job_specs.get("posture"),
+        "selected_job_count": len(replay_jobs),
+        "hardware_candidate_job_count": moonlab_job_specs.get(
+            "hardware_candidate_job_count"),
+        "hardware_submitted_job_count": moonlab_job_results.get(
+            "hardware_submitted_job_count"),
+        "blocked_job_count": moonlab_job_results.get("blocked_job_count"),
+        "pack_validation": {
+            "job_specs": str(job_specs_path) if job_specs_path else None,
+            "job_results": str(job_results_path) if job_results_path else None,
+            "regenerate_results_command": [
+                "python3",
+                "tools/qge_moonlab_job_runner.py",
+                str(default_specs),
+                "--out",
+                str(default_results),
+            ],
+            "verify_results_command": [
+                "python3",
+                "tools/qge_moonlab_job_runner.py",
+                str(default_specs),
+                "--out",
+                "/tmp/qge_moonlab_job_results.verify.json",
+                "--expect",
+                str(default_results),
+            ],
+        },
+        "jobs": replay_jobs,
+        "limits": [
+            "Replay validation proves artifact reproducibility, not hardware execution.",
+            "Hardware-candidate jobs remain unsubmitted until backend ids and shot metadata exist.",
+            "Whole-game Moonlab hardware execution is outside this replay plan.",
+        ],
+    }
+
+
+def compare_expected_results(
+    results: dict[str, Any],
+    expected_path: Path,
+) -> None:
+    expected = load_json(expected_path)
+    if results != expected:
+        raise ValueError(
+            f"regenerated Moonlab job results differ from {expected_path}"
+        )
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -262,6 +439,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("job_specs", type=Path)
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument(
+        "--expect",
+        type=Path,
+        help="Optional qge.moonlab_job_results.v0 artifact to compare against",
+    )
+    parser.add_argument(
+        "--plan-out",
+        type=Path,
+        help="Optional qge.moonlab_replay_plan.v0 output path",
+    )
     return parser.parse_args(argv)
 
 
@@ -274,11 +461,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"{args.job_specs} is not qge.moonlab_job_specs.v0"
             )
         results = build_moonlab_job_results(moonlab_job_specs)
+        if args.expect:
+            compare_expected_results(results, args.expect)
         write_json(args.out, results)
+        if args.plan_out:
+            replay_plan = build_moonlab_replay_plan(
+                moonlab_job_specs,
+                results,
+                job_specs_path=args.job_specs,
+                job_results_path=args.expect or args.out,
+            )
+            write_json(args.plan_out, replay_plan)
     except (OSError, ValueError) as exc:
         print(f"qge_moonlab_job_runner: {exc}", file=sys.stderr)
         return 1
     print(f"QGE_MOONLAB_JOB_RESULTS {args.out}")
+    if args.expect:
+        print(f"QGE_MOONLAB_EXPECTED_RESULTS_MATCH {args.expect}")
+    if args.plan_out:
+        print(f"QGE_MOONLAB_REPLAY_PLAN {args.plan_out}")
     return 0
 
 

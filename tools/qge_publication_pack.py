@@ -955,10 +955,21 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         args.outdir / "resource" / "qge_moonlab_job_results.json"
     )
     write_json(moonlab_job_results_path, moonlab_job_results)
+    moonlab_replay_plan = qge_moonlab_job_runner.build_moonlab_replay_plan(
+        moonlab_job_specs,
+        moonlab_job_results,
+        job_specs_path=moonlab_job_specs_path,
+        job_results_path=moonlab_job_results_path,
+    )
+    moonlab_replay_plan_path = (
+        args.outdir / "resource" / "qge_moonlab_replay_plan.json"
+    )
+    write_json(moonlab_replay_plan_path, moonlab_replay_plan)
     resource_artifacts = {
         "envelope": file_info(resource_path),
         "moonlab_job_specs": file_info(moonlab_job_specs_path),
         "moonlab_job_results": file_info(moonlab_job_results_path),
+        "moonlab_replay_plan": file_info(moonlab_replay_plan_path),
     }
     return {
         "schema": "qge.publication_pack.v0",
@@ -1152,6 +1163,17 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "blocked_job_count": moonlab_job_results.get(
                     "blocked_job_count"),
             },
+            "moonlab_replay_plan_summary": {
+                "schema": moonlab_replay_plan.get("schema"),
+                "selected_job_count": moonlab_replay_plan.get(
+                    "selected_job_count"),
+                "hardware_candidate_job_count": moonlab_replay_plan.get(
+                    "hardware_candidate_job_count"),
+                "hardware_submitted_job_count": moonlab_replay_plan.get(
+                    "hardware_submitted_job_count"),
+                "blocked_job_count": moonlab_replay_plan.get(
+                    "blocked_job_count"),
+            },
         },
         "claim_posture": {
             "allowed_wording": (
@@ -1171,6 +1193,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_vanilla_capture_matrix.py <graphics_capture_dir>",
             "tools/qge_breadth_evidence.py --matrix <graphics_capture_dir> --min-maps N",
             "tools/qge_publication_pack.py --capture-dir <trace_capture_dir> --vanilla-matrix <graphics_capture_dir>/vanilla_capture_matrix.json --graphics-capture-dir <graphics_capture_dir> --breadth-evidence <breadth_dir>",
+            "tools/qge_moonlab_job_runner.py <pack_dir>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack_dir>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json",
         ],
     }
 
@@ -1187,6 +1210,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("moonlab_job_specs_summary"))
     job_results_summary = dict_or_empty(
         advantage_summary.get("moonlab_job_results_summary"))
+    replay_plan_summary = dict_or_empty(
+        advantage_summary.get("moonlab_replay_plan_summary"))
     ready = bool(runtime.get("publication_ready_for_complete_claim"))
     return {
         "schema": "qge.icc_evidence.v0",
@@ -1208,6 +1233,8 @@ def build_icc_evidence(manifest: dict[str, Any],
             "moonlab_job_specs", {}).get("path"),
         "moonlab_job_results_file": artifacts.get("resource", {}).get(
             "moonlab_job_results", {}).get("path"),
+        "moonlab_replay_plan_file": artifacts.get("resource", {}).get(
+            "moonlab_replay_plan", {}).get("path"),
         "moonlab_selected_job_count": job_specs_summary.get(
             "selected_job_count"),
         "moonlab_hardware_candidate_job_count": job_specs_summary.get(
@@ -1220,6 +1247,7 @@ def build_icc_evidence(manifest: dict[str, Any],
             "hardware_submitted_job_count"),
         "moonlab_job_results_status": job_results_summary.get(
             "overall_status"),
+        "moonlab_replay_plan_schema": replay_plan_summary.get("schema"),
         "vanilla_capture_matrix_file": artifacts["vanilla"]["matrix"]["packed"]["path"],
         "vanilla_icc_evidence_file": artifacts["vanilla"]["icc_evidence"]["packed"]["path"],
         "breadth_evidence_file": artifacts.get("breadth", {}).get(
