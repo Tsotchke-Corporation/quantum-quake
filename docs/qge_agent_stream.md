@@ -392,6 +392,12 @@ classic-vs-QGE graphics run. The pack exposes direct and per-mode max
 average/render timing fields in the publication runtime summary and ICC evidence,
 and treats an explicit blocked publication performance sidecar as evidence-only
 rather than `qge_publication_artifact_pack_complete`.
+`tools/qge_breadth_evidence.py` aggregates multiple
+`vanilla_capture_matrix.json` files and optional publication packs into a
+machine-readable multi-run evidence sidecar. It emits
+`qge_breadth_evidence_pack_complete` only when every supplied matrix keeps
+Moonlab authority ready, uses the QGE primary framebuffer with native IDWT, and
+reports zero fallback, surrogate, and CPU-IDWT counts.
 
 `tools/qge_noesis_summary.py` reads the stream manifest, Noesis action trace,
 translated command buffer, runtime log, `noesis/gameplay_outcomes.ndjson`,

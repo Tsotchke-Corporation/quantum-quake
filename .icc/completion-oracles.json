@@ -376,6 +376,63 @@
           "action": "route_every_claim_through_claims_ledger"
         }
       ]
+    },
+    {
+      "name": "qge_breadth_evidence_pack",
+      "target": "qge_breadth_evidence_pack",
+      "aliases": [
+        "breadth-evidence",
+        "multi-run-evidence",
+        "qge_breadth_pack"
+      ],
+      "requires": [
+        {
+          "id": "qge_breadth_artifacts",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "breadth_evidence_file"
+          ],
+          "severity": "high",
+          "label": "Breadth evidence artifact files are emitted",
+          "action": "run_breadth_evidence_builder"
+        },
+        {
+          "id": "qge_breadth_completion",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_breadth_evidence_pack_complete"
+          ],
+          "severity": "high",
+          "label": "Breadth evidence completion is recorded",
+          "action": "emit_breadth_evidence_completion_reason"
+        },
+        {
+          "id": "qge_breadth_no_unmarked_fallback",
+          "kind": "no_stubbed_paths",
+          "classifications": [
+            "production_fallback",
+            "synthetic_model_only"
+          ],
+          "path_prefixes": [
+            "tools/",
+            "qge/",
+            "quake/Quake/qge_",
+            "docs/claims/"
+          ],
+          "severity": "high",
+          "label": "Breadth claims do not rely on unmarked fallback paths",
+          "action": "route_breadth_claims_through_breadth_evidence"
+        }
+      ]
     }
   ]
 }

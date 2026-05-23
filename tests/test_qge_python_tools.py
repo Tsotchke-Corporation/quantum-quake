@@ -18,6 +18,7 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 import qge_advantage_benchmark as advantage  # noqa: E402
+import qge_breadth_evidence as breadth_evidence  # noqa: E402
 import qge_image_metrics as image_metrics  # noqa: E402
 import qge_noesis_summary as noesis_summary  # noqa: E402
 import qge_oracle_export as oracle_export  # noqa: E402
@@ -359,6 +360,143 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(icc["completion_reason"], "qge_publication_artifact_pack_complete")
         self.assertTrue(icc["publication_ready_for_complete_claim"])
         self.assertEqual(icc["status"], "success")
+
+
+class BreadthEvidenceTests(unittest.TestCase):
+    def write_matrix(self,
+                     directory: Path,
+                     *,
+                     map_name: str,
+                     ready: bool = True,
+                     fallback_count: int = 0) -> Path:
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "README.txt").write_text(
+            f"Map: {map_name}\n",
+            encoding="utf-8",
+        )
+        matrix_path = directory / "vanilla_capture_matrix.json"
+        breadth_evidence.write_json(matrix_path, {
+            "schema": "qge.vanilla_capture_matrix.v0",
+            "capture_dir": str(directory),
+            "conformance_summary": {
+                "ready_for_complete_claim": ready,
+                "moonlab_authority_ready": ready,
+                "fallback_count": fallback_count,
+                "qge_surface_surrogates": 0,
+                "qge_primary_owner": "qge_3d",
+                "qge_render_idwt_backend": "native",
+                "qge_render_native_idwt": 3,
+                "qge_render_cpu_idwt": 0,
+                "moonlab_domain_readiness": {
+                    "qge_primary_framebuffer": {
+                        "ready": ready,
+                        "evidence": {
+                            "owner": "qge_3d",
+                            "fallback_count": fallback_count,
+                            "surrogate_count": 0,
+                        },
+                    },
+                    "render_quantum_workload": {
+                        "ready": ready,
+                        "evidence": {
+                            "idwt_backend": "native",
+                            "native_bridge_count": 12,
+                            "cpu_idwt_count": 0,
+                        },
+                    },
+                },
+            },
+        })
+        return matrix_path
+
+    def write_publication_pack(self, directory: Path, ready: bool = True) -> Path:
+        directory.mkdir(parents=True, exist_ok=True)
+        manifest_path = directory / "publication_manifest.json"
+        breadth_evidence.write_json(manifest_path, {
+            "schema": "qge.publication_pack.v0",
+            "runtime_summary": {
+                "publication_ready_for_complete_claim": ready,
+                "vanilla_ready_for_complete_claim": ready,
+                "fallback_count": 0,
+                "surrogate_count": 0,
+                "performance_source": "graphics_qge_candidate",
+            },
+        })
+        breadth_evidence.write_json(
+            directory / "qge_publication_icc_evidence.json",
+            {
+                "completion_reason": (
+                    "qge_publication_artifact_pack_complete"
+                    if ready else "qge_publication_artifact_pack_evidence_only"
+                ),
+            },
+        )
+        return manifest_path
+
+    def test_breadth_evidence_complete_for_ready_matrix_set(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            matrix_a = self.write_matrix(tmpdir / "run_a", map_name="e1m1")
+            matrix_b = self.write_matrix(tmpdir / "run_b", map_name="e1m2")
+            pack = self.write_publication_pack(tmpdir / "publication")
+            args = SimpleNamespace(
+                inputs=[],
+                matrix=[matrix_a, matrix_b],
+                publication_pack=[pack],
+                min_runs=2,
+            )
+
+            manifest = breadth_evidence.build_manifest(args)
+            aggregate = manifest["aggregate"]
+            self.assertTrue(aggregate["breadth_ready_for_complete_claim"])
+            self.assertEqual(aggregate["matrix_run_count"], 2)
+            self.assertEqual(aggregate["map_count"], 2)
+            self.assertEqual(aggregate["maps"], ["e1m1", "e1m2"])
+            self.assertEqual(aggregate["total_fallback_count"], 0)
+            self.assertGreater(aggregate["total_native_bridge_count"], 0)
+
+            icc = breadth_evidence.build_icc_evidence(
+                manifest,
+                tmpdir / "breadth_evidence.json",
+                tmpdir / "qge_breadth_icc_evidence.json",
+            )
+            self.assertEqual(icc["runtime_backend"], "qge_breadth_evidence")
+            self.assertEqual(
+                icc["completion_reason"],
+                "qge_breadth_evidence_pack_complete",
+            )
+            self.assertTrue(icc["breadth_ready_for_complete_claim"])
+
+    def test_breadth_evidence_blocks_fallback_matrix(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            matrix = self.write_matrix(
+                tmpdir / "run_a",
+                map_name="e1m1",
+                ready=False,
+                fallback_count=1,
+            )
+            args = SimpleNamespace(
+                inputs=[],
+                matrix=[matrix],
+                publication_pack=[],
+                min_runs=1,
+            )
+
+            manifest = breadth_evidence.build_manifest(args)
+            aggregate = manifest["aggregate"]
+            self.assertFalse(aggregate["breadth_ready_for_complete_claim"])
+            self.assertIn("matrix_0:fallback_count_nonzero",
+                          aggregate["issues"])
+            icc = breadth_evidence.build_icc_evidence(
+                manifest,
+                tmpdir / "breadth_evidence.json",
+                tmpdir / "qge_breadth_icc_evidence.json",
+            )
+            self.assertEqual(
+                icc["completion_reason"],
+                "qge_breadth_evidence_pack_evidence_only",
+            )
 
 
 class ImageMetricsTests(unittest.TestCase):

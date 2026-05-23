@@ -160,25 +160,31 @@ Minimum publishable artifact package:
    - Evidence: `qge_vanilla_capture_matrix_complete`
    - Must show no hidden classic production authority for claimed domains.
 
-2. Runtime traces
+2. Multi-run breadth evidence
+   - ICC target: `qge_breadth_evidence_pack`
+   - Required pass: `qge_breadth_evidence_pack_complete`
+   - Evidence: aggregated `vanilla_capture_matrix.json` runs plus optional
+     publication packs, with zero fallback, surrogate, and CPU-IDWT counts.
+
+3. Runtime traces
    - QGE trace file for each capture.
    - Runtime summaries for render, visibility, physics/projectiles, audio, AI,
      RNG, and UI/media.
    - Explicit fallback reasons for every non-owned domain.
 
-3. Visual evidence
+4. Visual evidence
    - Classic reference frame set.
    - QGE/Moonlab primary framebuffer frame set.
    - Region metrics for world, upper-playfield, viewmodel, floor, walls,
      ceiling, and corridor.
 
-4. Domain ownership table
+5. Domain ownership table
    - render: world, textures, lightmaps, alias/viewmodel, sprites, particles,
      sky/water/warp, HUD/console/menu
    - simulation: RNG, AI decisions, projectile/physics, visibility
    - media: audio post-mix and per-source authority
 
-5. Comparator table against Quandoom
+6. Comparator table against Quandoom
    - level scope
    - color/audio
    - live engine integration
