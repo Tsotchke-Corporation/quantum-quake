@@ -167,6 +167,9 @@ Minimum publishable artifact package:
      publication packs, with zero fallback, surrogate, and CPU-IDWT counts.
    - For multi-map claims, run `tools/qge_breadth_evidence.py --min-maps N`
      so repeated captures of a single map cannot satisfy the breadth gate.
+   - Current strongest local checkpoint:
+     `diagnostics/breadth_evidence/20260522-233053`, which aggregates seven
+     ready strict matrices across `e1m1`, `e1m2`, `e1m3`, and `e1m4`.
 
 3. Runtime traces
    - QGE trace file for each capture.
