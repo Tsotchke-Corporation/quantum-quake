@@ -51,7 +51,7 @@ when all of these are true:
 
 The full-port acceptance target is the ICC completion oracle
 `qge_vanilla_quake_conformance`. As of
-`diagnostics/publication_pack/20260523-160950`, ICC reports
+`diagnostics/publication_pack/20260523-162303`, ICC reports
 `qge_vanilla_runtime_complete` ready for the bundled e1m1 QGE/vanilla capture
 matrix. That evidence proves the ownership counters for the captured workload;
 it does not by itself close renderer fidelity, all-map breadth, or whole-game
@@ -71,12 +71,17 @@ replay jobs completed, zero blocked jobs, and zero hardware submissions.
 `resource/qge_moonlab_replay_plan.json` records the replay/validation contract
 for those selected jobs, including which artifacts must be present and which
 job remains an unsubmitted hardware candidate.
+`resource/qge_moonlab_submission_packet.json` records the deterministic
+hardware-candidate handoff contract: artifact hashes, required backend ID, shot
+schedule, readout metadata, and the result file that must be updated after a
+real submission.
 `tools/qge_moonlab_job_runner.py` regenerates those results independently from
 the job specs, can compare them with `--expect`, and can emit a replay plan
-with `--plan-out`, so the Moonlab execution evidence is not trapped inside the
-pack builder. The pack still keeps full-game hardware execution, hardware quantum
-advantage, and dense-state claims out of scope until separate hardware
-deployment evidence exists.
+with `--plan-out` plus the submission packet with `--submission-out`, so the
+Moonlab execution evidence is not trapped inside the pack builder. The pack
+still keeps full-game hardware execution, hardware quantum advantage, and
+dense-state claims out of scope until separate hardware deployment evidence
+exists.
 
 ## Current State
 
@@ -238,7 +243,7 @@ A complete port is credible when these are true:
 
 1. Expand the ready matrix beyond the current 9/32 partial full-game map
    coverage ledger. Re-run the missing-map queue with
-   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-160950`
+   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-162303`
    after installing registered BSP assets. With the current `assets/id1/pak0.pak`,
    the queue has zero locally runnable missing maps and 23 registered maps
    require additional registered BSP assets before capture. Use
@@ -250,6 +255,8 @@ A complete port is credible when these are true:
 4. Submit the QAE hardware-candidate job from `qge_moonlab_job_specs.json`
    through Moonlab hardware when available, recording backend IDs and readout
    metadata in `qge_moonlab_job_results.json` and preserving the submission
-   posture in `qge_moonlab_replay_plan.json`.
+   posture in `qge_moonlab_replay_plan.json`. Start from
+   `qge_moonlab_submission_packet.json`; it is the no-claim hardware handoff
+   contract for the bounded QAE benchmark job.
 5. Push per-source audio/media transduction from post-mix authority toward
    decoded-stream ownership.

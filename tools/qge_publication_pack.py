@@ -1130,6 +1130,18 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         args.outdir / "resource" / "qge_moonlab_replay_plan.json"
     )
     write_json(moonlab_replay_plan_path, moonlab_replay_plan)
+    moonlab_submission_packet = (
+        qge_moonlab_job_runner.build_moonlab_submission_packet(
+            moonlab_job_specs,
+            moonlab_job_results,
+            job_specs_path=moonlab_job_specs_path,
+            job_results_path=moonlab_job_results_path,
+        )
+    )
+    moonlab_submission_packet_path = (
+        args.outdir / "resource" / "qge_moonlab_submission_packet.json"
+    )
+    write_json(moonlab_submission_packet_path, moonlab_submission_packet)
     resource_artifacts = {
         "envelope": file_info(resource_path),
         "full_game_map_coverage": file_info(full_game_map_coverage_path),
@@ -1139,6 +1151,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "moonlab_job_specs": file_info(moonlab_job_specs_path),
         "moonlab_job_results": file_info(moonlab_job_results_path),
         "moonlab_replay_plan": file_info(moonlab_replay_plan_path),
+        "moonlab_submission_packet": file_info(moonlab_submission_packet_path),
     }
     return {
         "schema": "qge.publication_pack.v0",
@@ -1395,6 +1408,18 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "blocked_job_count": moonlab_replay_plan.get(
                     "blocked_job_count"),
             },
+            "moonlab_submission_packet_summary": {
+                "schema": moonlab_submission_packet.get("schema"),
+                "hardware_candidate_job_count": (
+                    moonlab_submission_packet.get(
+                        "hardware_candidate_job_count")),
+                "ready_candidate_count": moonlab_submission_packet.get(
+                    "ready_candidate_count"),
+                "blocked_candidate_count": moonlab_submission_packet.get(
+                    "blocked_candidate_count"),
+                "submitted_candidate_count": moonlab_submission_packet.get(
+                    "submitted_candidate_count"),
+            },
         },
         "claim_posture": {
             "allowed_wording": (
@@ -1414,7 +1439,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_vanilla_capture_matrix.py <graphics_capture_dir>",
             "tools/qge_breadth_evidence.py --matrix <graphics_capture_dir> --min-maps N",
             "tools/qge_publication_pack.py --capture-dir <trace_capture_dir> --vanilla-matrix <graphics_capture_dir>/vanilla_capture_matrix.json --graphics-capture-dir <graphics_capture_dir> --breadth-evidence <breadth_dir>",
-            "tools/qge_moonlab_job_runner.py <pack_dir>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack_dir>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json",
+            "tools/qge_moonlab_job_runner.py <pack_dir>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack_dir>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json --submission-out /tmp/qge_moonlab_submission_packet.verify.json",
         ],
     }
 
@@ -1433,6 +1458,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("moonlab_job_results_summary"))
     replay_plan_summary = dict_or_empty(
         advantage_summary.get("moonlab_replay_plan_summary"))
+    submission_packet_summary = dict_or_empty(
+        advantage_summary.get("moonlab_submission_packet_summary"))
     native_boundary_summary = dict_or_empty(
         advantage_summary.get("native_backend_boundary_summary"))
     full_game_summary = dict_or_empty(
@@ -1488,6 +1515,8 @@ def build_icc_evidence(manifest: dict[str, Any],
             "moonlab_job_results", {}).get("path"),
         "moonlab_replay_plan_file": artifacts.get("resource", {}).get(
             "moonlab_replay_plan", {}).get("path"),
+        "moonlab_submission_packet_file": artifacts.get("resource", {}).get(
+            "moonlab_submission_packet", {}).get("path"),
         "moonlab_selected_job_count": job_specs_summary.get(
             "selected_job_count"),
         "moonlab_hardware_candidate_job_count": job_specs_summary.get(
@@ -1501,6 +1530,14 @@ def build_icc_evidence(manifest: dict[str, Any],
         "moonlab_job_results_status": job_results_summary.get(
             "overall_status"),
         "moonlab_replay_plan_schema": replay_plan_summary.get("schema"),
+        "moonlab_submission_packet_schema": (
+            submission_packet_summary.get("schema")),
+        "moonlab_submission_ready_candidate_count": (
+            submission_packet_summary.get("ready_candidate_count")),
+        "moonlab_submission_blocked_candidate_count": (
+            submission_packet_summary.get("blocked_candidate_count")),
+        "moonlab_submission_submitted_candidate_count": (
+            submission_packet_summary.get("submitted_candidate_count")),
         "vanilla_capture_matrix_file": artifacts["vanilla"]["matrix"]["packed"]["path"],
         "vanilla_icc_evidence_file": artifacts["vanilla"]["icc_evidence"]["packed"]["path"],
         "breadth_evidence_file": artifacts.get("breadth", {}).get(

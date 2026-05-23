@@ -320,6 +320,128 @@ def result_jobs_by_id(
     return indexed
 
 
+def list_or_empty(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def candidate_submission_status(
+    spec_job: dict[str, Any],
+    result_job: dict[str, Any],
+) -> str:
+    missing = list_or_empty(result_job.get("missing_required_artifacts"))
+    if missing:
+        return "blocked_missing_required_artifact"
+    hardware_status = spec_job.get("hardware_submission_status")
+    if hardware_status not in (None, "not_submitted"):
+        return "hardware_submission_recorded"
+    return "ready_for_hardware_submission_metadata"
+
+
+def simulator_backend_results(result_job: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        item for item in list_or_empty(result_job.get("backend_results"))
+        if isinstance(item, dict) and
+        item.get("backend_kind") in ("moonlab_simulator", "native_backend_replay")
+    ]
+
+
+def build_moonlab_submission_packet(
+    moonlab_job_specs: dict[str, Any],
+    moonlab_job_results: dict[str, Any],
+    *,
+    job_specs_path: Path | None = None,
+    job_results_path: Path | None = None,
+) -> dict[str, Any]:
+    spec_jobs = list_or_empty(moonlab_job_specs.get("jobs"))
+    result_index = result_jobs_by_id(moonlab_job_results)
+    candidate_jobs = []
+    ready = 0
+    blocked = 0
+    submitted = 0
+    default_results = (
+        job_results_path or Path("resource/qge_moonlab_job_results.json")
+    )
+
+    for job in spec_jobs:
+        if not isinstance(job, dict) or not bool(job.get("hardware_candidate")):
+            continue
+        job_id = job.get("job_id")
+        result_job = (
+            result_index.get(job_id, {}) if isinstance(job_id, str) else {}
+        )
+        artifact_evidence = [
+            item for item in list_or_empty(result_job.get("artifact_evidence"))
+            if isinstance(item, dict)
+        ]
+        missing = list_or_empty(result_job.get("missing_required_artifacts"))
+        status = candidate_submission_status(job, result_job)
+        if status == "ready_for_hardware_submission_metadata":
+            ready += 1
+        elif status == "hardware_submission_recorded":
+            submitted += 1
+        else:
+            blocked += 1
+        required = dict_or_empty(job.get("required_artifacts"))
+        candidate_jobs.append({
+            "job_id": job_id,
+            "domain": job.get("domain"),
+            "kind": job.get("kind"),
+            "submission_status": status,
+            "hardware_submission_status": job.get("hardware_submission_status"),
+            "backend_targets": list_or_empty(job.get("backend_targets")),
+            "resource": dict_or_empty(job.get("resource")),
+            "required_artifacts": required,
+            "required_artifact_names": sorted(required.keys()),
+            "artifact_evidence": artifact_evidence,
+            "missing_required_artifacts": missing,
+            "simulator_result_status": result_job.get("result_status"),
+            "simulator_backend_results": simulator_backend_results(result_job),
+            "candidate_digest": stable_job_run_id(job, artifact_evidence),
+            "moonlab_submission_contract": {
+                "submission_mode": "moonlab_hardware_backend_handoff",
+                "backend_id_required": True,
+                "shot_schedule_required": True,
+                "readout_metadata_required": True,
+                "result_update_target": str(default_results),
+                "submit_only_if": [
+                    "submission_status is ready_for_hardware_submission_metadata",
+                    "backend id is known",
+                    "shot schedule and readout metadata are recorded",
+                    "simulator and hardware results remain separate",
+                ],
+            },
+            "claim_posture": {
+                "hardware_result_claimed": False,
+                "hardware_quantum_advantage_claimed": False,
+                "whole_game_hardware_execution_claimed": False,
+            },
+        })
+
+    return {
+        "schema": "qge.moonlab_submission_packet.v0",
+        "source_schema": moonlab_job_specs.get("schema"),
+        "results_schema": moonlab_job_results.get("schema"),
+        "posture": moonlab_job_specs.get("posture"),
+        "job_specs": str(job_specs_path) if job_specs_path else None,
+        "job_results": str(job_results_path) if job_results_path else None,
+        "hardware_candidate_job_count": len(candidate_jobs),
+        "ready_candidate_count": ready,
+        "blocked_candidate_count": blocked,
+        "submitted_candidate_count": submitted,
+        "hardware_submitted_job_count": moonlab_job_results.get(
+            "hardware_submitted_job_count"),
+        "whole_game_hardware_execution_claimed": False,
+        "hardware_quantum_advantage_claimed": False,
+        "dense_70000_qubit_state_claimed": False,
+        "candidate_jobs": candidate_jobs,
+        "limits": [
+            "This packet is a hardware handoff contract, not a hardware result.",
+            "A backend id, shot schedule, and readout metadata are required before a hardware submission can be claimed.",
+            "Simulator and hardware results must remain separate in qge_moonlab_job_results.json.",
+        ],
+    }
+
+
 def validation_checks_for_job(
     spec_job: dict[str, Any],
     result_job: dict[str, Any],
@@ -480,6 +602,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=Path,
         help="Optional qge.moonlab_replay_plan.v0 output path",
     )
+    parser.add_argument(
+        "--submission-out",
+        type=Path,
+        help="Optional qge.moonlab_submission_packet.v0 output path",
+    )
     return parser.parse_args(argv)
 
 
@@ -503,6 +630,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 job_results_path=args.expect or args.out,
             )
             write_json(args.plan_out, replay_plan)
+        if args.submission_out:
+            submission_packet = build_moonlab_submission_packet(
+                moonlab_job_specs,
+                results,
+                job_specs_path=args.job_specs,
+                job_results_path=args.expect or args.out,
+            )
+            write_json(args.submission_out, submission_packet)
     except (OSError, ValueError) as exc:
         print(f"qge_moonlab_job_runner: {exc}", file=sys.stderr)
         return 1
@@ -511,6 +646,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"QGE_MOONLAB_EXPECTED_RESULTS_MATCH {args.expect}")
     if args.plan_out:
         print(f"QGE_MOONLAB_REPLAY_PLAN {args.plan_out}")
+    if args.submission_out:
+        print(f"QGE_MOONLAB_SUBMISSION_PACKET {args.submission_out}")
     return 0
 
 

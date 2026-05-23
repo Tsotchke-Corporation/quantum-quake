@@ -336,6 +336,7 @@ assert manifest["artifacts"]["resource"]["native_backend_boundary"]["exists"] is
 assert manifest["artifacts"]["resource"]["moonlab_job_specs"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_job_results"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_replay_plan"]["exists"] is True
+assert manifest["artifacts"]["resource"]["moonlab_submission_packet"]["exists"] is True
 assert manifest["advantage_summary"]["resource_envelope_summary"]["whole_game_hardware_execution_claimed"] is False
 assert manifest["advantage_summary"]["full_game_map_coverage_summary"]["status"] == "partial"
 assert manifest["advantage_summary"]["full_game_map_coverage_summary"]["target_map_count"] == 32
@@ -348,6 +349,8 @@ assert manifest["advantage_summary"]["moonlab_job_specs_summary"]["hardware_cand
 assert manifest["advantage_summary"]["moonlab_job_results_summary"]["completed_simulator_job_count"] >= 2
 assert manifest["advantage_summary"]["moonlab_job_results_summary"]["hardware_submitted_job_count"] == 0
 assert manifest["advantage_summary"]["moonlab_replay_plan_summary"]["schema"] == "qge.moonlab_replay_plan.v0"
+assert manifest["advantage_summary"]["moonlab_submission_packet_summary"]["schema"] == "qge.moonlab_submission_packet.v0"
+assert manifest["advantage_summary"]["moonlab_submission_packet_summary"]["ready_candidate_count"] == 1
 assert manifest["artifacts"]["vanilla"]["icc_evidence"]["packed"]["exists"] is True
 assert icc["completion_reason"] == "qge_publication_artifact_pack_complete"
 assert icc["runtime_backend"] == "qge_publication_pack"
@@ -366,6 +369,9 @@ assert icc["moonlab_job_specs_file"].endswith("resource/qge_moonlab_job_specs.js
 assert icc["moonlab_job_results_file"].endswith("resource/qge_moonlab_job_results.json")
 assert icc["moonlab_replay_plan_file"].endswith("resource/qge_moonlab_replay_plan.json")
 assert icc["moonlab_replay_plan_schema"] == "qge.moonlab_replay_plan.v0"
+assert icc["moonlab_submission_packet_file"].endswith("resource/qge_moonlab_submission_packet.json")
+assert icc["moonlab_submission_packet_schema"] == "qge.moonlab_submission_packet.v0"
+assert icc["moonlab_submission_ready_candidate_count"] == 1
 assert icc["moonlab_hardware_candidate_job_count"] == 1
 assert icc["moonlab_completed_simulator_job_count"] >= 2
 assert icc["moonlab_hardware_submitted_job_count"] == 0
@@ -379,17 +385,20 @@ python3 "$repo_root/tools/qge_moonlab_job_runner.py" \
   --out "$tmpdir/qge_moonlab_job_results.json" \
   --expect "$pack_dir/resource/qge_moonlab_job_results.json" \
   --plan-out "$tmpdir/qge_moonlab_replay_plan.json" \
+  --submission-out "$tmpdir/qge_moonlab_submission_packet.json" \
   > "$tmpdir/moonlab_job_runner.stdout"
 grep -F 'QGE_MOONLAB_JOB_RESULTS' "$tmpdir/moonlab_job_runner.stdout" >/dev/null
 grep -F 'QGE_MOONLAB_EXPECTED_RESULTS_MATCH' "$tmpdir/moonlab_job_runner.stdout" >/dev/null
 grep -F 'QGE_MOONLAB_REPLAY_PLAN' "$tmpdir/moonlab_job_runner.stdout" >/dev/null
-python3 - "$tmpdir/qge_moonlab_job_results.json" "$tmpdir/qge_moonlab_replay_plan.json" "$pack_dir/publication_manifest.json" <<'PY'
+grep -F 'QGE_MOONLAB_SUBMISSION_PACKET' "$tmpdir/moonlab_job_runner.stdout" >/dev/null
+python3 - "$tmpdir/qge_moonlab_job_results.json" "$tmpdir/qge_moonlab_replay_plan.json" "$tmpdir/qge_moonlab_submission_packet.json" "$pack_dir/publication_manifest.json" <<'PY'
 import json
 import sys
 
 results = json.load(open(sys.argv[1], encoding="utf-8"))
 plan = json.load(open(sys.argv[2], encoding="utf-8"))
-manifest = json.load(open(sys.argv[3], encoding="utf-8"))
+submission = json.load(open(sys.argv[3], encoding="utf-8"))
+manifest = json.load(open(sys.argv[4], encoding="utf-8"))
 summary = manifest["advantage_summary"]["moonlab_job_results_summary"]
 assert results["schema"] == "qge.moonlab_job_results.v0"
 assert results["completed_simulator_job_count"] >= 2
@@ -400,6 +409,10 @@ assert plan["schema"] == "qge.moonlab_replay_plan.v0"
 assert plan["selected_job_count"] == manifest["advantage_summary"]["moonlab_job_specs_summary"]["selected_job_count"]
 assert plan["hardware_submitted_job_count"] == 0
 assert "--expect" in plan["pack_validation"]["verify_results_command"]
+assert submission["schema"] == "qge.moonlab_submission_packet.v0"
+assert submission["hardware_candidate_job_count"] == 1
+assert submission["ready_candidate_count"] == 1
+assert submission["candidate_jobs"][0]["submission_status"] == "ready_for_hardware_submission_metadata"
 PY
 
 if python3 "$repo_root/tools/qge_image_metrics.py" --check-deps > "$tmpdir/image_deps.stdout" 2> "$tmpdir/image_deps.stderr"; then

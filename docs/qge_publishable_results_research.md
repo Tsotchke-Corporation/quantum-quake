@@ -155,7 +155,7 @@ Do claim, once proven:
 Minimum publishable artifact package:
 
 Current strongest publication bundle:
-`diagnostics/publication_pack/20260523-160950`. It packages a ready e1m1
+`diagnostics/publication_pack/20260523-162303`. It packages a ready e1m1
 QGE/vanilla capture, vanilla ICC evidence sidecar, agent stream, oracle scene,
 claims evidence, finite-shot QAE benchmark artifacts,
 `resource/qge_resource_envelope.json`,
@@ -164,7 +164,8 @@ claims evidence, finite-shot QAE benchmark artifacts,
 `resource/qge_native_backend_boundary.json`,
 `resource/qge_moonlab_job_specs.json`,
 `resource/qge_moonlab_job_results.json`,
-`resource/qge_moonlab_replay_plan.json`, and the nine-map breadth sidecar from
+`resource/qge_moonlab_replay_plan.json`,
+`resource/qge_moonlab_submission_packet.json`, and the nine-map breadth sidecar from
 `diagnostics/breadth_evidence/20260523-152522`. The full-game map coverage
 ledger is explicit: 9/32 canonical registered single-player maps covered, 23
 missing, status `partial`. The Moonlab job results record
@@ -173,10 +174,12 @@ jobs, and zero hardware submissions; `tools/qge_moonlab_job_runner.py` can
 regenerate the same result evidence from the job specs and emits
 `QGE_MOONLAB_JOB_RESULTS` when it writes the output. With `--expect` and
 `--plan-out`, the same tool compares regenerated results against the packed
-expected artifact and writes a standalone replay contract. The QAE benchmark
-remains an unsubmitted hardware-candidate job. The bundled agent stream also
-records host-side macOS AppKit/SDL launcher probes and marks UI-only
-`-nolauncher` paths as intentional skips.
+expected artifact and writes a standalone replay contract; with
+`--submission-out`, it also writes the deterministic hardware-candidate
+handoff packet. The QAE benchmark remains unsubmitted until Moonlab hardware
+backend IDs, shot schedules, and readout metadata are recorded separately. The
+bundled agent stream also records host-side macOS AppKit/SDL launcher probes
+and marks UI-only `-nolauncher` paths as intentional skips.
 
 1. Strict ownership matrix
    - ICC target: `qge_vanilla_quake_conformance`
@@ -207,7 +210,7 @@ records host-side macOS AppKit/SDL launcher probes and marks UI-only
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for
-     `diagnostics/publication_pack/20260523-160950` inventories local loose/Pak
+     `diagnostics/publication_pack/20260523-162303` inventories local loose/Pak
      BSP assets before queuing. With the current `assets/id1/pak0.pak`, it
      reports zero locally queueable missing maps and 23 missing registered maps
      as asset-unavailable; those maps require additional registered BSP assets
@@ -223,7 +226,7 @@ records host-side macOS AppKit/SDL launcher probes and marks UI-only
      count of matrix runs where all required native boundaries resolved to the
      native sparse DWT render bridge.
    - The current publication bundle carries those breadth counters directly:
-     `diagnostics/publication_pack/20260523-160950` reports
+     `diagnostics/publication_pack/20260523-162303` reports
      `breadth_map_count=9`, `breadth_total_native_bridge_count=945`, and
      `breadth_total_runtime_backend_probe_event_count=36`, with
      `breadth_runtime_backend_probe_resolved_run_count=9`, plus
@@ -265,7 +268,7 @@ qge_vanilla_runtime_complete -> produce_ready_vanilla_capture_matrix
 ```
 
 That blocker is now cleared for the current self-contained publication pack:
-`diagnostics/publication_pack/20260523-160950` carries
+`diagnostics/publication_pack/20260523-162303` carries
 `qge_vanilla_capture_matrix_complete`, the vanilla ICC sidecar, native backend
 proofs, the agent stream, the benchmark bundle, and the nine-map breadth
 sidecar. It also carries `resource/qge_resource_envelope.json`, which records
@@ -281,10 +284,12 @@ plus `resource/qge_moonlab_job_specs.json` for selected simulator/native replay
 and hardware-candidate benchmark jobs, and
 `resource/qge_moonlab_job_results.json` for completed local simulator/native
 replay evidence, plus `resource/qge_moonlab_replay_plan.json` for the
-per-job replay/validation contract. Regenerate the latter independently with
+per-job replay/validation contract and
+`resource/qge_moonlab_submission_packet.json` for the hardware-candidate
+handoff contract. Regenerate the latter independently with
 `tools/qge_moonlab_job_runner.py` when validating or re-submitting the selected
 Moonlab jobs outside publication-pack assembly:
-`python3 tools/qge_moonlab_job_runner.py <pack>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json`.
+`python3 tools/qge_moonlab_job_runner.py <pack>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json --submission-out /tmp/qge_moonlab_submission_packet.verify.json`.
 
 The next hard work is therefore:
 
@@ -292,12 +297,14 @@ The next hard work is therefore:
    coverage ledger, while preserving zero fallback/surrogate/CPU-IDWT counters.
    Install the remaining registered BSP assets, verify them with
    `tools/qge_asset_inventory.py`, then start from
-   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-160950`
+   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-162303`
    so the 23 registered asset-unavailable maps become explicit capture jobs
    rather than weakening the authority gate.
 2. Submit the QAE hardware-candidate job through Moonlab hardware when
    available, recording backend IDs, shot schedule, readout metadata, and
-   hardware-vs-simulator comparison in `qge_moonlab_job_results.json`.
+   hardware-vs-simulator comparison in `qge_moonlab_job_results.json`. Use
+   `qge_moonlab_submission_packet.json` as the handoff input, not the
+   simulator result as a proxy for hardware execution.
 3. Improve renderer fidelity enough that the QGE primary framebuffer is not
    only owned, but inspectably close to vanilla Quake on fixed-view and
    autonomous captures.

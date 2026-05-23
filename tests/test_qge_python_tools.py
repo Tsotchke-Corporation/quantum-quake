@@ -569,6 +569,9 @@ class PublicationPackTests(unittest.TestCase):
             moonlab_replay_plan_path = (
                 jobs_tmp / "qge_moonlab_replay_plan.json"
             )
+            moonlab_submission_packet_path = (
+                jobs_tmp / "qge_moonlab_submission_packet.json"
+            )
             publication_pack.write_json(moonlab_specs_path, moonlab_job_specs)
             moonlab_stdout = io.StringIO()
             with contextlib.redirect_stdout(moonlab_stdout):
@@ -610,6 +613,27 @@ class PublicationPackTests(unittest.TestCase):
                 moonlab_replay_plan["pack_validation"]
                 ["verify_results_command"],
             )
+            moonlab_submission_packet = (
+                moonlab_job_runner.build_moonlab_submission_packet(
+                    moonlab_job_specs,
+                    moonlab_cli_results,
+                    job_specs_path=moonlab_specs_path,
+                    job_results_path=moonlab_results_path,
+                )
+            )
+            self.assertEqual(
+                moonlab_submission_packet["schema"],
+                "qge.moonlab_submission_packet.v0")
+            self.assertEqual(
+                moonlab_submission_packet["hardware_candidate_job_count"], 1)
+            self.assertEqual(
+                moonlab_submission_packet["ready_candidate_count"], 1)
+            self.assertEqual(
+                moonlab_submission_packet["submitted_candidate_count"], 0)
+            self.assertEqual(
+                moonlab_submission_packet["candidate_jobs"][0]
+                ["submission_status"],
+                "ready_for_hardware_submission_metadata")
             moonlab_verify_stdout = io.StringIO()
             with contextlib.redirect_stdout(moonlab_verify_stdout):
                 self.assertEqual(
@@ -621,6 +645,8 @@ class PublicationPackTests(unittest.TestCase):
                         str(moonlab_results_path),
                         "--plan-out",
                         str(moonlab_replay_plan_path),
+                        "--submission-out",
+                        str(moonlab_submission_packet_path),
                     ]),
                     0,
                 )
@@ -630,6 +656,10 @@ class PublicationPackTests(unittest.TestCase):
             )
             self.assertIn(
                 "QGE_MOONLAB_REPLAY_PLAN",
+                moonlab_verify_stdout.getvalue(),
+            )
+            self.assertIn(
+                "QGE_MOONLAB_SUBMISSION_PACKET",
                 moonlab_verify_stdout.getvalue(),
             )
             replay_plan_json = publication_pack.load_json(
@@ -642,6 +672,16 @@ class PublicationPackTests(unittest.TestCase):
                 ["status"],
                 "pass",
             )
+            submission_packet_json = publication_pack.load_json(
+                moonlab_submission_packet_path)
+            self.assertEqual(
+                submission_packet_json["schema"],
+                "qge.moonlab_submission_packet.v0")
+            self.assertEqual(
+                submission_packet_json["candidate_jobs"][0]
+                ["moonlab_submission_contract"]
+                ["submission_mode"],
+                "moonlab_hardware_backend_handoff")
 
         manifest = {
             "pack_dir": "pack",
@@ -673,6 +713,9 @@ class PublicationPackTests(unittest.TestCase):
                     },
                     "moonlab_replay_plan": {
                         "path": "resource/qge_moonlab_replay_plan.json"
+                    },
+                    "moonlab_submission_packet": {
+                        "path": "resource/qge_moonlab_submission_packet.json"
                     },
                 },
                 "vanilla": {
@@ -717,6 +760,13 @@ class PublicationPackTests(unittest.TestCase):
                     "hardware_candidate_job_count": 1,
                     "hardware_submitted_job_count": 0,
                     "blocked_job_count": 0,
+                },
+                "moonlab_submission_packet_summary": {
+                    "schema": "qge.moonlab_submission_packet.v0",
+                    "hardware_candidate_job_count": 1,
+                    "ready_candidate_count": 1,
+                    "blocked_candidate_count": 0,
+                    "submitted_candidate_count": 0,
                 },
                 "native_backend_boundary_summary": {
                     "status": "pass",
@@ -804,6 +854,18 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(
             icc["moonlab_replay_plan_schema"],
             "qge.moonlab_replay_plan.v0")
+        self.assertEqual(
+            icc["moonlab_submission_packet_file"],
+            "resource/qge_moonlab_submission_packet.json")
+        self.assertEqual(
+            icc["moonlab_submission_packet_schema"],
+            "qge.moonlab_submission_packet.v0")
+        self.assertEqual(
+            icc["moonlab_submission_ready_candidate_count"], 1)
+        self.assertEqual(
+            icc["moonlab_submission_blocked_candidate_count"], 0)
+        self.assertEqual(
+            icc["moonlab_submission_submitted_candidate_count"], 0)
         self.assertEqual(icc["moonlab_selected_job_count"], 4)
         self.assertEqual(icc["moonlab_hardware_candidate_job_count"], 1)
         self.assertEqual(icc["moonlab_completed_simulator_job_count"], 4)

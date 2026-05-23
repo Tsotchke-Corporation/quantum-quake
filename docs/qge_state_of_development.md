@@ -657,7 +657,7 @@ Known current visual state:
   missing, and no whole-game Moonlab coverage claim.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
-  publication pack is `diagnostics/publication_pack/20260523-160950`, with
+  publication pack is `diagnostics/publication_pack/20260523-162303`, with
   `qge_publication_artifact_pack_complete`, the e1m1 ready vanilla/QGE capture,
   vanilla ICC evidence sidecar, agent stream, oracle/claims exports, QAE
   benchmark artifacts, `resource/qge_resource_envelope.json`,
@@ -666,13 +666,15 @@ Known current visual state:
   `resource/qge_native_backend_boundary.json`,
   `resource/qge_moonlab_job_specs.json`,
   `resource/qge_moonlab_job_results.json`,
-  `resource/qge_moonlab_replay_plan.json`, and the nine-map breadth counters
-  plus per-target native backend proof maps. The job results complete four
-  simulator jobs total: the three simulator/native evidence jobs plus the
+  `resource/qge_moonlab_replay_plan.json`,
+  `resource/qge_moonlab_submission_packet.json`, and the nine-map breadth
+  counters plus per-target native backend proof maps. The job results complete
+  four simulator jobs total: the three simulator/native evidence jobs plus the
   coverage-ledger replay, with two native replay jobs, zero blocked jobs, zero
   hardware submissions; `tools/qge_moonlab_job_runner.py` regenerates that
   result evidence directly from the job-spec artifact, can compare it to the
-  packed expected results, and can emit the replay plan. The resource artifacts
+  packed expected results, and can emit the replay plan plus the
+  hardware-candidate submission packet. The resource artifacts
   explicitly avoid whole-game hardware execution, hardware advantage, and
   dense-state claims. The bundled agent stream includes host launcher probes for
   the macOS AppKit/SDL bootstrap and marks `-nolauncher` UI-only launcher paths
