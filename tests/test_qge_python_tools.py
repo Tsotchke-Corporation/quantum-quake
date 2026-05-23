@@ -24,6 +24,7 @@ import qge_asset_inventory as asset_inventory  # noqa: E402
 import qge_breadth_evidence as breadth_evidence  # noqa: E402
 import qge_full_game_capture_queue as full_game_capture_queue  # noqa: E402
 import qge_image_metrics as image_metrics  # noqa: E402
+import qge_moonlab_full_game_plan as moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest as moonlab_hardware_ingest  # noqa: E402
 import qge_moonlab_job_runner as moonlab_job_runner  # noqa: E402
 import qge_noesis_summary as noesis_summary  # noqa: E402
@@ -723,6 +724,17 @@ class PublicationPackTests(unittest.TestCase):
                             "resource/"
                             "qge_moonlab_hardware_record_template.json")
                     },
+                    "moonlab_full_game_plan": {
+                        "path": "resource/qge_moonlab_full_game_plan.json"
+                    },
+                    "moonlab_full_game_plan_markdown": {
+                        "path": "resource/qge_moonlab_full_game_plan.md"
+                    },
+                    "moonlab_full_game_plan_icc_evidence": {
+                        "path": (
+                            "resource/"
+                            "qge_moonlab_full_game_plan_icc_evidence.json")
+                    },
                 },
                 "vanilla": {
                     "matrix": {"packed": {"path": "vanilla_capture_matrix.json"}},
@@ -779,6 +791,15 @@ class PublicationPackTests(unittest.TestCase):
                     "record_schema": "qge.moonlab_hardware_record.v0",
                     "job_id": "qge.light_transport_qae_benchmark.mlae.v0",
                     "candidate_digest": "candidate-digest",
+                },
+                "moonlab_full_game_plan_summary": {
+                    "schema": "qge.moonlab_full_game_deployment_plan.v0",
+                    "status": "blocked_asset_unavailable",
+                    "target_map_count": 32,
+                    "covered_map_count": 4,
+                    "missing_map_count": 28,
+                    "asset_unavailable_map_count": 28,
+                    "whole_game_moonlab_deployment_claimed": False,
                 },
                 "native_backend_boundary_summary": {
                     "status": "pass",
@@ -890,6 +911,24 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(
             icc["moonlab_hardware_record_template_job_id"],
             "qge.light_transport_qae_benchmark.mlae.v0")
+        self.assertEqual(
+            icc["moonlab_full_game_plan_file"],
+            "resource/qge_moonlab_full_game_plan.json")
+        self.assertEqual(
+            icc["moonlab_full_game_plan_markdown_file"],
+            "resource/qge_moonlab_full_game_plan.md")
+        self.assertEqual(
+            icc["moonlab_full_game_plan_icc_evidence_file"],
+            "resource/qge_moonlab_full_game_plan_icc_evidence.json")
+        self.assertEqual(
+            icc["moonlab_full_game_plan_schema"],
+            "qge.moonlab_full_game_deployment_plan.v0")
+        self.assertEqual(
+            icc["moonlab_full_game_deployment_status"],
+            "blocked_asset_unavailable")
+        self.assertEqual(
+            icc["moonlab_full_game_asset_unavailable_map_count"], 28)
+        self.assertFalse(icc["whole_game_moonlab_deployment_claimed"])
         self.assertEqual(icc["moonlab_selected_job_count"], 4)
         self.assertEqual(icc["moonlab_hardware_candidate_job_count"], 1)
         self.assertEqual(icc["moonlab_completed_simulator_job_count"], 4)
@@ -1096,6 +1135,171 @@ class PublicationPackTests(unittest.TestCase):
             self.assertEqual(cli_icc["completed_hardware_job_count"], 1)
             self.assertFalse(
                 cli_icc["whole_game_hardware_execution_claimed"])
+
+    def test_moonlab_full_game_plan_tracks_asset_blockers(self) -> None:
+        coverage = breadth_evidence.build_full_game_map_coverage(
+            ["start", "e1m1"])
+        inventory = {
+            "schema": "qge.asset_inventory.v0",
+            "map_set": "quake_registered_single_player",
+            "status": "partial",
+            "target_map_count": 32,
+            "available_map_count": 3,
+            "missing_map_count": 29,
+            "available_maps": ["start", "e1m1", "e1m2"],
+            "missing_maps": [
+                name for name in
+                breadth_evidence.QUAKE_REGISTERED_SINGLE_PLAYER_MAPS
+                if name not in {"start", "e1m1", "e1m2"}
+            ],
+            "full_game_asset_ready": False,
+        }
+        breadth = {
+            "schema": "qge.breadth_evidence.v0",
+            "matrix_runs": [
+                {
+                    "map": "start",
+                    "matrix_file": "start/vanilla_capture_matrix.json",
+                    "ready": True,
+                    "ready_for_complete_claim": True,
+                    "moonlab_authority_ready": True,
+                    "fallback_count": 0,
+                    "surrogate_count": 0,
+                    "cpu_idwt_count": 0,
+                    "native_bridge_count": 105,
+                    "runtime_backend_probe_resolved": True,
+                }
+            ],
+        }
+        job_results = {
+            "schema": "qge.moonlab_job_results.v0",
+            "overall_status": "simulator_complete_hardware_not_submitted",
+            "completed_simulator_job_count": 4,
+            "completed_native_replay_job_count": 2,
+            "hardware_submitted_job_count": 0,
+        }
+        packet = {
+            "schema": "qge.moonlab_submission_packet.v0",
+            "hardware_candidate_job_count": 1,
+            "ready_candidate_count": 1,
+            "submitted_candidate_count": 0,
+        }
+        template = {
+            "schema": "qge.moonlab_hardware_record_template.v0",
+            "record_schema": "qge.moonlab_hardware_record.v0",
+        }
+        plan = moonlab_full_game_plan.build_plan(
+            coverage,
+            inventory,
+            source_path=Path("publication_pack"),
+            breadth_evidence=breadth,
+            moonlab_job_results=job_results,
+            submission_packet=packet,
+            hardware_record_template=template,
+        )
+        self.assertEqual(
+            plan["schema"], "qge.moonlab_full_game_deployment_plan.v0")
+        self.assertEqual(plan["status"], "blocked_asset_unavailable")
+        self.assertEqual(plan["covered_map_count"], 2)
+        self.assertEqual(plan["capture_required_maps"], ["e1m2"])
+        self.assertIn("e2m1", plan["asset_unavailable_maps"])
+        self.assertFalse(
+            plan["claim_posture"]["whole_game_moonlab_deployment_claimed"])
+        start = next(
+            row for row in plan["map_status"] if row["map"] == "start")
+        self.assertEqual(
+            start["deployment_status"],
+            "simulator_native_evidence_present")
+        self.assertEqual(start["evidence"][0]["fallback_count"], 0)
+        e1m2 = next(row for row in plan["map_status"] if row["map"] == "e1m2")
+        self.assertEqual(e1m2["deployment_status"], "capture_required")
+        icc = moonlab_full_game_plan.build_icc_evidence(
+            plan, out_path=Path("qge_moonlab_full_game_plan.json"))
+        self.assertEqual(
+            icc["runtime_backend"], "qge_moonlab_full_game_plan")
+        self.assertEqual(icc["capture_required_map_count"], 1)
+        self.assertFalse(icc["whole_game_hardware_execution_claimed"])
+        self.assertIn(
+            "blocked_asset_unavailable",
+            moonlab_full_game_plan.markdown_report(plan))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            resource = tmpdir / "resource"
+            resource.mkdir()
+            publication_pack.write_json(
+                resource / "qge_full_game_map_coverage.json", coverage)
+            publication_pack.write_json(
+                resource / "qge_asset_inventory.json", inventory)
+            publication_pack.write_json(
+                resource / "qge_moonlab_job_results.json", job_results)
+            publication_pack.write_json(
+                resource / "qge_moonlab_submission_packet.json", packet)
+            publication_pack.write_json(
+                resource / "qge_moonlab_hardware_record_template.json",
+                template,
+            )
+            publication_pack.write_json(
+                tmpdir / "breadth_evidence.json", breadth)
+            manifest = {
+                "schema": "qge.publication_pack.v0",
+                "source_inputs": {
+                    "breadth_evidence": str(tmpdir / "breadth_evidence.json")
+                },
+                "artifacts": {
+                    "resource": {
+                        "full_game_map_coverage": {
+                            "path": str(
+                                resource / "qge_full_game_map_coverage.json")
+                        },
+                        "asset_inventory": {
+                            "path": str(resource / "qge_asset_inventory.json")
+                        },
+                        "moonlab_job_results": {
+                            "path": str(
+                                resource / "qge_moonlab_job_results.json")
+                        },
+                        "moonlab_submission_packet": {
+                            "path": str(
+                                resource /
+                                "qge_moonlab_submission_packet.json")
+                        },
+                        "moonlab_hardware_record_template": {
+                            "path": str(
+                                resource /
+                                "qge_moonlab_hardware_record_template.json")
+                        },
+                    }
+                },
+            }
+            manifest_path = tmpdir / "publication_manifest.json"
+            publication_pack.write_json(manifest_path, manifest)
+            out_path = tmpdir / "qge_moonlab_full_game_plan.json"
+            markdown_path = tmpdir / "qge_moonlab_full_game_plan.md"
+            icc_path = tmpdir / "qge_moonlab_full_game_plan_icc.json"
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(
+                    moonlab_full_game_plan.main([
+                        str(tmpdir),
+                        "--out",
+                        str(out_path),
+                        "--markdown",
+                        str(markdown_path),
+                        "--icc-json",
+                        str(icc_path),
+                    ]),
+                    0,
+                )
+            self.assertIn(
+                "QGE_MOONLAB_FULL_GAME_PLAN", stdout.getvalue())
+            cli_plan = publication_pack.load_json(out_path)
+            self.assertEqual(
+                cli_plan["schema"],
+                "qge.moonlab_full_game_deployment_plan.v0")
+            cli_icc = publication_pack.load_json(icc_path)
+            self.assertEqual(
+                cli_icc["deployment_status"], "blocked_asset_unavailable")
 
 
 class BreadthEvidenceTests(unittest.TestCase):

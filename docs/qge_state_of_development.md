@@ -657,19 +657,24 @@ Known current visual state:
   missing, and no whole-game Moonlab coverage claim.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
-  publication pack is `diagnostics/publication_pack/20260523-164954`, with
+  publication pack is `diagnostics/publication_pack/20260523-171542`, with
   `qge_publication_artifact_pack_complete`, the e1m1 ready vanilla/QGE capture,
   vanilla ICC evidence sidecar, agent stream, oracle/claims exports, QAE
   benchmark artifacts, `resource/qge_resource_envelope.json`,
   `resource/qge_full_game_map_coverage.json`,
   `resource/qge_asset_inventory.json`,
+  `resource/qge_moonlab_full_game_plan.json`,
   `resource/qge_native_backend_boundary.json`,
   `resource/qge_moonlab_job_specs.json`,
   `resource/qge_moonlab_job_results.json`,
   `resource/qge_moonlab_replay_plan.json`,
   `resource/qge_moonlab_submission_packet.json`,
   `resource/qge_moonlab_hardware_record_template.json`, and the nine-map breadth
-  counters plus per-target native backend proof maps. The job results complete
+  counters plus per-target native backend proof maps. The full-game plan joins
+  coverage and asset inventory into one deployment ledger; current status is
+  `blocked_asset_unavailable`, with 9/32 maps covered, zero capture-required
+  maps queueable with local assets, and 23 registered BSP assets unavailable.
+  The job results complete
   four simulator jobs total: the three simulator/native evidence jobs plus the
   coverage-ledger replay, with two native replay jobs, zero blocked jobs, zero
   hardware submissions; `tools/qge_moonlab_job_runner.py` regenerates that

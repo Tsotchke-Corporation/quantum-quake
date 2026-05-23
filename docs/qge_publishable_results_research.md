@@ -155,12 +155,13 @@ Do claim, once proven:
 Minimum publishable artifact package:
 
 Current strongest publication bundle:
-`diagnostics/publication_pack/20260523-164954`. It packages a ready e1m1
+`diagnostics/publication_pack/20260523-171542`. It packages a ready e1m1
 QGE/vanilla capture, vanilla ICC evidence sidecar, agent stream, oracle scene,
 claims evidence, finite-shot QAE benchmark artifacts,
 `resource/qge_resource_envelope.json`,
 `resource/qge_full_game_map_coverage.json`,
 `resource/qge_asset_inventory.json`,
+`resource/qge_moonlab_full_game_plan.json`,
 `resource/qge_native_backend_boundary.json`,
 `resource/qge_moonlab_job_specs.json`,
 `resource/qge_moonlab_job_results.json`,
@@ -169,7 +170,10 @@ claims evidence, finite-shot QAE benchmark artifacts,
 `resource/qge_moonlab_hardware_record_template.json`, and the nine-map breadth sidecar from
 `diagnostics/breadth_evidence/20260523-152522`. The full-game map coverage
 ledger is explicit: 9/32 canonical registered single-player maps covered, 23
-missing, status `partial`. The Moonlab job results record
+missing, status `partial`. The Moonlab full-game plan records the same blocker
+as a deployment ledger: covered maps have strict simulator/native evidence,
+zero missing maps are locally queueable with the current assets, and 23 maps
+are `blocked_asset_unavailable`. The Moonlab job results record
 four completed simulator jobs, two completed native replay jobs, zero blocked
 jobs, and zero hardware submissions; `tools/qge_moonlab_job_runner.py` can
 regenerate the same result evidence from the job specs and emits
@@ -218,7 +222,7 @@ and marks UI-only `-nolauncher` paths as intentional skips.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for
-     `diagnostics/publication_pack/20260523-164954` inventories local loose/Pak
+     `diagnostics/publication_pack/20260523-171542` inventories local loose/Pak
      BSP assets before queuing. With the current `assets/id1/pak0.pak`, it
      reports zero locally queueable missing maps and 23 missing registered maps
      as asset-unavailable; those maps require additional registered BSP assets
@@ -234,7 +238,7 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      count of matrix runs where all required native boundaries resolved to the
      native sparse DWT render bridge.
    - The current publication bundle carries those breadth counters directly:
-     `diagnostics/publication_pack/20260523-164954` reports
+     `diagnostics/publication_pack/20260523-171542` reports
      `breadth_map_count=9`, `breadth_total_native_bridge_count=945`, and
      `breadth_total_runtime_backend_probe_event_count=36`, with
      `breadth_runtime_backend_probe_resolved_run_count=9`, plus
@@ -276,7 +280,7 @@ qge_vanilla_runtime_complete -> produce_ready_vanilla_capture_matrix
 ```
 
 That blocker is now cleared for the current self-contained publication pack:
-`diagnostics/publication_pack/20260523-164954` carries
+`diagnostics/publication_pack/20260523-171542` carries
 `qge_vanilla_capture_matrix_complete`, the vanilla ICC sidecar, native backend
 proofs, the agent stream, the benchmark bundle, and the nine-map breadth
 sidecar. It also carries `resource/qge_resource_envelope.json`, which records
@@ -286,6 +290,8 @@ hardware quantum advantage, and dense 70,000-qubit state claims out of scope,
 canonical map ledger,
 `resource/qge_asset_inventory.json`, which records the current PAK/BSP
 availability ledger,
+`resource/qge_moonlab_full_game_plan.json`, which records the full registered
+map deployment ledger and no-claim posture,
 `resource/qge_native_backend_boundary.json`, which records per-target native
 bridge pass/fail evidence for the three ICC-flagged runtime boundaries,
 plus `resource/qge_moonlab_job_specs.json` for selected simulator/native replay
@@ -302,6 +308,8 @@ Moonlab jobs outside publication-pack assembly:
 `python3 tools/qge_moonlab_job_runner.py <pack>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json --submission-out /tmp/qge_moonlab_submission_packet.verify.json`.
 Regenerate the hardware-return template from the submission packet with:
 `python3 tools/qge_moonlab_hardware_ingest.py <pack>/resource/qge_moonlab_submission_packet.json --template-out /tmp/qge_moonlab_hardware_record.template.json`.
+Regenerate the full-game Moonlab deployment ledger with:
+`python3 tools/qge_moonlab_full_game_plan.py <pack> --out /tmp/qge_moonlab_full_game_plan.json --markdown /tmp/qge_moonlab_full_game_plan.md --icc-json /tmp/qge_moonlab_full_game_plan_icc_evidence.json`.
 When Moonlab hardware returns a result, validate and merge it with:
 `python3 tools/qge_moonlab_hardware_ingest.py <pack>/resource/qge_moonlab_submission_packet.json --job-results <pack>/resource/qge_moonlab_job_results.json --hardware-record qge_moonlab_hardware_record.json --out qge_moonlab_job_results.hardware.json --comparison-out qge_moonlab_hardware_comparison.json --icc-out qge_moonlab_hardware_icc_evidence.json`.
 
@@ -311,7 +319,7 @@ The next hard work is therefore:
    coverage ledger, while preserving zero fallback/surrogate/CPU-IDWT counters.
    Install the remaining registered BSP assets, verify them with
    `tools/qge_asset_inventory.py`, then start from
-   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-164954`
+   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-171542`
    so the 23 registered asset-unavailable maps become explicit capture jobs
    rather than weakening the authority gate.
 2. Submit the QAE hardware-candidate job through Moonlab hardware when

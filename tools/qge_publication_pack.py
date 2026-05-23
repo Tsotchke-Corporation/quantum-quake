@@ -28,6 +28,7 @@ if str(SCRIPT_DIR) not in sys.path:
 import qge_advantage_benchmark  # noqa: E402
 import qge_asset_inventory  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
+import qge_moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest  # noqa: E402
 import qge_moonlab_job_runner  # noqa: E402
 import qge_oracle_export  # noqa: E402
@@ -1154,6 +1155,39 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         moonlab_hardware_record_template_path,
         moonlab_hardware_record_template,
     )
+    moonlab_full_game_plan = qge_moonlab_full_game_plan.build_plan(
+        full_game_map_coverage,
+        asset_inventory,
+        source_path=args.outdir,
+        breadth_evidence=load_json(breadth_evidence)
+        if breadth_evidence is not None and breadth_evidence.is_file()
+        else None,
+        moonlab_job_results=moonlab_job_results,
+        submission_packet=moonlab_submission_packet,
+        hardware_record_template=moonlab_hardware_record_template,
+    )
+    moonlab_full_game_plan_path = (
+        args.outdir / "resource" / "qge_moonlab_full_game_plan.json"
+    )
+    write_json(moonlab_full_game_plan_path, moonlab_full_game_plan)
+    moonlab_full_game_plan_markdown_path = (
+        args.outdir / "resource" / "qge_moonlab_full_game_plan.md"
+    )
+    moonlab_full_game_plan_markdown_path.write_text(
+        qge_moonlab_full_game_plan.markdown_report(moonlab_full_game_plan),
+        encoding="utf-8",
+    )
+    moonlab_full_game_plan_icc = (
+        qge_moonlab_full_game_plan.build_icc_evidence(
+            moonlab_full_game_plan,
+            out_path=moonlab_full_game_plan_path,
+        )
+    )
+    moonlab_full_game_plan_icc_path = (
+        args.outdir / "resource" /
+        "qge_moonlab_full_game_plan_icc_evidence.json"
+    )
+    write_json(moonlab_full_game_plan_icc_path, moonlab_full_game_plan_icc)
     resource_artifacts = {
         "envelope": file_info(resource_path),
         "full_game_map_coverage": file_info(full_game_map_coverage_path),
@@ -1166,6 +1200,11 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "moonlab_submission_packet": file_info(moonlab_submission_packet_path),
         "moonlab_hardware_record_template": file_info(
             moonlab_hardware_record_template_path),
+        "moonlab_full_game_plan": file_info(moonlab_full_game_plan_path),
+        "moonlab_full_game_plan_markdown": file_info(
+            moonlab_full_game_plan_markdown_path),
+        "moonlab_full_game_plan_icc_evidence": file_info(
+            moonlab_full_game_plan_icc_path),
     }
     return {
         "schema": "qge.publication_pack.v0",
@@ -1442,6 +1481,22 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "candidate_digest": moonlab_hardware_record_template.get(
                     "candidate_digest"),
             },
+            "moonlab_full_game_plan_summary": {
+                "schema": moonlab_full_game_plan.get("schema"),
+                "status": moonlab_full_game_plan.get("status"),
+                "target_map_count": moonlab_full_game_plan.get(
+                    "target_map_count"),
+                "covered_map_count": moonlab_full_game_plan.get(
+                    "covered_map_count"),
+                "missing_map_count": moonlab_full_game_plan.get(
+                    "missing_map_count"),
+                "asset_unavailable_map_count": (
+                    moonlab_full_game_plan.get(
+                        "asset_unavailable_map_count")),
+                "whole_game_moonlab_deployment_claimed": (
+                    moonlab_full_game_plan.get("claim_posture", {}).get(
+                        "whole_game_moonlab_deployment_claimed")),
+            },
         },
         "claim_posture": {
             "allowed_wording": (
@@ -1463,6 +1518,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_publication_pack.py --capture-dir <trace_capture_dir> --vanilla-matrix <graphics_capture_dir>/vanilla_capture_matrix.json --graphics-capture-dir <graphics_capture_dir> --breadth-evidence <breadth_dir>",
             "tools/qge_moonlab_job_runner.py <pack_dir>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack_dir>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json --submission-out /tmp/qge_moonlab_submission_packet.verify.json",
             "tools/qge_moonlab_hardware_ingest.py <pack_dir>/resource/qge_moonlab_submission_packet.json --template-out /tmp/qge_moonlab_hardware_record.template.json",
+            "tools/qge_moonlab_full_game_plan.py <pack_dir> --out /tmp/qge_moonlab_full_game_plan.json --markdown /tmp/qge_moonlab_full_game_plan.md --icc-json /tmp/qge_moonlab_full_game_plan_icc_evidence.json",
         ],
     }
 
@@ -1485,6 +1541,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("moonlab_submission_packet_summary"))
     hardware_record_template_summary = dict_or_empty(
         advantage_summary.get("moonlab_hardware_record_template_summary"))
+    full_game_plan_summary = dict_or_empty(
+        advantage_summary.get("moonlab_full_game_plan_summary"))
     native_boundary_summary = dict_or_empty(
         advantage_summary.get("native_backend_boundary_summary"))
     full_game_summary = dict_or_empty(
@@ -1545,6 +1603,14 @@ def build_icc_evidence(manifest: dict[str, Any],
         "moonlab_hardware_record_template_file": (
             artifacts.get("resource", {}).get(
                 "moonlab_hardware_record_template", {}).get("path")),
+        "moonlab_full_game_plan_file": artifacts.get("resource", {}).get(
+            "moonlab_full_game_plan", {}).get("path"),
+        "moonlab_full_game_plan_markdown_file": (
+            artifacts.get("resource", {}).get(
+                "moonlab_full_game_plan_markdown", {}).get("path")),
+        "moonlab_full_game_plan_icc_evidence_file": (
+            artifacts.get("resource", {}).get(
+                "moonlab_full_game_plan_icc_evidence", {}).get("path")),
         "moonlab_selected_job_count": job_specs_summary.get(
             "selected_job_count"),
         "moonlab_hardware_candidate_job_count": job_specs_summary.get(
@@ -1572,6 +1638,14 @@ def build_icc_evidence(manifest: dict[str, Any],
             hardware_record_template_summary.get("record_schema")),
         "moonlab_hardware_record_template_job_id": (
             hardware_record_template_summary.get("job_id")),
+        "moonlab_full_game_plan_schema": full_game_plan_summary.get("schema"),
+        "moonlab_full_game_deployment_status": (
+            full_game_plan_summary.get("status")),
+        "moonlab_full_game_asset_unavailable_map_count": (
+            full_game_plan_summary.get("asset_unavailable_map_count")),
+        "whole_game_moonlab_deployment_claimed": (
+            full_game_plan_summary.get(
+                "whole_game_moonlab_deployment_claimed")),
         "vanilla_capture_matrix_file": artifacts["vanilla"]["matrix"]["packed"]["path"],
         "vanilla_icc_evidence_file": artifacts["vanilla"]["icc_evidence"]["packed"]["path"],
         "breadth_evidence_file": artifacts.get("breadth", {}).get(
