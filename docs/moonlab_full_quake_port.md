@@ -1,8 +1,10 @@
 # Moonlab Full Quake Port
 
 This is the whole-game authority contract for Quantum Quake. The ICC task for
-this contract is `qge_vanilla_quake_conformance`; its current top blocker is
-the strict vanilla capture matrix proving QGE/Moonlab ownership counters.
+this contract is `qge_vanilla_quake_conformance`. The current strongest
+self-contained publication pack proves the strict vanilla capture matrix for a
+captured workload; the remaining work is expanding that authority and fidelity
+until it covers the full game without hidden classic production authority.
 
 This document defines what it means to turn Quantum Quake from a QuakeSpasm
 build with quantum hooks into a real Moonlab-owned game port.
@@ -48,17 +50,20 @@ when all of these are true:
   to be hidden production output.
 
 The full-port acceptance target is the ICC completion oracle
-`qge_vanilla_quake_conformance`. As of the current baseline, ICC reports that
-the trace artifacts and tests exist, but the strict ownership matrix is still
-blocked because `qge_vanilla_runtime_complete` is not proven.
+`qge_vanilla_quake_conformance`. As of
+`diagnostics/publication_pack/20260523-031110`, ICC reports
+`qge_vanilla_runtime_complete` ready for the bundled e1m1 QGE/vanilla capture
+matrix. That evidence proves the ownership counters for the captured workload;
+it does not by itself close renderer fidelity, all-map breadth, or hardware
+deployment claims.
 
 ## Current State
 
 | Domain | Current integration | Honest status |
 | --- | --- | --- |
 | RNG | `PF_random()` routes through `QGE_RandomFloat()` when `quantum_rng=1`. | Real Moonlab-backed QRNG use. |
-| Audio | `S_QuantumProcess()` transduces the mixed paintbuffer through QGE DCT/quantum gates. | Good post-mix media path, not per-asset ownership yet. |
-| Rendering | `R_MarkSurfaces()` submits visible BSP surfaces to a QGE scene buffer; `R_RenderScene()` calls `QGE_RenderScene()` after classic world/entity rendering. | Scene ingestion is real; final framebuffer is still overlay/composite, not full graphics ownership. |
+| Audio | `S_QuantumProcess()` transduces the mixed paintbuffer through QGE DCT/quantum gates and source-authority telemetry. | Good post-mix media path with observable source authority, not full decoded-stream ownership yet. |
+| Rendering | `R_MarkSurfaces()` submits visible BSP surfaces to a QGE scene buffer; `quantum_render 2` can own the primary captured framebuffer path with native sparse-DWT evidence. | Captured workload authority is proven; visual fidelity and complete special-surface coverage remain incomplete. |
 | Particles | `R_DrawParticles()` can call `QGE_DrawParticles()` when `quantum_particles=1`. | Separate quantum particle system, not complete Quake particle ownership. |
 | Visibility | `R_DrawWorld()` has `quantum_vis` hooks. | Surface registration/query path exists but is not yet the full BSP traversal authority. |
 | AI | Server think path calls `QGE_AIDecide()` for monsters. | Partial influence hook; needs explicit entity-state contract. |
@@ -206,15 +211,17 @@ A complete port is credible when these are true:
 - Classic Quake reference paths stay available and parity-tested out of band,
   but hidden classic production output is a release blocker.
 - ICC `completion-oracle --target qge_vanilla_quake_conformance` reports the
-  strict runtime matrix complete.
+  strict runtime matrix complete for the claimed publication/capture bundle.
 
 ## Immediate Implementation Order
 
-1. Stabilize diagnostics and fullscreen/windowed harnesses.
-2. Expand physics shadow tracking into a persistent projectile registry.
-3. Replace render overlay with a QGE scene ingestion layer.
-4. Add BSP surface and texture/lightmap encoders.
-5. Add `quantum_render 2` primary framebuffer mode.
-6. Move particles/projectile visuals from separate effects into the scene graph.
-7. Make per-source audio/media transduction observable.
-8. Add authoritative projectile mode after shadow error is bounded.
+1. Expand the ready matrix beyond the current publication capture and four-map
+   breadth sidecar.
+2. Improve `quantum_render 2` visual fidelity without weakening ownership
+   counters or native sparse-DWT evidence.
+3. Move particles/projectile visuals from separate effects into the scene graph.
+4. Add a hardware-deployment resource envelope for Moonlab-backed domains:
+   qubits, shots, native backend path, fallback policy, and simulator/hardware
+   portability limits.
+5. Push per-source audio/media transduction from post-mix authority toward
+   decoded-stream ownership.

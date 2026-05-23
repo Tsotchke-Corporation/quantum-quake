@@ -61,9 +61,12 @@ Working and routinely verified:
 
 Important known limitations:
 
-- The full-port ICC target is `qge_vanilla_quake_conformance`. ICC currently
-  reports it blocked on `qge_vanilla_runtime_complete`: the strict
-  vanilla/QGE runtime ownership matrix is not yet proven.
+- The full-port ICC target is `qge_vanilla_quake_conformance`. The current
+  strongest self-contained evidence pack is
+  `diagnostics/publication_pack/20260523-031110`, where ICC reports the strict
+  vanilla/QGE runtime ownership matrix and `qge_vanilla_runtime_complete`
+  ready. This is a captured workload proof, not a claim that every Quake domain
+  is visually or hardware complete.
 - `quantum_render 2` is not visually complete. The current renderer has
   improved world-surface coverage, Quake-FOV world projection, bilinear
   surface/light sampling, darker lightmap-preserving surface shading, and

@@ -225,24 +225,30 @@ UI-only `-nolauncher` paths as intentional skips.
 
 ## Immediate Engineering Wedge
 
-ICC says the top blocker is not another renderer luma tweak. The blocker is:
+The previous ICC blocker was:
 
 ```text
 qge_vanilla_runtime_complete -> produce_ready_vanilla_capture_matrix
 ```
 
-The next hard work should therefore be:
+That blocker is now cleared for the current self-contained publication pack:
+`diagnostics/publication_pack/20260523-031110` carries
+`qge_vanilla_capture_matrix_complete`, the vanilla ICC sidecar, native backend
+proofs, the agent stream, the benchmark bundle, and the four-map breadth
+sidecar.
 
-1. Make `tools/qge_vanilla_capture_matrix.py` emit a stricter whole-game
-   ownership matrix, not only graphics readiness. The hard-mode matrix must
-   include `moonlab_domain_readiness`, `moonlab_authority_ready`, and explicit
-   blockers for render quantum workload, RNG/entropy, AI, visibility, audio,
-   projectile live authority, particles, sprites, and performance.
-2. Add per-domain required counters for claimed Moonlab authority:
-   render, UI, audio, RNG, visibility, physics/projectiles, AI, particles, and
-   media.
-3. Make the matrix fail closed when classic output or state authority is hidden.
-4. Re-run ICC:
+The next hard work is therefore:
+
+1. Broaden the ready matrix beyond the current e1m1 publication capture and
+   four-map breadth sidecar, while preserving zero fallback/surrogate/CPU-IDWT
+   counters.
+2. Attach a hardware-deployment resource envelope to each Moonlab-owned domain:
+   qubits, shots, native backend path, simulator/hardware support, and explicit
+   fallback policy.
+3. Improve renderer fidelity enough that the QGE primary framebuffer is not
+   only owned, but inspectably close to vanilla Quake on fixed-view and
+   autonomous captures.
+4. Keep the historical blocked check available when rebuilding evidence:
 
 ```sh
 /Users/tyr/Desktop/infinite_context_coder/bin/icc completion-oracle \
