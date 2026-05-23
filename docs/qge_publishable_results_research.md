@@ -155,10 +155,11 @@ Do claim, once proven:
 Minimum publishable artifact package:
 
 Current strongest publication bundle:
-`diagnostics/publication_pack/20260523-124057`. It packages a ready e1m1
+`diagnostics/publication_pack/20260523-125637`. It packages a ready e1m1
 QGE/vanilla capture, vanilla ICC evidence sidecar, agent stream, oracle scene,
 claims evidence, finite-shot QAE benchmark artifacts,
 `resource/qge_resource_envelope.json`,
+`resource/qge_native_backend_boundary.json`,
 `resource/qge_moonlab_job_specs.json`,
 `resource/qge_moonlab_job_results.json`,
 `resource/qge_moonlab_replay_plan.json`, and the four-map breadth sidecar from
@@ -202,7 +203,7 @@ records host-side macOS AppKit/SDL launcher probes and marks UI-only
      count of matrix runs where all required native boundaries resolved to the
      native sparse DWT render bridge.
    - The current publication bundle carries those breadth counters directly:
-     `diagnostics/publication_pack/20260523-124057` reports
+     `diagnostics/publication_pack/20260523-125637` reports
      `breadth_map_count=4`, `breadth_total_native_bridge_count=420`, and
      `breadth_total_runtime_backend_probe_event_count=16`, with
      `breadth_runtime_backend_probe_resolved_run_count=4`.
@@ -243,12 +244,14 @@ qge_vanilla_runtime_complete -> produce_ready_vanilla_capture_matrix
 ```
 
 That blocker is now cleared for the current self-contained publication pack:
-`diagnostics/publication_pack/20260523-124057` carries
+`diagnostics/publication_pack/20260523-125637` carries
 `qge_vanilla_capture_matrix_complete`, the vanilla ICC sidecar, native backend
 proofs, the agent stream, the benchmark bundle, and the four-map breadth
 sidecar. It also carries `resource/qge_resource_envelope.json`, which records
 per-domain resource posture and explicitly keeps whole-game hardware execution,
 hardware quantum advantage, and dense 70,000-qubit state claims out of scope,
+`resource/qge_native_backend_boundary.json`, which records per-target native
+bridge pass/fail evidence for the three ICC-flagged runtime boundaries,
 plus `resource/qge_moonlab_job_specs.json` for selected simulator/native replay
 and hardware-candidate benchmark jobs, and
 `resource/qge_moonlab_job_results.json` for completed local simulator/native

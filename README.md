@@ -63,10 +63,12 @@ Important known limitations:
 
 - The full-port ICC target is `qge_vanilla_quake_conformance`. The current
   strongest self-contained evidence pack is
-  `diagnostics/publication_pack/20260523-124057`, where ICC reports the strict
+  `diagnostics/publication_pack/20260523-125637`, where ICC reports the strict
   vanilla/QGE runtime ownership matrix and `qge_vanilla_runtime_complete`
   ready. The pack includes `resource/qge_resource_envelope.json`, which scopes
   Moonlab simulator/native-backend deployment, plus
+  `resource/qge_native_backend_boundary.json` with the pass/fail proof for the
+  three native backend boundaries,
   `resource/qge_moonlab_job_specs.json` with selected simulator/native replay
   jobs and one unsubmitted hardware-candidate QAE benchmark job, and
   `resource/qge_moonlab_job_results.json` with three completed simulator jobs,

@@ -28,6 +28,7 @@ if str(SCRIPT_DIR) not in sys.path:
 import qge_advantage_benchmark  # noqa: E402
 import qge_moonlab_job_runner  # noqa: E402
 import qge_oracle_export  # noqa: E402
+import qge_perf_summary  # noqa: E402
 
 DEFAULT_SAMPLE_COUNTS = [16, 32, 64, 128]
 
@@ -174,6 +175,8 @@ def performance_summary(path: Path | None) -> dict[str, Any]:
         "runtime_backend_probe_missing_targets": [],
         "runtime_backend_probe_native_targets": [],
         "runtime_backend_probe_resolved": None,
+        "runtime_backend_boundary": None,
+        "runtime_backend_boundary_status": None,
     }
     if path is None or not path.is_file():
         return summary
@@ -186,6 +189,16 @@ def performance_summary(path: Path | None) -> dict[str, Any]:
     if not isinstance(aggregate, dict):
         aggregate = {}
     failures = aggregate.get("threshold_failures", [])
+    runtime_backend_probe_proofs = aggregate.get(
+        "runtime_backend_probe_proofs", {})
+    if not isinstance(runtime_backend_probe_proofs, dict):
+        runtime_backend_probe_proofs = {}
+    runtime_backend_boundary = aggregate.get("runtime_backend_boundary")
+    if not isinstance(runtime_backend_boundary, dict):
+        runtime_backend_boundary = (
+            qge_perf_summary.runtime_backend_boundary_from_proofs(
+                runtime_backend_probe_proofs)
+        )
     summary.update({
         "status": data.get("status"),
         "engine_average_quantum_ms_max": aggregate.get(
@@ -195,14 +208,16 @@ def performance_summary(path: Path | None) -> dict[str, Any]:
         "metric_evidence_present": aggregate.get("metric_evidence_present"),
         "required_runtime_backend_probe_targets": aggregate.get(
             "required_runtime_backend_probe_targets", []),
-        "runtime_backend_probe_proofs": aggregate.get(
-            "runtime_backend_probe_proofs", {}),
+        "runtime_backend_probe_proofs": runtime_backend_probe_proofs,
         "runtime_backend_probe_missing_targets": aggregate.get(
             "runtime_backend_probe_missing_targets", []),
         "runtime_backend_probe_native_targets": aggregate.get(
             "runtime_backend_probe_native_targets", []),
         "runtime_backend_probe_resolved": aggregate.get(
             "runtime_backend_probe_resolved"),
+        "runtime_backend_boundary": runtime_backend_boundary,
+        "runtime_backend_boundary_status": runtime_backend_boundary.get(
+            "status"),
     })
     return summary
 
@@ -929,6 +944,16 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     )
     resource_path = args.outdir / "resource" / "qge_resource_envelope.json"
     write_json(resource_path, resource_envelope)
+    native_backend_boundary = capture_perf_summary.get(
+        "runtime_backend_boundary")
+    if not isinstance(native_backend_boundary, dict):
+        native_backend_boundary = (
+            qge_perf_summary.runtime_backend_boundary_from_proofs({})
+        )
+    native_backend_boundary_path = (
+        args.outdir / "resource" / "qge_native_backend_boundary.json"
+    )
+    write_json(native_backend_boundary_path, native_backend_boundary)
     moonlab_job_specs = build_moonlab_job_specs(
         resource_envelope,
         {
@@ -967,6 +992,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     write_json(moonlab_replay_plan_path, moonlab_replay_plan)
     resource_artifacts = {
         "envelope": file_info(resource_path),
+        "native_backend_boundary": file_info(native_backend_boundary_path),
         "moonlab_job_specs": file_info(moonlab_job_specs_path),
         "moonlab_job_results": file_info(moonlab_job_results_path),
         "moonlab_replay_plan": file_info(moonlab_replay_plan_path),
@@ -1096,6 +1122,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                     "runtime_backend_probe_native_targets")),
             "performance_runtime_backend_probe_resolved": (
                 capture_perf_summary.get("runtime_backend_probe_resolved")),
+            "performance_runtime_backend_boundary_status": (
+                capture_perf_summary.get("runtime_backend_boundary_status")),
             "performance_ok": performance_ok,
             "breadth_evidence": breadth_summary,
             "breadth_ready_for_complete_claim": breadth_summary.get(
@@ -1145,6 +1173,15 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "best_qae": metrics.get("comparison", {}).get("best_qae"),
             "resource_estimate": metrics.get("resource_estimate"),
             "resource_envelope_summary": resource_envelope.get("posture"),
+            "native_backend_boundary_summary": {
+                "status": native_backend_boundary.get("status"),
+                "required_target_count": native_backend_boundary.get(
+                    "required_target_count"),
+                "passed_target_count": native_backend_boundary.get(
+                    "passed_target_count"),
+                "blocked_target_count": native_backend_boundary.get(
+                    "blocked_target_count"),
+            },
             "moonlab_job_specs_summary": {
                 "selected_job_count": moonlab_job_specs.get(
                     "selected_job_count"),
@@ -1212,6 +1249,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("moonlab_job_results_summary"))
     replay_plan_summary = dict_or_empty(
         advantage_summary.get("moonlab_replay_plan_summary"))
+    native_boundary_summary = dict_or_empty(
+        advantage_summary.get("native_backend_boundary_summary"))
     ready = bool(runtime.get("publication_ready_for_complete_claim"))
     return {
         "schema": "qge.icc_evidence.v0",
@@ -1229,6 +1268,14 @@ def build_icc_evidence(manifest: dict[str, Any],
         "scaling_summary_file": artifacts["advantage"]["scaling_summary"]["path"],
         "resource_envelope_file": artifacts.get("resource", {}).get(
             "envelope", {}).get("path"),
+        "native_backend_boundary_file": artifacts.get("resource", {}).get(
+            "native_backend_boundary", {}).get("path"),
+        "native_backend_boundary_status": native_boundary_summary.get(
+            "status"),
+        "native_backend_boundary_passed_target_count": (
+            native_boundary_summary.get("passed_target_count")),
+        "native_backend_boundary_required_target_count": (
+            native_boundary_summary.get("required_target_count")),
         "moonlab_job_specs_file": artifacts.get("resource", {}).get(
             "moonlab_job_specs", {}).get("path"),
         "moonlab_job_results_file": artifacts.get("resource", {}).get(

@@ -639,15 +639,17 @@ Known current visual state:
   backend-gate events, and 16 native backend runtime-probe events across
   `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`, and
   `qge_metal_init_common`. Runtime performance, vanilla matrix, breadth, and
-  publication artifacts now carry per-target `runtime_backend_probe_proofs` and
-  resolved/missing/native target sets so native backend evidence is auditable by
-  boundary instead of only as aggregate counts.
+  publication artifacts now carry per-target `runtime_backend_probe_proofs`,
+  resolved/missing/native target sets, and
+  `resource/qge_native_backend_boundary.json` so native backend evidence is
+  auditable by boundary instead of only as aggregate counts.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
-  publication pack is `diagnostics/publication_pack/20260523-124057`, with
+  publication pack is `diagnostics/publication_pack/20260523-125637`, with
   `qge_publication_artifact_pack_complete`, the e1m1 ready vanilla/QGE capture,
   vanilla ICC evidence sidecar, agent stream, oracle/claims exports, QAE
   benchmark artifacts, `resource/qge_resource_envelope.json`,
+  `resource/qge_native_backend_boundary.json`,
   `resource/qge_moonlab_job_specs.json`,
   `resource/qge_moonlab_job_results.json`,
   `resource/qge_moonlab_replay_plan.json`, and the four-map breadth counters

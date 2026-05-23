@@ -259,9 +259,11 @@ lines for `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`,
 and `qge_metal_init_common`. The performance sidecar parses them into
 `runtime_backend_probe_event_count`, `runtime_backend_probe_targets`,
 `runtime_backend_probe_paths`, `runtime_backend_probe_results`, and
-`runtime_backend_probe_proofs`. The proof map is keyed by native boundary and
-records each target's backend, phase, result, path, active/native flags, and
-whether that target reached `native_sparse_dwt_render_bridge`. The vanilla
+`runtime_backend_probe_proofs`, plus a compact `runtime_backend_boundary`
+verdict. The proof map is keyed by native boundary and records each target's
+backend, phase, result, path, active/native flags, and whether that target
+reached `native_sparse_dwt_render_bridge`. Publication packs also materialize
+that verdict as `resource/qge_native_backend_boundary.json`. The vanilla
 matrix requires `runtime_backend_probe_resolved=1`, meaning
 `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`, and
 `qge_metal_init_common` all have native render-bridge proof alongside the

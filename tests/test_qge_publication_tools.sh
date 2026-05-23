@@ -112,6 +112,36 @@ with (capture / "qge_trace.bin").open("wb") as f:
 )
 (capture / "frame_001.png").write_bytes(b"synthetic frame placeholder\n")
 (capture / "autoexec.cfg.used").write_text("map e1m1\n", encoding="utf-8")
+probe_targets = [
+    "qge_context_get_or_create_render_acceleration",
+    "qge_dwt_render",
+    "qge_metal_init_common",
+]
+probe_proofs = {
+    target: {
+        "event_count": 1,
+        "backends": ["Metal"],
+        "paths": ["native_sparse_dwt_render_bridge"],
+        "results": [result],
+        "phases": [phase],
+        "native_values": [1] if target != "qge_metal_init_common" else [],
+        "active_values": [1] if target != "qge_metal_init_common" else [],
+        "native_bridge_evidence": True,
+        "active_evidence": True,
+        "latest_event": {
+            "target": target,
+            "phase": phase,
+            "backend": "Metal",
+            "path": "native_sparse_dwt_render_bridge",
+            "result": result,
+        },
+    }
+    for target, phase, result in [
+        ("qge_context_get_or_create_render_acceleration", "create", "created"),
+        ("qge_dwt_render", "idwt", "native"),
+        ("qge_metal_init_common", "create", "active"),
+    ]
+}
 write_json(capture / "qge_perf_summary.json", {
     "status": "pass",
     "aggregate": {
@@ -119,6 +149,16 @@ write_json(capture / "qge_perf_summary.json", {
         "render_time_ms_max": 22.0,
         "threshold_failures": [],
         "metric_evidence_present": True,
+        "runtime_backend_probe_event_count": 3,
+        "runtime_backend_probe_targets": probe_targets,
+        "runtime_backend_probe_backends": ["Metal"],
+        "runtime_backend_probe_paths": ["native_sparse_dwt_render_bridge"],
+        "runtime_backend_probe_results": ["active", "created", "native"],
+        "required_runtime_backend_probe_targets": probe_targets,
+        "runtime_backend_probe_proofs": probe_proofs,
+        "runtime_backend_probe_missing_targets": [],
+        "runtime_backend_probe_native_targets": probe_targets,
+        "runtime_backend_probe_resolved": True,
     },
 })
 write_json(capture / "qge_perf_icc_evidence.json", {
@@ -288,10 +328,13 @@ assert runtime["vanilla_performance_ok"] is True
 assert manifest["artifacts"]["oracle"]["oracle_scene"]["exists"] is True
 assert manifest["artifacts"]["advantage"]["metrics"]["exists"] is True
 assert manifest["artifacts"]["resource"]["envelope"]["exists"] is True
+assert manifest["artifacts"]["resource"]["native_backend_boundary"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_job_specs"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_job_results"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_replay_plan"]["exists"] is True
 assert manifest["advantage_summary"]["resource_envelope_summary"]["whole_game_hardware_execution_claimed"] is False
+assert manifest["advantage_summary"]["native_backend_boundary_summary"]["status"] == "pass"
+assert manifest["advantage_summary"]["native_backend_boundary_summary"]["passed_target_count"] == 3
 assert manifest["advantage_summary"]["moonlab_job_specs_summary"]["hardware_candidate_job_count"] == 1
 assert manifest["advantage_summary"]["moonlab_job_results_summary"]["completed_simulator_job_count"] >= 2
 assert manifest["advantage_summary"]["moonlab_job_results_summary"]["hardware_submitted_job_count"] == 0
@@ -301,6 +344,8 @@ assert icc["completion_reason"] == "qge_publication_artifact_pack_complete"
 assert icc["runtime_backend"] == "qge_publication_pack"
 assert icc["publication_ready_for_complete_claim"] is True
 assert icc["resource_envelope_file"].endswith("resource/qge_resource_envelope.json")
+assert icc["native_backend_boundary_file"].endswith("resource/qge_native_backend_boundary.json")
+assert icc["native_backend_boundary_status"] == "pass"
 assert icc["moonlab_job_specs_file"].endswith("resource/qge_moonlab_job_specs.json")
 assert icc["moonlab_job_results_file"].endswith("resource/qge_moonlab_job_results.json")
 assert icc["moonlab_replay_plan_file"].endswith("resource/qge_moonlab_replay_plan.json")

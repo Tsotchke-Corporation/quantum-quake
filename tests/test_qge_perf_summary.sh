@@ -81,7 +81,10 @@ assert summary["aggregate"]["runtime_backend_probe_targets"] == [
 ]
 assert summary["aggregate"]["runtime_backend_probe_resolved"] is True
 assert summary["aggregate"]["runtime_backend_probe_missing_targets"] == []
+assert summary["aggregate"]["runtime_backend_boundary"]["status"] == "pass"
+assert summary["aggregate"]["runtime_backend_boundary"]["passed_target_count"] == 3
 assert summary["logs"][0]["components"]["encode"]["max_ms"] == 13.0
+assert summary["logs"][0]["runtime_backend_boundary"]["status"] == "pass"
 assert icc["completion_reason"] == "qge_runtime_performance_complete"
 assert icc["native_idwt_sum"] == 3
 assert icc["idwt_fallback_sum"] == 0
@@ -97,6 +100,8 @@ assert icc["runtime_backend_probe_targets"] == [
     "qge_metal_init_common",
 ]
 assert icc["runtime_backend_probe_resolved"] is True
+assert icc["runtime_backend_boundary_status"] == "pass"
+assert icc["runtime_backend_boundary_passed_target_count"] == 3
 assert icc["failure_free"] is True
 PY
 
@@ -132,8 +137,11 @@ assert summary["logs"][0]["backend_gate_init_event"]["flags_int"] == 0x3D
 assert summary["aggregate"]["native_idwt_sum"] == 0
 assert summary["aggregate"]["cpu_idwt_sum"] == 3
 assert summary["aggregate"]["idwt_backend_values"] == ["cpu"]
+assert summary["aggregate"]["runtime_backend_boundary"]["status"] == "blocked"
+assert summary["aggregate"]["runtime_backend_boundary"]["passed_target_count"] == 0
 assert icc["cpu_idwt_sum"] == 3
 assert icc["idwt_backend_values"] == ["cpu"]
+assert icc["runtime_backend_boundary_status"] == "blocked"
 PY
 
 if python3 "$repo_root/tools/qge_perf_summary.py" \

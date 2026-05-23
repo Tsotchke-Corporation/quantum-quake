@@ -610,6 +610,9 @@ class PublicationPackTests(unittest.TestCase):
                 },
                 "resource": {
                     "envelope": {"path": "resource/qge_resource_envelope.json"},
+                    "native_backend_boundary": {
+                        "path": "resource/qge_native_backend_boundary.json"
+                    },
                     "moonlab_job_specs": {
                         "path": "resource/qge_moonlab_job_specs.json"
                     },
@@ -663,6 +666,12 @@ class PublicationPackTests(unittest.TestCase):
                     "hardware_submitted_job_count": 0,
                     "blocked_job_count": 0,
                 },
+                "native_backend_boundary_summary": {
+                    "status": "pass",
+                    "required_target_count": 3,
+                    "passed_target_count": 3,
+                    "blocked_target_count": 0,
+                },
             },
             "runtime_summary": {
                 "publication_ready_for_complete_claim": True,
@@ -695,6 +704,12 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(
             icc["resource_envelope_file"],
             "resource/qge_resource_envelope.json")
+        self.assertEqual(
+            icc["native_backend_boundary_file"],
+            "resource/qge_native_backend_boundary.json")
+        self.assertEqual(icc["native_backend_boundary_status"], "pass")
+        self.assertEqual(
+            icc["native_backend_boundary_passed_target_count"], 3)
         self.assertEqual(
             icc["moonlab_job_specs_file"],
             "resource/qge_moonlab_job_specs.json")
@@ -1203,6 +1218,10 @@ class PerformanceSummaryTests(unittest.TestCase):
                 ["native_sparse_dwt_render_bridge", "sparse_dwt_cpu_render_path"],
             )
             self.assertTrue(parsed["backend_gate_render_bridge_active"])
+            self.assertEqual(
+                parsed["runtime_backend_boundary"]["status"], "pass")
+            self.assertEqual(
+                parsed["runtime_backend_boundary"]["passed_target_count"], 3)
 
             summary = perf_summary.build_summary(args)
             self.assertEqual(summary["status"], "pass")
@@ -1216,6 +1235,10 @@ class PerformanceSummaryTests(unittest.TestCase):
             self.assertEqual(
                 summary["aggregate"]["runtime_backend_probe_missing_targets"],
                 [],
+            )
+            self.assertEqual(
+                summary["aggregate"]["runtime_backend_boundary"]["status"],
+                "pass",
             )
             icc = perf_summary.build_icc_evidence(
                 summary,
@@ -1235,6 +1258,9 @@ class PerformanceSummaryTests(unittest.TestCase):
             )
             self.assertEqual(icc["runtime_backend_probe_event_count"], 3)
             self.assertTrue(icc["runtime_backend_probe_resolved"])
+            self.assertEqual(icc["runtime_backend_boundary_status"], "pass")
+            self.assertEqual(
+                icc["runtime_backend_boundary_passed_target_count"], 3)
 
 
 class NoesisSummaryTests(unittest.TestCase):

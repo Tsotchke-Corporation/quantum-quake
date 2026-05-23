@@ -46,6 +46,26 @@ REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS = (
     "qge_dwt_render",
     "qge_metal_init_common",
 )
+RUNTIME_BACKEND_BOUNDARY_SOURCES = {
+    "qge_context_get_or_create_render_acceleration": {
+        "source_path": "qge/qge_init.c",
+        "source_symbol": "qge_context_get_or_create_render_acceleration",
+        "required_path": "native_sparse_dwt_render_bridge",
+        "required_results": ["created", "cached"],
+    },
+    "qge_dwt_render": {
+        "source_path": "qge/qge_render.c",
+        "source_symbol": "qge_dwt_render",
+        "required_path": "native_sparse_dwt_render_bridge",
+        "required_results": ["native"],
+    },
+    "qge_metal_init_common": {
+        "source_path": "qge/qge_metal.mm",
+        "source_symbol": "qge_metal_init_common",
+        "required_path": "native_sparse_dwt_render_bridge",
+        "required_results": ["active"],
+    },
+}
 NATIVE_RUNTIME_PROBE_RESULTS = {
     "active",
     "cached",
@@ -309,6 +329,63 @@ def runtime_backend_probe_rollup_from_proofs(
     }
 
 
+def runtime_backend_boundary_from_proofs(
+    proofs: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    targets = []
+    for target in REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS:
+        proof = proofs.get(target, {})
+        if not isinstance(proof, dict):
+            proof = {}
+        source = RUNTIME_BACKEND_BOUNDARY_SOURCES[target]
+        observed_results = proof.get("results", [])
+        if not isinstance(observed_results, list):
+            observed_results = []
+        observed_paths = proof.get("paths", [])
+        if not isinstance(observed_paths, list):
+            observed_paths = []
+        required_results = source["required_results"]
+        required_result_seen = any(
+            result in observed_results for result in required_results)
+        native_bridge_evidence = bool(proof.get("native_bridge_evidence"))
+        active_evidence = bool(proof.get("active_evidence"))
+        status = (
+            "pass"
+            if native_bridge_evidence and active_evidence and required_result_seen
+            else "blocked"
+        )
+        targets.append({
+            "target": target,
+            **source,
+            "status": status,
+            "event_count": int(proof.get("event_count") or 0),
+            "observed_backends": proof.get("backends", [])
+            if isinstance(proof.get("backends"), list) else [],
+            "observed_paths": observed_paths,
+            "observed_results": observed_results,
+            "observed_phases": proof.get("phases", [])
+            if isinstance(proof.get("phases"), list) else [],
+            "native_bridge_evidence": native_bridge_evidence,
+            "active_evidence": active_evidence,
+            "required_result_seen": required_result_seen,
+            "latest_event": proof.get("latest_event"),
+        })
+    passed = sum(1 for target in targets if target["status"] == "pass")
+    return {
+        "schema": "qge.native_backend_boundary.v0",
+        "status": "pass" if passed == len(targets) else "blocked",
+        "required_target_count": len(targets),
+        "passed_target_count": passed,
+        "blocked_target_count": len(targets) - passed,
+        "targets": targets,
+        "limits": [
+            "Native backend boundary proof is runtime evidence, not a hardware result.",
+            "Every required target must show native bridge path, active evidence, and a target-specific success result.",
+            "CPU or unavailable paths remain explicit blocked boundary evidence.",
+        ],
+    }
+
+
 def parse_log(path: Path) -> dict[str, Any]:
     log_path = resolve_log_path(path)
     render_frames: list[dict[str, Any]] = []
@@ -434,6 +511,8 @@ def parse_log(path: Path) -> dict[str, Any]:
     })
     runtime_backend_probe_evidence = runtime_backend_probe_rollup(
         runtime_backend_probe_events)
+    runtime_backend_boundary = runtime_backend_boundary_from_proofs(
+        runtime_backend_probe_evidence["runtime_backend_probe_proofs"])
 
     return {
         "input_path": str(path),
@@ -497,6 +576,7 @@ def parse_log(path: Path) -> dict[str, Any]:
         "runtime_backend_probe_paths": runtime_backend_probe_paths,
         "runtime_backend_probe_results": runtime_backend_probe_results,
         "runtime_backend_probe_events": runtime_backend_probe_events,
+        "runtime_backend_boundary": runtime_backend_boundary,
         **runtime_backend_probe_evidence,
     }
 
@@ -581,6 +661,8 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
     runtime_backend_probe_proofs = merge_runtime_backend_probe_proofs(logs)
     runtime_backend_probe_evidence = runtime_backend_probe_rollup_from_proofs(
         runtime_backend_probe_proofs)
+    runtime_backend_boundary = runtime_backend_boundary_from_proofs(
+        runtime_backend_probe_proofs)
     missing_logs = [log["log_path"] for log in logs if not log["exists"]]
     metric_evidence_present = bool(average_values or render_max_values)
     threshold_failures: list[dict[str, Any]] = []
@@ -635,6 +717,7 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
             "runtime_backend_probe_paths": runtime_backend_probe_paths,
             "runtime_backend_probe_results": runtime_backend_probe_results,
             **runtime_backend_probe_evidence,
+            "runtime_backend_boundary": runtime_backend_boundary,
             "threshold_failures": threshold_failures,
             "max_average_ms": args.max_average_ms,
             "max_render_ms": args.max_render_ms,
@@ -698,6 +781,16 @@ def build_icc_evidence(summary: dict[str, Any],
             "runtime_backend_probe_native_targets"],
         "runtime_backend_probe_resolved": aggregate[
             "runtime_backend_probe_resolved"],
+        "runtime_backend_boundary_status": aggregate[
+            "runtime_backend_boundary"]["status"],
+        "runtime_backend_boundary_passed_target_count": aggregate[
+            "runtime_backend_boundary"]["passed_target_count"],
+        "runtime_backend_boundary_required_target_count": aggregate[
+            "runtime_backend_boundary"]["required_target_count"],
+        "runtime_backend_boundary_targets": [
+            target["target"]
+            for target in aggregate["runtime_backend_boundary"]["targets"]
+        ],
         "max_average_ms": aggregate["max_average_ms"],
         "max_render_ms": aggregate["max_render_ms"],
         "threshold_failures": aggregate["threshold_failures"],

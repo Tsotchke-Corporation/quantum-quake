@@ -51,12 +51,15 @@ when all of these are true:
 
 The full-port acceptance target is the ICC completion oracle
 `qge_vanilla_quake_conformance`. As of
-`diagnostics/publication_pack/20260523-124057`, ICC reports
+`diagnostics/publication_pack/20260523-125637`, ICC reports
 `qge_vanilla_runtime_complete` ready for the bundled e1m1 QGE/vanilla capture
 matrix. That evidence proves the ownership counters for the captured workload;
 it does not by itself close renderer fidelity, all-map breadth, or whole-game
 hardware deployment claims. The bundled `resource/qge_resource_envelope.json`
 states the current Moonlab simulator/native-backend posture, and
+`resource/qge_native_backend_boundary.json` records the native bridge boundary
+verdict for `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`,
+and `qge_metal_init_common`.
 `resource/qge_moonlab_job_specs.json` breaks that posture into selected replay
 and benchmark jobs. `resource/qge_moonlab_job_results.json` records the local
 simulator/native replay results: three simulator jobs completed, two native
