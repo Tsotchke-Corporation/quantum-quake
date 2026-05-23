@@ -316,6 +316,38 @@ class PublicationPackTests(unittest.TestCase):
             self.assertTrue(publication_pack.explicit_performance_failure(perf))
             self.assertEqual(perf["render_time_ms_max"], 44.0)
 
+            breadth_path = tmpdir / "breadth_evidence.json"
+            publication_pack.write_json(
+                breadth_path,
+                {
+                    "status": "success",
+                    "aggregate": {
+                        "breadth_ready_for_complete_claim": True,
+                        "matrix_run_count": 4,
+                        "ready_matrix_run_count": 4,
+                        "map_count": 4,
+                        "maps": ["e1m1", "e1m2", "e1m3", "e1m4"],
+                        "total_fallback_count": 0,
+                        "total_surrogate_count": 0,
+                        "total_cpu_idwt_count": 0,
+                        "total_native_bridge_count": 420,
+                        "total_backend_gate_event_count": 12,
+                        "total_runtime_backend_probe_event_count": 16,
+                        "runtime_backend_probe_targets": [
+                            "qge_context_get_or_create_render_acceleration",
+                            "qge_dwt_render",
+                            "qge_metal_init_common",
+                        ],
+                    },
+                },
+            )
+            breadth = publication_pack.breadth_evidence_summary(breadth_path)
+            self.assertFalse(
+                publication_pack.explicit_breadth_evidence_failure(breadth))
+            self.assertEqual(breadth["map_count"], 4)
+            self.assertEqual(
+                breadth["total_runtime_backend_probe_event_count"], 16)
+
         manifest = {
             "pack_dir": "pack",
             "artifacts": {
@@ -329,6 +361,12 @@ class PublicationPackTests(unittest.TestCase):
                 },
                 "vanilla": {
                     "matrix": {"packed": {"path": "vanilla_capture_matrix.json"}},
+                },
+                "breadth": {
+                    "evidence": {"packed": {"path": "breadth_evidence.json"}},
+                    "icc_evidence": {
+                        "packed": {"path": "qge_breadth_icc_evidence.json"}
+                    },
                 },
                 "capture": {
                     "performance_summary": {"packed": {"path": "qge_perf_summary.json"}},
@@ -349,6 +387,11 @@ class PublicationPackTests(unittest.TestCase):
                 "vanilla_performance_ok": True,
                 "agent_stream_manifest_ok": True,
                 "performance_ok": True,
+                "breadth_ready_for_complete_claim": True,
+                "breadth_map_count": 4,
+                "breadth_total_native_bridge_count": 420,
+                "breadth_total_runtime_backend_probe_event_count": 16,
+                "breadth_evidence_ok": True,
             },
         }
         icc = publication_pack.build_icc_evidence(
@@ -359,6 +402,9 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(icc["runtime_backend"], "qge_publication_pack")
         self.assertEqual(icc["completion_reason"], "qge_publication_artifact_pack_complete")
         self.assertTrue(icc["publication_ready_for_complete_claim"])
+        self.assertEqual(icc["breadth_map_count"], 4)
+        self.assertEqual(
+            icc["breadth_total_runtime_backend_probe_event_count"], 16)
         self.assertEqual(icc["status"], "success")
 
 

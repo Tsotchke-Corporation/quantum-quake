@@ -154,6 +154,12 @@ Do claim, once proven:
 
 Minimum publishable artifact package:
 
+Current strongest publication bundle:
+`diagnostics/publication_pack/20260523-015608`. It packages a ready e1m1
+QGE/vanilla capture, agent stream, oracle scene, claims evidence, finite-shot
+QAE benchmark artifacts, and the four-map breadth sidecar from
+`diagnostics/breadth_evidence/20260523-003430`.
+
 1. Strict ownership matrix
    - ICC target: `qge_vanilla_quake_conformance`
    - Required pass: `qge_vanilla_runtime_complete`
@@ -165,6 +171,10 @@ Minimum publishable artifact package:
    - Required pass: `qge_breadth_evidence_pack_complete`
    - Evidence: aggregated `vanilla_capture_matrix.json` runs plus optional
      publication packs, with zero fallback, surrogate, and CPU-IDWT counts.
+   - Publication packs should include the same breadth sidecar with
+     `tools/qge_publication_pack.py --breadth-evidence <breadth_dir>` so the
+     paper bundle carries the multi-map counters, native bridge events, backend
+     gate events, and runtime backend probes directly.
    - For multi-map claims, run `tools/qge_breadth_evidence.py --min-maps N`
      so repeated captures of a single map cannot satisfy the breadth gate.
    - Current strongest local checkpoint:
@@ -173,6 +183,10 @@ Minimum publishable artifact package:
      zero fallback, zero surrogate, zero CPU-IDWT, 420 native bridge events,
      12 backend-gate events, and 16 native backend runtime-probe events parsed
      into every matrix run.
+   - The current publication bundle carries those breadth counters directly:
+     `diagnostics/publication_pack/20260523-015608` reports
+     `breadth_map_count=4`, `breadth_total_native_bridge_count=420`, and
+     `breadth_total_runtime_backend_probe_event_count=16`.
 
 3. Runtime traces
    - QGE trace file for each capture.

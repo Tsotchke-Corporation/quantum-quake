@@ -382,7 +382,12 @@ pack copies these run-status fields from the vanilla matrix and also records the
 packed agent stream manifest's direct `run.status`, `run.success`,
 `run.startup_issue`, frame count, and trace status in its runtime summary and
 ICC evidence. A failed direct stream manifest makes the publication ICC result
-evidence-only instead of `qge_publication_artifact_pack_complete`.
+evidence-only instead of `qge_publication_artifact_pack_complete`. Pass
+`--breadth-evidence <breadth_dir>` to `tools/qge_publication_pack.py` to include
+the multi-map breadth sidecar in the publication bundle; the pack records the
+breadth map count, fallback/surrogate/CPU-IDWT totals, native bridge count,
+backend-gate count, and runtime-backend-probe totals in both the manifest and
+ICC evidence.
 `tools/qge_perf_summary.py` reads a capture directory or `quantum_quake.log`
 and emits structured timing evidence for `QGE render frame=` component timings
 and `QGE: Average quantum render time` lines, with optional JSON and ICC

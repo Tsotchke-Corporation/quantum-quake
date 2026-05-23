@@ -98,8 +98,9 @@ Current artifact status:
   `scaling_summary.json`, `qae_curve.csv`, `qae_circuit.txt`, and
   `qge_advantage_icc_evidence.json`.
 - The publication pack at
-  `diagnostics/publication_pack/20260507-soundstream-pack/` bundles the
-  benchmark, oracle, trace, stream, vanilla, claims, and source artifacts.
+  `diagnostics/publication_pack/20260523-015608/` bundles the benchmark,
+  oracle, trace, stream, vanilla, claims, source artifacts, and the four-map
+  breadth evidence sidecar.
 - Current metrics are evidence for a reproducible QAE-style benchmark under an
   explicit oracle model, not evidence for hardware advantage or end-to-end
   renderer acceleration.

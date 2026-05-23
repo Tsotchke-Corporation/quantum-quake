@@ -639,6 +639,12 @@ Known current visual state:
   backend-gate events, and 16 native backend runtime-probe events across
   `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`, and
   `qge_metal_init_common`.
+- `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
+  breadth evidence into the paper/demo bundle. The current strongest
+  publication pack is `diagnostics/publication_pack/20260523-015608`, with
+  `qge_publication_artifact_pack_complete`, the e1m1 ready vanilla/QGE capture,
+  agent stream, oracle/claims exports, QAE benchmark artifacts, and the
+  four-map breadth counters.
 - The current renderer should be described as improved, not fixed. In the
   latest fixed-view capture the world projection, contrast, and brightness are
   much closer to classic Quake, but floors, walls, and ceilings still do not

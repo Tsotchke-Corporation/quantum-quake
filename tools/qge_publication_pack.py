@@ -191,6 +191,89 @@ def performance_summary(path: Path | None) -> dict[str, Any]:
     return summary
 
 
+def resolve_breadth_evidence_path(path: Path | None) -> Path | None:
+    if path is None:
+        return None
+    if path.is_dir():
+        candidate = path / "breadth_evidence.json"
+        if candidate.is_file():
+            return candidate
+        candidate = path / "qge_breadth_icc_evidence.json"
+        if candidate.is_file():
+            return candidate
+    return path
+
+
+def breadth_evidence_summary(path: Path | None) -> dict[str, Any]:
+    path = resolve_breadth_evidence_path(path)
+    summary: dict[str, Any] = {
+        "path": str(path) if path else None,
+        "exists": bool(path and path.is_file()),
+        "status": None,
+        "breadth_ready_for_complete_claim": None,
+        "matrix_run_count": None,
+        "ready_matrix_run_count": None,
+        "map_count": None,
+        "maps": [],
+        "total_fallback_count": None,
+        "total_surrogate_count": None,
+        "total_cpu_idwt_count": None,
+        "total_native_bridge_count": None,
+        "total_backend_gate_event_count": None,
+        "backend_gate_render_bridge_run_count": None,
+        "total_runtime_backend_probe_event_count": None,
+        "runtime_backend_probe_run_count": None,
+        "runtime_backend_probe_targets": [],
+        "runtime_backend_probe_paths": [],
+        "runtime_backend_probe_results": [],
+        "issue_count": None,
+        "issues": [],
+    }
+    if path is None or not path.is_file():
+        return summary
+    try:
+        data = load_json(path)
+    except (OSError, ValueError) as exc:
+        summary["error"] = str(exc)
+        return summary
+    aggregate = data.get("aggregate")
+    if not isinstance(aggregate, dict):
+        aggregate = data
+    for key in (
+        "breadth_ready_for_complete_claim",
+        "matrix_run_count",
+        "ready_matrix_run_count",
+        "map_count",
+        "maps",
+        "total_fallback_count",
+        "total_surrogate_count",
+        "total_cpu_idwt_count",
+        "total_native_bridge_count",
+        "total_backend_gate_event_count",
+        "backend_gate_render_bridge_run_count",
+        "total_runtime_backend_probe_event_count",
+        "runtime_backend_probe_run_count",
+        "runtime_backend_probe_targets",
+        "runtime_backend_probe_paths",
+        "runtime_backend_probe_results",
+        "issue_count",
+        "issues",
+    ):
+        if key in aggregate:
+            summary[key] = aggregate.get(key)
+    summary["status"] = data.get("status")
+    return summary
+
+
+def explicit_breadth_evidence_failure(summary: dict[str, Any]) -> bool:
+    if not summary.get("exists"):
+        return False
+    if summary.get("error"):
+        return True
+    ready = summary.get("breadth_ready_for_complete_claim")
+    return ready is not None and not bool(ready)
+
+
 def explicit_performance_failure(summary: dict[str, Any]) -> bool:
     if not summary.get("exists"):
         return False
@@ -350,6 +433,8 @@ def resolve_inputs(args: argparse.Namespace) -> dict[str, Path | None]:
         "vanilla_matrix": vanilla_matrix,
         "graphics_capture_dir": graphics_capture_dir,
         "agent_stream_dir": agent_stream,
+        "breadth_evidence": resolve_breadth_evidence_path(
+            getattr(args, "breadth_evidence", None)),
     }
 
 
@@ -375,6 +460,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     vanilla_matrix = inputs["vanilla_matrix"]
     graphics_capture_dir = inputs["graphics_capture_dir"]
     agent_stream_dir = inputs["agent_stream_dir"]
+    breadth_evidence = inputs["breadth_evidence"]
     claims_path = args.claims
     if capture_dir is None or not capture_dir.is_dir():
         raise ValueError("no capture directory with qge_trace.bin was found")
@@ -403,6 +489,11 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     )
     agent_stream_summary = agent_manifest_summary(agent_manifest)
     capture_perf_summary = performance_summary(perf_summary_path)
+    breadth_summary = breadth_evidence_summary(breadth_evidence)
+    breadth_icc_evidence = (
+        breadth_evidence.parent / "qge_breadth_icc_evidence.json"
+        if breadth_evidence is not None else None
+    )
     agent_icc = (
         agent_stream_dir / "qge_agent_stream_icc_evidence.jsonl"
         if agent_stream_dir is not None else None
@@ -462,10 +553,18 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "icc_evidence": pack_file(agent_icc, args.outdir,
                                   "agent_stream/qge_agent_stream_icc_evidence.jsonl"),
     }
+    breadth_artifacts = {
+        "evidence": pack_file(breadth_evidence, args.outdir,
+                              "breadth/breadth_evidence.json"),
+        "icc_evidence": pack_file(breadth_icc_evidence, args.outdir,
+                                  "breadth/qge_breadth_icc_evidence.json"),
+    }
     metrics = advantage["metrics_data"]
     agent_stream_manifest_ok = not explicit_agent_run_failure(
         agent_stream_summary)
     performance_ok = not explicit_performance_failure(capture_perf_summary)
+    breadth_evidence_ok = not explicit_breadth_evidence_failure(
+        breadth_summary)
     vanilla_performance_ok = (
         conformance.get("performance_sidecars_success") is not False
     )
@@ -474,7 +573,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         conformance.get("agent_stream_runs_success") is not False and
         agent_stream_manifest_ok and
         vanilla_performance_ok and
-        performance_ok
+        performance_ok and
+        breadth_evidence_ok
     )
     return {
         "schema": "qge.publication_pack.v0",
@@ -489,6 +589,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "publication_performance_source": perf_source,
             "publication_performance_summary": str(perf_summary_path),
             "agent_stream_dir": str(agent_stream_dir) if agent_stream_dir else None,
+            "breadth_evidence": str(breadth_evidence)
+            if breadth_evidence is not None else None,
             "claims_ledger": str(claims_path),
         },
         "artifacts": {
@@ -496,6 +598,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "capture": capture_artifacts,
             "vanilla": vanilla_artifacts,
             "agent_stream": agent_artifacts,
+            "breadth": breadth_artifacts,
             "oracle": {
                 "oracle_scene": oracle["oracle_scene"],
                 "claims_evidence": oracle["claims_evidence"],
@@ -583,6 +686,33 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "performance_metric_evidence_present": capture_perf_summary.get(
                 "metric_evidence_present"),
             "performance_ok": performance_ok,
+            "breadth_evidence": breadth_summary,
+            "breadth_ready_for_complete_claim": breadth_summary.get(
+                "breadth_ready_for_complete_claim"),
+            "breadth_matrix_run_count": breadth_summary.get(
+                "matrix_run_count"),
+            "breadth_ready_matrix_run_count": breadth_summary.get(
+                "ready_matrix_run_count"),
+            "breadth_map_count": breadth_summary.get("map_count"),
+            "breadth_maps": breadth_summary.get("maps"),
+            "breadth_total_fallback_count": breadth_summary.get(
+                "total_fallback_count"),
+            "breadth_total_surrogate_count": breadth_summary.get(
+                "total_surrogate_count"),
+            "breadth_total_cpu_idwt_count": breadth_summary.get(
+                "total_cpu_idwt_count"),
+            "breadth_total_native_bridge_count": breadth_summary.get(
+                "total_native_bridge_count"),
+            "breadth_total_backend_gate_event_count": breadth_summary.get(
+                "total_backend_gate_event_count"),
+            "breadth_total_runtime_backend_probe_event_count": (
+                breadth_summary.get(
+                    "total_runtime_backend_probe_event_count")),
+            "breadth_runtime_backend_probe_targets": breadth_summary.get(
+                "runtime_backend_probe_targets"),
+            "breadth_runtime_backend_probe_paths": breadth_summary.get(
+                "runtime_backend_probe_paths"),
+            "breadth_evidence_ok": breadth_evidence_ok,
             "agent_stream_manifest_ok": agent_stream_manifest_ok,
             "publication_ready_for_complete_claim": publication_ready,
         },
@@ -609,7 +739,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_oracle_export.py <capture_dir>",
             "tools/qge_advantage_benchmark.py <oracle_scene.json> --outdir <outdir>",
             "tools/qge_vanilla_capture_matrix.py <graphics_capture_dir>",
-            "tools/qge_publication_pack.py --capture-dir <trace_capture_dir> --vanilla-matrix <graphics_capture_dir>/vanilla_capture_matrix.json --graphics-capture-dir <graphics_capture_dir>",
+            "tools/qge_breadth_evidence.py --matrix <graphics_capture_dir> --min-maps N",
+            "tools/qge_publication_pack.py --capture-dir <trace_capture_dir> --vanilla-matrix <graphics_capture_dir>/vanilla_capture_matrix.json --graphics-capture-dir <graphics_capture_dir> --breadth-evidence <breadth_dir>",
         ],
     }
 
@@ -635,6 +766,10 @@ def build_icc_evidence(manifest: dict[str, Any],
         "advantage_metrics_file": artifacts["advantage"]["metrics"]["path"],
         "scaling_summary_file": artifacts["advantage"]["scaling_summary"]["path"],
         "vanilla_capture_matrix_file": artifacts["vanilla"]["matrix"]["packed"]["path"],
+        "breadth_evidence_file": artifacts.get("breadth", {}).get(
+            "evidence", {}).get("packed", {}).get("path"),
+        "breadth_icc_evidence_file": artifacts.get("breadth", {}).get(
+            "icc_evidence", {}).get("packed", {}).get("path"),
         "performance_summary_file": artifacts["capture"]["performance_summary"]["packed"]["path"],
         "performance_icc_evidence_file": artifacts["capture"]["performance_icc_evidence"]["packed"]["path"],
         "performance_source": runtime.get("performance_source"),
@@ -711,6 +846,30 @@ def build_icc_evidence(manifest: dict[str, Any],
         "performance_metric_evidence_present": runtime.get(
             "performance_metric_evidence_present"),
         "performance_ok": runtime.get("performance_ok"),
+        "breadth_ready_for_complete_claim": runtime.get(
+            "breadth_ready_for_complete_claim"),
+        "breadth_matrix_run_count": runtime.get("breadth_matrix_run_count"),
+        "breadth_ready_matrix_run_count": runtime.get(
+            "breadth_ready_matrix_run_count"),
+        "breadth_map_count": runtime.get("breadth_map_count"),
+        "breadth_maps": runtime.get("breadth_maps"),
+        "breadth_total_fallback_count": runtime.get(
+            "breadth_total_fallback_count"),
+        "breadth_total_surrogate_count": runtime.get(
+            "breadth_total_surrogate_count"),
+        "breadth_total_cpu_idwt_count": runtime.get(
+            "breadth_total_cpu_idwt_count"),
+        "breadth_total_native_bridge_count": runtime.get(
+            "breadth_total_native_bridge_count"),
+        "breadth_total_backend_gate_event_count": runtime.get(
+            "breadth_total_backend_gate_event_count"),
+        "breadth_total_runtime_backend_probe_event_count": runtime.get(
+            "breadth_total_runtime_backend_probe_event_count"),
+        "breadth_runtime_backend_probe_targets": runtime.get(
+            "breadth_runtime_backend_probe_targets"),
+        "breadth_runtime_backend_probe_paths": runtime.get(
+            "breadth_runtime_backend_probe_paths"),
+        "breadth_evidence_ok": runtime.get("breadth_evidence_ok"),
         "agent_stream_manifest_ok": runtime.get("agent_stream_manifest_ok"),
         "publication_ready_for_complete_claim": ready,
         "status": "success" if ready else "blocked",
@@ -728,6 +887,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--graphics-capture-dir", type=Path,
                         help="Optional quake_graphics harness directory for paired performance sidecars")
     parser.add_argument("--agent-stream-dir", type=Path)
+    parser.add_argument("--breadth-evidence", type=Path,
+                        help="Optional breadth_evidence.json or breadth evidence directory")
     parser.add_argument("--claims", type=Path,
                         default=REPO_ROOT / "docs/claims/qge_claims.json")
     parser.add_argument("--seed", type=int, default=1337)
