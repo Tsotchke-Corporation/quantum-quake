@@ -51,14 +51,14 @@ when all of these are true:
 
 The full-port acceptance target is the ICC completion oracle
 `qge_vanilla_quake_conformance`. As of
-`diagnostics/publication_pack/20260523-140556`, ICC reports
+`diagnostics/publication_pack/20260523-143208`, ICC reports
 `qge_vanilla_runtime_complete` ready for the bundled e1m1 QGE/vanilla capture
 matrix. That evidence proves the ownership counters for the captured workload;
 it does not by itself close renderer fidelity, all-map breadth, or whole-game
 hardware deployment claims. The bundled `resource/qge_resource_envelope.json`
 states the current Moonlab simulator/native-backend posture, and
 `resource/qge_full_game_map_coverage.json` records the canonical registered
-single-player map ledger: 5/32 maps covered, 27 maps pending, status `partial`.
+single-player map ledger: 7/32 maps covered, 25 maps pending, status `partial`.
 `resource/qge_native_backend_boundary.json` records the native bridge boundary
 verdict for `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`,
 and `qge_metal_init_common`.
@@ -235,9 +235,9 @@ A complete port is credible when these are true:
 ## Immediate Implementation Order
 
 1. Expand the ready matrix beyond the current publication capture and the
-   5/32 partial full-game map coverage ledger. Generate the missing-map run
+   7/32 partial full-game map coverage ledger. Generate the missing-map run
    script with
-   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-140556`.
+   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-143208`.
    The generated queue runs the Noesis-fire authority-smoke profile on combat
    maps first and defers `start`/`end` as special-route evidence work.
 2. Improve `quantum_render 2` visual fidelity without weakening ownership

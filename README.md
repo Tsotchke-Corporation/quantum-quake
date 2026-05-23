@@ -63,12 +63,12 @@ Important known limitations:
 
 - The full-port ICC target is `qge_vanilla_quake_conformance`. The current
   strongest self-contained evidence pack is
-  `diagnostics/publication_pack/20260523-140556`, where ICC reports the strict
+  `diagnostics/publication_pack/20260523-143208`, where ICC reports the strict
   vanilla/QGE runtime ownership matrix and `qge_vanilla_runtime_complete`
   ready. The pack includes `resource/qge_resource_envelope.json`, which scopes
   Moonlab simulator/native-backend deployment,
   `resource/qge_full_game_map_coverage.json`, which records partial canonical
-  map coverage at 5/32 maps with 27 maps pending, plus
+  map coverage at 7/32 maps with 25 maps pending, plus
   `resource/qge_native_backend_boundary.json` with the pass/fail proof for the
   three native backend boundaries,
   `resource/qge_moonlab_job_specs.json` with selected simulator/native replay
@@ -82,8 +82,8 @@ Important known limitations:
   hardware execution, hardware quantum advantage, or a dense 70,000-qubit
   state. This is a captured workload proof, not a claim that every Quake domain
   is visually or hardware complete. Use
-  `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-140556`
-  to generate the remaining 27-map harness queue and breadth rebuild script;
+  `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-143208`
+  to generate the remaining 25-map harness queue and breadth rebuild script;
   the queue runs Noesis-fire authority smokes first and defers `start`/`end`
   as special-route maps rather than weakening the Moonlab claim.
 - `quantum_render 2` is not visually complete. The current renderer has
