@@ -155,13 +155,16 @@ Do claim, once proven:
 Minimum publishable artifact package:
 
 Current strongest publication bundle:
-`diagnostics/publication_pack/20260523-032917`. It packages a ready e1m1
+`diagnostics/publication_pack/20260523-034017`. It packages a ready e1m1
 QGE/vanilla capture, vanilla ICC evidence sidecar, agent stream, oracle scene,
 claims evidence, finite-shot QAE benchmark artifacts,
-`resource/qge_resource_envelope.json`, and the four-map breadth sidecar from
-`diagnostics/breadth_evidence/20260523-022036`. The bundled agent stream also
-records host-side macOS AppKit/SDL launcher probes and marks UI-only
-`-nolauncher` paths as intentional skips.
+`resource/qge_resource_envelope.json`,
+`resource/qge_moonlab_job_specs.json`, and the four-map breadth sidecar from
+`diagnostics/breadth_evidence/20260523-022036`. The Moonlab job spec currently
+contains selected simulator/native replay jobs plus one unsubmitted
+hardware-candidate QAE benchmark job. The bundled agent stream also records
+host-side macOS AppKit/SDL launcher probes and marks UI-only `-nolauncher`
+paths as intentional skips.
 
 1. Strict ownership matrix
    - ICC target: `qge_vanilla_quake_conformance`
@@ -192,7 +195,7 @@ records host-side macOS AppKit/SDL launcher probes and marks UI-only
      count of matrix runs where all required native boundaries resolved to the
      native sparse DWT render bridge.
    - The current publication bundle carries those breadth counters directly:
-     `diagnostics/publication_pack/20260523-032917` reports
+     `diagnostics/publication_pack/20260523-034017` reports
      `breadth_map_count=4`, `breadth_total_native_bridge_count=420`, and
      `breadth_total_runtime_backend_probe_event_count=16`, with
      `breadth_runtime_backend_probe_resolved_run_count=4`.
@@ -233,21 +236,23 @@ qge_vanilla_runtime_complete -> produce_ready_vanilla_capture_matrix
 ```
 
 That blocker is now cleared for the current self-contained publication pack:
-`diagnostics/publication_pack/20260523-032917` carries
+`diagnostics/publication_pack/20260523-034017` carries
 `qge_vanilla_capture_matrix_complete`, the vanilla ICC sidecar, native backend
 proofs, the agent stream, the benchmark bundle, and the four-map breadth
 sidecar. It also carries `resource/qge_resource_envelope.json`, which records
 per-domain resource posture and explicitly keeps whole-game hardware execution,
-hardware quantum advantage, and dense 70,000-qubit state claims out of scope.
+hardware quantum advantage, and dense 70,000-qubit state claims out of scope,
+plus `resource/qge_moonlab_job_specs.json` for selected simulator/native replay
+and hardware-candidate benchmark jobs.
 
 The next hard work is therefore:
 
 1. Broaden the ready matrix beyond the current e1m1 publication capture and
    four-map breadth sidecar, while preserving zero fallback/surrogate/CPU-IDWT
    counters.
-2. Turn the resource envelope into per-domain Moonlab deployment jobs: export
-   simulator/hardware job specs for selected kernels, record backend IDs, and
-   keep explicit fallback policy for every non-owned or simulator-only domain.
+2. Turn `qge_moonlab_job_specs.json` into executed Moonlab submissions for the
+   selected kernels: record simulator backend IDs first, then hardware backend
+   IDs where Moonlab can submit the QAE benchmark job.
 3. Improve renderer fidelity enough that the QGE primary framebuffer is not
    only owned, but inspectably close to vanilla Quake on fixed-view and
    autonomous captures.

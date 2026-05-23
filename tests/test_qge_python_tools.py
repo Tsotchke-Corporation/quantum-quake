@@ -421,6 +421,30 @@ class PublicationPackTests(unittest.TestCase):
             resource_envelope["domains"]["light_transport_qae_benchmark"]
             ["logical_qubits"],
             11)
+        moonlab_job_specs = publication_pack.build_moonlab_job_specs(
+            resource_envelope,
+            {
+                "oracle_scene": "oracle/oracle_scene.json",
+                "advantage_metrics": "advantage/advantage_metrics.json",
+                "qae_circuit": "advantage/qae_circuit.txt",
+                "trace": "capture/qge_trace.bin",
+                "frame": "capture/frame_001.png",
+                "vanilla_matrix": "vanilla/vanilla_capture_matrix.json",
+                "performance_summary": "capture/qge_perf_summary.json",
+                "breadth_evidence": "breadth/breadth_evidence.json",
+            },
+        )
+        self.assertEqual(
+            moonlab_job_specs["schema"], "qge.moonlab_job_specs.v0")
+        self.assertEqual(moonlab_job_specs["selected_job_count"], 3)
+        self.assertEqual(
+            moonlab_job_specs["hardware_candidate_job_count"], 1)
+        self.assertFalse(
+            moonlab_job_specs["posture"]
+            ["whole_game_hardware_execution_claimed"])
+        self.assertEqual(
+            moonlab_job_specs["jobs"][1]["hardware_submission_status"],
+            "not_submitted")
 
         manifest = {
             "pack_dir": "pack",
@@ -435,6 +459,9 @@ class PublicationPackTests(unittest.TestCase):
                 },
                 "resource": {
                     "envelope": {"path": "resource/qge_resource_envelope.json"},
+                    "moonlab_job_specs": {
+                        "path": "resource/qge_moonlab_job_specs.json"
+                    },
                 },
                 "vanilla": {
                     "matrix": {"packed": {"path": "vanilla_capture_matrix.json"}},
@@ -458,6 +485,12 @@ class PublicationPackTests(unittest.TestCase):
                     "manifest": {"packed": {"path": "manifest.json"}},
                     "events": {"packed": {"path": "events.ndjson"}},
                     "stream_directory": {"packed": {"file_count": 7}},
+                },
+            },
+            "advantage_summary": {
+                "moonlab_job_specs_summary": {
+                    "selected_job_count": 3,
+                    "hardware_candidate_job_count": 1,
                 },
             },
             "runtime_summary": {
@@ -491,6 +524,11 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(
             icc["resource_envelope_file"],
             "resource/qge_resource_envelope.json")
+        self.assertEqual(
+            icc["moonlab_job_specs_file"],
+            "resource/qge_moonlab_job_specs.json")
+        self.assertEqual(icc["moonlab_selected_job_count"], 3)
+        self.assertEqual(icc["moonlab_hardware_candidate_job_count"], 1)
         self.assertFalse(icc["whole_game_hardware_execution_claimed"])
         self.assertEqual(icc["breadth_map_count"], 4)
         self.assertEqual(

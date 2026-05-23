@@ -469,6 +469,149 @@ def build_resource_envelope(
     return resource_envelope
 
 
+def build_moonlab_job_specs(
+    resource_envelope: dict[str, Any],
+    artifact_paths: dict[str, Any],
+) -> dict[str, Any]:
+    posture = dict_or_empty(resource_envelope.get("posture"))
+    domains = dict_or_empty(resource_envelope.get("domains"))
+    render = dict_or_empty(domains.get("render_primary_framebuffer"))
+    qae = dict_or_empty(domains.get("light_transport_qae_benchmark"))
+    runtime = dict_or_empty(domains.get("runtime_backend_probes"))
+    breadth = dict_or_empty(domains.get("breadth_capture_matrix"))
+    jobs = [
+        {
+            "job_id": "qge.render_primary_framebuffer.sparse_dwt_replay.v0",
+            "domain": "render_primary_framebuffer",
+            "kind": "moonlab_simulator_native_backend_replay",
+            "status": render.get("status"),
+            "backend_targets": [
+                "moonlab_simulator",
+                "qge_native_sparse_dwt_bridge",
+            ],
+            "hardware_candidate": False,
+            "hardware_submission_status": (
+                "not_applicable_full_frame_hardware_execution_not_claimed"
+            ),
+            "resource": {
+                "candidate_count": render.get("candidate_count"),
+                "register_bits": render.get("register_bits"),
+                "shots_per_frame": render.get("shots_per_frame"),
+                "gate_count_per_frame": render.get("gate_count_per_frame"),
+                "native_backend_path": render.get("native_backend_path"),
+                "native_backend_result": render.get("native_backend_result"),
+            },
+            "required_artifacts": {
+                "oracle_scene": artifact_paths.get("oracle_scene"),
+                "trace": artifact_paths.get("trace"),
+                "frame": artifact_paths.get("frame"),
+                "vanilla_matrix": artifact_paths.get("vanilla_matrix"),
+            },
+            "fallback_policy": (
+                "fail closed if fallback, surrogate, or cpu_idwt counters are nonzero"
+            ),
+            "success_criteria": [
+                "QGE primary framebuffer is produced without hidden classic fallback.",
+                "Native sparse-DWT bridge is active where captured evidence claims it.",
+                "Classic frame remains a reference oracle, not production output.",
+            ],
+        },
+        {
+            "job_id": "qge.light_transport_qae_benchmark.mlae.v0",
+            "domain": "light_transport_qae_benchmark",
+            "kind": "moonlab_qae_kernel",
+            "status": qae.get("status"),
+            "backend_targets": [
+                "moonlab_simulator",
+                "moonlab_hardware_candidate",
+            ],
+            "hardware_candidate": True,
+            "hardware_submission_status": "not_submitted",
+            "resource": {
+                "logical_qubits": qae.get("logical_qubits"),
+                "candidate_index_bits": qae.get("candidate_index_bits"),
+                "contribution_threshold_bits": (
+                    qae.get("contribution_threshold_bits")),
+                "controlled_oracle_calls": qae.get("controlled_oracle_calls"),
+                "one_qubit_gates": qae.get("one_qubit_gates"),
+                "two_qubit_gates": qae.get("two_qubit_gates"),
+                "circuit_depth": qae.get("circuit_depth"),
+                "shots": qae.get("shots"),
+            },
+            "required_artifacts": {
+                "oracle_scene": artifact_paths.get("oracle_scene"),
+                "advantage_metrics": artifact_paths.get("advantage_metrics"),
+                "qae_circuit": artifact_paths.get("qae_circuit"),
+            },
+            "fallback_policy": (
+                "simulator result is publishable; hardware result requires backend id, "
+                "shot schedule, and observed readout metadata"
+            ),
+            "success_criteria": [
+                "Execute the bounded mean-estimation circuit against the scene oracle.",
+                "Record backend identifier and shot schedule for every submitted run.",
+                "Report simulator and hardware results separately.",
+            ],
+        },
+        {
+            "job_id": "qge.runtime_backend_probe.replay.v0",
+            "domain": "runtime_backend_probes",
+            "kind": "moonlab_runtime_boundary_replay",
+            "status": runtime.get("status"),
+            "backend_targets": ["qge_native_runtime_boundaries"],
+            "hardware_candidate": False,
+            "hardware_submission_status": "not_a_quantum_hardware_job",
+            "resource": {
+                "required_targets": runtime.get("required_targets"),
+                "native_targets": runtime.get("native_targets"),
+                "missing_targets": runtime.get("missing_targets"),
+                "performance_resolved": runtime.get("performance_resolved"),
+                "breadth_resolved_run_count": (
+                    runtime.get("breadth_resolved_run_count")),
+            },
+            "required_artifacts": {
+                "performance_summary": artifact_paths.get("performance_summary"),
+                "breadth_evidence": artifact_paths.get("breadth_evidence"),
+            },
+            "fallback_policy": (
+                "fail closed if required native runtime boundary targets are missing"
+            ),
+            "success_criteria": [
+                "Every required native runtime target resolves in the captured run.",
+                "Breadth evidence preserves the same target resolution across maps.",
+            ],
+        },
+    ]
+    hardware_candidate_count = sum(
+        1 for job in jobs if bool(job.get("hardware_candidate")))
+    return {
+        "schema": "qge.moonlab_job_specs.v0",
+        "posture": {
+            "whole_game_hardware_execution_claimed": bool(
+                posture.get("whole_game_hardware_execution_claimed")),
+            "hardware_quantum_advantage_claimed": bool(
+                posture.get("hardware_quantum_advantage_claimed")),
+            "dense_70000_qubit_state_claimed": bool(
+                posture.get("dense_70000_qubit_state_claimed")),
+            "moonlab_simulator_path_claimed": bool(
+                posture.get("moonlab_simulator_path_claimed")),
+        },
+        "submission_scope": (
+            "selected Moonlab simulator/native-backend jobs with one "
+            "hardware-candidate benchmark kernel; no whole-game hardware run"
+        ),
+        "selected_job_count": len(jobs),
+        "hardware_candidate_job_count": hardware_candidate_count,
+        "breadth_map_count": breadth.get("map_count"),
+        "jobs": jobs,
+        "limits": [
+            "Hardware-candidate jobs are not hardware results until submitted.",
+            "Full-frame render replay is a simulator/native-backend evidence job.",
+            "No unrestricted dense all-game state is submitted or claimed.",
+        ],
+    }
+
+
 def resolve_vanilla_icc_evidence_path(
     vanilla_matrix: Path,
     graphics_capture_dir: Path | None,
@@ -785,8 +928,28 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     )
     resource_path = args.outdir / "resource" / "qge_resource_envelope.json"
     write_json(resource_path, resource_envelope)
+    moonlab_job_specs = build_moonlab_job_specs(
+        resource_envelope,
+        {
+            "oracle_scene": oracle["oracle_scene"]["path"],
+            "advantage_metrics": advantage["metrics"]["path"],
+            "qae_circuit": advantage["qae_circuit"]["path"],
+            "trace": capture_artifacts["trace"]["packed"]["path"],
+            "frame": capture_artifacts["frame"]["packed"]["path"],
+            "vanilla_matrix": vanilla_artifacts["matrix"]["packed"]["path"],
+            "performance_summary": (
+                capture_artifacts["performance_summary"]["packed"]["path"]),
+            "breadth_evidence": (
+                breadth_artifacts["evidence"]["packed"]["path"]),
+        },
+    )
+    moonlab_job_specs_path = (
+        args.outdir / "resource" / "qge_moonlab_job_specs.json"
+    )
+    write_json(moonlab_job_specs_path, moonlab_job_specs)
     resource_artifacts = {
         "envelope": file_info(resource_path),
+        "moonlab_job_specs": file_info(moonlab_job_specs_path),
     }
     return {
         "schema": "qge.publication_pack.v0",
@@ -962,6 +1125,13 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "best_qae": metrics.get("comparison", {}).get("best_qae"),
             "resource_estimate": metrics.get("resource_estimate"),
             "resource_envelope_summary": resource_envelope.get("posture"),
+            "moonlab_job_specs_summary": {
+                "selected_job_count": moonlab_job_specs.get(
+                    "selected_job_count"),
+                "hardware_candidate_job_count": moonlab_job_specs.get(
+                    "hardware_candidate_job_count"),
+                "submission_scope": moonlab_job_specs.get("submission_scope"),
+            },
         },
         "claim_posture": {
             "allowed_wording": (
@@ -990,6 +1160,11 @@ def build_icc_evidence(manifest: dict[str, Any],
                        icc_path: Path) -> dict[str, Any]:
     artifacts = manifest["artifacts"]
     runtime = manifest["runtime_summary"]
+    advantage_summary = manifest.get("advantage_summary", {})
+    if not isinstance(advantage_summary, dict):
+        advantage_summary = {}
+    job_specs_summary = dict_or_empty(
+        advantage_summary.get("moonlab_job_specs_summary"))
     ready = bool(runtime.get("publication_ready_for_complete_claim"))
     return {
         "schema": "qge.icc_evidence.v0",
@@ -1007,6 +1182,12 @@ def build_icc_evidence(manifest: dict[str, Any],
         "scaling_summary_file": artifacts["advantage"]["scaling_summary"]["path"],
         "resource_envelope_file": artifacts.get("resource", {}).get(
             "envelope", {}).get("path"),
+        "moonlab_job_specs_file": artifacts.get("resource", {}).get(
+            "moonlab_job_specs", {}).get("path"),
+        "moonlab_selected_job_count": job_specs_summary.get(
+            "selected_job_count"),
+        "moonlab_hardware_candidate_job_count": job_specs_summary.get(
+            "hardware_candidate_job_count"),
         "vanilla_capture_matrix_file": artifacts["vanilla"]["matrix"]["packed"]["path"],
         "vanilla_icc_evidence_file": artifacts["vanilla"]["icc_evidence"]["packed"]["path"],
         "breadth_evidence_file": artifacts.get("breadth", {}).get(
