@@ -187,7 +187,8 @@ def build_moonlab_domain_readiness(
     )
     performance_gate_ready = (
         int_from(summary.get("qge_backend_gate_event_count")) > 0 and
-        int_from(summary.get("qge_runtime_backend_probe_event_count")) > 0
+        int_from(summary.get("qge_runtime_backend_probe_event_count")) > 0 and
+        bool(summary.get("qge_runtime_backend_probe_resolved"))
     )
 
     entropy_count = int_from(records.get("entropy"))
@@ -359,9 +360,17 @@ def build_moonlab_domain_readiness(
                     "qge_runtime_backend_probe_targets"),
                 "runtime_backend_probe_paths": summary.get(
                     "qge_runtime_backend_probe_paths"),
+                "runtime_backend_probe_proofs": summary.get(
+                    "qge_runtime_backend_probe_proofs"),
+                "runtime_backend_probe_missing_targets": summary.get(
+                    "qge_runtime_backend_probe_missing_targets"),
+                "runtime_backend_probe_native_targets": summary.get(
+                    "qge_runtime_backend_probe_native_targets"),
+                "runtime_backend_probe_resolved": summary.get(
+                    "qge_runtime_backend_probe_resolved"),
             },
             [
-                "performance sidecars must pass and expose backend-gate and native backend runtime probes"
+                "performance sidecars must pass and expose per-target native backend runtime probes"
             ],
         ),
     }
@@ -500,6 +509,11 @@ def performance_summary(path: Path) -> dict[str, Any]:
         "runtime_backend_probe_backends": [],
         "runtime_backend_probe_paths": [],
         "runtime_backend_probe_results": [],
+        "required_runtime_backend_probe_targets": [],
+        "runtime_backend_probe_proofs": {},
+        "runtime_backend_probe_missing_targets": [],
+        "runtime_backend_probe_native_targets": [],
+        "runtime_backend_probe_resolved": False,
     }
     if not path.is_file():
         return summary
@@ -549,6 +563,24 @@ def performance_summary(path: Path) -> dict[str, Any]:
             "runtime_backend_probe_results")
         if isinstance(aggregate.get("runtime_backend_probe_results"), list)
         else [],
+        "required_runtime_backend_probe_targets": aggregate.get(
+            "required_runtime_backend_probe_targets")
+        if isinstance(aggregate.get("required_runtime_backend_probe_targets"), list)
+        else [],
+        "runtime_backend_probe_proofs": aggregate.get(
+            "runtime_backend_probe_proofs")
+        if isinstance(aggregate.get("runtime_backend_probe_proofs"), dict)
+        else {},
+        "runtime_backend_probe_missing_targets": aggregate.get(
+            "runtime_backend_probe_missing_targets")
+        if isinstance(aggregate.get("runtime_backend_probe_missing_targets"), list)
+        else [],
+        "runtime_backend_probe_native_targets": aggregate.get(
+            "runtime_backend_probe_native_targets")
+        if isinstance(aggregate.get("runtime_backend_probe_native_targets"), list)
+        else [],
+        "runtime_backend_probe_resolved": bool(
+            aggregate.get("runtime_backend_probe_resolved")),
     })
     return summary
 
@@ -874,6 +906,16 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
             "runtime_backend_probe_paths"),
         "qge_runtime_backend_probe_results": qge_perf.get(
             "runtime_backend_probe_results"),
+        "qge_required_runtime_backend_probe_targets": qge_perf.get(
+            "required_runtime_backend_probe_targets"),
+        "qge_runtime_backend_probe_proofs": qge_perf.get(
+            "runtime_backend_probe_proofs"),
+        "qge_runtime_backend_probe_missing_targets": qge_perf.get(
+            "runtime_backend_probe_missing_targets"),
+        "qge_runtime_backend_probe_native_targets": qge_perf.get(
+            "runtime_backend_probe_native_targets"),
+        "qge_runtime_backend_probe_resolved": qge_perf.get(
+            "runtime_backend_probe_resolved"),
     }
     moonlab_domains = build_moonlab_domain_readiness(
         conformance_summary,
@@ -1002,6 +1044,16 @@ def build_icc_evidence(matrix: dict[str, Any],
             "qge_runtime_backend_probe_paths"),
         "qge_runtime_backend_probe_results": summary.get(
             "qge_runtime_backend_probe_results"),
+        "qge_required_runtime_backend_probe_targets": summary.get(
+            "qge_required_runtime_backend_probe_targets"),
+        "qge_runtime_backend_probe_proofs": summary.get(
+            "qge_runtime_backend_probe_proofs"),
+        "qge_runtime_backend_probe_missing_targets": summary.get(
+            "qge_runtime_backend_probe_missing_targets"),
+        "qge_runtime_backend_probe_native_targets": summary.get(
+            "qge_runtime_backend_probe_native_targets"),
+        "qge_runtime_backend_probe_resolved": summary.get(
+            "qge_runtime_backend_probe_resolved"),
         "runtime_evidence_ready": summary.get("runtime_evidence_ready"),
         "moonlab_authority_ready": summary.get("moonlab_authority_ready"),
         "moonlab_authority_blockers": summary.get(

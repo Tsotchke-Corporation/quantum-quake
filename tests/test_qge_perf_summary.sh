@@ -62,6 +62,9 @@ assert summary["logs"][0]["runtime_backend_probe_targets"] == [
     "qge_metal_init_common",
 ]
 assert summary["logs"][0]["runtime_backend_probe_paths"] == ["native_sparse_dwt_render_bridge"]
+assert summary["logs"][0]["runtime_backend_probe_resolved"] is True
+assert summary["logs"][0]["runtime_backend_probe_missing_targets"] == []
+assert summary["logs"][0]["runtime_backend_probe_proofs"]["qge_dwt_render"]["native_bridge_evidence"] is True
 assert summary["aggregate"]["native_idwt_sum"] == 3
 assert summary["aggregate"]["idwt_fallback_sum"] == 0
 assert summary["aggregate"]["cpu_idwt_sum"] == 0
@@ -76,6 +79,8 @@ assert summary["aggregate"]["runtime_backend_probe_targets"] == [
     "qge_dwt_render",
     "qge_metal_init_common",
 ]
+assert summary["aggregate"]["runtime_backend_probe_resolved"] is True
+assert summary["aggregate"]["runtime_backend_probe_missing_targets"] == []
 assert summary["logs"][0]["components"]["encode"]["max_ms"] == 13.0
 assert icc["completion_reason"] == "qge_runtime_performance_complete"
 assert icc["native_idwt_sum"] == 3
@@ -91,6 +96,7 @@ assert icc["runtime_backend_probe_targets"] == [
     "qge_dwt_render",
     "qge_metal_init_common",
 ]
+assert icc["runtime_backend_probe_resolved"] is True
 assert icc["failure_free"] is True
 PY
 

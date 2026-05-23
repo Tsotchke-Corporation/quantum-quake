@@ -633,18 +633,21 @@ Known current visual state:
   fixed-view renderer comparisons.
 - `tools/qge_breadth_evidence.py --min-maps` now enforces distinct-map breadth
   in addition to strict ownership counters. The current strongest breadth pack
-  is `diagnostics/breadth_evidence/20260523-003430`, covering four ready
+  is `diagnostics/breadth_evidence/20260523-022036`, covering four ready
   Noesis-fire matrices across `e1m1`, `e1m2`, `e1m3`, and `e1m4` with zero
   fallback, zero surrogate, zero CPU-IDWT, 420 native bridge events, 12 parsed
   backend-gate events, and 16 native backend runtime-probe events across
   `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`, and
-  `qge_metal_init_common`.
+  `qge_metal_init_common`. Runtime performance, vanilla matrix, breadth, and
+  publication artifacts now carry per-target `runtime_backend_probe_proofs` and
+  resolved/missing/native target sets so native backend evidence is auditable by
+  boundary instead of only as aggregate counts.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
-  publication pack is `diagnostics/publication_pack/20260523-015608`, with
+  publication pack is `diagnostics/publication_pack/20260523-022043`, with
   `qge_publication_artifact_pack_complete`, the e1m1 ready vanilla/QGE capture,
   agent stream, oracle/claims exports, QAE benchmark artifacts, and the
-  four-map breadth counters.
+  four-map breadth counters plus per-target native backend proof maps.
 - The current renderer should be described as improved, not fixed. In the
   latest fixed-view capture the world projection, contrast, and brightness are
   much closer to classic Quake, but floors, walls, and ceilings still do not

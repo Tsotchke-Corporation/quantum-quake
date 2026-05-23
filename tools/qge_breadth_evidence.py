@@ -13,6 +13,11 @@ from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
+REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS = [
+    "qge_context_get_or_create_render_acceleration",
+    "qge_dwt_render",
+    "qge_metal_init_common",
+]
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -46,6 +51,10 @@ def as_int(value: Any) -> int:
 
 def as_bool(value: Any) -> bool:
     return bool(value)
+
+
+def dict_value(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
 
 def read_readme_value(path: Path, label: str) -> str | None:
@@ -161,6 +170,16 @@ def build_matrix_run_summary(path: Path) -> dict[str, Any]:
         summary.get("qge_runtime_backend_probe_paths"))
     runtime_backend_probe_results = string_list(
         summary.get("qge_runtime_backend_probe_results"))
+    required_runtime_backend_probe_targets = string_list(
+        summary.get("qge_required_runtime_backend_probe_targets"))
+    runtime_backend_probe_proofs = dict_value(
+        summary.get("qge_runtime_backend_probe_proofs"))
+    runtime_backend_probe_missing_targets = string_list(
+        summary.get("qge_runtime_backend_probe_missing_targets"))
+    runtime_backend_probe_native_targets = string_list(
+        summary.get("qge_runtime_backend_probe_native_targets"))
+    runtime_backend_probe_resolved = as_bool(
+        summary.get("qge_runtime_backend_probe_resolved"))
 
     issues = []
     if not as_bool(summary.get("ready_for_complete_claim")):
@@ -185,6 +204,8 @@ def build_matrix_run_summary(path: Path) -> dict[str, Any]:
         issues.append("backend_gate_render_bridge_inactive")
     if runtime_backend_probe_event_count <= 0:
         issues.append("runtime_backend_probe_missing")
+    if not runtime_backend_probe_resolved:
+        issues.append("runtime_backend_probe_unresolved")
 
     return {
         "kind": "vanilla_capture_matrix",
@@ -215,6 +236,14 @@ def build_matrix_run_summary(path: Path) -> dict[str, Any]:
         "runtime_backend_probe_backends": runtime_backend_probe_backends,
         "runtime_backend_probe_paths": runtime_backend_probe_paths,
         "runtime_backend_probe_results": runtime_backend_probe_results,
+        "required_runtime_backend_probe_targets": (
+            required_runtime_backend_probe_targets),
+        "runtime_backend_probe_proofs": runtime_backend_probe_proofs,
+        "runtime_backend_probe_missing_targets": (
+            runtime_backend_probe_missing_targets),
+        "runtime_backend_probe_native_targets": (
+            runtime_backend_probe_native_targets),
+        "runtime_backend_probe_resolved": runtime_backend_probe_resolved,
     }
 
 
@@ -265,6 +294,62 @@ def string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, str)]
+
+
+def merge_runtime_backend_probe_proofs(
+    matrix_runs: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    by_target: dict[str, list[dict[str, Any]]] = {}
+    for run in matrix_runs:
+        proofs = dict_value(run.get("runtime_backend_probe_proofs"))
+        for target, proof in proofs.items():
+            if isinstance(proof, dict):
+                by_target.setdefault(str(target), []).append(proof)
+
+    merged: dict[str, dict[str, Any]] = {}
+    for target, proofs in by_target.items():
+        merged[target] = {
+            "run_count": len(proofs),
+            "event_count": sum(
+                as_int(proof.get("event_count")) for proof in proofs),
+            "backends": unique_sorted([
+                backend
+                for proof in proofs
+                for backend in string_list(proof.get("backends"))
+            ]),
+            "paths": unique_sorted([
+                path
+                for proof in proofs
+                for path in string_list(proof.get("paths"))
+            ]),
+            "results": unique_sorted([
+                result
+                for proof in proofs
+                for result in string_list(proof.get("results"))
+            ]),
+            "phases": unique_sorted([
+                phase
+                for proof in proofs
+                for phase in string_list(proof.get("phases"))
+            ]),
+            "native_bridge_run_count": sum(
+                1 for proof in proofs
+                if as_bool(proof.get("native_bridge_evidence"))
+            ),
+            "active_run_count": sum(
+                1 for proof in proofs
+                if as_bool(proof.get("active_evidence"))
+            ),
+            "native_bridge_evidence": all(
+                as_bool(proof.get("native_bridge_evidence"))
+                for proof in proofs
+            ),
+            "active_evidence": all(
+                as_bool(proof.get("active_evidence"))
+                for proof in proofs
+            ),
+        }
+    return merged
 
 
 def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
@@ -339,9 +424,36 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         for run in matrix_runs
         for result in string_list(run.get("runtime_backend_probe_results"))
     ])
+    required_runtime_backend_probe_targets = unique_sorted([
+        target
+        for run in matrix_runs
+        for target in string_list(
+            run.get("required_runtime_backend_probe_targets"))
+    ])
+    if not required_runtime_backend_probe_targets:
+        required_runtime_backend_probe_targets = list(
+            REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS)
+    runtime_backend_probe_proofs = merge_runtime_backend_probe_proofs(
+        matrix_runs)
+    runtime_backend_probe_missing_targets = unique_sorted([
+        target
+        for run in matrix_runs
+        for target in string_list(
+            run.get("runtime_backend_probe_missing_targets"))
+    ])
+    runtime_backend_probe_native_targets = unique_sorted([
+        target
+        for run in matrix_runs
+        for target in string_list(
+            run.get("runtime_backend_probe_native_targets"))
+    ])
     runtime_backend_probe_run_count = sum(
         1 for run in matrix_runs
         if as_int(run.get("runtime_backend_probe_event_count")) > 0
+    )
+    runtime_backend_probe_resolved_run_count = sum(
+        1 for run in matrix_runs
+        if as_bool(run.get("runtime_backend_probe_resolved"))
     )
     issues = []
     if not min_runs_met:
@@ -367,7 +479,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         total_backend_gate_event_count > 0 and
         backend_gate_render_bridge_run_count == len(matrix_runs) and
         total_runtime_backend_probe_event_count > 0 and
-        runtime_backend_probe_run_count == len(matrix_runs)
+        runtime_backend_probe_run_count == len(matrix_runs) and
+        runtime_backend_probe_resolved_run_count == len(matrix_runs)
     )
 
     return {
@@ -408,6 +521,15 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "runtime_backend_probe_paths": runtime_backend_probe_paths,
             "runtime_backend_probe_results": runtime_backend_probe_results,
             "runtime_backend_probe_run_count": runtime_backend_probe_run_count,
+            "required_runtime_backend_probe_targets": (
+                required_runtime_backend_probe_targets),
+            "runtime_backend_probe_proofs": runtime_backend_probe_proofs,
+            "runtime_backend_probe_missing_targets": (
+                runtime_backend_probe_missing_targets),
+            "runtime_backend_probe_native_targets": (
+                runtime_backend_probe_native_targets),
+            "runtime_backend_probe_resolved_run_count": (
+                runtime_backend_probe_resolved_run_count),
             "issue_count": len(issues),
             "issues": issues,
         },
@@ -471,6 +593,16 @@ def build_icc_evidence(manifest: dict[str, Any],
             "runtime_backend_probe_results"),
         "runtime_backend_probe_run_count": aggregate.get(
             "runtime_backend_probe_run_count"),
+        "required_runtime_backend_probe_targets": aggregate.get(
+            "required_runtime_backend_probe_targets"),
+        "runtime_backend_probe_proofs": aggregate.get(
+            "runtime_backend_probe_proofs"),
+        "runtime_backend_probe_missing_targets": aggregate.get(
+            "runtime_backend_probe_missing_targets"),
+        "runtime_backend_probe_native_targets": aggregate.get(
+            "runtime_backend_probe_native_targets"),
+        "runtime_backend_probe_resolved_run_count": aggregate.get(
+            "runtime_backend_probe_resolved_run_count"),
         "issue_count": aggregate.get("issue_count"),
         "status": "success" if ready else "incomplete",
     }

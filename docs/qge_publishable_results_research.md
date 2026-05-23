@@ -155,10 +155,10 @@ Do claim, once proven:
 Minimum publishable artifact package:
 
 Current strongest publication bundle:
-`diagnostics/publication_pack/20260523-015608`. It packages a ready e1m1
+`diagnostics/publication_pack/20260523-022043`. It packages a ready e1m1
 QGE/vanilla capture, agent stream, oracle scene, claims evidence, finite-shot
 QAE benchmark artifacts, and the four-map breadth sidecar from
-`diagnostics/breadth_evidence/20260523-003430`.
+`diagnostics/breadth_evidence/20260523-022036`.
 
 1. Strict ownership matrix
    - ICC target: `qge_vanilla_quake_conformance`
@@ -178,15 +178,21 @@ QAE benchmark artifacts, and the four-map breadth sidecar from
    - For multi-map claims, run `tools/qge_breadth_evidence.py --min-maps N`
      so repeated captures of a single map cannot satisfy the breadth gate.
    - Current strongest local checkpoint:
-     `diagnostics/breadth_evidence/20260523-003430`, which aggregates four
+     `diagnostics/breadth_evidence/20260523-022036`, which aggregates four
      ready Noesis-fire matrices across `e1m1`, `e1m2`, `e1m3`, and `e1m4` with
      zero fallback, zero surrogate, zero CPU-IDWT, 420 native bridge events,
      12 backend-gate events, and 16 native backend runtime-probe events parsed
      into every matrix run.
+   - The sidecar also records per-target runtime backend proofs for
+     `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`, and
+     `qge_metal_init_common`, including missing/native target sets and the
+     count of matrix runs where all required native boundaries resolved to the
+     native sparse DWT render bridge.
    - The current publication bundle carries those breadth counters directly:
-     `diagnostics/publication_pack/20260523-015608` reports
+     `diagnostics/publication_pack/20260523-022043` reports
      `breadth_map_count=4`, `breadth_total_native_bridge_count=420`, and
-     `breadth_total_runtime_backend_probe_event_count=16`.
+     `breadth_total_runtime_backend_probe_event_count=16`, with
+     `breadth_runtime_backend_probe_resolved_run_count=4`.
 
 3. Runtime traces
    - QGE trace file for each capture.

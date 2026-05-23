@@ -168,6 +168,11 @@ def performance_summary(path: Path | None) -> dict[str, Any]:
         "render_time_ms_max": None,
         "threshold_failures": [],
         "metric_evidence_present": None,
+        "required_runtime_backend_probe_targets": [],
+        "runtime_backend_probe_proofs": {},
+        "runtime_backend_probe_missing_targets": [],
+        "runtime_backend_probe_native_targets": [],
+        "runtime_backend_probe_resolved": None,
     }
     if path is None or not path.is_file():
         return summary
@@ -187,6 +192,16 @@ def performance_summary(path: Path | None) -> dict[str, Any]:
         "render_time_ms_max": aggregate.get("render_time_ms_max"),
         "threshold_failures": failures if isinstance(failures, list) else [],
         "metric_evidence_present": aggregate.get("metric_evidence_present"),
+        "required_runtime_backend_probe_targets": aggregate.get(
+            "required_runtime_backend_probe_targets", []),
+        "runtime_backend_probe_proofs": aggregate.get(
+            "runtime_backend_probe_proofs", {}),
+        "runtime_backend_probe_missing_targets": aggregate.get(
+            "runtime_backend_probe_missing_targets", []),
+        "runtime_backend_probe_native_targets": aggregate.get(
+            "runtime_backend_probe_native_targets", []),
+        "runtime_backend_probe_resolved": aggregate.get(
+            "runtime_backend_probe_resolved"),
     })
     return summary
 
@@ -226,6 +241,11 @@ def breadth_evidence_summary(path: Path | None) -> dict[str, Any]:
         "runtime_backend_probe_targets": [],
         "runtime_backend_probe_paths": [],
         "runtime_backend_probe_results": [],
+        "required_runtime_backend_probe_targets": [],
+        "runtime_backend_probe_proofs": {},
+        "runtime_backend_probe_missing_targets": [],
+        "runtime_backend_probe_native_targets": [],
+        "runtime_backend_probe_resolved_run_count": None,
         "issue_count": None,
         "issues": [],
     }
@@ -256,6 +276,11 @@ def breadth_evidence_summary(path: Path | None) -> dict[str, Any]:
         "runtime_backend_probe_targets",
         "runtime_backend_probe_paths",
         "runtime_backend_probe_results",
+        "required_runtime_backend_probe_targets",
+        "runtime_backend_probe_proofs",
+        "runtime_backend_probe_missing_targets",
+        "runtime_backend_probe_native_targets",
+        "runtime_backend_probe_resolved_run_count",
         "issue_count",
         "issues",
     ):
@@ -685,6 +710,19 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "threshold_failures"),
             "performance_metric_evidence_present": capture_perf_summary.get(
                 "metric_evidence_present"),
+            "performance_required_runtime_backend_probe_targets": (
+                capture_perf_summary.get(
+                    "required_runtime_backend_probe_targets")),
+            "performance_runtime_backend_probe_proofs": (
+                capture_perf_summary.get("runtime_backend_probe_proofs")),
+            "performance_runtime_backend_probe_missing_targets": (
+                capture_perf_summary.get(
+                    "runtime_backend_probe_missing_targets")),
+            "performance_runtime_backend_probe_native_targets": (
+                capture_perf_summary.get(
+                    "runtime_backend_probe_native_targets")),
+            "performance_runtime_backend_probe_resolved": (
+                capture_perf_summary.get("runtime_backend_probe_resolved")),
             "performance_ok": performance_ok,
             "breadth_evidence": breadth_summary,
             "breadth_ready_for_complete_claim": breadth_summary.get(
@@ -712,6 +750,17 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "runtime_backend_probe_targets"),
             "breadth_runtime_backend_probe_paths": breadth_summary.get(
                 "runtime_backend_probe_paths"),
+            "breadth_required_runtime_backend_probe_targets": (
+                breadth_summary.get("required_runtime_backend_probe_targets")),
+            "breadth_runtime_backend_probe_proofs": breadth_summary.get(
+                "runtime_backend_probe_proofs"),
+            "breadth_runtime_backend_probe_missing_targets": (
+                breadth_summary.get("runtime_backend_probe_missing_targets")),
+            "breadth_runtime_backend_probe_native_targets": (
+                breadth_summary.get("runtime_backend_probe_native_targets")),
+            "breadth_runtime_backend_probe_resolved_run_count": (
+                breadth_summary.get(
+                    "runtime_backend_probe_resolved_run_count")),
             "breadth_evidence_ok": breadth_evidence_ok,
             "agent_stream_manifest_ok": agent_stream_manifest_ok,
             "publication_ready_for_complete_claim": publication_ready,
@@ -869,6 +918,26 @@ def build_icc_evidence(manifest: dict[str, Any],
             "breadth_runtime_backend_probe_targets"),
         "breadth_runtime_backend_probe_paths": runtime.get(
             "breadth_runtime_backend_probe_paths"),
+        "breadth_required_runtime_backend_probe_targets": runtime.get(
+            "breadth_required_runtime_backend_probe_targets"),
+        "breadth_runtime_backend_probe_proofs": runtime.get(
+            "breadth_runtime_backend_probe_proofs"),
+        "breadth_runtime_backend_probe_missing_targets": runtime.get(
+            "breadth_runtime_backend_probe_missing_targets"),
+        "breadth_runtime_backend_probe_native_targets": runtime.get(
+            "breadth_runtime_backend_probe_native_targets"),
+        "breadth_runtime_backend_probe_resolved_run_count": runtime.get(
+            "breadth_runtime_backend_probe_resolved_run_count"),
+        "performance_runtime_backend_probe_resolved": runtime.get(
+            "performance_runtime_backend_probe_resolved"),
+        "performance_required_runtime_backend_probe_targets": runtime.get(
+            "performance_required_runtime_backend_probe_targets"),
+        "performance_runtime_backend_probe_proofs": runtime.get(
+            "performance_runtime_backend_probe_proofs"),
+        "performance_runtime_backend_probe_missing_targets": runtime.get(
+            "performance_runtime_backend_probe_missing_targets"),
+        "performance_runtime_backend_probe_native_targets": runtime.get(
+            "performance_runtime_backend_probe_native_targets"),
         "breadth_evidence_ok": runtime.get("breadth_evidence_ok"),
         "agent_stream_manifest_ok": runtime.get("agent_stream_manifest_ok"),
         "publication_ready_for_complete_claim": ready,

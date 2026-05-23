@@ -41,6 +41,17 @@ RUNTIME_BACKEND_PROBE_RE = re.compile(
     r"(?: (?P<rest>.*))?$"
 )
 NUMBER_RE = re.compile(r"^-?[0-9]+(?:\.[0-9]+)?$")
+REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS = (
+    "qge_context_get_or_create_render_acceleration",
+    "qge_dwt_render",
+    "qge_metal_init_common",
+)
+NATIVE_RUNTIME_PROBE_RESULTS = {
+    "active",
+    "cached",
+    "created",
+    "native",
+}
 
 
 def numeric_value(value: str) -> int | float | str:
@@ -103,6 +114,199 @@ def parse_runtime_backend_probe_line(line: str) -> dict[str, Any] | None:
     if rest:
         fields.update(parse_key_values(rest))
     return fields
+
+
+def int_field(event: dict[str, Any], key: str) -> int | None:
+    value = event.get(key)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.lstrip("-").isdigit():
+        return int(value)
+    return None
+
+
+def unique_sorted(values: list[Any]) -> list[str]:
+    return sorted({
+        str(value)
+        for value in values
+        if value is not None and str(value) != ""
+    })
+
+
+def runtime_backend_probe_proofs(
+    events: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    proofs: dict[str, dict[str, Any]] = {}
+    targets = unique_sorted([event.get("target") for event in events])
+    for target in targets:
+        target_events = [
+            event for event in events
+            if event.get("target") == target
+        ]
+        active_values = [
+            value for value in (
+                int_field(event, "active") for event in target_events
+            )
+            if value is not None
+        ]
+        native_values = [
+            value for value in (
+                int_field(event, "native") for event in target_events
+            )
+            if value is not None
+        ]
+        native_bridge_evidence = any(
+            event.get("path") == "native_sparse_dwt_render_bridge" and
+            str(event.get("result")) in NATIVE_RUNTIME_PROBE_RESULTS
+            for event in target_events
+        )
+        active_evidence = (
+            any(value > 0 for value in active_values) or
+            any(
+                event.get("path") == "native_sparse_dwt_render_bridge" and
+                event.get("result") == "active"
+                for event in target_events
+            )
+        )
+        proofs[target] = {
+            "event_count": len(target_events),
+            "backends": unique_sorted([
+                event.get("backend") for event in target_events
+            ]),
+            "paths": unique_sorted([
+                event.get("path") for event in target_events
+            ]),
+            "results": unique_sorted([
+                event.get("result") for event in target_events
+            ]),
+            "phases": unique_sorted([
+                event.get("phase") for event in target_events
+            ]),
+            "native_values": sorted(set(native_values)),
+            "active_values": sorted(set(active_values)),
+            "native_bridge_evidence": native_bridge_evidence,
+            "active_evidence": active_evidence,
+            "latest_event": target_events[-1] if target_events else None,
+        }
+    return proofs
+
+
+def runtime_backend_probe_rollup(
+    events: list[dict[str, Any]],
+) -> dict[str, Any]:
+    proofs = runtime_backend_probe_proofs(events)
+    missing_targets = [
+        target for target in REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS
+        if target not in proofs
+    ]
+    native_targets = [
+        target for target in REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS
+        if proofs.get(target, {}).get("native_bridge_evidence")
+    ]
+    return {
+        "required_runtime_backend_probe_targets": list(
+            REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS),
+        "runtime_backend_probe_proofs": proofs,
+        "runtime_backend_probe_missing_targets": missing_targets,
+        "runtime_backend_probe_native_targets": native_targets,
+        "runtime_backend_probe_resolved": (
+            not missing_targets and
+            len(native_targets) == len(REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS)
+        ),
+    }
+
+
+def merge_runtime_backend_probe_proofs(
+    logs: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    by_target: dict[str, list[dict[str, Any]]] = {}
+    for log in logs:
+        proofs = log.get("runtime_backend_probe_proofs", {})
+        if not isinstance(proofs, dict):
+            continue
+        for target, proof in proofs.items():
+            if isinstance(proof, dict):
+                by_target.setdefault(str(target), []).append(proof)
+
+    merged: dict[str, dict[str, Any]] = {}
+    for target, proofs in by_target.items():
+        merged[target] = {
+            "event_count": sum(
+                int(proof.get("event_count") or 0) for proof in proofs),
+            "backends": unique_sorted([
+                backend
+                for proof in proofs
+                for backend in proof.get("backends", [])
+            ]),
+            "paths": unique_sorted([
+                path
+                for proof in proofs
+                for path in proof.get("paths", [])
+            ]),
+            "results": unique_sorted([
+                result
+                for proof in proofs
+                for result in proof.get("results", [])
+            ]),
+            "phases": unique_sorted([
+                phase
+                for proof in proofs
+                for phase in proof.get("phases", [])
+            ]),
+            "native_values": sorted({
+                int(value)
+                for proof in proofs
+                for value in proof.get("native_values", [])
+                if isinstance(value, int)
+            }),
+            "active_values": sorted({
+                int(value)
+                for proof in proofs
+                for value in proof.get("active_values", [])
+                if isinstance(value, int)
+            }),
+            "native_bridge_evidence": any(
+                bool(proof.get("native_bridge_evidence"))
+                for proof in proofs
+            ),
+            "active_evidence": any(
+                bool(proof.get("active_evidence"))
+                for proof in proofs
+            ),
+            "latest_event": next(
+                (
+                    proof.get("latest_event")
+                    for proof in reversed(proofs)
+                    if proof.get("latest_event") is not None
+                ),
+                None,
+            ),
+        }
+    return merged
+
+
+def runtime_backend_probe_rollup_from_proofs(
+    proofs: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    missing_targets = [
+        target for target in REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS
+        if target not in proofs
+    ]
+    native_targets = [
+        target for target in REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS
+        if proofs.get(target, {}).get("native_bridge_evidence")
+    ]
+    return {
+        "required_runtime_backend_probe_targets": list(
+            REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS),
+        "runtime_backend_probe_proofs": proofs,
+        "runtime_backend_probe_missing_targets": missing_targets,
+        "runtime_backend_probe_native_targets": native_targets,
+        "runtime_backend_probe_resolved": (
+            not missing_targets and
+            len(native_targets) == len(REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS)
+        ),
+    }
 
 
 def parse_log(path: Path) -> dict[str, Any]:
@@ -228,6 +432,8 @@ def parse_log(path: Path) -> dict[str, Any]:
         for event in runtime_backend_probe_events
         if isinstance(event.get("result"), str)
     })
+    runtime_backend_probe_evidence = runtime_backend_probe_rollup(
+        runtime_backend_probe_events)
 
     return {
         "input_path": str(path),
@@ -291,6 +497,7 @@ def parse_log(path: Path) -> dict[str, Any]:
         "runtime_backend_probe_paths": runtime_backend_probe_paths,
         "runtime_backend_probe_results": runtime_backend_probe_results,
         "runtime_backend_probe_events": runtime_backend_probe_events,
+        **runtime_backend_probe_evidence,
     }
 
 
@@ -371,6 +578,9 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
         for log in logs
         for result in log.get("runtime_backend_probe_results", [])
     })
+    runtime_backend_probe_proofs = merge_runtime_backend_probe_proofs(logs)
+    runtime_backend_probe_evidence = runtime_backend_probe_rollup_from_proofs(
+        runtime_backend_probe_proofs)
     missing_logs = [log["log_path"] for log in logs if not log["exists"]]
     metric_evidence_present = bool(average_values or render_max_values)
     threshold_failures: list[dict[str, Any]] = []
@@ -424,6 +634,7 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
             "runtime_backend_probe_backends": runtime_backend_probe_backends,
             "runtime_backend_probe_paths": runtime_backend_probe_paths,
             "runtime_backend_probe_results": runtime_backend_probe_results,
+            **runtime_backend_probe_evidence,
             "threshold_failures": threshold_failures,
             "max_average_ms": args.max_average_ms,
             "max_render_ms": args.max_render_ms,
@@ -477,6 +688,16 @@ def build_icc_evidence(summary: dict[str, Any],
             "runtime_backend_probe_paths"],
         "runtime_backend_probe_results": aggregate[
             "runtime_backend_probe_results"],
+        "required_runtime_backend_probe_targets": aggregate[
+            "required_runtime_backend_probe_targets"],
+        "runtime_backend_probe_proofs": aggregate[
+            "runtime_backend_probe_proofs"],
+        "runtime_backend_probe_missing_targets": aggregate[
+            "runtime_backend_probe_missing_targets"],
+        "runtime_backend_probe_native_targets": aggregate[
+            "runtime_backend_probe_native_targets"],
+        "runtime_backend_probe_resolved": aggregate[
+            "runtime_backend_probe_resolved"],
         "max_average_ms": aggregate["max_average_ms"],
         "max_render_ms": aggregate["max_render_ms"],
         "threshold_failures": aggregate["threshold_failures"],

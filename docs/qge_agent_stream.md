@@ -258,9 +258,14 @@ ready. Native backend selection points also emit `QGE: Runtime backend probe`
 lines for `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`,
 and `qge_metal_init_common`. The performance sidecar parses them into
 `runtime_backend_probe_event_count`, `runtime_backend_probe_targets`,
-`runtime_backend_probe_paths`, and `runtime_backend_probe_results`, and the
-vanilla matrix requires those probes alongside the backend gate before marking
-QGE performance ready.
+`runtime_backend_probe_paths`, `runtime_backend_probe_results`, and
+`runtime_backend_probe_proofs`. The proof map is keyed by native boundary and
+records each target's backend, phase, result, path, active/native flags, and
+whether that target reached `native_sparse_dwt_render_bridge`. The vanilla
+matrix requires `runtime_backend_probe_resolved=1`, meaning
+`qge_context_get_or_create_render_acceleration`, `qge_dwt_render`, and
+`qge_metal_init_common` all have native render-bridge proof alongside the
+backend gate before marking QGE performance ready.
 Texture/material setup emits `texture_signal_cache` and
 `lightmap_signal_cache` probes as well. These mark the surface texture and
 lightmap signal paths as intentional CPU-side metadata/sample caches and record
@@ -414,7 +419,9 @@ machine-readable multi-run evidence sidecar. It emits
 Moonlab authority ready, uses the QGE primary framebuffer with native IDWT, and
 reports zero fallback, surrogate, and CPU-IDWT counts. The breadth aggregate
 also carries backend-gate and runtime-backend-probe counts, paths, results, and
-targets so the native backend claims can be audited across every supplied run.
+targets, plus per-target proof maps, missing/native target sets, and
+`runtime_backend_probe_resolved_run_count` so the native backend claims can be
+audited across every supplied run.
 Use `--min-maps` when the artifact needs to prove breadth across distinct maps
 instead of repeated captures of one map.
 
