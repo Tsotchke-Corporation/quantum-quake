@@ -313,6 +313,162 @@ def explicit_performance_failure(summary: dict[str, Any]) -> bool:
     return False
 
 
+def int_or_none(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(float(value.split("/", 1)[0]))
+        except ValueError:
+            return None
+    return None
+
+
+def dict_or_empty(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def build_resource_envelope(
+    oracle_scene: dict[str, Any],
+    advantage_metrics: dict[str, Any],
+    conformance: dict[str, Any],
+    performance: dict[str, Any],
+    breadth: dict[str, Any],
+) -> dict[str, Any]:
+    cost_model = dict_or_empty(oracle_scene.get("cost_model"))
+    sample_space = dict_or_empty(oracle_scene.get("sample_space"))
+    snapshot = dict_or_empty(oracle_scene.get("snapshot"))
+    render = dict_or_empty(snapshot.get("render"))
+    comparison = dict_or_empty(advantage_metrics.get("comparison"))
+    best_qae = dict_or_empty(comparison.get("best_qae"))
+    qae_resource = dict_or_empty(advantage_metrics.get("resource_estimate"))
+    native_targets = (
+        performance.get("runtime_backend_probe_native_targets")
+        or breadth.get("runtime_backend_probe_native_targets")
+        or []
+    )
+    missing_targets = (
+        performance.get("runtime_backend_probe_missing_targets")
+        or breadth.get("runtime_backend_probe_missing_targets")
+        or []
+    )
+    required_targets = (
+        performance.get("required_runtime_backend_probe_targets")
+        or breadth.get("required_runtime_backend_probe_targets")
+        or []
+    )
+
+    render_ready = (
+        bool(conformance.get("ready_for_complete_claim"))
+        and int_or_none(conformance.get("fallback_count")) == 0
+        and int_or_none(conformance.get("qge_surface_surrogates")) == 0
+        and int_or_none(render.get("cpu_idwt")) == 0
+    )
+    breadth_ready = bool(breadth.get("breadth_ready_for_complete_claim"))
+    resource_envelope = {
+        "schema": "qge.resource_envelope.v0",
+        "posture": {
+            "whole_game_hardware_execution_claimed": False,
+            "hardware_quantum_advantage_claimed": False,
+            "dense_70000_qubit_state_claimed": False,
+            "moonlab_simulator_path_claimed": True,
+            "hardware_deployment_scope": (
+                "selected kernels only; full-game authority remains a "
+                "Moonlab/QGE simulator and native-backend integration claim"
+            ),
+        },
+        "domains": {
+            "render_primary_framebuffer": {
+                "status": (
+                    "captured_workload_ready" if render_ready
+                    else "evidence_only"
+                ),
+                "moonlab_representation": (
+                    "sparse_dwt_coefficients_plus_finite_shot_render_gate"
+                ),
+                "candidate_count": int_or_none(
+                    cost_model.get("candidate_count"))
+                or int_or_none(sample_space.get("candidate_count")),
+                "register_bits": int_or_none(sample_space.get("register_bits")),
+                "shots_per_frame": (
+                    int_or_none(render.get("shots"))
+                    or int_or_none(cost_model.get("shots"))
+                ),
+                "gate_count_per_frame": int_or_none(render.get("gates")),
+                "native_backend_path": render.get("idwt_path"),
+                "native_backend_result": render.get("idwt_backend"),
+                "fallback_count": int_or_none(conformance.get("fallback_count")),
+                "surrogate_count": int_or_none(
+                    conformance.get("qge_surface_surrogates")),
+                "cpu_idwt_count": int_or_none(render.get("cpu_idwt")),
+                "hardware_deployment": (
+                    "not a full-frame hardware claim; render evidence uses "
+                    "Moonlab/QGE sparse state and the native sparse-DWT bridge"
+                ),
+            },
+            "light_transport_qae_benchmark": {
+                "status": "simulator_benchmark",
+                "moonlab_representation": "finite_shot_mlae_oracle_model",
+                "logical_qubits": int_or_none(
+                    qae_resource.get("logical_qubits")),
+                "candidate_index_bits": int_or_none(
+                    qae_resource.get("candidate_index_bits")),
+                "contribution_threshold_bits": int_or_none(
+                    qae_resource.get("contribution_threshold_bits")),
+                "controlled_oracle_calls": int_or_none(
+                    qae_resource.get("controlled_oracle_calls")),
+                "one_qubit_gates": int_or_none(
+                    qae_resource.get("one_qubit_gates")),
+                "two_qubit_gates": int_or_none(
+                    qae_resource.get("two_qubit_gates")),
+                "circuit_depth": int_or_none(
+                    qae_resource.get("circuit_depth")),
+                "shots": int_or_none(best_qae.get("shots")),
+                "hardware_deployment": (
+                    "logical benchmark circuit shape only; no practical "
+                    "hardware speedup claim"
+                ),
+            },
+            "runtime_backend_probes": {
+                "status": (
+                    "resolved" if not missing_targets and native_targets
+                    else "incomplete"
+                ),
+                "required_targets": required_targets,
+                "native_targets": native_targets,
+                "missing_targets": missing_targets,
+                "performance_resolved": performance.get(
+                    "runtime_backend_probe_resolved"),
+                "breadth_resolved_run_count": breadth.get(
+                    "runtime_backend_probe_resolved_run_count"),
+            },
+            "breadth_capture_matrix": {
+                "status": (
+                    "ready" if breadth_ready else "evidence_only"
+                ),
+                "map_count": breadth.get("map_count"),
+                "maps": breadth.get("maps"),
+                "total_fallback_count": breadth.get("total_fallback_count"),
+                "total_surrogate_count": breadth.get("total_surrogate_count"),
+                "total_cpu_idwt_count": breadth.get("total_cpu_idwt_count"),
+                "total_native_bridge_count": breadth.get(
+                    "total_native_bridge_count"),
+            },
+        },
+        "limits": [
+            "No unrestricted dense all-game state is claimed.",
+            "Whole-game hardware execution is not claimed.",
+            "Renderer ownership and renderer visual fidelity are separate claims.",
+            "Classic Quake remains a host/reference oracle where not explicitly owned.",
+        ],
+    }
+    return resource_envelope
+
+
 def resolve_vanilla_icc_evidence_path(
     vanilla_matrix: Path,
     graphics_capture_dir: Path | None,
@@ -620,6 +776,18 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         performance_ok and
         breadth_evidence_ok
     )
+    resource_envelope = build_resource_envelope(
+        oracle["oracle_scene_data"],
+        metrics,
+        conformance,
+        capture_perf_summary,
+        breadth_summary,
+    )
+    resource_path = args.outdir / "resource" / "qge_resource_envelope.json"
+    write_json(resource_path, resource_envelope)
+    resource_artifacts = {
+        "envelope": file_info(resource_path),
+    }
     return {
         "schema": "qge.publication_pack.v0",
         "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -645,6 +813,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "vanilla": vanilla_artifacts,
             "agent_stream": agent_artifacts,
             "breadth": breadth_artifacts,
+            "resource": resource_artifacts,
             "oracle": {
                 "oracle_scene": oracle["oracle_scene"],
                 "claims_evidence": oracle["claims_evidence"],
@@ -792,6 +961,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "best_classical": metrics.get("comparison", {}).get("best_classical"),
             "best_qae": metrics.get("comparison", {}).get("best_qae"),
             "resource_estimate": metrics.get("resource_estimate"),
+            "resource_envelope_summary": resource_envelope.get("posture"),
         },
         "claim_posture": {
             "allowed_wording": (
@@ -835,6 +1005,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         "claims_evidence_file": artifacts["oracle"]["claims_evidence"]["path"],
         "advantage_metrics_file": artifacts["advantage"]["metrics"]["path"],
         "scaling_summary_file": artifacts["advantage"]["scaling_summary"]["path"],
+        "resource_envelope_file": artifacts.get("resource", {}).get(
+            "envelope", {}).get("path"),
         "vanilla_capture_matrix_file": artifacts["vanilla"]["matrix"]["packed"]["path"],
         "vanilla_icc_evidence_file": artifacts["vanilla"]["icc_evidence"]["packed"]["path"],
         "breadth_evidence_file": artifacts.get("breadth", {}).get(
@@ -963,6 +1135,9 @@ def build_icc_evidence(manifest: dict[str, Any],
         "breadth_evidence_ok": runtime.get("breadth_evidence_ok"),
         "agent_stream_manifest_ok": runtime.get("agent_stream_manifest_ok"),
         "publication_ready_for_complete_claim": ready,
+        "whole_game_hardware_execution_claimed": False,
+        "hardware_quantum_advantage_claimed": False,
+        "dense_70000_qubit_state_claimed": False,
         "status": "success" if ready else "blocked",
     }
 

@@ -287,10 +287,14 @@ assert runtime["performance_ok"] is True
 assert runtime["vanilla_performance_ok"] is True
 assert manifest["artifacts"]["oracle"]["oracle_scene"]["exists"] is True
 assert manifest["artifacts"]["advantage"]["metrics"]["exists"] is True
+assert manifest["artifacts"]["resource"]["envelope"]["exists"] is True
+assert manifest["advantage_summary"]["resource_envelope_summary"]["whole_game_hardware_execution_claimed"] is False
 assert manifest["artifacts"]["vanilla"]["icc_evidence"]["packed"]["exists"] is True
 assert icc["completion_reason"] == "qge_publication_artifact_pack_complete"
 assert icc["runtime_backend"] == "qge_publication_pack"
 assert icc["publication_ready_for_complete_claim"] is True
+assert icc["resource_envelope_file"].endswith("resource/qge_resource_envelope.json")
+assert icc["whole_game_hardware_execution_claimed"] is False
 assert icc["vanilla_icc_evidence_file"].endswith("vanilla/qge_vanilla_icc_evidence.json")
 assert icc["status"] == "success"
 PY

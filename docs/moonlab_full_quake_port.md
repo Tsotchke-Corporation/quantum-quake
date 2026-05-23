@@ -51,11 +51,14 @@ when all of these are true:
 
 The full-port acceptance target is the ICC completion oracle
 `qge_vanilla_quake_conformance`. As of
-`diagnostics/publication_pack/20260523-031110`, ICC reports
+`diagnostics/publication_pack/20260523-032917`, ICC reports
 `qge_vanilla_runtime_complete` ready for the bundled e1m1 QGE/vanilla capture
 matrix. That evidence proves the ownership counters for the captured workload;
-it does not by itself close renderer fidelity, all-map breadth, or hardware
-deployment claims.
+it does not by itself close renderer fidelity, all-map breadth, or whole-game
+hardware deployment claims. The bundled `resource/qge_resource_envelope.json`
+states the current Moonlab simulator/native-backend posture and keeps full-game
+hardware execution, hardware quantum advantage, and dense-state claims out of
+scope until separate hardware deployment evidence exists.
 
 ## Current State
 

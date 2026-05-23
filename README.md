@@ -63,10 +63,13 @@ Important known limitations:
 
 - The full-port ICC target is `qge_vanilla_quake_conformance`. The current
   strongest self-contained evidence pack is
-  `diagnostics/publication_pack/20260523-031110`, where ICC reports the strict
+  `diagnostics/publication_pack/20260523-032917`, where ICC reports the strict
   vanilla/QGE runtime ownership matrix and `qge_vanilla_runtime_complete`
-  ready. This is a captured workload proof, not a claim that every Quake domain
-  is visually or hardware complete.
+  ready. The pack includes `resource/qge_resource_envelope.json`, which scopes
+  Moonlab simulator/native-backend deployment and explicitly does not claim
+  whole-game hardware execution, hardware quantum advantage, or a dense
+  70,000-qubit state. This is a captured workload proof, not a claim that every
+  Quake domain is visually or hardware complete.
 - `quantum_render 2` is not visually complete. The current renderer has
   improved world-surface coverage, Quake-FOV world projection, bilinear
   surface/light sampling, darker lightmap-preserving surface shading, and

@@ -360,6 +360,68 @@ class PublicationPackTests(unittest.TestCase):
             self.assertEqual(
                 breadth["total_runtime_backend_probe_event_count"], 16)
 
+        resource_envelope = publication_pack.build_resource_envelope(
+            {
+                "cost_model": {"candidate_count": 8, "shots": 64},
+                "sample_space": {"candidate_count": 8, "register_bits": 3},
+                "snapshot": {
+                    "render": {
+                        "shots": 64,
+                        "gates": 26,
+                        "idwt_path": "native_sparse_dwt_render_bridge",
+                        "idwt_backend": "native",
+                        "cpu_idwt": 0,
+                    }
+                },
+            },
+            {
+                "comparison": {"best_qae": {"shots": 8}},
+                "resource_estimate": {
+                    "logical_qubits": 11,
+                    "candidate_index_bits": 3,
+                    "contribution_threshold_bits": 5,
+                    "controlled_oracle_calls": 96,
+                    "one_qubit_gates": 1152,
+                    "two_qubit_gates": 768,
+                    "circuit_depth": 140,
+                },
+            },
+            {
+                "ready_for_complete_claim": True,
+                "fallback_count": 0,
+                "qge_surface_surrogates": 0,
+            },
+            {
+                "runtime_backend_probe_resolved": True,
+                "required_runtime_backend_probe_targets": [
+                    "qge_dwt_render",
+                ],
+                "runtime_backend_probe_native_targets": [
+                    "qge_dwt_render",
+                ],
+                "runtime_backend_probe_missing_targets": [],
+            },
+            {
+                "breadth_ready_for_complete_claim": True,
+                "map_count": 4,
+                "maps": ["e1m1", "e1m2", "e1m3", "e1m4"],
+                "total_fallback_count": 0,
+                "total_surrogate_count": 0,
+                "total_cpu_idwt_count": 0,
+                "total_native_bridge_count": 420,
+            },
+        )
+        self.assertFalse(
+            resource_envelope["posture"]["whole_game_hardware_execution_claimed"])
+        self.assertEqual(
+            resource_envelope["domains"]["render_primary_framebuffer"]
+            ["status"],
+            "captured_workload_ready")
+        self.assertEqual(
+            resource_envelope["domains"]["light_transport_qae_benchmark"]
+            ["logical_qubits"],
+            11)
+
         manifest = {
             "pack_dir": "pack",
             "artifacts": {
@@ -370,6 +432,9 @@ class PublicationPackTests(unittest.TestCase):
                 "advantage": {
                     "metrics": {"path": "advantage_metrics.json"},
                     "scaling_summary": {"path": "scaling_summary.json"},
+                },
+                "resource": {
+                    "envelope": {"path": "resource/qge_resource_envelope.json"},
                 },
                 "vanilla": {
                     "matrix": {"packed": {"path": "vanilla_capture_matrix.json"}},
@@ -423,6 +488,10 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(
             icc["vanilla_icc_evidence_file"],
             "vanilla/qge_vanilla_icc_evidence.json")
+        self.assertEqual(
+            icc["resource_envelope_file"],
+            "resource/qge_resource_envelope.json")
+        self.assertFalse(icc["whole_game_hardware_execution_claimed"])
         self.assertEqual(icc["breadth_map_count"], 4)
         self.assertEqual(
             icc["breadth_total_runtime_backend_probe_event_count"], 16)
