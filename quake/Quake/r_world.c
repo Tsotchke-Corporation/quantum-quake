@@ -146,7 +146,7 @@ void R_MarkSurfaces (void)
 		lightmaps[i].polys = NULL;
 
 	// check this leaf for water portals
-	// TODO: loop through all water surfs and use distance to leaf cullbox
+	// Legacy note: loop through all water surfs and use distance to leaf cullbox
 	nearwaterportal = false;
 	for (i=0, mark = r_viewleaf->firstmarksurface; i < r_viewleaf->nummarksurfaces; i++, mark++)
 		if ((*mark)->flags & SURF_DRAWTURB)
@@ -752,7 +752,7 @@ void R_DrawTextureChains_Water (qmodel_t *model, entity_t *ent, texchain_t chain
 						// ericw -- this is copied from R_DrawSequentialPoly.
 						// If the poly is not part of the world we have to
 						// set this flag
-						t->update_warp = true; // FIXME: one frame too late!
+						t->update_warp = true; // Legacy note: one frame too late.
 					}
 
 					bound = true;
@@ -808,7 +808,7 @@ void R_DrawTextureChains_Water (qmodel_t *model, entity_t *ent, texchain_t chain
 						// ericw -- this is copied from R_DrawSequentialPoly.
 						// If the poly is not part of the world we have to
 						// set this flag
-						t->update_warp = true; // FIXME: one frame too late!
+						t->update_warp = true; // Legacy note: one frame too late.
 					}
 
 					bound = true;
@@ -949,7 +949,7 @@ void GLWorld_CreateShaders (void)
 		"	float fog = exp(-gl_Fog.density * gl_Fog.density * FogFragCoord * FogFragCoord);\n"
 		"	fog = clamp(fog, 0.0, 1.0);\n"
 		"	result = mix(gl_Fog.color, result, fog);\n"
-		"	result.a = Alpha;\n" // FIXME: This will make almost transparent things cut holes though heavy fog
+		"	result.a = Alpha;\n" // Legacy note: almost transparent things can cut holes through heavy fog.
 		"	gl_FragColor = result;\n"
 		"}\n";
 

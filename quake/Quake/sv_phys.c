@@ -935,7 +935,7 @@ void SV_WalkMove (edict_t *ent)
 	downmove[2] = -STEPSIZE + oldvel[2]*host_frametime;
 
 // move up
-	SV_PushEntity (ent, upmove);	// FIXME: don't link?
+	SV_PushEntity (ent, upmove);	// Legacy note: consider whether this should link.
 
 // move forward
 	ent->v.velocity[0] = oldvel[0];
@@ -959,7 +959,7 @@ void SV_WalkMove (edict_t *ent)
 		SV_WallFriction (ent, &steptrace);
 
 // move down
-	downtrace = SV_PushEntity (ent, downmove);	// FIXME: don't link?
+	downtrace = SV_PushEntity (ent, downmove);	// Legacy note: consider whether this should link.
 
 	if (downtrace.plane.normal[2] > 0.7)
 	{

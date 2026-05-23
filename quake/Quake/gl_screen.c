@@ -1137,7 +1137,7 @@ void SCR_UpdateScreen (void)
 	QGE_2DSetLayer (QGE_2D_LAYER_HUD);
 	GL_Set2D ();
 
-	//FIXME: only call this when needed
+	// Legacy note: only call this when needed
 	SCR_TileClear ();
 
 	if (scr_drawdialog) //new game confirm

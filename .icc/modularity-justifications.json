@@ -5,6 +5,62 @@
   },
   "justifications": [
     {
+      "path": "quake/Quake/lodepng.c",
+      "status": "third_party_vendor_source",
+      "task_id": "qge_domain_ownership_swarm",
+      "reason": "This is the vendored lodepng implementation used by the inherited QuakeSpasm compatibility codebase. It remains a single translation unit because splitting a third-party codec source would increase merge and verification risk without advancing QGE domain ownership.",
+      "mitigation": "Do not land new QGE behavior in this file. Treat changes as vendor-sync or security/codec fixes only; if image codec ownership becomes a QGE requirement, wrap it behind a focused QGE image-codec module boundary instead of editing the vendor implementation."
+    },
+    {
+      "path": "quake/Quake/lodepng.h",
+      "status": "third_party_vendor_header",
+      "task_id": "qge_domain_ownership_swarm",
+      "reason": "This is the paired lodepng public header from the vendored codec compatibility source. Its size reflects upstream API and documentation, not a QGE subsystem boundary.",
+      "mitigation": "Keep QGE code isolated from this header through existing QuakeSpasm call sites. Any future QGE image IO surface should use a narrow adapter module boundary and leave the vendored header intact except for vendor-sync updates."
+    },
+    {
+      "path": "quake/Quake/miniz.c",
+      "status": "third_party_vendor_source",
+      "task_id": "qge_domain_ownership_swarm",
+      "reason": "This is the vendored miniz compression implementation carried by the QuakeSpasm compatibility tree. It is oversized by design as a self-contained third-party library, not because QGE gameplay or Moonlab authority is concentrated there.",
+      "mitigation": "Avoid QGE feature work in this file. Compression changes should be vendor-sync, bugfix, or security-only; if QGE needs owned compression evidence, add a separate adapter/test surface instead of splitting this vendor file."
+    },
+    {
+      "path": "quake/Quake/gl_model.c",
+      "status": "upstream_quakespasm_asset_boundary",
+      "task_id": "qge_domain_ownership_swarm",
+      "reason": "This inherited QuakeSpasm file owns BSP/model loading, texture metadata, and lightmap setup used as the classic reference asset compatibility boundary. Splitting it before QGE fully owns model import would risk changing reference semantics that current publication captures rely on.",
+      "mitigation": "Keep QGE changes at explicit hook or adapter boundaries and validate with vanilla/QGE capture matrices. The migration path is focused QGE-owned model, texture, and lightmap import modules once those artifacts no longer depend on classic loader internals."
+    },
+    {
+      "path": "quake/Quake/common.c",
+      "status": "upstream_quakespasm_runtime_boundary",
+      "task_id": "qge_domain_ownership_swarm",
+      "reason": "This inherited common-runtime file contains broad QuakeSpasm compatibility utilities, command-line handling, and filesystem glue that remain part of the host/reference runtime rather than the QGE authority surface.",
+      "mitigation": "Do not add new QGE domain logic here. Route QGE behavior through focused qge/ modules or explicit hook files, and only touch common.c for host compatibility fixes with regression coverage."
+    },
+    {
+      "path": "quake/Quake/menu.c",
+      "status": "upstream_quakespasm_ui_boundary",
+      "task_id": "qge_domain_ownership_swarm",
+      "reason": "This is inherited QuakeSpasm menu/UI compatibility code. It is large because it preserves the classic menu system, while current QGE/Moonlab work uses it only as host UI and not as an authority subsystem.",
+      "mitigation": "Keep QGE runtime ownership and publication evidence out of this file. If QGE needs owned UI telemetry, add a focused QGE UI/overlay module and leave classic menu behavior as reference compatibility."
+    },
+    {
+      "path": "quake/Quake/gl_vidsdl.c",
+      "status": "upstream_quakespasm_video_boundary",
+      "task_id": "qge_domain_ownership_swarm",
+      "reason": "This inherited SDL/OpenGL video backend remains the platform windowing and display compatibility layer. Its monolithic shape reflects upstream video bootstrap constraints, not hidden QGE renderer authority.",
+      "mitigation": "Keep QGE rendering authority in qge/ and qge_hooks.c, and use stream/harness tests to validate any display bootstrap change. The future migration path is a narrow QGE display module boundary once renderer ownership no longer needs the classic video path."
+    },
+    {
+      "path": "quake/Quake/host_cmd.c",
+      "status": "upstream_quakespasm_console_boundary",
+      "task_id": "qge_domain_ownership_swarm",
+      "reason": "This inherited host-command compatibility surface preserves classic console, save/demo, and server command behavior. It remains large because those commands are tightly coupled to Quake host state used as the reference runtime.",
+      "mitigation": "Avoid placing QGE authority in host commands. Add QGE commands through narrow, tested hooks and migrate stable QGE command handling into focused modules when the ownership boundary is no longer coupled to classic host state."
+    },
+    {
       "path": "quake/Quake/qge_hooks.c",
       "status": "temporary_legacy_boundary",
       "task_id": "qge_domain_ownership_swarm",
