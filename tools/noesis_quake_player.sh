@@ -391,6 +391,27 @@ emit_builtin_plan() {
       emit_action "attack 1"
       emit_action "clear-input 2"
       ;;
+    start-hub-route)
+      emit_action "give 7"
+      emit_action "give r 100"
+      emit_action "weapon 7"
+      emit_action "center-view"
+      emit_action "cmd echo QGE_NOESIS_PHASE phase=start_spawn_orient"
+      emit_action "wait 4"
+      emit_action "turn-right 4"
+      emit_action "run-forward 10"
+      emit_action "clear-input 2"
+      emit_action "cmd echo QGE_NOESIS_PHASE phase=start_hub_cross"
+      emit_action "turn-left 8"
+      emit_action "run-forward 12"
+      emit_action "strafe-right 5"
+      emit_action "attack 2"
+      emit_action "cmd echo QGE_NOESIS_PHASE phase=start_return_probe"
+      emit_action "turn-right 6"
+      emit_action "run-forward 8"
+      emit_action "attack 2"
+      emit_action "clear-input 2"
+      ;;
     patrol|*)
       emit_action "forward 12"
       emit_action "turn-right 6"

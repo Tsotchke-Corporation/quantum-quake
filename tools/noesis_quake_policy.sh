@@ -192,6 +192,26 @@ emit_e1m1_route_push() {
   emit "clear-input 2"
 }
 
+emit_start_hub_route() {
+  emit_common_setup
+  emit "center-view"
+  emit_phase "phase=start_spawn_orient"
+  emit "wait 4"
+  emit "turn-right 4"
+  emit "run-forward 10"
+  emit "clear-input 2"
+  emit_phase "phase=start_hub_cross"
+  emit "turn-left 8"
+  emit "run-forward 12"
+  emit "strafe-right 5"
+  emit "attack 2"
+  emit_phase "phase=start_return_probe"
+  emit "turn-right 6"
+  emit "run-forward 8"
+  emit "attack 2"
+  emit "clear-input 2"
+}
+
 emit_weapon_cycle_smoke() {
   emit "weapon 2"
   emit "wait 4"
@@ -263,6 +283,9 @@ case "$plan" in
     ;;
   e1m1-route-push|route-push)
     emit_e1m1_route_push
+    ;;
+  start-hub-route)
+    emit_start_hub_route
     ;;
   adaptive)
     emit_adaptive

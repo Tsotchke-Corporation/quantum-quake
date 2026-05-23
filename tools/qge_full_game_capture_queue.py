@@ -43,7 +43,19 @@ DEFAULT_ENV = {
     "QGE_RENDER_MATERIAL_GAIN": "0.18",
     "QGE_RENDER_EDGE_SAMPLES": "0",
 }
-SPECIAL_ROUTE_MAPS = {"start", "end"}
+SPECIAL_ROUTE_MAPS = {"end"}
+START_HUB_ROUTE_MAPS = {"start"}
+DEFERRED_ROUTE_MAPS = SPECIAL_ROUTE_MAPS | START_HUB_ROUTE_MAPS
+START_HUB_ROUTE_ENV = {
+    "QGE_NOESIS_PLAN": "start-hub-route",
+    "QGE_NOESIS_SCRIPTED": "1",
+    "QGE_NOESIS_REQUIRE_COMBAT": "0",
+    "QGE_NOESIS_MIN_LOG_PHASES": "2",
+    "QGE_NOESIS_MIN_ROUTE_DISTANCE": "16",
+    "QGE_NOESIS_START_WAIT": "24",
+    "QGE_NOESIS_ASSIST": "0",
+    "QGE_STREAM_FIRE_MIN_START_WAIT": "0",
+}
 DEFAULT_ASSET_ROOT = REPO_ROOT / "assets" / "id1"
 
 
@@ -201,10 +213,20 @@ def queue_environment(args: argparse.Namespace, map_name: str) -> dict[str, str]
     env["QGE_HARNESS_FORCE_WORLD_METRICS"] = (
         "1" if args.force_world_metrics else "0"
     )
+    if map_name in START_HUB_ROUTE_MAPS:
+        env.update(START_HUB_ROUTE_ENV)
     for item in args.env or []:
         key, value = item.split("=", 1)
         env[key] = value
     return env
+
+
+def route_profile_for_map(map_name: str) -> str:
+    if map_name in START_HUB_ROUTE_MAPS:
+        return "start_hub_route_authority_smoke"
+    if map_name in SPECIAL_ROUTE_MAPS:
+        return "special_route_required"
+    return "noesis_authority_smoke"
 
 
 def selected_missing_maps(
@@ -218,8 +240,8 @@ def selected_missing_maps(
     ]
     if special_maps_last:
         missing = (
-            [name for name in missing if name not in SPECIAL_ROUTE_MAPS] +
-            [name for name in missing if name in SPECIAL_ROUTE_MAPS]
+            [name for name in missing if name not in DEFERRED_ROUTE_MAPS] +
+            [name for name in missing if name in DEFERRED_ROUTE_MAPS]
         )
     if limit is not None:
         missing = missing[:limit]
@@ -273,11 +295,7 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
         jobs.append({
             "index": index,
             "map": map_name,
-            "route_profile": (
-                "special_route_required"
-                if map_name in SPECIAL_ROUTE_MAPS
-                else "noesis_authority_smoke"
-            ),
+            "route_profile": route_profile_for_map(map_name),
             "status": "pending_capture",
             "environment": env,
             "command": ["bash", "tools/quake_graphics_harness.sh"],
@@ -293,6 +311,7 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
         "status": "complete" if not jobs else "pending",
         "special_maps_last": special_maps_last,
         "special_route_maps": sorted(SPECIAL_ROUTE_MAPS),
+        "start_hub_route_maps": sorted(START_HUB_ROUTE_MAPS),
         "asset_root": str(asset_root),
         "asset_filter_enabled": not include_unavailable_assets,
         "asset_inventory_status": (
@@ -326,6 +345,7 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
         "limits": [
             "This queue does not prove coverage until the generated captures run.",
             "Every queued harness output must still pass the strict breadth gates.",
+            "Maps with route_profile=start_hub_route_authority_smoke are ordered last but keep projectile authority required.",
             "Maps with route_profile=special_route_required are ordered last because they need noncombat/endgame-specific evidence, not a weakened Moonlab claim.",
             "Maps absent from the local asset PAK/loose BSP inventory are not queued unless --include-unavailable-assets is set.",
             "Do not claim full-game map coverage until remaining_map_count_after_queue is zero and the rebuilt breadth artifact is complete.",

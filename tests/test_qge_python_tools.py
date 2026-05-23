@@ -1171,7 +1171,23 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(canonical_queue["jobs"][0]["map"], "start")
             self.assertEqual(
                 canonical_queue["jobs"][0]["route_profile"],
-                "special_route_required",
+                "start_hub_route_authority_smoke",
+            )
+            self.assertEqual(canonical_queue["special_route_maps"], ["end"])
+            self.assertEqual(canonical_queue["start_hub_route_maps"], ["start"])
+            self.assertEqual(
+                canonical_queue["jobs"][0]["environment"]["QGE_NOESIS_PLAN"],
+                "start-hub-route",
+            )
+            self.assertEqual(
+                canonical_queue["jobs"][0]["environment"]
+                ["QGE_NOESIS_REQUIRE_COMBAT"],
+                "0",
+            )
+            self.assertEqual(
+                canonical_queue["jobs"][0]["environment"]
+                ["QGE_NOESIS_MIN_LOG_PHASES"],
+                "2",
             )
 
     def test_full_game_capture_queue_skips_unavailable_local_assets(self) -> None:
@@ -4428,6 +4444,103 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
                 "own_world",
                 summary["qge_asset_ownership_missing_fields"],
             )
+
+    def test_start_map_does_not_require_monster_ai_authority(self) -> None:
+        summary = {
+            "classic_frame_exists": True,
+            "qge_frame_exists": True,
+            "agent_stream_runs_success": True,
+            "fallback_count": 0,
+            "qge_surface_surrogates": 0,
+            "qge_classic_output_hidden": True,
+            "classic2d_latest": 0,
+            "classic3d_latest": 0,
+            "qge_classic_output_seen_any_frame": True,
+            "qge_primary_owner": "qge_3d",
+            "viewmodel_encoded": 1,
+            "qge_render_gates": 26,
+            "qge_render_shots": 64,
+            "qge_render_primary_fb": 1,
+            "qge_asset_ownership_complete": True,
+            "qge_asset_ownership": {
+                "own_particles": 1,
+                "own_sprites": 1,
+            },
+            "performance_sidecars_success": True,
+            "classic_performance_status": "blocked",
+            "qge_performance_status": "pass",
+            "qge_performance_threshold_failures": [],
+            "qge_backend_gate_event_count": 3,
+            "qge_backend_gate_backends": ["Metal"],
+            "qge_backend_gate_paths": ["native_sparse_dwt_render_bridge"],
+            "qge_backend_gate_render_bridge_paths": [
+                "native_sparse_dwt_render_bridge",
+            ],
+            "qge_backend_gate_render_bridge_active": True,
+            "qge_runtime_backend_probe_event_count": 3,
+            "qge_runtime_backend_probe_targets": [
+                "qge_context_get_or_create_render_acceleration",
+                "qge_dwt_render",
+                "qge_metal_init_common",
+            ],
+            "qge_runtime_backend_probe_paths": [
+                "native_sparse_dwt_render_bridge",
+            ],
+            "qge_runtime_backend_probe_proofs": {},
+            "qge_runtime_backend_probe_missing_targets": [],
+            "qge_runtime_backend_probe_native_targets": [
+                "qge_context_get_or_create_render_acceleration",
+                "qge_dwt_render",
+                "qge_metal_init_common",
+            ],
+            "qge_runtime_backend_probe_resolved": True,
+        }
+        runtime_evidence = {
+            "render": {
+                "sparse_dwt_count": 1,
+                "native_bridge_count": 1,
+                "cpu_idwt_count": 0,
+                "idwt_backend": "native",
+            },
+            "ai": {"ready": False, "decision_count": 0, "record_count": 0},
+            "audio": {"ready": True, "source_spatial_count": 1},
+            "visibility": {
+                "ready": True,
+                "authority_gate_count": 1,
+                "authority_apply_count": 1,
+            },
+            "projectile": {
+                "ready": True,
+                "authority_gate_count": 1,
+                "active_projectiles_max": 1,
+                "writeback_decision_count": 1,
+            },
+        }
+        trace_evidence = {"records": {"entropy": 1, "measurement": 1}}
+
+        start_domains = vanilla_matrix.build_moonlab_domain_readiness(
+            summary,
+            runtime_evidence,
+            trace_evidence,
+            "start",
+        )
+        self.assertFalse(start_domains["ai_authority"]["required"])
+        self.assertTrue(start_domains["ai_authority"]["ready"])
+        self.assertEqual(vanilla_matrix.domain_blockers(start_domains), [])
+        self.assertTrue(vanilla_matrix.domains_ready(start_domains))
+
+        combat_domains = vanilla_matrix.build_moonlab_domain_readiness(
+            summary,
+            runtime_evidence,
+            trace_evidence,
+            "e1m1",
+        )
+        self.assertTrue(combat_domains["ai_authority"]["required"])
+        self.assertFalse(combat_domains["ai_authority"]["ready"])
+        self.assertIn(
+            "ai_authority: AI must have QGE decisions in the trace",
+            vanilla_matrix.domain_blockers(combat_domains),
+        )
 
 
 if __name__ == "__main__":

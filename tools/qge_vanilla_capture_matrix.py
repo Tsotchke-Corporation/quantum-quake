@@ -30,6 +30,7 @@ ASSET_OWNERSHIP_KEYS = [
     "own_hud",
     "own_console",
 ]
+AI_OPTIONAL_MAPS = {"start"}
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -153,9 +154,10 @@ def records_section(trace_evidence: dict[str, Any]) -> dict[str, Any]:
 
 def readiness_entry(ready: bool,
                     evidence: dict[str, Any],
-                    blockers: list[str]) -> dict[str, Any]:
+                    blockers: list[str],
+                    required: bool = True) -> dict[str, Any]:
     return {
-        "required": True,
+        "required": required,
         "ready": ready,
         "evidence": evidence,
         "blockers": [] if ready else blockers,
@@ -166,6 +168,7 @@ def build_moonlab_domain_readiness(
     summary: dict[str, Any],
     runtime_evidence: dict[str, Any],
     trace_evidence: dict[str, Any],
+    map_name: str | None = None,
 ) -> dict[str, Any]:
     records = records_section(trace_evidence)
     render = runtime_section(runtime_evidence, "render")
@@ -208,6 +211,19 @@ def build_moonlab_domain_readiness(
         int_from(projectile.get("branch_state_count")),
         int_from(projectile.get("preimpact_selection_count")),
     )
+    canonical_map = (map_name or "").strip().lower()
+    ai_optional = canonical_map in AI_OPTIONAL_MAPS
+    ai_ready = bool(ai.get("ready")) and ai_decision_count > 0
+    ai_evidence = {
+        "ready": ai.get("ready"),
+        "decision_count": ai_decision_count,
+        "record_count": ai.get("record_count"),
+    }
+    if ai_optional:
+        ai_evidence["not_applicable_reason"] = (
+            "start_hub_has_no_monster_ai_requirement"
+        )
+        ai_evidence["map"] = canonical_map
 
     domains = {
         "capture_artifacts": readiness_entry(
@@ -275,13 +291,10 @@ def build_moonlab_domain_readiness(
             ["trace must include entropy and measurement records"],
         ),
         "ai_authority": readiness_entry(
-            bool(ai.get("ready")) and ai_decision_count > 0,
-            {
-                "ready": ai.get("ready"),
-                "decision_count": ai_decision_count,
-                "record_count": ai.get("record_count"),
-            },
+            ai_ready or ai_optional,
+            ai_evidence,
             ["AI must have QGE decisions in the trace"],
+            required=not ai_optional,
         ),
         "visibility_authority": readiness_entry(
             bool(visibility.get("ready")) and
@@ -380,7 +393,11 @@ def build_moonlab_domain_readiness(
 def domain_blockers(domains: dict[str, Any]) -> list[str]:
     blockers: list[str] = []
     for name, data in domains.items():
-        if not isinstance(data, dict) or data.get("ready"):
+        if (
+            not isinstance(data, dict) or
+            data.get("ready") or
+            not data.get("required", True)
+        ):
             continue
         domain_blockers_value = data.get("blockers", [])
         if not isinstance(domain_blockers_value, list):
@@ -757,6 +774,7 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
     classic = mode_entry(capture_dir, args.classic_mode,
                          args.classic_render, "reference")
     qge = mode_entry(capture_dir, args.qge_mode, args.qge_render, "candidate")
+    map_name = qge.get("map") or classic.get("map")
     classic_agent_run = classic.get("agent_stream_run", {})
     qge_agent_run = qge.get("agent_stream_run", {})
     classic_perf = classic.get("performance", {})
@@ -819,6 +837,7 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
 
     conformance_summary = {
         "status": "evidence_only",
+        "map": map_name,
         "classic_frame_exists": classic["frame"]["exists"],
         "qge_frame_exists": qge["frame"]["exists"],
         "classic_agent_run_status": classic_agent_run.get("run_status"),
@@ -931,6 +950,7 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
         conformance_summary,
         qge_runtime_evidence,
         qge_trace,
+        str(map_name) if map_name else None,
     )
     moonlab_ready = domains_ready(moonlab_domains)
     conformance_summary["moonlab_domain_readiness"] = moonlab_domains

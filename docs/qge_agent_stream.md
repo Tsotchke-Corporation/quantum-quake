@@ -442,10 +442,14 @@ and `pak*.pak` directories before it writes jobs, skips maps whose BSP is
 absent unless `--include-unavailable-assets` is set, and records the
 asset-unavailable missing maps in JSON/Markdown. The generated script runs
 `tools/quake_graphics_harness.sh` for each missing canonical map using the
-Noesis-fire authority-smoke profile by default, orders combat maps before
-`start`/`end`, marks those noncombat/endgame maps as
+Noesis-fire authority-smoke profile by default, gives `start` the dedicated
+`start_hub_route_authority_smoke` route with `QGE_NOESIS_PLAN=start-hub-route`,
+orders combat maps before noncombat/endgame maps, marks `end` as
 `special_route_required`, and then rebuilds breadth evidence with the previous
-ready matrices plus the new capture directories.
+ready matrices plus the new capture directories. The `start` route is allowed
+to omit monster AI authority because the hub has no monster AI requirement, but
+it still uses rocket projectile authority so branch/writeback evidence remains
+required.
 
 `tools/qge_noesis_summary.py` reads the stream manifest, Noesis action trace,
 translated command buffer, runtime log, `noesis/gameplay_outcomes.ndjson`,
