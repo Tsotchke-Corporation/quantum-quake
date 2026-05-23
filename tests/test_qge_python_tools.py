@@ -184,6 +184,8 @@ class AdvantageBenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["observable"]["candidate_count"], 8)
         self.assertEqual(metrics["scaling_summary"]["trial_count"], 2)
         self.assertGreater(metrics["resource_estimate"]["logical_qubits"], 0)
+        self.assertIn("absolute_delta", metrics["comparison"]["best_qae"])
+        self.assertNotIn("absolute_error", metrics["comparison"]["best_qae"])
 
         with tempfile.TemporaryDirectory() as tmp:
             outdir = Path(tmp)
@@ -207,9 +209,60 @@ class AdvantageBenchmarkTests(unittest.TestCase):
             self.assertEqual(icc["runtime_backend"], "qge_advantage_benchmark")
             self.assertEqual(icc["completion_reason"], "qge_advantage_benchmark_complete")
             self.assertEqual(icc["trial_count"], 2)
+            self.assertIn("absolute_delta", curve_path.read_text(encoding="utf-8"))
+            self.assertIn("ci95_absolute_delta", icc)
+            self.assertNotIn("ci95_absolute_error", icc)
 
 
 class PublicationPackTests(unittest.TestCase):
+    def test_graphics_sidecar_supplies_publication_performance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            stream = tmpdir / "quake_stream"
+            graphics = tmpdir / "quake_graphics"
+            stream.mkdir()
+            graphics.mkdir()
+            vanilla_matrix = graphics / "vanilla_capture_matrix.json"
+            vanilla_matrix.write_text("{}\n", encoding="utf-8")
+            publication_pack.write_json(
+                graphics / "quantum.qge_perf_summary.json",
+                {
+                    "status": "pass",
+                    "aggregate": {
+                        "engine_average_quantum_ms_max": 12.5,
+                        "render_time_ms_max": 22.0,
+                        "threshold_failures": [],
+                        "metric_evidence_present": True,
+                    },
+                },
+            )
+            publication_pack.write_json(
+                stream / "qge_perf_summary.json",
+                {
+                    "status": "blocked",
+                    "aggregate": {
+                        "threshold_failures": [],
+                        "metric_evidence_present": False,
+                    },
+                },
+            )
+
+            args = SimpleNamespace(
+                capture_dir=stream,
+                vanilla_matrix=vanilla_matrix,
+                graphics_capture_dir=None,
+                agent_stream_dir=None,
+            )
+            inputs = publication_pack.resolve_inputs(args)
+            self.assertEqual(inputs["graphics_capture_dir"], graphics)
+            summary, _icc, source = publication_pack.publication_performance_paths(
+                stream, inputs["graphics_capture_dir"])
+            self.assertEqual(summary, graphics / "quantum.qge_perf_summary.json")
+            self.assertEqual(source, "graphics_qge_candidate")
+            perf = publication_pack.performance_summary(summary)
+            self.assertFalse(publication_pack.explicit_performance_failure(perf))
+            self.assertEqual(perf["render_time_ms_max"], 22.0)
+
     def test_manifest_summaries_and_icc_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmpdir = Path(tmp)

@@ -311,13 +311,14 @@ def resource_estimate(candidate_bits: int,
 
 
 def fit_slope(points: list[dict[str, Any]],
-              error_key: str = "absolute_error") -> float | None:
+              delta_key: str = "absolute_delta") -> float | None:
     pairs = [
         (math.log(float(point["oracle_eval_count"])),
-         math.log(float(point.get(error_key, point.get("absolute_error", 0.0)))))
+         math.log(float(point.get(
+             delta_key, point.get("absolute_error", 0.0)))))
         for point in points
         if point.get("oracle_eval_count", 0) > 0 and
-        point.get(error_key, point.get("absolute_error", 0.0)) > 0.0
+        point.get(delta_key, point.get("absolute_error", 0.0)) > 0.0
     ]
     if len(pairs) < 2:
         return None
@@ -329,10 +330,10 @@ def fit_slope(points: list[dict[str, Any]],
     return sum((x - mean_x) * (y - mean_y) for x, y in pairs) / denom
 
 
-def add_error(record: dict[str, Any], reference: float) -> dict[str, Any]:
+def add_delta(record: dict[str, Any], reference: float) -> dict[str, Any]:
     out = dict(record)
-    out["absolute_error"] = abs(float(out["estimate"]) - reference)
-    out["rmse"] = out["absolute_error"]
+    out["absolute_delta"] = abs(float(out["estimate"]) - reference)
+    out["rmse"] = out["absolute_delta"]
     return out
 
 
@@ -348,7 +349,7 @@ def annotate_trial_record(record: dict[str, Any],
                           reference: float,
                           trial: int,
                           seed: int) -> dict[str, Any]:
-    out = add_error(record, reference)
+    out = add_delta(record, reference)
     out["trial"] = trial
     out["trial_seed"] = seed
     out["reference_value"] = reference
@@ -369,14 +370,14 @@ def aggregate_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows = []
     for key, group in groups.items():
         algorithm, oracle_evals, samples, shots = key
-        signed_errors = [
+        signed_deltas = [
             float(record["estimate"]) - float(record["reference_value"])
             for record in group
         ]
-        abs_errors = [abs(error) for error in signed_errors]
+        abs_deltas = [abs(delta) for delta in signed_deltas]
         estimates = [float(record["estimate"]) for record in group]
         references = [float(record["reference_value"]) for record in group]
-        mean_abs = mean(abs_errors)
+        mean_abs = mean(abs_deltas)
         row = {
             "algorithm": algorithm,
             "oracle_eval_count": oracle_evals,
@@ -385,17 +386,17 @@ def aggregate_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "trial_count": len(group),
             "mean_estimate": mean(estimates),
             "mean_reference_value": mean(references),
-            "mean_absolute_error": mean_abs,
-            "absolute_error": mean_abs,
-            "rmse": rmse(signed_errors),
-            "std_absolute_error": sample_stdev(abs_errors),
-            "stderr_absolute_error": (
-                sample_stdev(abs_errors) / math.sqrt(len(abs_errors))
-                if abs_errors else 0.0
+            "mean_absolute_delta": mean_abs,
+            "absolute_delta": mean_abs,
+            "rmse": rmse(signed_deltas),
+            "std_absolute_delta": sample_stdev(abs_deltas),
+            "stderr_absolute_delta": (
+                sample_stdev(abs_deltas) / math.sqrt(len(abs_deltas))
+                if abs_deltas else 0.0
             ),
-            "ci95_absolute_error": ci95_half_width(abs_errors),
-            "min_absolute_error": min(abs_errors) if abs_errors else 0.0,
-            "max_absolute_error": max(abs_errors) if abs_errors else 0.0,
+            "ci95_absolute_delta": ci95_half_width(abs_deltas),
+            "min_absolute_delta": min(abs_deltas) if abs_deltas else 0.0,
+            "max_absolute_delta": max(abs_deltas) if abs_deltas else 0.0,
             "trial_seeds": [record.get("trial_seed") for record in group],
         }
         rows.append(row)
@@ -421,7 +422,7 @@ def write_curve_csv(path: Path, metrics: dict[str, Any]) -> None:
                 "oracle_eval_count": record.get("oracle_eval_count"),
                 "estimate": record.get("estimate"),
                 "reference_value": record.get("reference_value"),
-                "absolute_error": record.get("absolute_error"),
+                "absolute_delta": record.get("absolute_delta"),
                 "rmse": record.get("rmse"),
                 "seed": record.get("seed"),
                 "trial_seed": record.get("trial_seed"),
@@ -435,7 +436,7 @@ def write_curve_csv(path: Path, metrics: dict[str, Any]) -> None:
             "oracle_eval_count",
             "estimate",
             "reference_value",
-            "absolute_error",
+            "absolute_delta",
             "rmse",
             "seed",
             "trial_seed",
@@ -464,13 +465,13 @@ def write_scaling_csv(path: Path, metrics: dict[str, Any]) -> None:
         "trial_count",
         "mean_estimate",
         "mean_reference_value",
-        "mean_absolute_error",
+        "mean_absolute_delta",
         "rmse",
-        "std_absolute_error",
-        "stderr_absolute_error",
-        "ci95_absolute_error",
-        "min_absolute_error",
-        "max_absolute_error",
+        "std_absolute_delta",
+        "stderr_absolute_delta",
+        "ci95_absolute_delta",
+        "min_absolute_delta",
+        "max_absolute_delta",
     ]
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -545,7 +546,7 @@ def build_icc_evidence(metrics: dict[str, Any],
         "confidence_level": metrics["scaling_summary"]["confidence_level"],
         "reference_value": metrics["comparison"]["best_qae"]["mean_reference_value"],
         "rmse": metrics["comparison"]["best_qae"]["rmse"],
-        "ci95_absolute_error": metrics["comparison"]["best_qae"]["ci95_absolute_error"],
+        "ci95_absolute_delta": metrics["comparison"]["best_qae"]["ci95_absolute_delta"],
         "status": "success",
     }
 
@@ -684,15 +685,15 @@ def build_metrics(args: argparse.Namespace, oracle_scene: dict[str, Any]) -> dic
         "comparison": {
             "best_classical": best_classical,
             "best_qae": best_qae,
-            "mc_loglog_error_slope": fit_slope([
+            "mc_loglog_delta_slope": fit_slope([
                 item for item in classical_summary
                 if item["algorithm"] == "classical_mc"
             ], "rmse"),
-            "stratified_loglog_error_slope": fit_slope([
+            "stratified_loglog_delta_slope": fit_slope([
                 item for item in classical_summary
                 if item["algorithm"] == "stratified_vdc"
             ], "rmse"),
-            "qae_loglog_error_slope": fit_slope(qae_summary, "rmse"),
+            "qae_loglog_delta_slope": fit_slope(qae_summary, "rmse"),
         },
         "claim_posture": {
             "claim_id": "advantage.light_transport_qae_query_scaling",

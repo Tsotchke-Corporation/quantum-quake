@@ -334,6 +334,11 @@ def resolve_inputs(args: argparse.Namespace) -> dict[str, Path | None]:
     capture_dir = args.capture_dir or latest_capture_dir()
     vanilla_matrix = args.vanilla_matrix or latest_file(
         "diagnostics/quake_graphics/*/vanilla_capture_matrix.json")
+    graphics_capture_dir = args.graphics_capture_dir
+    if graphics_capture_dir is None and vanilla_matrix is not None:
+        candidate = vanilla_matrix.parent
+        if (candidate / "quantum.qge_perf_summary.json").is_file():
+            graphics_capture_dir = candidate
     agent_stream = args.agent_stream_dir
     if agent_stream is None and capture_dir is not None:
         value = read_readme_value(capture_dir / "README.txt", "Agent stream")
@@ -343,14 +348,32 @@ def resolve_inputs(args: argparse.Namespace) -> dict[str, Path | None]:
     return {
         "capture_dir": capture_dir,
         "vanilla_matrix": vanilla_matrix,
+        "graphics_capture_dir": graphics_capture_dir,
         "agent_stream_dir": agent_stream,
     }
+
+
+def publication_performance_paths(
+    capture_dir: Path,
+    graphics_capture_dir: Path | None,
+) -> tuple[Path, Path, str]:
+    if graphics_capture_dir is not None:
+        summary = graphics_capture_dir / "quantum.qge_perf_summary.json"
+        evidence = graphics_capture_dir / "quantum.qge_perf_icc_evidence.json"
+        if summary.is_file():
+            return summary, evidence, "graphics_qge_candidate"
+    return (
+        capture_dir / "qge_perf_summary.json",
+        capture_dir / "qge_perf_icc_evidence.json",
+        "stream_capture",
+    )
 
 
 def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     inputs = resolve_inputs(args)
     capture_dir = inputs["capture_dir"]
     vanilla_matrix = inputs["vanilla_matrix"]
+    graphics_capture_dir = inputs["graphics_capture_dir"]
     agent_stream_dir = inputs["agent_stream_dir"]
     claims_path = args.claims
     if capture_dir is None or not capture_dir.is_dir():
@@ -372,13 +395,14 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                                           args)
     vanilla = load_json(vanilla_matrix)
     conformance = vanilla.get("conformance_summary", {})
+    perf_summary_path, perf_icc_path, perf_source = publication_performance_paths(
+        capture_dir, graphics_capture_dir)
     agent_manifest = (
         agent_stream_dir / "manifest.json"
         if agent_stream_dir is not None else None
     )
     agent_stream_summary = agent_manifest_summary(agent_manifest)
-    capture_perf_summary = performance_summary(
-        capture_dir / "qge_perf_summary.json")
+    capture_perf_summary = performance_summary(perf_summary_path)
     agent_icc = (
         agent_stream_dir / "qge_agent_stream_icc_evidence.jsonl"
         if agent_stream_dir is not None else None
@@ -405,10 +429,10 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "log": pack_file(capture_dir / "quantum_quake.log", args.outdir,
                          "capture/quantum_quake.log"),
         "performance_summary": pack_file(
-            capture_dir / "qge_perf_summary.json", args.outdir,
+            perf_summary_path, args.outdir,
             "capture/qge_perf_summary.json"),
         "performance_icc_evidence": pack_file(
-            capture_dir / "qge_perf_icc_evidence.json", args.outdir,
+            perf_icc_path, args.outdir,
             "capture/qge_perf_icc_evidence.json"),
         "readme": pack_file(capture_dir / "README.txt", args.outdir,
                             "capture/README.txt"),
@@ -460,6 +484,10 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "source_inputs": {
             "capture_dir": str(capture_dir),
             "vanilla_matrix": str(vanilla_matrix),
+            "graphics_capture_dir": (
+                str(graphics_capture_dir) if graphics_capture_dir else None),
+            "publication_performance_source": perf_source,
+            "publication_performance_summary": str(perf_summary_path),
             "agent_stream_dir": str(agent_stream_dir) if agent_stream_dir else None,
             "claims_ledger": str(claims_path),
         },
@@ -544,6 +572,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "agent_stream_performance_status": agent_stream_summary.get(
                 "performance_status"),
             "performance_summary": capture_perf_summary,
+            "performance_source": perf_source,
             "performance_status": capture_perf_summary.get("status"),
             "performance_engine_average_quantum_ms_max": (
                 capture_perf_summary.get("engine_average_quantum_ms_max")),
@@ -580,7 +609,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_oracle_export.py <capture_dir>",
             "tools/qge_advantage_benchmark.py <oracle_scene.json> --outdir <outdir>",
             "tools/qge_vanilla_capture_matrix.py <graphics_capture_dir>",
-            "tools/qge_publication_pack.py --capture-dir <capture_dir> --vanilla-matrix <vanilla_capture_matrix.json>",
+            "tools/qge_publication_pack.py --capture-dir <trace_capture_dir> --vanilla-matrix <graphics_capture_dir>/vanilla_capture_matrix.json --graphics-capture-dir <graphics_capture_dir>",
         ],
     }
 
@@ -608,6 +637,7 @@ def build_icc_evidence(manifest: dict[str, Any],
         "vanilla_capture_matrix_file": artifacts["vanilla"]["matrix"]["packed"]["path"],
         "performance_summary_file": artifacts["capture"]["performance_summary"]["packed"]["path"],
         "performance_icc_evidence_file": artifacts["capture"]["performance_icc_evidence"]["packed"]["path"],
+        "performance_source": runtime.get("performance_source"),
         "agent_stream_manifest_file": artifacts["agent_stream"]["manifest"]["packed"]["path"],
         "agent_stream_events_file": artifacts["agent_stream"]["events"]["packed"]["path"],
         "agent_stream_file_count": artifacts["agent_stream"]["stream_directory"]["packed"]["file_count"],
@@ -695,6 +725,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                         "publication_pack" / stamp)
     parser.add_argument("--capture-dir", type=Path)
     parser.add_argument("--vanilla-matrix", type=Path)
+    parser.add_argument("--graphics-capture-dir", type=Path,
+                        help="Optional quake_graphics harness directory for paired performance sidecars")
     parser.add_argument("--agent-stream-dir", type=Path)
     parser.add_argument("--claims", type=Path,
                         default=REPO_ROOT / "docs/claims/qge_claims.json")

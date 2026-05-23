@@ -77,7 +77,7 @@ Formal problem:
 
 - Let `x` be a sampled path, ray, light point, subpixel, or visibility event.
 - Let `f(x) in [0, 1]` be its contribution to a bounded render observable.
-- Classical Monte Carlo estimates `mu = E[f(x)]` with error scaling
+- Classical Monte Carlo estimates `mu = E[f(x)]` with delta scaling
   `O(1 / sqrt(M))`.
 - Quantum amplitude estimation estimates the same mean with ideal query scaling
   `O(1 / M)` or `O(1 / epsilon)` under a coherent sampler and oracle.
@@ -88,7 +88,7 @@ What QGE must build:
 - reversible/bounded contribution oracle
 - amplitude-estimation circuit or faithful simulator
 - matching classical MC estimator
-- error-versus-oracle-call plots over multiple seeds and scene settings
+- delta-versus-oracle-call plots over multiple seeds and scene settings
 
 Current artifact status:
 
@@ -216,7 +216,7 @@ Quantum kernel:
 
 Primary plot:
 
-- mean absolute error or RMSE versus oracle evaluations
+- mean absolute delta or RMSE versus oracle evaluations
 - classical slope near `M^-1/2`
 - quantum-estimation slope closer to `M^-1` in the ideal oracle model
 
@@ -237,7 +237,7 @@ Required trace fields:
 - `confidence`
 - `observable`
 - `reference_value`
-- `absolute_error`
+- `absolute_delta`
 - `rmse`
 - `seed`
 
@@ -374,7 +374,7 @@ Continue extending traces or companion records for:
 - qRAM assumptions
 - circuit depth
 - baseline algorithm id
-- error and confidence
+- delta and confidence
 
 ### Slice 4: Amplitude Estimation Module
 

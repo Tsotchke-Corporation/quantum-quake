@@ -384,11 +384,14 @@ status in `manifest.json` plus `agent_stream_perf_status` in the JSONL ICC
 sidecar. Set `QGE_PERF_MAX_AVERAGE_MS` or `QGE_PERF_MAX_RENDER_MS` to turn a
 capture into a thresholded performance smoke without failing the media stream
 itself; threshold failures mark the performance sidecar `blocked`.
-Publication packs copy capture and vanilla-matrix performance sidecars into the
-pack, expose direct and per-mode max average/render timing fields in the
-publication runtime summary and ICC evidence, and treat an explicit blocked
-performance sidecar as evidence-only rather than
-`qge_publication_artifact_pack_complete`.
+Publication packs use the stream capture for trace/oracle inputs and prefer the
+paired `quake_graphics` QGE candidate performance sidecar when the vanilla
+matrix comes from a graphics harness directory. This keeps raw stream-side
+summaries from blocking a paper pack when the publication evidence is the paired
+classic-vs-QGE graphics run. The pack exposes direct and per-mode max
+average/render timing fields in the publication runtime summary and ICC evidence,
+and treats an explicit blocked publication performance sidecar as evidence-only
+rather than `qge_publication_artifact_pack_complete`.
 
 `tools/qge_noesis_summary.py` reads the stream manifest, Noesis action trace,
 translated command buffer, runtime log, `noesis/gameplay_outcomes.ndjson`,

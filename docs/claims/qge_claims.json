@@ -93,7 +93,7 @@
     {
       "accepted_evidence": [
         "same observable evaluated by high-sample reference, MC, Sobol, and QAE lab mode",
-        "error-vs-query output shows expected scaling under declared oracle model",
+        "delta-vs-query output shows expected scaling under declared oracle model",
         "state-prep, qRAM, readout, and baseline caveats are reported"
       ],
       "allowed_wording": "On a bounded Quake-derived light-transport observable, QGE evaluates quantum amplitude-estimation query scaling under an explicit oracle model.",
@@ -168,7 +168,7 @@
         "route movement is inferred without gameplay summary counters",
         "training, learned policy updates, or general play are claimed without a replay/update loop and held-out evaluation"
       ],
-      "input_model": "Quake server state, local clearance/floor/hazard probes, target visibility, aim error, and assist telemetry",
+      "input_model": "Quake server state, local clearance/floor/hazard probes, target visibility, aim residual, and assist telemetry",
       "output_observable": "route movement, target engagement, damage, kills, ammo use, and terminal-stall metrics",
       "problem_statement": "Bound the evidence for current Noesis autonomy without overstating it as learned gameplay.",
       "quantum_algorithm": "none required; this is a harness and AI-control evidence claim",
