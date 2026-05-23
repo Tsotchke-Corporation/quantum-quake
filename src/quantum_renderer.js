@@ -10,6 +10,8 @@ const PHASE_TEXTURE_SIZE = 128;
 const PHASE_TEXEL_COUNT = PHASE_TEXTURE_SIZE * PHASE_TEXTURE_SIZE;
 const STATE_STRUCT_SIZE = 256;
 const AMPLITUDE_PTR_OFFSET = 8; // quantum_state_t.amplitudes pointer (WASM32 layout)
+const GPU_BACKEND_WEBGPU = 2;
+const GPU_BACKEND_AUTO = 7;
 const RT_MAX_TRIANGLES_DEFAULT = 49152;
 const RT_LEAF_TRIANGLES = 8;
 const RT_MAX_BVH_DEPTH = 24;
@@ -112,6 +114,12 @@ let _moonlabModule = null;
 let _moonlabInitPromise = null;
 let _moonlabFailed = false;
 let _moonlabStatePtr = 0;
+let _moonlabGpuCtxPtr = 0;
+let _moonlabGpuAmpBufferPtr = 0;
+let _moonlabGpuReadbackPtr = 0;
+let _moonlabGpuNative = false;
+let _moonlabGpuBlocked = false;
+let _moonlabUsingGpu = false;
 let _moonlabQubits = 0;
 let _moonlabCollapseState = 0;
 let _moonlabFrame = 0;
@@ -2729,6 +2737,143 @@ function _ensureRenderTargets() {
 
 }
 
+function _moonlabHasUnifiedGpuApi( module ) {
+
+	return typeof module._gpu_compute_init === 'function' &&
+		typeof module._gpu_compute_free === 'function' &&
+		typeof module._gpu_get_backend_type === 'function' &&
+		typeof module._gpu_buffer_create_from_data === 'function' &&
+		typeof module._gpu_buffer_read === 'function' &&
+		typeof module._gpu_buffer_free === 'function' &&
+		( typeof module._gpu_hadamard_u32 === 'function' || typeof module._gpu_hadamard === 'function' ) &&
+		( typeof module._gpu_phase_u32 === 'function' || typeof module._gpu_phase === 'function' ) &&
+		( typeof module._gpu_cnot_u32 === 'function' || typeof module._gpu_cnot === 'function' );
+
+}
+
+function _initMoonlabGpuContext() {
+
+	if ( _moonlabModule == null || _moonlabGpuBlocked === true )
+		return false;
+
+	if ( _moonlabGpuCtxPtr !== 0 )
+		return true;
+
+	if ( _moonlabHasUnifiedGpuApi( _moonlabModule ) !== true ) {
+
+		_moonlabGpuBlocked = true;
+		return false;
+
+	}
+
+	let ctxPtr = _moonlabModule._gpu_compute_init( GPU_BACKEND_WEBGPU );
+	if ( ctxPtr === 0 )
+		ctxPtr = _moonlabModule._gpu_compute_init( GPU_BACKEND_AUTO );
+
+	if ( ctxPtr === 0 ) {
+
+		_moonlabGpuBlocked = true;
+		return false;
+
+	}
+
+	const backend = _moonlabModule._gpu_get_backend_type( ctxPtr ) | 0;
+	if ( backend !== GPU_BACKEND_WEBGPU ) {
+
+		_moonlabModule._gpu_compute_free( ctxPtr );
+		_moonlabGpuBlocked = true;
+		return false;
+
+	}
+
+	_moonlabGpuCtxPtr = ctxPtr;
+	_moonlabGpuNative = typeof _moonlabModule._gpu_is_native_accelerated === 'function' &&
+		_moonlabModule._gpu_is_native_accelerated( _moonlabGpuCtxPtr ) !== 0;
+	return true;
+
+}
+
+function _freeMoonlabGpuResources() {
+
+	if ( _moonlabModule != null && _moonlabGpuAmpBufferPtr !== 0 && typeof _moonlabModule._gpu_buffer_free === 'function' )
+		_moonlabModule._gpu_buffer_free( _moonlabGpuAmpBufferPtr );
+
+	if ( _moonlabModule != null && _moonlabGpuReadbackPtr !== 0 )
+		_moonlabModule._free( _moonlabGpuReadbackPtr );
+
+	_moonlabGpuAmpBufferPtr = 0;
+	_moonlabGpuReadbackPtr = 0;
+
+}
+
+function _releaseMoonlabGpuContext() {
+
+	_freeMoonlabGpuResources();
+
+	if ( _moonlabModule != null && _moonlabGpuCtxPtr !== 0 && typeof _moonlabModule._gpu_compute_free === 'function' )
+		_moonlabModule._gpu_compute_free( _moonlabGpuCtxPtr );
+
+	_moonlabGpuCtxPtr = 0;
+	_moonlabGpuNative = false;
+	_moonlabUsingGpu = false;
+
+}
+
+function _moonlabGpuCallHadamard( module, ctxPtr, bufferPtr, qubit, stateDim ) {
+
+	if ( typeof module._gpu_hadamard_u32 === 'function' )
+		return module._gpu_hadamard_u32( ctxPtr, bufferPtr, qubit, stateDim >>> 0 );
+
+	if ( typeof module._gpu_hadamard === 'function' )
+		return module._gpu_hadamard( ctxPtr, bufferPtr, qubit, BigInt( stateDim ) );
+
+	return -7;
+
+}
+
+function _moonlabGpuCallPhase( module, ctxPtr, bufferPtr, qubit, theta, stateDim ) {
+
+	if ( typeof module._gpu_phase_u32 === 'function' )
+		return module._gpu_phase_u32( ctxPtr, bufferPtr, qubit, theta, stateDim >>> 0 );
+
+	if ( typeof module._gpu_phase === 'function' )
+		return module._gpu_phase( ctxPtr, bufferPtr, qubit, theta, BigInt( stateDim ) );
+
+	return -7;
+
+}
+
+function _moonlabGpuCallCnot( module, ctxPtr, bufferPtr, control, target, stateDim ) {
+
+	if ( typeof module._gpu_cnot_u32 === 'function' )
+		return module._gpu_cnot_u32( ctxPtr, bufferPtr, control, target, stateDim >>> 0 );
+
+	if ( typeof module._gpu_cnot === 'function' )
+		return module._gpu_cnot( ctxPtr, bufferPtr, control, target, BigInt( stateDim ) );
+
+	return -7;
+
+}
+
+function _sampleMoonlabCollapseStateFromAmplitudes( heap, ampBase, dim, randomValue ) {
+
+	const target = _clamp( randomValue, 0, 0.999999999999 );
+	let cumulative = 0;
+
+	for ( let i = 0; i < dim; i ++ ) {
+
+		const re = heap[ ampBase + i * 2 ];
+		const im = heap[ ampBase + i * 2 + 1 ];
+		cumulative += re * re + im * im;
+		if ( target <= cumulative )
+			return i;
+
+	}
+
+	return dim - 1;
+
+}
+
 function _initMoonlab() {
 
 	if ( _moonlabModule != null || _moonlabInitPromise != null || _moonlabFailed )
@@ -2770,12 +2915,24 @@ function _initMoonlab() {
 		.then( function () {
 
 			Con_Printf( 'Quantum renderer: MoonLab WASM loaded\n' );
-			_ensureMoonlabState();
+			if ( _ensureMoonlabState() === true ) {
+
+				if ( _moonlabUsingGpu )
+					Con_Printf( _moonlabGpuNative ? 'Quantum renderer: MoonLab WebGPU active\n' : 'Quantum renderer: MoonLab WebGPU fallback active\n' );
+				else
+					Con_Printf( 'Quantum renderer: MoonLab CPU backend active\n' );
+
+			} else {
+
+				Con_Printf( 'Quantum renderer: MoonLab state init failed, using fallback noise\n' );
+
+			}
 
 		} )
 		.catch( function ( e ) {
 
 			_moonlabFailed = true;
+			_releaseMoonlabGpuContext();
 			Con_Printf( 'Quantum renderer: MoonLab init failed, fallback active\n' );
 			console.error( e );
 
@@ -2785,13 +2942,31 @@ function _initMoonlab() {
 
 function _freeMoonlabState() {
 
-	if ( _moonlabModule == null || _moonlabStatePtr === 0 )
+	if ( _moonlabModule == null ) {
+
+		_moonlabStatePtr = 0;
+		_moonlabGpuCtxPtr = 0;
+		_moonlabGpuAmpBufferPtr = 0;
+		_moonlabGpuReadbackPtr = 0;
+		_moonlabGpuNative = false;
+		_moonlabQubits = 0;
+		_moonlabUsingGpu = false;
 		return;
 
-	_moonlabModule._quantum_state_free( _moonlabStatePtr );
-	_moonlabModule._free( _moonlabStatePtr );
-	_moonlabStatePtr = 0;
+	}
+
+	_freeMoonlabGpuResources();
+
+	if ( _moonlabStatePtr !== 0 ) {
+
+		_moonlabModule._quantum_state_free( _moonlabStatePtr );
+		_moonlabModule._free( _moonlabStatePtr );
+		_moonlabStatePtr = 0;
+
+	}
+
 	_moonlabQubits = 0;
+	_moonlabUsingGpu = false;
 
 }
 
@@ -2801,10 +2976,46 @@ function _ensureMoonlabState() {
 		return false;
 
 	const qubits = _clampInt( r_quantum_qubits.value, 2, 12 );
-	if ( _moonlabStatePtr !== 0 && _moonlabQubits === qubits )
+	const hasGpuState = _moonlabGpuCtxPtr !== 0 && _moonlabGpuAmpBufferPtr !== 0 && _moonlabGpuReadbackPtr !== 0;
+	const hasCpuState = _moonlabStatePtr !== 0;
+	if ( _moonlabQubits === qubits && ( ( _moonlabUsingGpu && hasGpuState ) || ( _moonlabUsingGpu === false && hasCpuState ) ) )
 		return true;
 
 	_freeMoonlabState();
+
+	const dim = 1 << qubits;
+	const ampBytes = dim * 2 * 8;
+
+	if ( _moonlabGpuBlocked === false && _initMoonlabGpuContext() === true ) {
+
+		_moonlabGpuReadbackPtr = _moonlabModule._malloc( ampBytes );
+		if ( _moonlabGpuReadbackPtr !== 0 ) {
+
+			const heap = _moonlabModule.HEAPF64;
+			const base = _moonlabGpuReadbackPtr >> 3;
+			for ( let i = 0; i < dim * 2; i ++ )
+				heap[ base + i ] = 0;
+			heap[ base ] = 1;
+
+			_moonlabGpuAmpBufferPtr = _moonlabModule._gpu_buffer_create_from_data( _moonlabGpuCtxPtr, _moonlabGpuReadbackPtr, ampBytes );
+			if ( _moonlabGpuAmpBufferPtr !== 0 ) {
+
+				_moonlabUsingGpu = true;
+				_moonlabGpuNative = typeof _moonlabModule._gpu_is_native_accelerated === 'function' &&
+					_moonlabModule._gpu_is_native_accelerated( _moonlabGpuCtxPtr ) !== 0;
+				_moonlabQubits = qubits;
+				_moonlabCollapseState = 0;
+				_moonlabFrame = 0;
+				_clearAccumTargets();
+				return true;
+
+			}
+
+		}
+
+		_freeMoonlabGpuResources();
+
+	}
 
 	_moonlabStatePtr = _moonlabModule._malloc( STATE_STRUCT_SIZE );
 	if ( _moonlabStatePtr === 0 ) {
@@ -2824,6 +3035,7 @@ function _ensureMoonlabState() {
 
 	}
 
+	_moonlabUsingGpu = false;
 	_moonlabQubits = qubits;
 	_moonlabCollapseState = 0;
 	_moonlabFrame = 0;
@@ -2870,30 +3082,98 @@ function _populateMoonlabPhaseTexture() {
 
 	}
 
+	const module = _moonlabModule;
 	const depth = _clampInt( r_quantum_depth.value, 1, 24 );
 	const dim = 1 << _moonlabQubits;
 	const mask = dim - 1;
 	const collapseState = _toNumber( _moonlabCollapseState, 0 ) | 0;
+	const useGpu = _moonlabUsingGpu && _moonlabGpuCtxPtr !== 0 && _moonlabGpuAmpBufferPtr !== 0;
 
 	for ( let i = 0; i < depth; i ++ ) {
 
 		const q = ( _moonlabFrame + i * 3 ) % _moonlabQubits;
 		const phaseAngle = Math.sin( ( _moonlabFrame + i * 1.37 ) * 0.21 + collapseState * 0.0007 ) * Math.PI;
-		_moonlabModule._gate_hadamard( _moonlabStatePtr, q );
-		_moonlabModule._gate_rz( _moonlabStatePtr, q, phaseAngle );
+		let rc = 0;
 
-		if ( _moonlabQubits > 1 ) {
+		if ( useGpu ) {
 
-			const target = ( q + 1 + ( ( _moonlabFrame + i ) % ( _moonlabQubits - 1 ) ) ) % _moonlabQubits;
-			_moonlabModule._gate_cnot( _moonlabStatePtr, q, target );
+			rc = _moonlabGpuCallHadamard( module, _moonlabGpuCtxPtr, _moonlabGpuAmpBufferPtr, q, dim );
+			if ( rc === 0 )
+				rc = _moonlabGpuCallPhase( module, _moonlabGpuCtxPtr, _moonlabGpuAmpBufferPtr, q, phaseAngle, dim );
+
+			if ( rc === 0 && _moonlabQubits > 1 ) {
+
+				const target = ( q + 1 + ( ( _moonlabFrame + i ) % ( _moonlabQubits - 1 ) ) ) % _moonlabQubits;
+				rc = _moonlabGpuCallCnot( module, _moonlabGpuCtxPtr, _moonlabGpuAmpBufferPtr, q, target, dim );
+
+			}
+
+		} else {
+
+			module._gate_hadamard( _moonlabStatePtr, q );
+			module._gate_rz( _moonlabStatePtr, q, phaseAngle );
+
+			if ( _moonlabQubits > 1 ) {
+
+				const target = ( q + 1 + ( ( _moonlabFrame + i ) % ( _moonlabQubits - 1 ) ) ) % _moonlabQubits;
+				module._gate_cnot( _moonlabStatePtr, q, target );
+
+			}
+
+		}
+
+		if ( useGpu && rc !== 0 ) {
+
+			Con_Printf( 'Quantum renderer: MoonLab WebGPU gate failed, switching to CPU backend\n' );
+			_moonlabGpuBlocked = true;
+			_releaseMoonlabGpuContext();
+			_moonlabQubits = 0;
+			if ( _ensureMoonlabState() !== true ) {
+
+				_populateFallbackPhaseTexture();
+				return;
+
+			}
+
+			_populateMoonlabPhaseTexture();
+			return;
 
 		}
 
 	}
 
-	const ampPtr = _moonlabModule.HEAP32[ ( _moonlabStatePtr + AMPLITUDE_PTR_OFFSET ) >> 2 ] >>> 0;
-	const heap = _moonlabModule.HEAPF64;
-	const ampBase = ampPtr >> 3;
+	let heap = module.HEAPF64;
+	let ampBase = 0;
+	if ( useGpu ) {
+
+		const readRc = module._gpu_buffer_read( _moonlabGpuAmpBufferPtr, _moonlabGpuReadbackPtr, dim * 2 * 8, 0 );
+		if ( readRc !== 0 ) {
+
+			Con_Printf( 'Quantum renderer: MoonLab WebGPU readback failed, switching to CPU backend\n' );
+			_moonlabGpuBlocked = true;
+			_releaseMoonlabGpuContext();
+			_moonlabQubits = 0;
+			if ( _ensureMoonlabState() !== true ) {
+
+				_populateFallbackPhaseTexture();
+				return;
+
+			}
+
+			_populateMoonlabPhaseTexture();
+			return;
+
+		}
+
+		ampBase = _moonlabGpuReadbackPtr >> 3;
+
+	} else {
+
+		const ampPtr = module.HEAP32[ ( _moonlabStatePtr + AMPLITUDE_PTR_OFFSET ) >> 2 ] >>> 0;
+		ampBase = ampPtr >> 3;
+
+	}
+
 	const phaseOffset = ( collapseState ^ ( _moonlabFrame * 17 ) ) & mask;
 
 	for ( let i = 0; i < PHASE_TEXEL_COUNT; i ++ ) {
@@ -2927,8 +3207,19 @@ function _populateMoonlabPhaseTexture() {
 	}
 
 	const measurementRand = _pseudoRandom( _moonlabFrame * 12.9898 + collapseState * 0.31337 + 0.1337 );
-	const measured = _moonlabModule._measurement_all_qubits( _moonlabStatePtr, measurementRand );
-	_moonlabCollapseState = _toNumber( measured, 0 ) | 0;
+	if ( useGpu ) {
+
+		_moonlabCollapseState = _sampleMoonlabCollapseStateFromAmplitudes( heap, ampBase, dim, measurementRand );
+		if ( typeof module._gpu_is_native_accelerated === 'function' )
+			_moonlabGpuNative = module._gpu_is_native_accelerated( _moonlabGpuCtxPtr ) !== 0;
+
+	} else {
+
+		const measured = module._measurement_all_qubits( _moonlabStatePtr, measurementRand );
+		_moonlabCollapseState = _toNumber( measured, 0 ) | 0;
+
+	}
+
 	_moonlabFrame ++;
 
 }
@@ -3298,7 +3589,15 @@ function _syncUi() {
 
 	} else if ( _moonlabModule != null ) {
 
-		_uiStatus.textContent = 'MoonLab: ready';
+		if ( _moonlabUsingGpu ) {
+
+			_uiStatus.textContent = _moonlabGpuNative ? 'MoonLab: webgpu native' : 'MoonLab: webgpu fallback';
+
+		} else {
+
+			_uiStatus.textContent = 'MoonLab: cpu backend';
+
+		}
 
 	} else if ( _moonlabFailed ) {
 
