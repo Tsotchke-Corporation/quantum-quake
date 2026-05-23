@@ -361,6 +361,10 @@ class PublicationPackTests(unittest.TestCase):
                 publication_pack.explicit_breadth_evidence_failure(breadth))
             self.assertEqual(breadth["map_count"], 4)
             self.assertEqual(
+                breadth["full_game_map_coverage_status"], "partial")
+            self.assertEqual(breadth["full_game_map_target_count"], 32)
+            self.assertEqual(breadth["full_game_map_covered_count"], 4)
+            self.assertEqual(
                 breadth["total_runtime_backend_probe_event_count"], 16)
 
         resource_envelope = publication_pack.build_resource_envelope(
@@ -424,6 +428,13 @@ class PublicationPackTests(unittest.TestCase):
             resource_envelope["domains"]["light_transport_qae_benchmark"]
             ["logical_qubits"],
             11)
+        self.assertEqual(
+            resource_envelope["domains"]["full_game_map_coverage"]["status"],
+            "partial")
+        self.assertEqual(
+            resource_envelope["domains"]["full_game_map_coverage"]
+            ["covered_map_count"],
+            4)
         with tempfile.TemporaryDirectory() as tmp:
             jobs_tmp = Path(tmp)
             oracle_scene_path = jobs_tmp / "oracle_scene.json"
@@ -434,6 +445,7 @@ class PublicationPackTests(unittest.TestCase):
             vanilla_matrix_path = jobs_tmp / "vanilla_capture_matrix.json"
             performance_path = jobs_tmp / "qge_perf_summary.json"
             breadth_path = jobs_tmp / "breadth_evidence.json"
+            full_game_path = jobs_tmp / "qge_full_game_map_coverage.json"
             publication_pack.write_json(oracle_scene_path, {"scene": {}})
             publication_pack.write_json(
                 advantage_metrics_path,
@@ -478,6 +490,10 @@ class PublicationPackTests(unittest.TestCase):
                     "total_native_bridge_count": 420,
                 },
             )
+            publication_pack.write_json(
+                full_game_path,
+                resource_envelope["domains"]["full_game_map_coverage"],
+            )
             moonlab_job_specs = publication_pack.build_moonlab_job_specs(
                 resource_envelope,
                 {
@@ -489,6 +505,7 @@ class PublicationPackTests(unittest.TestCase):
                     "vanilla_matrix": str(vanilla_matrix_path),
                     "performance_summary": str(performance_path),
                     "breadth_evidence": str(breadth_path),
+                    "full_game_map_coverage": str(full_game_path),
                 },
             )
             moonlab_job_results = (
@@ -497,9 +514,12 @@ class PublicationPackTests(unittest.TestCase):
             )
             self.assertEqual(
                 moonlab_job_specs["schema"], "qge.moonlab_job_specs.v0")
-            self.assertEqual(moonlab_job_specs["selected_job_count"], 3)
+            self.assertEqual(moonlab_job_specs["selected_job_count"], 4)
             self.assertEqual(
                 moonlab_job_specs["hardware_candidate_job_count"], 1)
+            self.assertEqual(
+                moonlab_job_specs["full_game_map_coverage_status"],
+                "partial")
             self.assertFalse(
                 moonlab_job_specs["posture"]
                 ["whole_game_hardware_execution_claimed"])
@@ -509,7 +529,7 @@ class PublicationPackTests(unittest.TestCase):
             self.assertEqual(
                 moonlab_job_results["schema"], "qge.moonlab_job_results.v0")
             self.assertEqual(
-                moonlab_job_results["completed_simulator_job_count"], 3)
+                moonlab_job_results["completed_simulator_job_count"], 4)
             self.assertEqual(
                 moonlab_job_results["completed_native_replay_job_count"], 2)
             self.assertEqual(
@@ -543,7 +563,7 @@ class PublicationPackTests(unittest.TestCase):
             self.assertEqual(
                 moonlab_cli_results["schema"], "qge.moonlab_job_results.v0")
             self.assertEqual(
-                moonlab_cli_results["completed_simulator_job_count"], 3)
+                moonlab_cli_results["completed_simulator_job_count"], 4)
             moonlab_replay_plan = (
                 moonlab_job_runner.build_moonlab_replay_plan(
                     moonlab_job_specs,
@@ -556,7 +576,7 @@ class PublicationPackTests(unittest.TestCase):
                 moonlab_replay_plan["schema"],
                 "qge.moonlab_replay_plan.v0")
             self.assertEqual(
-                moonlab_replay_plan["selected_job_count"], 3)
+                moonlab_replay_plan["selected_job_count"], 4)
             self.assertEqual(
                 moonlab_replay_plan["hardware_submitted_job_count"], 0)
             self.assertIn(
@@ -590,7 +610,7 @@ class PublicationPackTests(unittest.TestCase):
                 moonlab_replay_plan_path)
             self.assertEqual(
                 replay_plan_json["schema"], "qge.moonlab_replay_plan.v0")
-            self.assertEqual(replay_plan_json["selected_job_count"], 3)
+            self.assertEqual(replay_plan_json["selected_job_count"], 4)
             self.assertEqual(
                 replay_plan_json["jobs"][0]["validation_checks"][0]
                 ["status"],
@@ -610,6 +630,9 @@ class PublicationPackTests(unittest.TestCase):
                 },
                 "resource": {
                     "envelope": {"path": "resource/qge_resource_envelope.json"},
+                    "full_game_map_coverage": {
+                        "path": "resource/qge_full_game_map_coverage.json"
+                    },
                     "native_backend_boundary": {
                         "path": "resource/qge_native_backend_boundary.json"
                     },
@@ -649,19 +672,19 @@ class PublicationPackTests(unittest.TestCase):
             },
             "advantage_summary": {
                 "moonlab_job_specs_summary": {
-                    "selected_job_count": 3,
+                    "selected_job_count": 4,
                     "hardware_candidate_job_count": 1,
                 },
                 "moonlab_job_results_summary": {
                     "overall_status": "simulator_complete_hardware_not_submitted",
-                    "completed_simulator_job_count": 3,
+                    "completed_simulator_job_count": 4,
                     "completed_native_replay_job_count": 2,
                     "hardware_submitted_job_count": 0,
                     "blocked_job_count": 0,
                 },
                 "moonlab_replay_plan_summary": {
                     "schema": "qge.moonlab_replay_plan.v0",
-                    "selected_job_count": 3,
+                    "selected_job_count": 4,
                     "hardware_candidate_job_count": 1,
                     "hardware_submitted_job_count": 0,
                     "blocked_job_count": 0,
@@ -671,6 +694,12 @@ class PublicationPackTests(unittest.TestCase):
                     "required_target_count": 3,
                     "passed_target_count": 3,
                     "blocked_target_count": 0,
+                },
+                "full_game_map_coverage_summary": {
+                    "status": "partial",
+                    "target_map_count": 32,
+                    "covered_map_count": 4,
+                    "missing_map_count": 28,
                 },
             },
             "runtime_summary": {
@@ -684,6 +713,10 @@ class PublicationPackTests(unittest.TestCase):
                 "performance_ok": True,
                 "breadth_ready_for_complete_claim": True,
                 "breadth_map_count": 4,
+                "full_game_map_coverage_status": "partial",
+                "full_game_map_target_count": 32,
+                "full_game_map_covered_count": 4,
+                "full_game_map_missing_count": 28,
                 "breadth_total_native_bridge_count": 420,
                 "breadth_total_runtime_backend_probe_event_count": 16,
                 "breadth_runtime_backend_probe_resolved_run_count": 4,
@@ -705,6 +738,13 @@ class PublicationPackTests(unittest.TestCase):
             icc["resource_envelope_file"],
             "resource/qge_resource_envelope.json")
         self.assertEqual(
+            icc["full_game_map_coverage_file"],
+            "resource/qge_full_game_map_coverage.json")
+        self.assertEqual(icc["full_game_map_coverage_status"], "partial")
+        self.assertEqual(icc["full_game_map_target_count"], 32)
+        self.assertEqual(icc["full_game_map_covered_count"], 4)
+        self.assertEqual(icc["full_game_map_missing_count"], 28)
+        self.assertEqual(
             icc["native_backend_boundary_file"],
             "resource/qge_native_backend_boundary.json")
         self.assertEqual(icc["native_backend_boundary_status"], "pass")
@@ -722,9 +762,9 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(
             icc["moonlab_replay_plan_schema"],
             "qge.moonlab_replay_plan.v0")
-        self.assertEqual(icc["moonlab_selected_job_count"], 3)
+        self.assertEqual(icc["moonlab_selected_job_count"], 4)
         self.assertEqual(icc["moonlab_hardware_candidate_job_count"], 1)
-        self.assertEqual(icc["moonlab_completed_simulator_job_count"], 3)
+        self.assertEqual(icc["moonlab_completed_simulator_job_count"], 4)
         self.assertEqual(icc["moonlab_completed_native_replay_job_count"], 2)
         self.assertEqual(icc["moonlab_hardware_submitted_job_count"], 0)
         self.assertEqual(
@@ -892,6 +932,19 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(aggregate["matrix_run_count"], 2)
             self.assertEqual(aggregate["map_count"], 2)
             self.assertEqual(aggregate["maps"], ["e1m1", "e1m2"])
+            self.assertEqual(
+                manifest["full_game_coverage"]["schema"],
+                "qge.full_game_map_coverage.v0",
+            )
+            self.assertEqual(
+                aggregate["full_game_map_coverage_status"], "partial")
+            self.assertEqual(aggregate["full_game_map_target_count"], 32)
+            self.assertEqual(aggregate["full_game_map_covered_count"], 2)
+            self.assertEqual(aggregate["full_game_map_missing_count"], 30)
+            self.assertIn(
+                "start",
+                aggregate["full_game_map_missing_maps"],
+            )
             self.assertEqual(aggregate["total_fallback_count"], 0)
             self.assertGreater(aggregate["total_native_bridge_count"], 0)
             self.assertEqual(aggregate["total_backend_gate_event_count"], 6)
@@ -931,6 +984,10 @@ class BreadthEvidenceTests(unittest.TestCase):
                 "qge_breadth_evidence_pack_complete",
             )
             self.assertTrue(icc["breadth_ready_for_complete_claim"])
+            self.assertEqual(icc["full_game_map_coverage_status"], "partial")
+            self.assertEqual(icc["full_game_map_target_count"], 32)
+            self.assertEqual(icc["full_game_map_covered_count"], 2)
+            self.assertEqual(icc["full_game_map_missing_count"], 30)
             self.assertEqual(icc["total_backend_gate_event_count"], 6)
             self.assertEqual(icc["total_runtime_backend_probe_event_count"], 6)
             self.assertEqual(icc["runtime_backend_probe_resolved_run_count"], 2)

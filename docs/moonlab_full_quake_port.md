@@ -51,18 +51,20 @@ when all of these are true:
 
 The full-port acceptance target is the ICC completion oracle
 `qge_vanilla_quake_conformance`. As of
-`diagnostics/publication_pack/20260523-125637`, ICC reports
+`diagnostics/publication_pack/20260523-132000`, ICC reports
 `qge_vanilla_runtime_complete` ready for the bundled e1m1 QGE/vanilla capture
 matrix. That evidence proves the ownership counters for the captured workload;
 it does not by itself close renderer fidelity, all-map breadth, or whole-game
 hardware deployment claims. The bundled `resource/qge_resource_envelope.json`
 states the current Moonlab simulator/native-backend posture, and
+`resource/qge_full_game_map_coverage.json` records the canonical registered
+single-player map ledger: 4/32 maps covered, 28 maps pending, status `partial`.
 `resource/qge_native_backend_boundary.json` records the native bridge boundary
 verdict for `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`,
 and `qge_metal_init_common`.
 `resource/qge_moonlab_job_specs.json` breaks that posture into selected replay
 and benchmark jobs. `resource/qge_moonlab_job_results.json` records the local
-simulator/native replay results: three simulator jobs completed, two native
+simulator/native replay results: four simulator jobs completed, two native
 replay jobs completed, zero blocked jobs, and zero hardware submissions.
 `resource/qge_moonlab_replay_plan.json` records the replay/validation contract
 for those selected jobs, including which artifacts must be present and which
@@ -232,8 +234,8 @@ A complete port is credible when these are true:
 
 ## Immediate Implementation Order
 
-1. Expand the ready matrix beyond the current publication capture and four-map
-   breadth sidecar.
+1. Expand the ready matrix beyond the current publication capture and the
+   4/32 partial full-game map coverage ledger.
 2. Improve `quantum_render 2` visual fidelity without weakening ownership
    counters or native sparse-DWT evidence.
 3. Move particles/projectile visuals from separate effects into the scene graph.

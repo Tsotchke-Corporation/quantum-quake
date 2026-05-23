@@ -633,7 +633,7 @@ Known current visual state:
   fixed-view renderer comparisons.
 - `tools/qge_breadth_evidence.py --min-maps` now enforces distinct-map breadth
   in addition to strict ownership counters. The current strongest breadth pack
-  is `diagnostics/breadth_evidence/20260523-022036`, covering four ready
+  is `diagnostics/breadth_evidence/20260523-131947`, covering four ready
   Noesis-fire matrices across `e1m1`, `e1m2`, `e1m3`, and `e1m4` with zero
   fallback, zero surrogate, zero CPU-IDWT, 420 native bridge events, 12 parsed
   backend-gate events, and 16 native backend runtime-probe events across
@@ -642,19 +642,24 @@ Known current visual state:
   publication artifacts now carry per-target `runtime_backend_probe_proofs`,
   resolved/missing/native target sets, and
   `resource/qge_native_backend_boundary.json` so native backend evidence is
-  auditable by boundary instead of only as aggregate counts.
+  auditable by boundary instead of only as aggregate counts. The same breadth
+  sidecar now emits `qge.full_game_map_coverage.v0` full-game map coverage:
+  the canonical registered single-player ledger is 4/32 covered, 28 missing,
+  status `partial`.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
-  publication pack is `diagnostics/publication_pack/20260523-125637`, with
+  publication pack is `diagnostics/publication_pack/20260523-132000`, with
   `qge_publication_artifact_pack_complete`, the e1m1 ready vanilla/QGE capture,
   vanilla ICC evidence sidecar, agent stream, oracle/claims exports, QAE
   benchmark artifacts, `resource/qge_resource_envelope.json`,
+  `resource/qge_full_game_map_coverage.json`,
   `resource/qge_native_backend_boundary.json`,
   `resource/qge_moonlab_job_specs.json`,
   `resource/qge_moonlab_job_results.json`,
   `resource/qge_moonlab_replay_plan.json`, and the four-map breadth counters
-  plus per-target native backend proof maps. The job results complete three
-  simulator jobs and two native replay jobs with zero blocked jobs and zero
+  plus per-target native backend proof maps. The job results complete four
+  simulator jobs total: the three simulator/native evidence jobs plus the
+  coverage-ledger replay, with two native replay jobs, zero blocked jobs, zero
   hardware submissions; `tools/qge_moonlab_job_runner.py` regenerates that
   result evidence directly from the job-spec artifact, can compare it to the
   packed expected results, and can emit the replay plan. The resource artifacts

@@ -26,6 +26,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import qge_advantage_benchmark  # noqa: E402
+import qge_breadth_evidence  # noqa: E402
 import qge_moonlab_job_runner  # noqa: E402
 import qge_oracle_export  # noqa: E402
 import qge_perf_summary  # noqa: E402
@@ -237,6 +238,9 @@ def resolve_breadth_evidence_path(path: Path | None) -> Path | None:
 
 def breadth_evidence_summary(path: Path | None) -> dict[str, Any]:
     path = resolve_breadth_evidence_path(path)
+    default_full_game_coverage = (
+        qge_breadth_evidence.build_full_game_map_coverage([])
+    )
     summary: dict[str, Any] = {
         "path": str(path) if path else None,
         "exists": bool(path and path.is_file()),
@@ -246,6 +250,18 @@ def breadth_evidence_summary(path: Path | None) -> dict[str, Any]:
         "ready_matrix_run_count": None,
         "map_count": None,
         "maps": [],
+        "full_game_coverage": default_full_game_coverage,
+        "full_game_map_set": default_full_game_coverage["map_set"],
+        "full_game_map_coverage_status": default_full_game_coverage["status"],
+        "full_game_map_target_count": (
+            default_full_game_coverage["target_map_count"]),
+        "full_game_map_covered_count": (
+            default_full_game_coverage["covered_map_count"]),
+        "full_game_map_missing_count": (
+            default_full_game_coverage["missing_map_count"]),
+        "full_game_map_missing_maps": (
+            default_full_game_coverage["missing_maps"]),
+        "full_game_map_extra_maps": default_full_game_coverage["extra_maps"],
         "total_fallback_count": None,
         "total_surrogate_count": None,
         "total_cpu_idwt_count": None,
@@ -281,6 +297,13 @@ def breadth_evidence_summary(path: Path | None) -> dict[str, Any]:
         "ready_matrix_run_count",
         "map_count",
         "maps",
+        "full_game_map_set",
+        "full_game_map_coverage_status",
+        "full_game_map_target_count",
+        "full_game_map_covered_count",
+        "full_game_map_missing_count",
+        "full_game_map_missing_maps",
+        "full_game_map_extra_maps",
         "total_fallback_count",
         "total_surrogate_count",
         "total_cpu_idwt_count",
@@ -302,6 +325,26 @@ def breadth_evidence_summary(path: Path | None) -> dict[str, Any]:
     ):
         if key in aggregate:
             summary[key] = aggregate.get(key)
+    maps = summary.get("maps")
+    if not isinstance(maps, list):
+        maps = []
+        summary["maps"] = maps
+    full_game_coverage = full_game_coverage_from_summary(
+        aggregate.get("full_game_coverage"),
+        maps,
+    )
+    summary["full_game_coverage"] = full_game_coverage
+    summary["full_game_map_set"] = full_game_coverage.get("map_set")
+    summary["full_game_map_coverage_status"] = full_game_coverage.get("status")
+    summary["full_game_map_target_count"] = full_game_coverage.get(
+        "target_map_count")
+    summary["full_game_map_covered_count"] = full_game_coverage.get(
+        "covered_map_count")
+    summary["full_game_map_missing_count"] = full_game_coverage.get(
+        "missing_map_count")
+    summary["full_game_map_missing_maps"] = full_game_coverage.get(
+        "missing_maps")
+    summary["full_game_map_extra_maps"] = full_game_coverage.get("extra_maps")
     summary["status"] = data.get("status")
     return summary
 
@@ -348,6 +391,17 @@ def dict_or_empty(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def full_game_coverage_from_summary(
+    value: Any,
+    maps: list[Any],
+) -> dict[str, Any]:
+    if isinstance(value, dict) and value.get("schema") == (
+        "qge.full_game_map_coverage.v0"
+    ):
+        return value
+    return qge_breadth_evidence.build_full_game_map_coverage(maps)
+
+
 def build_resource_envelope(
     oracle_scene: dict[str, Any],
     advantage_metrics: dict[str, Any],
@@ -385,6 +439,10 @@ def build_resource_envelope(
         and int_or_none(render.get("cpu_idwt")) == 0
     )
     breadth_ready = bool(breadth.get("breadth_ready_for_complete_claim"))
+    full_game_coverage = full_game_coverage_from_summary(
+        breadth.get("full_game_coverage"),
+        breadth.get("maps") if isinstance(breadth.get("maps"), list) else [],
+    )
     resource_envelope = {
         "schema": "qge.resource_envelope.v0",
         "posture": {
@@ -474,6 +532,23 @@ def build_resource_envelope(
                 "total_native_bridge_count": breadth.get(
                     "total_native_bridge_count"),
             },
+            "full_game_map_coverage": {
+                "status": full_game_coverage.get("status"),
+                "map_set": full_game_coverage.get("map_set"),
+                "target_map_count": full_game_coverage.get(
+                    "target_map_count"),
+                "covered_map_count": full_game_coverage.get(
+                    "covered_map_count"),
+                "missing_map_count": full_game_coverage.get(
+                    "missing_map_count"),
+                "coverage_ratio": full_game_coverage.get("coverage_ratio"),
+                "covered_maps": full_game_coverage.get("covered_maps"),
+                "missing_maps": full_game_coverage.get("missing_maps"),
+                "hardware_deployment": (
+                    "not a hardware job; this is the explicit coverage ledger "
+                    "for canonical single-player map evidence"
+                ),
+            },
         },
         "limits": [
             "No unrestricted dense all-game state is claimed.",
@@ -495,6 +570,7 @@ def build_moonlab_job_specs(
     qae = dict_or_empty(domains.get("light_transport_qae_benchmark"))
     runtime = dict_or_empty(domains.get("runtime_backend_probes"))
     breadth = dict_or_empty(domains.get("breadth_capture_matrix"))
+    full_game = dict_or_empty(domains.get("full_game_map_coverage"))
     jobs = [
         {
             "job_id": "qge.render_primary_framebuffer.sparse_dwt_replay.v0",
@@ -597,6 +673,36 @@ def build_moonlab_job_specs(
                 "Breadth evidence preserves the same target resolution across maps.",
             ],
         },
+        {
+            "job_id": "qge.full_game_map_coverage.ledger.v0",
+            "domain": "full_game_map_coverage",
+            "kind": "moonlab_coverage_ledger_replay",
+            "status": full_game.get("status"),
+            "backend_targets": ["qge_coverage_ledger"],
+            "hardware_candidate": False,
+            "hardware_submission_status": "not_a_quantum_hardware_job",
+            "resource": {
+                "map_set": full_game.get("map_set"),
+                "target_map_count": full_game.get("target_map_count"),
+                "covered_map_count": full_game.get("covered_map_count"),
+                "missing_map_count": full_game.get("missing_map_count"),
+                "coverage_ratio": full_game.get("coverage_ratio"),
+                "missing_maps": full_game.get("missing_maps"),
+            },
+            "required_artifacts": {
+                "full_game_map_coverage": artifact_paths.get(
+                    "full_game_map_coverage"),
+            },
+            "fallback_policy": (
+                "ledger remains partial until every target map has a ready "
+                "QGE/Moonlab evidence run"
+            ),
+            "success_criteria": [
+                "Every canonical registered single-player map is enumerated.",
+                "Covered and missing maps are recorded without implication.",
+                "A whole-game claim is allowed only when missing_map_count is zero.",
+            ],
+        },
     ]
     hardware_candidate_count = sum(
         1 for job in jobs if bool(job.get("hardware_candidate")))
@@ -619,6 +725,9 @@ def build_moonlab_job_specs(
         "selected_job_count": len(jobs),
         "hardware_candidate_job_count": hardware_candidate_count,
         "breadth_map_count": breadth.get("map_count"),
+        "full_game_map_coverage_status": full_game.get("status"),
+        "full_game_map_covered_count": full_game.get("covered_map_count"),
+        "full_game_map_target_count": full_game.get("target_map_count"),
         "jobs": jobs,
         "limits": [
             "Hardware-candidate jobs are not hardware results until submitted.",
@@ -944,6 +1053,15 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     )
     resource_path = args.outdir / "resource" / "qge_resource_envelope.json"
     write_json(resource_path, resource_envelope)
+    full_game_map_coverage = full_game_coverage_from_summary(
+        breadth_summary.get("full_game_coverage"),
+        breadth_summary.get("maps")
+        if isinstance(breadth_summary.get("maps"), list) else [],
+    )
+    full_game_map_coverage_path = (
+        args.outdir / "resource" / "qge_full_game_map_coverage.json"
+    )
+    write_json(full_game_map_coverage_path, full_game_map_coverage)
     native_backend_boundary = capture_perf_summary.get(
         "runtime_backend_boundary")
     if not isinstance(native_backend_boundary, dict):
@@ -967,6 +1085,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 capture_artifacts["performance_summary"]["packed"]["path"]),
             "breadth_evidence": (
                 breadth_artifacts["evidence"]["packed"]["path"]),
+            "full_game_map_coverage": str(full_game_map_coverage_path),
         },
     )
     moonlab_job_specs_path = (
@@ -992,6 +1111,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     write_json(moonlab_replay_plan_path, moonlab_replay_plan)
     resource_artifacts = {
         "envelope": file_info(resource_path),
+        "full_game_map_coverage": file_info(full_game_map_coverage_path),
         "native_backend_boundary": file_info(native_backend_boundary_path),
         "moonlab_job_specs": file_info(moonlab_job_specs_path),
         "moonlab_job_results": file_info(moonlab_job_results_path),
@@ -1134,6 +1254,18 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "ready_matrix_run_count"),
             "breadth_map_count": breadth_summary.get("map_count"),
             "breadth_maps": breadth_summary.get("maps"),
+            "full_game_map_coverage": full_game_map_coverage,
+            "full_game_map_set": full_game_map_coverage.get("map_set"),
+            "full_game_map_coverage_status": (
+                full_game_map_coverage.get("status")),
+            "full_game_map_target_count": (
+                full_game_map_coverage.get("target_map_count")),
+            "full_game_map_covered_count": (
+                full_game_map_coverage.get("covered_map_count")),
+            "full_game_map_missing_count": (
+                full_game_map_coverage.get("missing_map_count")),
+            "full_game_map_missing_maps": (
+                full_game_map_coverage.get("missing_maps")),
             "breadth_total_fallback_count": breadth_summary.get(
                 "total_fallback_count"),
             "breadth_total_surrogate_count": breadth_summary.get(
@@ -1173,6 +1305,16 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "best_qae": metrics.get("comparison", {}).get("best_qae"),
             "resource_estimate": metrics.get("resource_estimate"),
             "resource_envelope_summary": resource_envelope.get("posture"),
+            "full_game_map_coverage_summary": {
+                "status": full_game_map_coverage.get("status"),
+                "map_set": full_game_map_coverage.get("map_set"),
+                "target_map_count": full_game_map_coverage.get(
+                    "target_map_count"),
+                "covered_map_count": full_game_map_coverage.get(
+                    "covered_map_count"),
+                "missing_map_count": full_game_map_coverage.get(
+                    "missing_map_count"),
+            },
             "native_backend_boundary_summary": {
                 "status": native_backend_boundary.get("status"),
                 "required_target_count": native_backend_boundary.get(
@@ -1251,6 +1393,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("moonlab_replay_plan_summary"))
     native_boundary_summary = dict_or_empty(
         advantage_summary.get("native_backend_boundary_summary"))
+    full_game_summary = dict_or_empty(
+        advantage_summary.get("full_game_map_coverage_summary"))
     ready = bool(runtime.get("publication_ready_for_complete_claim"))
     return {
         "schema": "qge.icc_evidence.v0",
@@ -1268,6 +1412,15 @@ def build_icc_evidence(manifest: dict[str, Any],
         "scaling_summary_file": artifacts["advantage"]["scaling_summary"]["path"],
         "resource_envelope_file": artifacts.get("resource", {}).get(
             "envelope", {}).get("path"),
+        "full_game_map_coverage_file": artifacts.get("resource", {}).get(
+            "full_game_map_coverage", {}).get("path"),
+        "full_game_map_coverage_status": full_game_summary.get("status"),
+        "full_game_map_target_count": full_game_summary.get(
+            "target_map_count"),
+        "full_game_map_covered_count": full_game_summary.get(
+            "covered_map_count"),
+        "full_game_map_missing_count": full_game_summary.get(
+            "missing_map_count"),
         "native_backend_boundary_file": artifacts.get("resource", {}).get(
             "native_backend_boundary", {}).get("path"),
         "native_backend_boundary_status": native_boundary_summary.get(
@@ -1384,6 +1537,16 @@ def build_icc_evidence(manifest: dict[str, Any],
             "breadth_ready_matrix_run_count"),
         "breadth_map_count": runtime.get("breadth_map_count"),
         "breadth_maps": runtime.get("breadth_maps"),
+        "runtime_full_game_map_coverage_status": runtime.get(
+            "full_game_map_coverage_status"),
+        "runtime_full_game_map_target_count": runtime.get(
+            "full_game_map_target_count"),
+        "runtime_full_game_map_covered_count": runtime.get(
+            "full_game_map_covered_count"),
+        "runtime_full_game_map_missing_count": runtime.get(
+            "full_game_map_missing_count"),
+        "runtime_full_game_map_missing_maps": runtime.get(
+            "full_game_map_missing_maps"),
         "breadth_total_fallback_count": runtime.get(
             "breadth_total_fallback_count"),
         "breadth_total_surrogate_count": runtime.get(

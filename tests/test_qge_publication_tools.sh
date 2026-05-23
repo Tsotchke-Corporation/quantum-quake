@@ -328,11 +328,15 @@ assert runtime["vanilla_performance_ok"] is True
 assert manifest["artifacts"]["oracle"]["oracle_scene"]["exists"] is True
 assert manifest["artifacts"]["advantage"]["metrics"]["exists"] is True
 assert manifest["artifacts"]["resource"]["envelope"]["exists"] is True
+assert manifest["artifacts"]["resource"]["full_game_map_coverage"]["exists"] is True
 assert manifest["artifacts"]["resource"]["native_backend_boundary"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_job_specs"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_job_results"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_replay_plan"]["exists"] is True
 assert manifest["advantage_summary"]["resource_envelope_summary"]["whole_game_hardware_execution_claimed"] is False
+assert manifest["advantage_summary"]["full_game_map_coverage_summary"]["status"] == "partial"
+assert manifest["advantage_summary"]["full_game_map_coverage_summary"]["target_map_count"] == 32
+assert manifest["advantage_summary"]["full_game_map_coverage_summary"]["covered_map_count"] == 0
 assert manifest["advantage_summary"]["native_backend_boundary_summary"]["status"] == "pass"
 assert manifest["advantage_summary"]["native_backend_boundary_summary"]["passed_target_count"] == 3
 assert manifest["advantage_summary"]["moonlab_job_specs_summary"]["hardware_candidate_job_count"] == 1
@@ -344,6 +348,10 @@ assert icc["completion_reason"] == "qge_publication_artifact_pack_complete"
 assert icc["runtime_backend"] == "qge_publication_pack"
 assert icc["publication_ready_for_complete_claim"] is True
 assert icc["resource_envelope_file"].endswith("resource/qge_resource_envelope.json")
+assert icc["full_game_map_coverage_file"].endswith("resource/qge_full_game_map_coverage.json")
+assert icc["full_game_map_coverage_status"] == "partial"
+assert icc["full_game_map_target_count"] == 32
+assert icc["full_game_map_covered_count"] == 0
 assert icc["native_backend_boundary_file"].endswith("resource/qge_native_backend_boundary.json")
 assert icc["native_backend_boundary_status"] == "pass"
 assert icc["moonlab_job_specs_file"].endswith("resource/qge_moonlab_job_specs.json")

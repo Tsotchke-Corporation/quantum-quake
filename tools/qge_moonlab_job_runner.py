@@ -122,6 +122,18 @@ def job_observations(job: dict[str, Any]) -> dict[str, Any]:
                 "breadth_total_native_bridge_count": (
                     breadth.get("total_native_bridge_count")),
             })
+    elif domain == "full_game_map_coverage":
+        coverage_path = required.get("full_game_map_coverage")
+        if isinstance(coverage_path, str) and Path(coverage_path).is_file():
+            coverage = load_json(Path(coverage_path))
+            observations.update({
+                "coverage_status": coverage.get("status"),
+                "map_set": coverage.get("map_set"),
+                "target_map_count": coverage.get("target_map_count"),
+                "covered_map_count": coverage.get("covered_map_count"),
+                "missing_map_count": coverage.get("missing_map_count"),
+                "missing_maps": coverage.get("missing_maps"),
+            })
     elif domain == "render_primary_framebuffer":
         frame_path = required.get("frame")
         if isinstance(frame_path, str) and Path(frame_path).is_file():
@@ -269,6 +281,11 @@ def replay_scope_for_job(job: dict[str, Any]) -> str:
         return (
             "replay native runtime-boundary evidence from performance and "
             "breadth artifacts"
+        )
+    if domain == "full_game_map_coverage":
+        return (
+            "replay canonical map coverage ledger; partial status means the "
+            "whole-game Moonlab claim is still pending"
         )
     return "replay selected Moonlab job evidence from required artifacts"
 

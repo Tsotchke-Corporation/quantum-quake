@@ -155,16 +155,19 @@ Do claim, once proven:
 Minimum publishable artifact package:
 
 Current strongest publication bundle:
-`diagnostics/publication_pack/20260523-125637`. It packages a ready e1m1
+`diagnostics/publication_pack/20260523-132000`. It packages a ready e1m1
 QGE/vanilla capture, vanilla ICC evidence sidecar, agent stream, oracle scene,
 claims evidence, finite-shot QAE benchmark artifacts,
 `resource/qge_resource_envelope.json`,
+`resource/qge_full_game_map_coverage.json`,
 `resource/qge_native_backend_boundary.json`,
 `resource/qge_moonlab_job_specs.json`,
 `resource/qge_moonlab_job_results.json`,
 `resource/qge_moonlab_replay_plan.json`, and the four-map breadth sidecar from
-`diagnostics/breadth_evidence/20260523-022036`. The Moonlab job results record
-three completed simulator jobs, two completed native replay jobs, zero blocked
+`diagnostics/breadth_evidence/20260523-131947`. The full-game map coverage
+ledger is explicit: 4/32 canonical registered single-player maps covered, 28
+missing, status `partial`. The Moonlab job results record
+four completed simulator jobs, two completed native replay jobs, zero blocked
 jobs, and zero hardware submissions; `tools/qge_moonlab_job_runner.py` can
 regenerate the same result evidence from the job specs and emits
 `QGE_MOONLAB_JOB_RESULTS` when it writes the output. With `--expect` and
@@ -192,21 +195,25 @@ records host-side macOS AppKit/SDL launcher probes and marks UI-only
    - For multi-map claims, run `tools/qge_breadth_evidence.py --min-maps N`
      so repeated captures of a single map cannot satisfy the breadth gate.
    - Current strongest local checkpoint:
-     `diagnostics/breadth_evidence/20260523-022036`, which aggregates four
+     `diagnostics/breadth_evidence/20260523-131947`, which aggregates four
      ready Noesis-fire matrices across `e1m1`, `e1m2`, `e1m3`, and `e1m4` with
      zero fallback, zero surrogate, zero CPU-IDWT, 420 native bridge events,
      12 backend-gate events, and 16 native backend runtime-probe events parsed
      into every matrix run.
+   - It also emits `qge.full_game_map_coverage.v0`, currently 4/32 maps
+     covered and 28 missing. A full-game map claim requires this status to be
+     `complete`, not merely `qge_breadth_evidence_pack_complete`.
    - The sidecar also records per-target runtime backend proofs for
      `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`, and
      `qge_metal_init_common`, including missing/native target sets and the
      count of matrix runs where all required native boundaries resolved to the
      native sparse DWT render bridge.
    - The current publication bundle carries those breadth counters directly:
-     `diagnostics/publication_pack/20260523-125637` reports
+     `diagnostics/publication_pack/20260523-132000` reports
      `breadth_map_count=4`, `breadth_total_native_bridge_count=420`, and
      `breadth_total_runtime_backend_probe_event_count=16`, with
-     `breadth_runtime_backend_probe_resolved_run_count=4`.
+     `breadth_runtime_backend_probe_resolved_run_count=4`, plus
+     `full_game_map_coverage_status=partial`.
 
 3. Runtime traces
    - QGE trace file for each capture.
@@ -244,12 +251,14 @@ qge_vanilla_runtime_complete -> produce_ready_vanilla_capture_matrix
 ```
 
 That blocker is now cleared for the current self-contained publication pack:
-`diagnostics/publication_pack/20260523-125637` carries
+`diagnostics/publication_pack/20260523-132000` carries
 `qge_vanilla_capture_matrix_complete`, the vanilla ICC sidecar, native backend
 proofs, the agent stream, the benchmark bundle, and the four-map breadth
 sidecar. It also carries `resource/qge_resource_envelope.json`, which records
 per-domain resource posture and explicitly keeps whole-game hardware execution,
 hardware quantum advantage, and dense 70,000-qubit state claims out of scope,
+`resource/qge_full_game_map_coverage.json`, which records the 4/32 partial
+canonical map ledger,
 `resource/qge_native_backend_boundary.json`, which records per-target native
 bridge pass/fail evidence for the three ICC-flagged runtime boundaries,
 plus `resource/qge_moonlab_job_specs.json` for selected simulator/native replay
@@ -264,8 +273,8 @@ Moonlab jobs outside publication-pack assembly:
 The next hard work is therefore:
 
 1. Broaden the ready matrix beyond the current e1m1 publication capture and
-   four-map breadth sidecar, while preserving zero fallback/surrogate/CPU-IDWT
-   counters.
+   4/32 partial full-game map coverage ledger, while preserving zero
+   fallback/surrogate/CPU-IDWT counters.
 2. Submit the QAE hardware-candidate job through Moonlab hardware when
    available, recording backend IDs, shot schedule, readout metadata, and
    hardware-vs-simulator comparison in `qge_moonlab_job_results.json`.

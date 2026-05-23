@@ -430,7 +430,9 @@ reports zero fallback, surrogate, and CPU-IDWT counts. The breadth aggregate
 also carries backend-gate and runtime-backend-probe counts, paths, results, and
 targets, plus per-target proof maps, missing/native target sets, and
 `runtime_backend_probe_resolved_run_count` so the native backend claims can be
-audited across every supplied run.
+audited across every supplied run. It also emits
+`qge.full_game_map_coverage.v0`, a canonical registered single-player map
+ledger that stays `partial` until every target map has a ready QGE/Moonlab run.
 Use `--min-maps` when the artifact needs to prove breadth across distinct maps
 instead of repeated captures of one map.
 

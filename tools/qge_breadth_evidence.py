@@ -18,6 +18,44 @@ REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS = [
     "qge_dwt_render",
     "qge_metal_init_common",
 ]
+DEFAULT_FULL_GAME_MAP_SET = "quake_registered_single_player"
+QUAKE_REGISTERED_SINGLE_PLAYER_MAPS = [
+    "start",
+    "e1m1",
+    "e1m2",
+    "e1m3",
+    "e1m4",
+    "e1m5",
+    "e1m6",
+    "e1m7",
+    "e1m8",
+    "e2m1",
+    "e2m2",
+    "e2m3",
+    "e2m4",
+    "e2m5",
+    "e2m6",
+    "e2m7",
+    "e3m1",
+    "e3m2",
+    "e3m3",
+    "e3m4",
+    "e3m5",
+    "e3m6",
+    "e3m7",
+    "e4m1",
+    "e4m2",
+    "e4m3",
+    "e4m4",
+    "e4m5",
+    "e4m6",
+    "e4m7",
+    "e4m8",
+    "end",
+]
+FULL_GAME_MAP_SETS = {
+    DEFAULT_FULL_GAME_MAP_SET: QUAKE_REGISTERED_SINGLE_PLAYER_MAPS,
+}
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -296,6 +334,78 @@ def string_list(value: Any) -> list[str]:
     return [item for item in value if isinstance(item, str)]
 
 
+def canonical_map_name(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    name = value.strip().lower()
+    if not name:
+        return None
+    if name.startswith("maps/"):
+        name = name[5:]
+    if name.endswith(".bsp"):
+        name = name[:-4]
+    return name or None
+
+
+def map_targets_for_set(name: str) -> list[str]:
+    try:
+        return list(FULL_GAME_MAP_SETS[name])
+    except KeyError as exc:
+        choices = ", ".join(sorted(FULL_GAME_MAP_SETS))
+        raise ValueError(
+            f"unknown full-game map set {name!r}; expected one of: {choices}"
+        ) from exc
+
+
+def build_full_game_map_coverage(
+    covered_maps: list[Any],
+    *,
+    map_set: str = DEFAULT_FULL_GAME_MAP_SET,
+) -> dict[str, Any]:
+    target_maps = map_targets_for_set(map_set)
+    target_set = set(target_maps)
+    covered_set = {
+        name for name in (canonical_map_name(value) for value in covered_maps)
+        if name is not None
+    }
+    covered_target_maps = [name for name in target_maps if name in covered_set]
+    missing_maps = [name for name in target_maps if name not in covered_set]
+    extra_maps = sorted(name for name in covered_set if name not in target_set)
+    target_count = len(target_maps)
+    covered_count = len(covered_target_maps)
+    return {
+        "schema": "qge.full_game_map_coverage.v0",
+        "map_set": map_set,
+        "status": "complete" if not missing_maps else "partial",
+        "target_map_count": target_count,
+        "covered_map_count": covered_count,
+        "missing_map_count": len(missing_maps),
+        "coverage_ratio": (
+            covered_count / target_count if target_count else 0.0
+        ),
+        "covered_maps": covered_target_maps,
+        "missing_maps": missing_maps,
+        "extra_maps": extra_maps,
+        "map_status": [
+            {
+                "map": name,
+                "status": "covered" if name in covered_set else "missing",
+            }
+            for name in target_maps
+        ],
+        "limits": [
+            (
+                "This ledger tracks canonical registered Quake single-player "
+                "map coverage only."
+            ),
+            (
+                "A partial status is explicit evidence of remaining full-game "
+                "work, not a whole-game Moonlab completion claim."
+            ),
+        ],
+    }
+
+
 def merge_runtime_backend_probe_proofs(
     matrix_runs: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
@@ -373,8 +483,14 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     matrix_ready = all(run["ready"] for run in matrix_runs)
     publication_ready = all(pack["ready"] for pack in publication_packs)
     min_runs_met = len(matrix_runs) >= args.min_runs
-    maps = unique_sorted([run.get("map") for run in matrix_runs])
+    maps = unique_sorted([
+        canonical_map_name(run.get("map")) for run in matrix_runs
+    ])
     min_maps_met = len(maps) >= args.min_maps
+    full_game_coverage = build_full_game_map_coverage(
+        maps,
+        map_set=getattr(args, "map_set", DEFAULT_FULL_GAME_MAP_SET),
+    )
     total_fallback_count = sum(as_int(run.get("fallback_count")) for run in all_runs)
     total_surrogate_count = sum(as_int(run.get("surrogate_count")) for run in all_runs)
     total_cpu_idwt_count = sum(as_int(run.get("cpu_idwt_count")) for run in matrix_runs)
@@ -491,6 +607,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "min_maps": args.min_maps,
         "matrix_runs": matrix_runs,
         "publication_packs": publication_packs,
+        "full_game_coverage": full_game_coverage,
         "aggregate": {
             "breadth_ready_for_complete_claim": complete,
             "matrix_run_count": len(matrix_runs),
@@ -500,6 +617,18 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 1 for pack in publication_packs if pack["ready"]),
             "map_count": len(maps),
             "maps": maps,
+            "full_game_map_set": full_game_coverage["map_set"],
+            "full_game_map_coverage_status": full_game_coverage["status"],
+            "full_game_map_target_count": (
+                full_game_coverage["target_map_count"]),
+            "full_game_map_covered_count": (
+                full_game_coverage["covered_map_count"]),
+            "full_game_map_missing_count": (
+                full_game_coverage["missing_map_count"]),
+            "full_game_map_missing_maps": (
+                full_game_coverage["missing_maps"]),
+            "full_game_map_extra_maps": full_game_coverage["extra_maps"],
+            "full_game_coverage": full_game_coverage,
             "qge_primary_owners": unique_sorted([
                 run.get("qge_primary_owner") for run in matrix_runs]),
             "idwt_backends": unique_sorted([
@@ -543,6 +672,10 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "This artifact alone proves unrestricted map coverage, hardware "
                 "speedup, or deployment on physical quantum hardware."
             ),
+            "full_game_wording": (
+                "Use full_game_coverage.status == complete before claiming "
+                "canonical all-map Quake coverage."
+            ),
         },
     }
 
@@ -569,6 +702,19 @@ def build_icc_evidence(manifest: dict[str, Any],
             "ready_publication_pack_count"),
         "map_count": aggregate.get("map_count"),
         "maps": aggregate.get("maps"),
+        "full_game_map_set": aggregate.get("full_game_map_set"),
+        "full_game_map_coverage_status": aggregate.get(
+            "full_game_map_coverage_status"),
+        "full_game_map_target_count": aggregate.get(
+            "full_game_map_target_count"),
+        "full_game_map_covered_count": aggregate.get(
+            "full_game_map_covered_count"),
+        "full_game_map_missing_count": aggregate.get(
+            "full_game_map_missing_count"),
+        "full_game_map_missing_maps": aggregate.get(
+            "full_game_map_missing_maps"),
+        "full_game_map_extra_maps": aggregate.get(
+            "full_game_map_extra_maps"),
         "total_fallback_count": aggregate.get("total_fallback_count"),
         "total_surrogate_count": aggregate.get("total_surrogate_count"),
         "total_cpu_idwt_count": aggregate.get("total_cpu_idwt_count"),
@@ -621,6 +767,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                         help="Minimum ready vanilla matrix runs required")
     parser.add_argument("--min-maps", type=int, default=1,
                         help="Minimum distinct map names required")
+    parser.add_argument("--map-set", default=DEFAULT_FULL_GAME_MAP_SET,
+                        choices=sorted(FULL_GAME_MAP_SETS),
+                        help="Canonical full-game map set for coverage ledger")
     parser.add_argument("--out", type=Path,
                         default=REPO_ROOT / "diagnostics" /
                         "breadth_evidence" / stamp / "breadth_evidence.json")
