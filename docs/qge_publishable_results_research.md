@@ -155,7 +155,7 @@ Do claim, once proven:
 Minimum publishable artifact package:
 
 Current strongest publication bundle:
-`diagnostics/publication_pack/20260523-143208`. It packages a ready e1m1
+`diagnostics/publication_pack/20260523-150118`. It packages a ready e1m1
 QGE/vanilla capture, vanilla ICC evidence sidecar, agent stream, oracle scene,
 claims evidence, finite-shot QAE benchmark artifacts,
 `resource/qge_resource_envelope.json`,
@@ -163,9 +163,9 @@ claims evidence, finite-shot QAE benchmark artifacts,
 `resource/qge_native_backend_boundary.json`,
 `resource/qge_moonlab_job_specs.json`,
 `resource/qge_moonlab_job_results.json`,
-`resource/qge_moonlab_replay_plan.json`, and the seven-map breadth sidecar from
-`diagnostics/breadth_evidence/20260523-142909`. The full-game map coverage
-ledger is explicit: 7/32 canonical registered single-player maps covered, 25
+`resource/qge_moonlab_replay_plan.json`, and the eight-map breadth sidecar from
+`diagnostics/breadth_evidence/20260523-150050`. The full-game map coverage
+ledger is explicit: 8/32 canonical registered single-player maps covered, 24
 missing, status `partial`. The Moonlab job results record
 four completed simulator jobs, two completed native replay jobs, zero blocked
 jobs, and zero hardware submissions; `tools/qge_moonlab_job_runner.py` can
@@ -195,32 +195,32 @@ records host-side macOS AppKit/SDL launcher probes and marks UI-only
    - For multi-map claims, run `tools/qge_breadth_evidence.py --min-maps N`
      so repeated captures of a single map cannot satisfy the breadth gate.
    - Current strongest local checkpoint:
-     `diagnostics/breadth_evidence/20260523-142909`, which aggregates seven
-     ready Noesis-fire matrices across `e1m1` through `e1m7` with
-     zero fallback, zero surrogate, zero CPU-IDWT, 735 native bridge events,
-     21 backend-gate events, and 28 native backend runtime-probe events parsed
+     `diagnostics/breadth_evidence/20260523-150050`, which aggregates eight
+     ready Noesis-fire matrices across `e1m1` through `e1m8` with
+     zero fallback, zero surrogate, zero CPU-IDWT, 840 native bridge events,
+     24 backend-gate events, and 32 native backend runtime-probe events parsed
      into every matrix run.
-   - It also emits `qge.full_game_map_coverage.v0`, currently 7/32 maps
-     covered and 25 missing. A full-game map claim requires this status to be
+   - It also emits `qge.full_game_map_coverage.v0`, currently 8/32 maps
+     covered and 24 missing. A full-game map claim requires this status to be
      `complete`, not merely `qge_breadth_evidence_pack_complete`.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for
-     `diagnostics/publication_pack/20260523-143208` contains 25 pending
-     captures, runs Noesis-fire authority-smoke combat maps first, defers
-     `start`/`end` as `special_route_required`, and will rebuild breadth
-     evidence with `--min-runs 32 --min-maps 32` after all queued captures
-     complete.
+     `diagnostics/publication_pack/20260523-150118` inventories local loose/Pak
+     BSP assets before queuing. With the current `assets/id1/pak0.pak`, it
+     reports `start` as the only locally queueable missing map and 23 missing
+     registered maps as asset-unavailable; those maps require additional
+     registered BSP assets before capture.
    - The sidecar also records per-target runtime backend proofs for
      `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`, and
      `qge_metal_init_common`, including missing/native target sets and the
      count of matrix runs where all required native boundaries resolved to the
      native sparse DWT render bridge.
    - The current publication bundle carries those breadth counters directly:
-     `diagnostics/publication_pack/20260523-143208` reports
-     `breadth_map_count=7`, `breadth_total_native_bridge_count=735`, and
-     `breadth_total_runtime_backend_probe_event_count=28`, with
-     `breadth_runtime_backend_probe_resolved_run_count=7`, plus
+     `diagnostics/publication_pack/20260523-150118` reports
+     `breadth_map_count=8`, `breadth_total_native_bridge_count=840`, and
+     `breadth_total_runtime_backend_probe_event_count=32`, with
+     `breadth_runtime_backend_probe_resolved_run_count=8`, plus
      `full_game_map_coverage_status=partial`.
 
 3. Runtime traces
@@ -259,13 +259,13 @@ qge_vanilla_runtime_complete -> produce_ready_vanilla_capture_matrix
 ```
 
 That blocker is now cleared for the current self-contained publication pack:
-`diagnostics/publication_pack/20260523-143208` carries
+`diagnostics/publication_pack/20260523-150118` carries
 `qge_vanilla_capture_matrix_complete`, the vanilla ICC sidecar, native backend
-proofs, the agent stream, the benchmark bundle, and the seven-map breadth
+proofs, the agent stream, the benchmark bundle, and the eight-map breadth
 sidecar. It also carries `resource/qge_resource_envelope.json`, which records
 per-domain resource posture and explicitly keeps whole-game hardware execution,
 hardware quantum advantage, and dense 70,000-qubit state claims out of scope,
-`resource/qge_full_game_map_coverage.json`, which records the 7/32 partial
+`resource/qge_full_game_map_coverage.json`, which records the 8/32 partial
 canonical map ledger,
 `resource/qge_native_backend_boundary.json`, which records per-target native
 bridge pass/fail evidence for the three ICC-flagged runtime boundaries,
@@ -281,12 +281,12 @@ Moonlab jobs outside publication-pack assembly:
 The next hard work is therefore:
 
 1. Broaden the ready matrix beyond the current e1m1 publication capture and
-   7/32 partial full-game map coverage ledger, while preserving zero
+   8/32 partial full-game map coverage ledger, while preserving zero
    fallback/surrogate/CPU-IDWT counters. Start from
-   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-143208`
-   so the remaining 25 maps are captured and aggregated by the same gate;
-   keep `start`/`end` tracked as special-route work rather than relaxing the
-   authority gate.
+   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-150118`
+   so the remaining locally available `start` route and the 23 registered
+   asset-unavailable maps stay explicit rather than weakening the authority
+   gate.
 2. Submit the QAE hardware-candidate job through Moonlab hardware when
    available, recording backend IDs, shot schedule, readout metadata, and
    hardware-vs-simulator comparison in `qge_moonlab_job_results.json`.

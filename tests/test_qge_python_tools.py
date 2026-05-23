@@ -58,6 +58,19 @@ def write_rgb_png(path: Path, rows: list[list[tuple[int, int, int]]]) -> None:
     )
 
 
+def write_pak(path: Path, names: list[str]) -> None:
+    directory = bytearray()
+    for name in names:
+        raw_name = name.encode("ascii")
+        if len(raw_name) > 55:
+            raise ValueError("PAK entry name is too long")
+        directory.extend(raw_name + b"\0" * (56 - len(raw_name)))
+        directory.extend(struct.pack("<II", 12, 0))
+    path.write_bytes(
+        struct.pack("<4sII", b"PACK", 12, len(directory)) + directory
+    )
+
+
 def minimal_oracle_scene() -> dict:
     return {
         "scene": {
@@ -1142,6 +1155,7 @@ class BreadthEvidenceTests(unittest.TestCase):
             markdown = full_game_capture_queue.markdown_report(queue)
             self.assertIn("QGE Full Game Capture Queue", markdown)
             self.assertIn("noesis_authority_smoke", markdown)
+            self.assertIn("Asset-unavailable missing maps", markdown)
 
             canonical_queue = full_game_capture_queue.build_queue(SimpleNamespace(
                 source=breadth_path,
@@ -1159,6 +1173,66 @@ class BreadthEvidenceTests(unittest.TestCase):
                 canonical_queue["jobs"][0]["route_profile"],
                 "special_route_required",
             )
+
+    def test_full_game_capture_queue_skips_unavailable_local_assets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            matrix_a = self.write_matrix(tmpdir / "run_a", map_name="e1m1")
+            matrix_b = self.write_matrix(tmpdir / "run_b", map_name="e1m2")
+            args = SimpleNamespace(
+                inputs=[],
+                matrix=[matrix_a, matrix_b],
+                publication_pack=[],
+                min_runs=2,
+                min_maps=2,
+                map_set="quake_registered_single_player",
+            )
+            manifest = breadth_evidence.build_manifest(args)
+            breadth_path = tmpdir / "breadth_evidence.json"
+            breadth_evidence.write_json(breadth_path, manifest)
+            asset_root = tmpdir / "id1"
+            asset_root.mkdir()
+            write_pak(asset_root / "pak0.pak", ["maps/e1m3.bsp"])
+
+            queue = full_game_capture_queue.build_queue(SimpleNamespace(
+                source=breadth_path,
+                limit=3,
+                frames=3,
+                wait_frames=12,
+                trace=True,
+                special_maps_last=True,
+                authority_smoke=True,
+                force_world_metrics=True,
+                asset_root=asset_root,
+                include_unavailable_assets=False,
+                env=[],
+            ))
+
+            self.assertEqual(queue["queue_job_count"], 1)
+            self.assertEqual(queue["jobs"][0]["map"], "e1m3")
+            self.assertTrue(queue["asset_filter_enabled"])
+            self.assertEqual(queue["available_asset_maps"], ["e1m3"])
+            self.assertEqual(queue["asset_available_missing_maps"], ["e1m3"])
+            self.assertIn("e1m4", queue["asset_unavailable_missing_maps"])
+            self.assertIn("start", queue["asset_unavailable_missing_maps"])
+            self.assertEqual(queue["covered_map_count_after_queue"], 3)
+
+            override = full_game_capture_queue.build_queue(SimpleNamespace(
+                source=breadth_path,
+                limit=2,
+                frames=3,
+                wait_frames=12,
+                trace=True,
+                special_maps_last=True,
+                authority_smoke=True,
+                force_world_metrics=True,
+                asset_root=asset_root,
+                include_unavailable_assets=True,
+                env=[],
+            ))
+            self.assertFalse(override["asset_filter_enabled"])
+            self.assertEqual([job["map"] for job in override["jobs"]],
+                             ["e1m3", "e1m4"])
 
 
 class ImageMetricsTests(unittest.TestCase):
@@ -4173,6 +4247,7 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
                         "own_world=1 own_textures=1 own_lightmaps=1 "
                         "own_entities=1 own_sprites=1 own_particles=1 "
                         "own_viewmodel=1 own_hud=0 own_console=1 "
+                        "entity_culls=2 entity_misses=0 "
                         "poly=3 tris=6 edgefills=2 gate_kernel=1 gates=26 "
                         "shots=64 primary_fb=1 native_idwt=1 cpu_idwt=0 "
                         "idwt_backend=native fallback_reason=classic2d_unowned\n"
@@ -4182,7 +4257,8 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
                     f"QGE render frame=1 render={render_value} fallback=0 "
                     f"surrogate=0 classic3d=0 classic2d=0 viewmodel=1 "
                     f"owner={owner} suppressed3d=1 suppressed2d=1 "
-                    f"{ownership}poly=3 tris=6 edgefills=2 "
+                    f"{ownership}entity_culls=2 entity_misses=0 "
+                    f"poly=3 tris=6 edgefills=2 "
                     f"gate_kernel=1 gates=26 shots=64 primary_fb=1 "
                     f"native_idwt=1 cpu_idwt=0 idwt_backend=native\n",
                     encoding="utf-8",
@@ -4210,6 +4286,8 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
             self.assertEqual(summary["classic2d_latest"], 0)
             self.assertTrue(summary["qge_asset_ownership_complete"])
             self.assertEqual(summary["qge_asset_ownership"]["own_world"], 1)
+            self.assertEqual(summary["qge_entity_culls"], 2)
+            self.assertEqual(summary["qge_entity_misses"], 0)
             self.assertTrue(summary["runtime_evidence_ready"])
             self.assertTrue(summary["moonlab_authority_ready"])
             self.assertEqual(summary["moonlab_authority_blockers"], [])

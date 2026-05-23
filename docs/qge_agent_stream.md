@@ -437,7 +437,10 @@ Use `--min-maps` when the artifact needs to prove breadth across distinct maps
 instead of repeated captures of one map.
 `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>` turns
 that ledger into `qge.full_game_capture_queue.v0` plus a runnable
-`run_missing_maps.sh` script. The generated script runs
+`run_missing_maps.sh` script. The queue inventories loose `maps/*.bsp` files
+and `pak*.pak` directories before it writes jobs, skips maps whose BSP is
+absent unless `--include-unavailable-assets` is set, and records the
+asset-unavailable missing maps in JSON/Markdown. The generated script runs
 `tools/quake_graphics_harness.sh` for each missing canonical map using the
 Noesis-fire authority-smoke profile by default, orders combat maps before
 `start`/`end`, marks those noncombat/endgame maps as

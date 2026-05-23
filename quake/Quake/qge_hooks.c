@@ -500,6 +500,7 @@ static int qge_scene_encoded_edicts = 0;
 static int qge_scene_alias_encoded = 0;
 static int qge_scene_sprite_encoded = 0;
 static int qge_scene_viewmodel_encoded = 0;
+static int qge_scene_entity_culls = 0;
 static int qge_scene_entity_misses = 0;
 static int qge_scene_entity_coefficients = 0;
 static int qge_scene_entity_mesh_triangles = 0;
@@ -510,6 +511,12 @@ static int qge_scene_particle_coefficients = 0;
 static double qge_scene_setup_ms = 0.0;
 static double qge_scene_raster_ms = 0.0;
 static double qge_scene_forward_dwt_ms = 0.0;
+
+typedef enum {
+	QGE_ENTITY_ENCODE_MISSED = 0,
+	QGE_ENTITY_ENCODE_ENCODED = 1,
+	QGE_ENTITY_ENCODE_CULLED = 2
+} qge_entity_encode_result_t;
 
 static qge_phys_object_t qge_phys_objects[QGE_MAX_PHYS_OBJECTS];
 static int qge_phys_active_objects = 0;
@@ -4794,6 +4801,7 @@ void QGE_SceneBegin(void)
 	qge_scene_alias_encoded = 0;
 	qge_scene_sprite_encoded = 0;
 	qge_scene_viewmodel_encoded = 0;
+	qge_scene_entity_culls = 0;
 	qge_scene_entity_misses = 0;
 	qge_scene_entity_coefficients = 0;
 	qge_scene_entity_mesh_triangles = 0;
@@ -9113,8 +9121,9 @@ static void QGE_EncodeSnapshotEntityDetailDWT(dwt_framebuffer_t *fb,
 		QGE_EncodeBrushEntityCoefficients(edict, bounds, color, depth_world);
 }
 
-static qboolean QGE_EncodeSnapshotEdictDWT(dwt_framebuffer_t *fb,
-										   const qge_snapshot_edict_t *edict)
+static qge_entity_encode_result_t QGE_EncodeSnapshotEdictDWT(
+	dwt_framebuffer_t *fb,
+	const qge_snapshot_edict_t *edict)
 {
 	qge_resource_kind_t model_kind;
 	screen_rect_t bounds;
@@ -9123,15 +9132,15 @@ static qboolean QGE_EncodeSnapshotEdictDWT(dwt_framebuffer_t *fb,
 	float brightness;
 
 	if (!fb || !edict || !qge_resource_id_is_valid(edict->model_id))
-		return false;
+		return QGE_ENTITY_ENCODE_MISSED;
 
 	model_kind = qge_resource_id_kind(edict->model_id);
 	if (model_kind != QGE_RESOURCE_ALIAS_MODEL &&
 		model_kind != QGE_RESOURCE_SPRITE &&
 		model_kind != QGE_RESOURCE_BSP_MODEL)
-		return false;
+		return QGE_ENTITY_ENCODE_MISSED;
 	if (!QGE_ProjectSnapshotEdictBounds(edict, &bounds, &depth_world))
-		return false;
+		return QGE_ENTITY_ENCODE_CULLED;
 
 	depth = depth_world / 4096.0f;
 	if (depth > 1.0f) depth = 1.0f;
@@ -9148,7 +9157,7 @@ static qboolean QGE_EncodeSnapshotEdictDWT(dwt_framebuffer_t *fb,
 		qge_scene_sprite_encoded++;
 	if (QGE_IsSnapshotViewmodel(edict))
 		qge_scene_viewmodel_encoded++;
-	return true;
+	return QGE_ENTITY_ENCODE_ENCODED;
 }
 
 static int QGE_EncodeSnapshotEdicts(dwt_framebuffer_t *fb,
@@ -9160,9 +9169,13 @@ static int QGE_EncodeSnapshotEdicts(dwt_framebuffer_t *fb,
 		return 0;
 
 	for (int i = 0; i < (int)snapshot->edict_count; i++) {
+		qge_entity_encode_result_t result;
 		qge_scene_snapshot_edicts++;
-		if (QGE_EncodeSnapshotEdictDWT(fb, &snapshot->edicts[i]))
+		result = QGE_EncodeSnapshotEdictDWT(fb, &snapshot->edicts[i]);
+		if (result == QGE_ENTITY_ENCODE_ENCODED)
 			encoded++;
+		else if (result == QGE_ENTITY_ENCODE_CULLED)
+			qge_scene_entity_culls++;
 		else
 			qge_scene_entity_misses++;
 	}
@@ -9988,7 +10001,8 @@ void QGE_RenderScene(void)
 		qge_scene_lightmapped_surfaces > 0 &&
 		qge_scene_lightmap_cache_misses == 0;
 	own_entities =
-		qge_scene_snapshot_edicts == qge_scene_encoded_edicts &&
+		qge_scene_snapshot_edicts ==
+			qge_scene_encoded_edicts + qge_scene_entity_culls &&
 		qge_scene_entity_misses == 0;
 	own_sprites =
 		(qge_scene_sprite_encoded > 0) ||
@@ -10041,7 +10055,7 @@ void QGE_RenderScene(void)
 						   "texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d microfill=%d gaprepair=%d texfilter=%d "
 						   "culled=%d surrogate=%d micro=%d clipped=%d fallback=%d "
 						   "encoded=%d material=%d edicts=%d alias=%d sprites=%d sbill=%d emesh=%d ecoeff=%d "
-						   "viewmodel=%d entity_miss=%d particles=%d pcoeff=%d gates=%d shots=%d "
+						   "viewmodel=%d entity_cull=%d entity_miss=%d particles=%d pcoeff=%d gates=%d shots=%d "
 						   "readout=%.3f edgeq=%.3f ggain=%.3f egain=%.3f "
 						   "native_idwt=%d idwt_fallback=%d cpu_idwt=%d "
 						   "idwt_backend=%s idwt_path=%s idwt_reason=%s "
@@ -10077,7 +10091,8 @@ void QGE_RenderScene(void)
 						   qge_scene_sprite_billboards,
 						   qge_scene_entity_mesh_triangles,
 						   qge_scene_entity_coefficients,
-						   qge_scene_viewmodel_encoded, qge_scene_entity_misses,
+						   qge_scene_viewmodel_encoded, qge_scene_entity_culls,
+						   qge_scene_entity_misses,
 						   qge_scene_encoded_particles,
 						   qge_scene_particle_coefficients,
 						   qge_render_gate_total, qge_render_gate_shots,
@@ -10102,7 +10117,7 @@ void QGE_RenderScene(void)
 					"texcache=%d/%d lightcache=%d/%d poly=%d tris=%d edgefills=%d microfill=%d gaprepair=%d texfilter=%d "
 					"culled=%d surrogate=%d micro=%d clipped=%d invalid=%d fallback=%d encoded_surfaces=%d "
 					"material_encoded=%d snapshot_edicts=%d encoded_edicts=%d alias=%d "
-					"sprites=%d sprite_billboards=%d entity_mesh_tris=%d entity_coeffs=%d viewmodel=%d entity_misses=%d "
+					"sprites=%d sprite_billboards=%d entity_mesh_tris=%d entity_coeffs=%d viewmodel=%d entity_culls=%d entity_misses=%d "
 					"snapshot_particles=%d encoded_particles=%d particle_coeffs=%d visedicts=%d nonzero=%d/%d max=%.6f sum=%.3f "
 					"gate_kernel=%d gates=%d h=%d ry=%d rz=%d ent=%d phase=%d gate_active=%d "
 					"shots=%d readout_ones=%d edge_ones=%d majority=0x%llx "
@@ -10144,7 +10159,7 @@ void QGE_RenderScene(void)
 					qge_scene_sprite_encoded, qge_scene_sprite_billboards,
 					qge_scene_entity_mesh_triangles,
 					qge_scene_entity_coefficients,
-					qge_scene_viewmodel_encoded,
+					qge_scene_viewmodel_encoded, qge_scene_entity_culls,
 					qge_scene_entity_misses, qge_scene_snapshot_particles,
 					qge_scene_encoded_particles,
 					qge_scene_particle_coefficients, cl_numvisedicts,

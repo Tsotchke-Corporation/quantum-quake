@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import shlex
+import struct
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,6 +44,7 @@ DEFAULT_ENV = {
     "QGE_RENDER_EDGE_SAMPLES": "0",
 }
 SPECIAL_ROUTE_MAPS = {"start", "end"}
+DEFAULT_ASSET_ROOT = REPO_ROOT / "assets" / "id1"
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -79,6 +81,42 @@ def dict_or_empty(value: Any) -> dict[str, Any]:
 
 def list_or_empty(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
+
+
+def pak_directory_entries(path: Path) -> list[str]:
+    data = path.read_bytes()
+    if len(data) < 12:
+        raise ValueError(f"{path} is too short to be a PAK file")
+    magic, directory_offset, directory_size = struct.unpack("<4sII", data[:12])
+    if magic != b"PACK":
+        raise ValueError(f"{path} is not a Quake PAK file")
+    if directory_size % 64 != 0:
+        raise ValueError(f"{path} has an invalid PAK directory size")
+    directory_end = directory_offset + directory_size
+    if directory_offset > len(data) or directory_end > len(data):
+        raise ValueError(f"{path} has an out-of-bounds PAK directory")
+    entries = []
+    for offset in range(directory_offset, directory_end, 64):
+        raw_name = data[offset:offset + 56].split(b"\0", 1)[0]
+        name = raw_name.decode("ascii", "ignore").replace("\\", "/").lower()
+        if name:
+            entries.append(name)
+    return entries
+
+
+def available_bsp_maps(asset_root: Path) -> set[str]:
+    maps: set[str] = set()
+    if not asset_root.is_dir():
+        return maps
+    loose_maps = asset_root / "maps"
+    if loose_maps.is_dir():
+        for path in loose_maps.glob("*.bsp"):
+            maps.add(path.stem.lower())
+    for pak_path in sorted(asset_root.glob("pak*.pak")):
+        for entry in pak_directory_entries(pak_path):
+            if entry.startswith("maps/") and entry.endswith(".bsp"):
+                maps.add(Path(entry).stem.lower())
+    return maps
 
 
 def existing_matrix_sources(data: dict[str, Any]) -> list[str]:
@@ -188,15 +226,49 @@ def selected_missing_maps(
     return missing
 
 
+def ordered_missing_maps(
+    coverage: dict[str, Any],
+    special_maps_last: bool = True,
+) -> list[str]:
+    return selected_missing_maps(coverage, None, special_maps_last)
+
+
 def build_queue(args: argparse.Namespace) -> dict[str, Any]:
     source_path = resolve_source_path(args.source)
     data = load_json(source_path)
     coverage = coverage_from_data(data)
     special_maps_last = getattr(args, "special_maps_last", True)
-    missing_maps = selected_missing_maps(coverage, args.limit, special_maps_last)
+    missing_maps = ordered_missing_maps(coverage, special_maps_last)
+    asset_root = Path(getattr(args, "asset_root", DEFAULT_ASSET_ROOT))
+    include_unavailable_assets = bool(
+        getattr(args, "include_unavailable_assets", False)
+    )
+    available_maps = available_bsp_maps(asset_root)
+    if include_unavailable_assets:
+        queueable_missing_maps = list(missing_maps)
+        asset_available_missing_maps = [
+            name for name in missing_maps
+            if name.lower() in available_maps
+        ]
+        asset_unavailable_missing_maps = [
+            name for name in missing_maps
+            if name.lower() not in available_maps
+        ]
+    else:
+        asset_available_missing_maps = [
+            name for name in missing_maps
+            if name.lower() in available_maps
+        ]
+        queueable_missing_maps = list(asset_available_missing_maps)
+        asset_unavailable_missing_maps = [
+            name for name in missing_maps
+            if name.lower() not in available_maps
+        ]
+    if args.limit is not None:
+        queueable_missing_maps = queueable_missing_maps[:args.limit]
     existing_sources = existing_matrix_sources(data)
     jobs = []
-    for index, map_name in enumerate(missing_maps, start=1):
+    for index, map_name in enumerate(queueable_missing_maps, start=1):
         env = queue_environment(args, map_name)
         jobs.append({
             "index": index,
@@ -221,6 +293,19 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
         "status": "complete" if not jobs else "pending",
         "special_maps_last": special_maps_last,
         "special_route_maps": sorted(SPECIAL_ROUTE_MAPS),
+        "asset_root": str(asset_root),
+        "asset_filter_enabled": not include_unavailable_assets,
+        "asset_inventory_status": (
+            "present" if asset_root.is_dir() else "missing_asset_root"
+        ),
+        "available_asset_maps": sorted(
+            name for name in available_maps
+            if name in qge_breadth_evidence.QUAKE_REGISTERED_SINGLE_PLAYER_MAPS
+        ),
+        "asset_available_missing_maps": asset_available_missing_maps,
+        "asset_available_missing_count": len(asset_available_missing_maps),
+        "asset_unavailable_missing_maps": asset_unavailable_missing_maps,
+        "asset_unavailable_missing_count": len(asset_unavailable_missing_maps),
         "coverage_before": coverage,
         "existing_matrix_sources": existing_sources,
         "queue_job_count": len(jobs),
@@ -242,6 +327,7 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
             "This queue does not prove coverage until the generated captures run.",
             "Every queued harness output must still pass the strict breadth gates.",
             "Maps with route_profile=special_route_required are ordered last because they need noncombat/endgame-specific evidence, not a weakened Moonlab claim.",
+            "Maps absent from the local asset PAK/loose BSP inventory are not queued unless --include-unavailable-assets is set.",
             "Do not claim full-game map coverage until remaining_map_count_after_queue is zero and the rebuilt breadth artifact is complete.",
         ],
     }
@@ -332,6 +418,16 @@ def markdown_report(queue: dict[str, Any]) -> str:
             f"{queue.get('remaining_map_count_after_queue')} |"
         ),
         "",
+        (
+            f"Asset root: `{queue.get('asset_root')}` "
+            f"({queue.get('asset_inventory_status')}, "
+            f"filter={'on' if queue.get('asset_filter_enabled') else 'off'})"
+        ),
+        (
+            f"Asset-unavailable missing maps: "
+            f"{queue.get('asset_unavailable_missing_count')}"
+        ),
+        "",
         "| # | Map | Route Profile | Command |",
         "| ---: | --- | --- | --- |",
     ]
@@ -385,6 +481,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--force-world-metrics",
                         action=argparse.BooleanOptionalAction,
                         default=True)
+    parser.add_argument("--asset-root", type=Path, default=DEFAULT_ASSET_ROOT,
+                        help="Directory containing loose maps/ and pak*.pak assets")
+    parser.add_argument("--include-unavailable-assets",
+                        action=argparse.BooleanOptionalAction,
+                        default=False,
+                        help="Queue maps even when their BSP is absent locally")
     parser.add_argument("--env", action="append", type=parse_env,
                         help="Extra KEY=VALUE environment override")
     return parser.parse_args(argv)

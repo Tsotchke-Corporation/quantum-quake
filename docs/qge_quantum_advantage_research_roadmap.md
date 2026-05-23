@@ -98,17 +98,19 @@ Current artifact status:
   `scaling_summary.json`, `qae_curve.csv`, `qae_circuit.txt`, and
   `qge_advantage_icc_evidence.json`.
 - The publication pack at
-  `diagnostics/publication_pack/20260523-143208/` bundles the benchmark,
+  `diagnostics/publication_pack/20260523-150118/` bundles the benchmark,
   oracle, trace, stream, vanilla, vanilla ICC evidence sidecar, claims, source
   artifacts, `resource/qge_resource_envelope.json`,
   `resource/qge_full_game_map_coverage.json`,
   `resource/qge_native_backend_boundary.json`,
   `resource/qge_moonlab_job_specs.json`,
   `resource/qge_moonlab_job_results.json`,
-  `resource/qge_moonlab_replay_plan.json`, and the seven-map breadth evidence
+  `resource/qge_moonlab_replay_plan.json`, and the eight-map breadth evidence
   sidecar with per-target native backend proof maps. The map coverage artifact
-  is `partial`: 7/32 canonical registered single-player maps covered and 25
-  pending. Its agent stream also carries macOS AppKit/SDL launcher probes,
+  is `partial`: 8/32 canonical registered single-player maps covered and 24
+  pending. The current local asset inventory only queues `start` next; 23
+  registered maps require additional registered BSP assets. Its agent stream
+  also carries macOS AppKit/SDL launcher probes,
   including intentional
   `-nolauncher` skips for UI-only launcher controls.
 - Current metrics are evidence for a reproducible QAE-style benchmark under an

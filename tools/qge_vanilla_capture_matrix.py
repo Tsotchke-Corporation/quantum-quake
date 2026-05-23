@@ -808,6 +808,14 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
     qge_render_idwt_backend = qge_render.get("idwt_backend")
     if not qge_render_idwt_backend:
         qge_render_idwt_backend = qge_render_max.get("idwt_backend")
+    qge_entity_culls = max(
+        counter_max(qge_render, qge_render_max, "entity_cull"),
+        counter_max(qge_render, qge_render_max, "entity_culls"),
+    )
+    qge_entity_misses = max(
+        counter_max(qge_render, qge_render_max, "entity_miss"),
+        counter_max(qge_render, qge_render_max, "entity_misses"),
+    )
 
     conformance_summary = {
         "status": "evidence_only",
@@ -861,6 +869,8 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
         "qge_asset_ownership_incomplete_fields": (
             ownership["incomplete_fields"]),
         "qge_asset_ownership_complete": ownership["complete"],
+        "qge_entity_culls": qge_entity_culls,
+        "qge_entity_misses": qge_entity_misses,
         "qge_surface_polygons": qge_render.get("poly"),
         "qge_surface_triangles": qge_render.get("tris"),
         "qge_surface_surrogates": surrogate_count,
