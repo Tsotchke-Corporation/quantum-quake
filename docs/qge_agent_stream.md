@@ -450,6 +450,10 @@ ready matrices plus the new capture directories. The `start` route is allowed
 to omit monster AI authority because the hub has no monster AI requirement, but
 it still uses rocket projectile authority so branch/writeback evidence remains
 required.
+`tools/qge_asset_inventory.py --asset-root assets/id1` emits the standalone
+`qge.asset_inventory.v0` JSON/Markdown audit with PAK SHA-256 hashes, loose BSP
+hashes, available canonical maps, and missing registered maps, so asset blockers
+can be checked before running the queue.
 
 `tools/qge_noesis_summary.py` reads the stream manifest, Noesis action trace,
 translated command buffer, runtime log, `noesis/gameplay_outcomes.ndjson`,

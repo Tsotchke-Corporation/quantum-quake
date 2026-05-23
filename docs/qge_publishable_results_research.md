@@ -160,6 +160,7 @@ QGE/vanilla capture, vanilla ICC evidence sidecar, agent stream, oracle scene,
 claims evidence, finite-shot QAE benchmark artifacts,
 `resource/qge_resource_envelope.json`,
 `resource/qge_full_game_map_coverage.json`,
+`resource/qge_asset_inventory.json`,
 `resource/qge_native_backend_boundary.json`,
 `resource/qge_moonlab_job_specs.json`,
 `resource/qge_moonlab_job_results.json`,
@@ -211,6 +212,11 @@ records host-side macOS AppKit/SDL launcher probes and marks UI-only
      reports zero locally queueable missing maps and 23 missing registered maps
      as asset-unavailable; those maps require additional registered BSP assets
      before capture.
+   - `tools/qge_asset_inventory.py --asset-root assets/id1` emits
+     `qge.asset_inventory.v0` and `qge_registered_asset_inventory_complete`
+     ICC evidence with PAK SHA-256 hashes and the exact available/missing map
+     ledger. The current local inventory is one `pak0.pak`, 9/32 canonical maps
+     available, 23 missing, and no whole-game Moonlab coverage claim.
    - The sidecar also records per-target runtime backend proofs for
      `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`, and
      `qge_metal_init_common`, including missing/native target sets and the
@@ -267,6 +273,8 @@ per-domain resource posture and explicitly keeps whole-game hardware execution,
 hardware quantum advantage, and dense 70,000-qubit state claims out of scope,
 `resource/qge_full_game_map_coverage.json`, which records the 9/32 partial
 canonical map ledger,
+`resource/qge_asset_inventory.json`, which records the current PAK/BSP
+availability ledger,
 `resource/qge_native_backend_boundary.json`, which records per-target native
 bridge pass/fail evidence for the three ICC-flagged runtime boundaries,
 plus `resource/qge_moonlab_job_specs.json` for selected simulator/native replay
@@ -282,7 +290,8 @@ The next hard work is therefore:
 
 1. Broaden the ready matrix beyond the current 9/32 partial full-game map
    coverage ledger, while preserving zero fallback/surrogate/CPU-IDWT counters.
-   Install the remaining registered BSP assets, then start from
+   Install the remaining registered BSP assets, verify them with
+   `tools/qge_asset_inventory.py`, then start from
    `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-152555`
    so the 23 registered asset-unavailable maps become explicit capture jobs
    rather than weakening the authority gate.

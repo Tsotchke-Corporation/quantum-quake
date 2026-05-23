@@ -651,6 +651,10 @@ Known current visual state:
   queuing. Against the current publication pack and current `assets/id1/pak0.pak`,
   zero locally queueable missing maps remain and 23 registered maps are reported
   as asset-unavailable until additional registered BSP assets are installed.
+  `tools/qge_asset_inventory.py` now emits the hash-backed
+  `qge.asset_inventory.v0` audit independently of queue generation; the current
+  local inventory has one valid `pak0.pak`, 9/32 canonical maps available, 23
+  missing, and no whole-game Moonlab coverage claim.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
   publication pack is `diagnostics/publication_pack/20260523-152555`, with
@@ -658,6 +662,7 @@ Known current visual state:
   vanilla ICC evidence sidecar, agent stream, oracle/claims exports, QAE
   benchmark artifacts, `resource/qge_resource_envelope.json`,
   `resource/qge_full_game_map_coverage.json`,
+  `resource/qge_asset_inventory.json`,
   `resource/qge_native_backend_boundary.json`,
   `resource/qge_moonlab_job_specs.json`,
   `resource/qge_moonlab_job_results.json`,

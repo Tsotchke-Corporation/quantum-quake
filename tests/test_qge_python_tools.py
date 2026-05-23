@@ -20,6 +20,7 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 import qge_advantage_benchmark as advantage  # noqa: E402
+import qge_asset_inventory as asset_inventory  # noqa: E402
 import qge_breadth_evidence as breadth_evidence  # noqa: E402
 import qge_full_game_capture_queue as full_game_capture_queue  # noqa: E402
 import qge_image_metrics as image_metrics  # noqa: E402
@@ -460,6 +461,7 @@ class PublicationPackTests(unittest.TestCase):
             performance_path = jobs_tmp / "qge_perf_summary.json"
             breadth_path = jobs_tmp / "breadth_evidence.json"
             full_game_path = jobs_tmp / "qge_full_game_map_coverage.json"
+            asset_inventory_path = jobs_tmp / "qge_asset_inventory.json"
             publication_pack.write_json(oracle_scene_path, {"scene": {}})
             publication_pack.write_json(
                 advantage_metrics_path,
@@ -508,6 +510,15 @@ class PublicationPackTests(unittest.TestCase):
                 full_game_path,
                 resource_envelope["domains"]["full_game_map_coverage"],
             )
+            publication_pack.write_json(
+                asset_inventory_path,
+                {
+                    "schema": "qge.asset_inventory.v0",
+                    "available_map_count": 4,
+                    "missing_map_count": 28,
+                    "full_game_asset_ready": False,
+                },
+            )
             moonlab_job_specs = publication_pack.build_moonlab_job_specs(
                 resource_envelope,
                 {
@@ -520,6 +531,7 @@ class PublicationPackTests(unittest.TestCase):
                     "performance_summary": str(performance_path),
                     "breadth_evidence": str(breadth_path),
                     "full_game_map_coverage": str(full_game_path),
+                    "asset_inventory": str(asset_inventory_path),
                 },
             )
             moonlab_job_results = (
@@ -647,6 +659,9 @@ class PublicationPackTests(unittest.TestCase):
                     "full_game_map_coverage": {
                         "path": "resource/qge_full_game_map_coverage.json"
                     },
+                    "asset_inventory": {
+                        "path": "resource/qge_asset_inventory.json"
+                    },
                     "native_backend_boundary": {
                         "path": "resource/qge_native_backend_boundary.json"
                     },
@@ -715,6 +730,12 @@ class PublicationPackTests(unittest.TestCase):
                     "covered_map_count": 4,
                     "missing_map_count": 28,
                 },
+                "asset_inventory_summary": {
+                    "status": "partial",
+                    "available_map_count": 4,
+                    "missing_map_count": 28,
+                    "full_game_asset_ready": False,
+                },
             },
             "runtime_summary": {
                 "publication_ready_for_complete_claim": True,
@@ -759,6 +780,13 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(icc["full_game_map_covered_count"], 4)
         self.assertEqual(icc["full_game_map_missing_count"], 28)
         self.assertEqual(
+            icc["asset_inventory_file"],
+            "resource/qge_asset_inventory.json")
+        self.assertEqual(icc["asset_inventory_status"], "partial")
+        self.assertEqual(icc["asset_inventory_available_map_count"], 4)
+        self.assertEqual(icc["asset_inventory_missing_map_count"], 28)
+        self.assertFalse(icc["full_game_asset_ready"])
+        self.assertEqual(
             icc["native_backend_boundary_file"],
             "resource/qge_native_backend_boundary.json")
         self.assertEqual(icc["native_backend_boundary_status"], "pass")
@@ -794,6 +822,42 @@ class PublicationPackTests(unittest.TestCase):
 
 
 class BreadthEvidenceTests(unittest.TestCase):
+    def test_asset_inventory_reports_registered_map_availability(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            asset_root = Path(tmp) / "id1"
+            maps_dir = asset_root / "maps"
+            maps_dir.mkdir(parents=True)
+            (maps_dir / "e1m2.bsp").write_bytes(b"loose-bsp")
+            write_pak(asset_root / "pak0.pak", [
+                "maps/start.bsp",
+                "maps/e1m1.bsp",
+                "maps/custom.bsp",
+            ])
+
+            inventory = asset_inventory.build_inventory(asset_root)
+
+            self.assertEqual(inventory["schema"], "qge.asset_inventory.v0")
+            self.assertEqual(
+                inventory["available_maps"],
+                ["start", "e1m1", "e1m2"],
+            )
+            self.assertIn("e2m1", inventory["missing_maps"])
+            self.assertEqual(inventory["missing_map_count"], 29)
+            self.assertEqual(inventory["extra_maps"], ["custom"])
+            self.assertFalse(inventory["full_game_asset_ready"])
+            self.assertEqual(inventory["pak_count"], 1)
+            self.assertEqual(inventory["loose_bsp_count"], 1)
+            self.assertIn(
+                "QGE Asset Inventory",
+                asset_inventory.markdown_report(inventory),
+            )
+            icc = asset_inventory.build_icc_evidence(inventory)
+            self.assertEqual(
+                icc["completion_reason"],
+                "qge_registered_asset_inventory_complete",
+            )
+            self.assertFalse(icc["whole_game_moonlab_coverage_claimed"])
+
     def write_matrix(self,
                      directory: Path,
                      *,

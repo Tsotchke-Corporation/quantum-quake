@@ -68,7 +68,9 @@ Important known limitations:
   ready. The pack includes `resource/qge_resource_envelope.json`, which scopes
   Moonlab simulator/native-backend deployment,
   `resource/qge_full_game_map_coverage.json`, which records partial canonical
-  map coverage at 9/32 maps with 23 maps pending, plus
+  map coverage at 9/32 maps with 23 maps pending,
+  `resource/qge_asset_inventory.json`, which records the PAK/BSP availability
+  blocker, plus
   `resource/qge_native_backend_boundary.json` with the pass/fail proof for the
   three native backend boundaries,
   `resource/qge_moonlab_job_specs.json` with selected simulator/native replay
@@ -87,7 +89,9 @@ Important known limitations:
   inventories loose/Pak BSP assets, skips missing local BSPs unless
   `--include-unavailable-assets` is set, and currently reports zero locally
   queueable missing maps while 23 registered maps require additional registered
-  BSP assets before capture.
+  BSP assets before capture. `tools/qge_asset_inventory.py` emits the companion
+  hash-backed asset audit; the current local inventory is one `pak0.pak`
+  containing 9/32 canonical maps.
 - `quantum_render 2` is not visually complete. The current renderer has
   improved world-surface coverage, Quake-FOV world projection, bilinear
   surface/light sampling, darker lightmap-preserving surface shading, and

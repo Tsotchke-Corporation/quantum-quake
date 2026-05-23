@@ -59,6 +59,8 @@ hardware deployment claims. The bundled `resource/qge_resource_envelope.json`
 states the current Moonlab simulator/native-backend posture, and
 `resource/qge_full_game_map_coverage.json` records the canonical registered
 single-player map ledger: 9/32 maps covered, 23 maps pending, status `partial`.
+`resource/qge_asset_inventory.json` records the PAK/BSP asset availability
+behind that partial ledger.
 `resource/qge_native_backend_boundary.json` records the native bridge boundary
 verdict for `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`,
 and `qge_metal_init_common`.
@@ -239,7 +241,9 @@ A complete port is credible when these are true:
    `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-152555`
    after installing registered BSP assets. With the current `assets/id1/pak0.pak`,
    the queue has zero locally runnable missing maps and 23 registered maps
-   require additional registered BSP assets before capture.
+   require additional registered BSP assets before capture. Use
+   `tools/qge_asset_inventory.py --asset-root assets/id1` to verify the PAK/BSP
+   hashes and canonical-map availability before rebuilding the queue.
 2. Improve `quantum_render 2` visual fidelity without weakening ownership
    counters or native sparse-DWT evidence.
 3. Move particles/projectile visuals from separate effects into the scene graph.

@@ -134,6 +134,20 @@ def job_observations(job: dict[str, Any]) -> dict[str, Any]:
                 "missing_map_count": coverage.get("missing_map_count"),
                 "missing_maps": coverage.get("missing_maps"),
             })
+        asset_inventory_path = required.get("asset_inventory")
+        if (
+            isinstance(asset_inventory_path, str) and
+            Path(asset_inventory_path).is_file()
+        ):
+            inventory = load_json(Path(asset_inventory_path))
+            observations.update({
+                "asset_inventory_status": inventory.get("status"),
+                "asset_available_map_count": (
+                    inventory.get("available_map_count")),
+                "asset_missing_map_count": inventory.get("missing_map_count"),
+                "full_game_asset_ready": (
+                    inventory.get("full_game_asset_ready")),
+            })
     elif domain == "render_primary_framebuffer":
         frame_path = required.get("frame")
         if isinstance(frame_path, str) and Path(frame_path).is_file():

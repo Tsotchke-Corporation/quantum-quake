@@ -26,6 +26,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import qge_advantage_benchmark  # noqa: E402
+import qge_asset_inventory  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
 import qge_moonlab_job_runner  # noqa: E402
 import qge_oracle_export  # noqa: E402
@@ -692,6 +693,7 @@ def build_moonlab_job_specs(
             "required_artifacts": {
                 "full_game_map_coverage": artifact_paths.get(
                     "full_game_map_coverage"),
+                "asset_inventory": artifact_paths.get("asset_inventory"),
             },
             "fallback_policy": (
                 "ledger remains partial until every target map has a ready "
@@ -1062,6 +1064,24 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         args.outdir / "resource" / "qge_full_game_map_coverage.json"
     )
     write_json(full_game_map_coverage_path, full_game_map_coverage)
+    asset_inventory = qge_asset_inventory.build_inventory(
+        Path(getattr(args, "asset_root", qge_asset_inventory.DEFAULT_ASSET_ROOT)),
+        map_set=str(
+            full_game_map_coverage.get("map_set") or
+            qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
+        ),
+    )
+    asset_inventory_path = (
+        args.outdir / "resource" / "qge_asset_inventory.json"
+    )
+    write_json(asset_inventory_path, asset_inventory)
+    asset_inventory_icc = qge_asset_inventory.build_icc_evidence(
+        asset_inventory)
+    asset_inventory_icc["asset_inventory_file"] = str(asset_inventory_path)
+    asset_inventory_icc_path = (
+        args.outdir / "resource" / "qge_asset_inventory_icc_evidence.json"
+    )
+    write_json(asset_inventory_icc_path, asset_inventory_icc)
     native_backend_boundary = capture_perf_summary.get(
         "runtime_backend_boundary")
     if not isinstance(native_backend_boundary, dict):
@@ -1086,6 +1106,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "breadth_evidence": (
                 breadth_artifacts["evidence"]["packed"]["path"]),
             "full_game_map_coverage": str(full_game_map_coverage_path),
+            "asset_inventory": str(asset_inventory_path),
         },
     )
     moonlab_job_specs_path = (
@@ -1112,6 +1133,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     resource_artifacts = {
         "envelope": file_info(resource_path),
         "full_game_map_coverage": file_info(full_game_map_coverage_path),
+        "asset_inventory": file_info(asset_inventory_path),
+        "asset_inventory_icc_evidence": file_info(asset_inventory_icc_path),
         "native_backend_boundary": file_info(native_backend_boundary_path),
         "moonlab_job_specs": file_info(moonlab_job_specs_path),
         "moonlab_job_results": file_info(moonlab_job_results_path),
@@ -1266,6 +1289,14 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 full_game_map_coverage.get("missing_map_count")),
             "full_game_map_missing_maps": (
                 full_game_map_coverage.get("missing_maps")),
+            "asset_inventory": asset_inventory,
+            "asset_inventory_status": asset_inventory.get("status"),
+            "asset_inventory_available_map_count": (
+                asset_inventory.get("available_map_count")),
+            "asset_inventory_missing_map_count": (
+                asset_inventory.get("missing_map_count")),
+            "full_game_asset_ready": (
+                asset_inventory.get("full_game_asset_ready")),
             "breadth_total_fallback_count": breadth_summary.get(
                 "total_fallback_count"),
             "breadth_total_surrogate_count": breadth_summary.get(
@@ -1314,6 +1345,17 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                     "covered_map_count"),
                 "missing_map_count": full_game_map_coverage.get(
                     "missing_map_count"),
+            },
+            "asset_inventory_summary": {
+                "status": asset_inventory.get("status"),
+                "asset_root_status": asset_inventory.get("asset_root_status"),
+                "available_map_count": asset_inventory.get(
+                    "available_map_count"),
+                "missing_map_count": asset_inventory.get("missing_map_count"),
+                "pak_count": asset_inventory.get("pak_count"),
+                "invalid_pak_count": asset_inventory.get("invalid_pak_count"),
+                "full_game_asset_ready": asset_inventory.get(
+                    "full_game_asset_ready"),
             },
             "native_backend_boundary_summary": {
                 "status": native_backend_boundary.get("status"),
@@ -1395,6 +1437,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("native_backend_boundary_summary"))
     full_game_summary = dict_or_empty(
         advantage_summary.get("full_game_map_coverage_summary"))
+    asset_inventory_summary = dict_or_empty(
+        advantage_summary.get("asset_inventory_summary"))
     ready = bool(runtime.get("publication_ready_for_complete_claim"))
     return {
         "schema": "qge.icc_evidence.v0",
@@ -1421,6 +1465,15 @@ def build_icc_evidence(manifest: dict[str, Any],
             "covered_map_count"),
         "full_game_map_missing_count": full_game_summary.get(
             "missing_map_count"),
+        "asset_inventory_file": artifacts.get("resource", {}).get(
+            "asset_inventory", {}).get("path"),
+        "asset_inventory_status": asset_inventory_summary.get("status"),
+        "asset_inventory_available_map_count": (
+            asset_inventory_summary.get("available_map_count")),
+        "asset_inventory_missing_map_count": (
+            asset_inventory_summary.get("missing_map_count")),
+        "full_game_asset_ready": asset_inventory_summary.get(
+            "full_game_asset_ready"),
         "native_backend_boundary_file": artifacts.get("resource", {}).get(
             "native_backend_boundary", {}).get("path"),
         "native_backend_boundary_status": native_boundary_summary.get(
@@ -1606,6 +1659,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--agent-stream-dir", type=Path)
     parser.add_argument("--breadth-evidence", type=Path,
                         help="Optional breadth_evidence.json or breadth evidence directory")
+    parser.add_argument("--asset-root", type=Path,
+                        default=qge_asset_inventory.DEFAULT_ASSET_ROOT,
+                        help="Directory containing loose maps/ and pak*.pak assets")
     parser.add_argument("--claims", type=Path,
                         default=REPO_ROOT / "docs/claims/qge_claims.json")
     parser.add_argument("--seed", type=int, default=1337)
