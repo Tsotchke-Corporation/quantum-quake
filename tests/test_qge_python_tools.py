@@ -24,6 +24,7 @@ import qge_asset_inventory as asset_inventory  # noqa: E402
 import qge_breadth_evidence as breadth_evidence  # noqa: E402
 import qge_full_game_capture_queue as full_game_capture_queue  # noqa: E402
 import qge_image_metrics as image_metrics  # noqa: E402
+import qge_moonlab_hardware_ingest as moonlab_hardware_ingest  # noqa: E402
 import qge_moonlab_job_runner as moonlab_job_runner  # noqa: E402
 import qge_noesis_summary as noesis_summary  # noqa: E402
 import qge_oracle_export as oracle_export  # noqa: E402
@@ -881,6 +882,158 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(
             icc["breadth_runtime_backend_probe_resolved_run_count"], 4)
         self.assertEqual(icc["status"], "success")
+
+    def test_moonlab_hardware_ingest_records_bounded_result(self) -> None:
+        job_id = "qge.light_transport_qae_benchmark.mlae.v0"
+        packet = {
+            "schema": "qge.moonlab_submission_packet.v0",
+            "candidate_jobs": [
+                {
+                    "job_id": job_id,
+                    "domain": "light_transport_qae_benchmark",
+                    "kind": "moonlab_qae_kernel",
+                    "submission_status": (
+                        "ready_for_hardware_submission_metadata"),
+                    "candidate_digest": "candidate-digest",
+                    "missing_required_artifacts": [],
+                },
+            ],
+        }
+        results = {
+            "schema": "qge.moonlab_job_results.v0",
+            "blocked_job_count": 0,
+            "hardware_submitted_job_count": 0,
+            "jobs": [
+                {
+                    "job_id": job_id,
+                    "domain": "light_transport_qae_benchmark",
+                    "kind": "moonlab_qae_kernel",
+                    "result_status": (
+                        "simulator_completed_hardware_not_submitted"),
+                    "hardware_submission_status": "not_submitted",
+                    "backend_results": [
+                        {
+                            "backend_id": (
+                                "moonlab-simulator-local/qge-publication-pack"),
+                            "backend_kind": "moonlab_simulator",
+                            "status": "completed",
+                        },
+                        {
+                            "backend_id": None,
+                            "backend_kind": "moonlab_hardware_candidate",
+                            "status": "not_submitted",
+                        },
+                    ],
+                    "observations": {
+                        "reference_value": 0.5,
+                        "shots": 384,
+                    },
+                    "claim_posture": {
+                        "hardware_result_claimed": False,
+                        "hardware_quantum_advantage_claimed": False,
+                        "whole_game_hardware_execution_claimed": False,
+                    },
+                },
+            ],
+        }
+        record = {
+            "schema": "qge.moonlab_hardware_record.v0",
+            "job_id": job_id,
+            "candidate_digest": "candidate-digest",
+            "backend_id": "moonlab-hardware/mock-qpu",
+            "backend_kind": "moonlab_hardware",
+            "status": "completed",
+            "run_id": "moonlab-hw-run-001",
+            "submitted_utc": "2026-05-23T20:30:00Z",
+            "completed_utc": "2026-05-23T20:31:00Z",
+            "shot_schedule": {
+                "shots": 384,
+                "batches": 3,
+            },
+            "readout_metadata": {
+                "shots_completed": 384,
+                "readout_format": "expectation_value",
+            },
+            "observations": {
+                "mean_value": 0.503,
+                "shots": 384,
+                "readout_error": 0.004,
+            },
+            "hardware_quantum_advantage_claimed": False,
+            "whole_game_hardware_execution_claimed": False,
+            "dense_70000_qubit_state_claimed": False,
+        }
+
+        updated, comparison = (
+            moonlab_hardware_ingest.ingest_hardware_record(
+                packet, results, record)
+        )
+        self.assertEqual(updated["hardware_submitted_job_count"], 1)
+        self.assertEqual(updated["completed_hardware_job_count"], 1)
+        self.assertEqual(
+            updated["overall_status"],
+            "simulator_complete_hardware_recorded")
+        self.assertEqual(
+            updated["jobs"][0]["result_status"],
+            "hardware_completed_simulator_retained")
+        self.assertEqual(
+            updated["jobs"][0]["backend_results"][-1]["backend_kind"],
+            "moonlab_hardware")
+        self.assertEqual(
+            comparison["schema"], "qge.moonlab_hardware_comparison.v0")
+        self.assertAlmostEqual(comparison["value_delta"], 0.003)
+        self.assertFalse(
+            comparison["claim_posture"]
+            ["hardware_quantum_advantage_claimed"])
+
+        bad_record = dict(record)
+        bad_record["hardware_quantum_advantage_claimed"] = True
+        with self.assertRaises(ValueError):
+            moonlab_hardware_ingest.ingest_hardware_record(
+                packet, results, bad_record)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            packet_path = tmpdir / "qge_moonlab_submission_packet.json"
+            results_path = tmpdir / "qge_moonlab_job_results.json"
+            record_path = tmpdir / "qge_moonlab_hardware_record.json"
+            out_path = tmpdir / "qge_moonlab_job_results.hardware.json"
+            comparison_path = tmpdir / "qge_moonlab_hardware_comparison.json"
+            icc_path = tmpdir / "qge_moonlab_hardware_icc_evidence.json"
+            publication_pack.write_json(packet_path, packet)
+            publication_pack.write_json(results_path, results)
+            publication_pack.write_json(record_path, record)
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(
+                    moonlab_hardware_ingest.main([
+                        str(packet_path),
+                        "--job-results",
+                        str(results_path),
+                        "--hardware-record",
+                        str(record_path),
+                        "--out",
+                        str(out_path),
+                        "--comparison-out",
+                        str(comparison_path),
+                        "--icc-out",
+                        str(icc_path),
+                    ]),
+                    0,
+                )
+            self.assertIn(
+                "QGE_MOONLAB_HARDWARE_RESULTS", stdout.getvalue())
+            self.assertIn(
+                "QGE_MOONLAB_HARDWARE_COMPARISON", stdout.getvalue())
+            self.assertIn(
+                "QGE_MOONLAB_HARDWARE_ICC_EVIDENCE", stdout.getvalue())
+            cli_icc = publication_pack.load_json(icc_path)
+            self.assertEqual(
+                cli_icc["completion_reason"],
+                "qge_moonlab_hardware_result_recorded")
+            self.assertEqual(cli_icc["completed_hardware_job_count"], 1)
+            self.assertFalse(
+                cli_icc["whole_game_hardware_execution_claimed"])
 
 
 class BreadthEvidenceTests(unittest.TestCase):

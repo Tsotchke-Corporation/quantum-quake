@@ -178,6 +178,10 @@ expected artifact and writes a standalone replay contract; with
 `--submission-out`, it also writes the deterministic hardware-candidate
 handoff packet. The QAE benchmark remains unsubmitted until Moonlab hardware
 backend IDs, shot schedules, and readout metadata are recorded separately. The
+post-submission return path is `tools/qge_moonlab_hardware_ingest.py`, which
+requires a `qge.moonlab_hardware_record.v0`, rejects advantage/full-game/dense
+state overclaim flags, and emits updated job results plus a bounded hardware
+comparison artifact. The
 bundled agent stream also records host-side macOS AppKit/SDL launcher probes
 and marks UI-only `-nolauncher` paths as intentional skips.
 
@@ -290,6 +294,8 @@ handoff contract. Regenerate the latter independently with
 `tools/qge_moonlab_job_runner.py` when validating or re-submitting the selected
 Moonlab jobs outside publication-pack assembly:
 `python3 tools/qge_moonlab_job_runner.py <pack>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json --submission-out /tmp/qge_moonlab_submission_packet.verify.json`.
+When Moonlab hardware returns a result, validate and merge it with:
+`python3 tools/qge_moonlab_hardware_ingest.py <pack>/resource/qge_moonlab_submission_packet.json --job-results <pack>/resource/qge_moonlab_job_results.json --hardware-record qge_moonlab_hardware_record.json --out qge_moonlab_job_results.hardware.json --comparison-out qge_moonlab_hardware_comparison.json --icc-out qge_moonlab_hardware_icc_evidence.json`.
 
 The next hard work is therefore:
 
@@ -304,7 +310,8 @@ The next hard work is therefore:
    available, recording backend IDs, shot schedule, readout metadata, and
    hardware-vs-simulator comparison in `qge_moonlab_job_results.json`. Use
    `qge_moonlab_submission_packet.json` as the handoff input, not the
-   simulator result as a proxy for hardware execution.
+   simulator result as a proxy for hardware execution; use
+   `tools/qge_moonlab_hardware_ingest.py` to merge the returned record.
 3. Improve renderer fidelity enough that the QGE primary framebuffer is not
    only owned, but inspectably close to vanilla Quake on fixed-view and
    autonomous captures.

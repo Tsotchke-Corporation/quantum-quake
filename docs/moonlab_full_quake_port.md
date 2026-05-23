@@ -79,9 +79,12 @@ real submission.
 the job specs, can compare them with `--expect`, and can emit a replay plan
 with `--plan-out` plus the submission packet with `--submission-out`, so the
 Moonlab execution evidence is not trapped inside the pack builder. The pack
-still keeps full-game hardware execution, hardware quantum advantage, and
-dense-state claims out of scope until separate hardware deployment evidence
-exists.
+also includes `tools/qge_moonlab_hardware_ingest.py` for the return path: it
+accepts a `qge.moonlab_hardware_record.v0`, validates the backend ID,
+candidate digest, shot schedule, and readout metadata, and writes an updated
+job-results artifact plus a bounded hardware comparison. The pack still keeps
+full-game hardware execution, hardware quantum advantage, and dense-state
+claims out of scope until separate hardware deployment evidence exists.
 
 ## Current State
 
@@ -257,6 +260,8 @@ A complete port is credible when these are true:
    metadata in `qge_moonlab_job_results.json` and preserving the submission
    posture in `qge_moonlab_replay_plan.json`. Start from
    `qge_moonlab_submission_packet.json`; it is the no-claim hardware handoff
-   contract for the bounded QAE benchmark job.
+   contract for the bounded QAE benchmark job. Ingest the returned
+   `qge.moonlab_hardware_record.v0` with `tools/qge_moonlab_hardware_ingest.py`
+   so the simulator result, hardware result, and claim posture remain separate.
 5. Push per-source audio/media transduction from post-mix authority toward
    decoded-stream ownership.

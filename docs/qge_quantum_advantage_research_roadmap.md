@@ -114,7 +114,10 @@ Current artifact status:
   missing maps; 23 registered maps require additional registered BSP assets. Its agent stream
   also carries macOS AppKit/SDL launcher probes,
   including intentional
-  `-nolauncher` skips for UI-only launcher controls.
+  `-nolauncher` skips for UI-only launcher controls. A real hardware return
+  should be merged with `tools/qge_moonlab_hardware_ingest.py`, which records a
+  bounded hardware comparison while keeping hardware advantage and whole-game
+  hardware claims false.
 - Current metrics are evidence for a reproducible QAE-style benchmark under an
   explicit oracle model, not evidence for hardware advantage or end-to-end
   renderer acceleration.

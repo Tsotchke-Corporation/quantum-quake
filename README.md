@@ -83,7 +83,10 @@ Important known limitations:
   hardware-candidate handoff contract. `tools/qge_moonlab_job_runner.py` can
   regenerate those results directly from the job specs, compare them against
   the packed expected results, and emit both a replay plan and submission
-  packet. The pack explicitly does not claim whole-game
+  packet. After a real Moonlab hardware run, use
+  `tools/qge_moonlab_hardware_ingest.py` to validate the returned backend ID,
+  shot schedule, readout metadata, and candidate digest before updating
+  `qge_moonlab_job_results.json`. The pack explicitly does not claim whole-game
   hardware execution, hardware quantum advantage, or a dense 70,000-qubit
   state. This is a captured workload proof, not a claim that every Quake domain
   is visually or hardware complete. Use

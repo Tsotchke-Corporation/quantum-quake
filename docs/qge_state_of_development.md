@@ -674,7 +674,10 @@ Known current visual state:
   hardware submissions; `tools/qge_moonlab_job_runner.py` regenerates that
   result evidence directly from the job-spec artifact, can compare it to the
   packed expected results, and can emit the replay plan plus the
-  hardware-candidate submission packet. The resource artifacts
+  hardware-candidate submission packet. `tools/qge_moonlab_hardware_ingest.py`
+  is the guarded return path for a real Moonlab hardware record: it requires
+  backend ID, shot schedule, readout metadata, and matching candidate digest
+  before writing a bounded hardware comparison. The resource artifacts
   explicitly avoid whole-game hardware execution, hardware advantage, and
   dense-state claims. The bundled agent stream includes host launcher probes for
   the macOS AppKit/SDL bootstrap and marks `-nolauncher` UI-only launcher paths
