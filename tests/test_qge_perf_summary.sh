@@ -12,7 +12,7 @@ fail_json="$tmpdir/fail-summary.json"
 fail_icc_json="$tmpdir/fail-icc.json"
 
 cat > "$log_file" <<'LOG'
-QGE: Backend gate phase=init backend=Metal status=capable, inactive native=1 active=0 flags=0x3d path=sparse_dwt_cpu_render_path reason=native_backend_available_sparse_dwt_cpu_path_pending_renderer_bridge probe=metal_system_device_available
+QGE backend gate phase=init backend=Metal status=capable, inactive native=1 active=0 flags=0x3d path=sparse_dwt_cpu_render_path reason=native_backend_available_sparse_dwt_cpu_path_pending_renderer_bridge probe=metal_system_device_available
 QGE: Backend gate phase=render_bridge backend=Metal status=active acceleration native=1 active=1 flags=0x17 path=native_sparse_dwt_render_bridge reason=native_sparse_dwt_render_bridge_active probe=metal_system_device_available
 QGE render frame=3 mode=primary owner=qge_3d classic3d=0 suppressed3d=9 res=1024 time=27.0 encode=13.0 setup=0.0 raster=9.0 fdwt=4.0 dwt=3.0 convert=3.0 blit=8.0 reuse=0 interval=8 coeffs=192495 snapshot=117 snapshot_miss=0 texcache=234/0 lightcache=234/0 poly=117 tris=348 edgefills=0 microfill=0 culled=0 surrogate=0 micro=0 clipped=0 fallback=0 encoded=117 material=117 edicts=1 alias=1 sprites=0 sbill=0 emesh=0 ecoeff=4 viewmodel=1 entity_miss=0 particles=0 pcoeff=0 gates=26 shots=64 readout=0.953 edgeq=0.031 ggain=1.054 egain=0.727 native_idwt=3 idwt_fallback=0 cpu_idwt=0 idwt_backend=native idwt_path=native_sparse_dwt_render_bridge idwt_reason=native_sparse_dwt_render_bridge_active nonzero=448991/1048576
 QGE: Average quantum render time: 16.27 ms (24 frames)
@@ -48,16 +48,27 @@ assert summary["logs"][0]["idwt_backend"]["values"] == ["native"]
 assert summary["logs"][0]["backend_gate_init_event"]["path"] == "sparse_dwt_cpu_render_path"
 assert summary["logs"][0]["backend_gate_render_bridge_event"]["path"] == "native_sparse_dwt_render_bridge"
 assert summary["logs"][0]["backend_gate_shutdown_event"]["active"] == 1
+assert summary["logs"][0]["backend_gate_event_count"] == 3
+assert summary["logs"][0]["backend_gate_backends"] == ["Metal"]
+assert summary["logs"][0]["backend_gate_paths"] == ["native_sparse_dwt_render_bridge", "sparse_dwt_cpu_render_path"]
+assert summary["logs"][0]["backend_gate_render_bridge_active"] is True
 assert summary["aggregate"]["native_idwt_sum"] == 3
 assert summary["aggregate"]["idwt_fallback_sum"] == 0
 assert summary["aggregate"]["cpu_idwt_sum"] == 0
 assert summary["aggregate"]["idwt_backend_values"] == ["native"]
+assert summary["aggregate"]["backend_gate_event_count"] == 3
+assert summary["aggregate"]["backend_gate_backends"] == ["Metal"]
+assert summary["aggregate"]["backend_gate_render_bridge_paths"] == ["native_sparse_dwt_render_bridge"]
+assert summary["aggregate"]["backend_gate_render_bridge_active"] is True
 assert summary["logs"][0]["components"]["encode"]["max_ms"] == 13.0
 assert icc["completion_reason"] == "qge_runtime_performance_complete"
 assert icc["native_idwt_sum"] == 3
 assert icc["idwt_fallback_sum"] == 0
 assert icc["cpu_idwt_sum"] == 0
 assert icc["idwt_backend_values"] == ["native"]
+assert icc["backend_gate_event_count"] == 3
+assert icc["backend_gate_render_bridge_paths"] == ["native_sparse_dwt_render_bridge"]
+assert icc["backend_gate_render_bridge_active"] is True
 assert icc["failure_free"] is True
 PY
 
@@ -68,7 +79,7 @@ cat > "$cpu_log_file" <<'LOG'
 QGE: Backend gate phase=init backend=Metal status=capable, inactive native=1 active=0 flags=0x3d path=sparse_dwt_cpu_render_path reason=native_backend_available_sparse_dwt_cpu_path_pending_renderer_bridge probe=metal_system_device_available
 QGE render frame=4 mode=primary owner=qge_3d classic3d=0 suppressed3d=9 res=512 time=12.0 encode=5.0 setup=0.0 raster=3.0 fdwt=1.0 dwt=2.0 convert=1.0 blit=1.0 reuse=0 interval=1 coeffs=12000 snapshot=64 snapshot_miss=0 native_idwt=0 idwt_fallback=0 cpu_idwt=3 idwt_backend=cpu idwt_path=sparse_dwt_cpu_render_path idwt_reason=native_backend_available_sparse_dwt_cpu_path_pending_renderer_bridge nonzero=50000/262144
 QGE: Average quantum render time: 12.00 ms (1 frames)
-QGE: Backend gate phase=shutdown backend=Metal status=capable, inactive native=1 active=0 flags=0x3d path=sparse_dwt_cpu_render_path reason=native_backend_available_sparse_dwt_cpu_path_pending_renderer_bridge probe=metal_system_device_available
+QGE backend gate phase=shutdown backend=Metal status=capable, inactive native=1 active=0 flags=0x3d path=sparse_dwt_cpu_render_path reason=native_backend_available_sparse_dwt_cpu_path_pending_renderer_bridge probe=metal_system_device_available
 LOG
 
 python3 "$repo_root/tools/qge_perf_summary.py" \

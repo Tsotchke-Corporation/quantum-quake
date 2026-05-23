@@ -250,7 +250,11 @@ reason, and the reason when a capable backend is intentionally running the
 sparse CPU path. Once the sparse render bridge is active, the path becomes
 `native_sparse_dwt_render_bridge` and render traces set the `native_idwt` flag.
 The engine emits the gate at init, render-bridge activation, and shutdown so
-traces prove both the selected backend and the teardown path.
+traces prove both the selected backend and the teardown path. The performance
+summary sidecar parses these lines into `backend_gate_event_count`,
+`backend_gate_paths`, and `backend_gate_render_bridge_paths`; the vanilla matrix
+requires that backend-gate evidence before marking the QGE performance domain
+ready.
 Texture/material setup emits `texture_signal_cache` and
 `lightmap_signal_cache` probes as well. These mark the surface texture and
 lightmap signal paths as intentional CPU-side metadata/sample caches and record

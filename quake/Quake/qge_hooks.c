@@ -2372,7 +2372,7 @@ static void QGE_TraceBackendGate(const char *phase)
 	memset(&profile, 0, sizeof(profile));
 	qge_get_profile(qge_ctx, &profile);
 
-	fprintf(stderr, "QGE backend gate phase=%s backend=%s status=%s native=%d active=%d flags=0x%x path=%s reason=%s probe=%s qubits=%d memory=%llu\n",
+	fprintf(stderr, "QGE: Backend gate phase=%s backend=%s status=%s native=%d active=%d flags=0x%x path=%s reason=%s probe=%s qubits=%d memory=%llu\n",
 			phase, backend_name, status, native_available, active, flags, runtime_path, reason, probe_reason, profile.current_qubits,
 			(unsigned long long)profile.memory_used_bytes);
 

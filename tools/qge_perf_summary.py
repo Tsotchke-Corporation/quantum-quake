@@ -20,7 +20,7 @@ AVG_RE = re.compile(
     r"\((?P<frames>[0-9]+) frames\)"
 )
 BACKEND_GATE_RE = re.compile(
-    r"^QGE: Backend gate "
+    r"^QGE(?::)? [Bb]ackend gate "
     r"phase=(?P<phase>\S+) "
     r"backend=(?P<backend>\S+) "
     r"status=(?P<status>.+?) "
@@ -92,7 +92,9 @@ def parse_log(path: Path) -> dict[str, Any]:
                     average_ms = float(average.group("ms"))
                     average_frames = int(average.group("frames"))
                     continue
-                if line.startswith("QGE: Backend gate "):
+                if line.startswith(("QGE: Backend gate ",
+                                    "QGE backend gate ",
+                                    "QGE: backend gate ")):
                     backend_gate_lines.append(line)
                     backend_gate = parse_backend_gate_line(line)
                     if backend_gate is not None:
@@ -145,6 +147,25 @@ def parse_log(path: Path) -> dict[str, Any]:
         event for event in backend_gate_events
         if event.get("phase") == "render_bridge"
     ]
+    backend_gate_paths = sorted({
+        str(event["path"])
+        for event in backend_gate_events
+        if isinstance(event.get("path"), str)
+    })
+    backend_gate_backends = sorted({
+        str(event["backend"])
+        for event in backend_gate_events
+        if isinstance(event.get("backend"), str)
+    })
+    backend_gate_render_bridge_paths = sorted({
+        str(event["path"])
+        for event in render_bridge_events
+        if isinstance(event.get("path"), str)
+    })
+    backend_gate_render_bridge_active = any(
+        int(event.get("active") or 0) > 0
+        for event in render_bridge_events
+    )
 
     return {
         "input_path": str(path),
@@ -181,6 +202,11 @@ def parse_log(path: Path) -> dict[str, Any]:
         },
         "last_render_frame": render_frames[-1] if render_frames else None,
         "backend_gate_count": len(backend_gate_lines),
+        "backend_gate_event_count": len(backend_gate_events),
+        "backend_gate_paths": backend_gate_paths,
+        "backend_gate_backends": backend_gate_backends,
+        "backend_gate_render_bridge_paths": backend_gate_render_bridge_paths,
+        "backend_gate_render_bridge_active": backend_gate_render_bridge_active,
         "backend_gate_init": backend_gate_lines[0] if backend_gate_lines else None,
         "backend_gate_shutdown": (
             backend_gate_lines[-1] if len(backend_gate_lines) > 1 else None
@@ -228,6 +254,29 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
         for log in logs
         for value in (log.get("idwt_backend") or {}).get("values", [])
     })
+    backend_gate_event_count = sum(
+        int(log.get("backend_gate_event_count") or 0)
+        for log in logs
+    )
+    backend_gate_paths = sorted({
+        path
+        for log in logs
+        for path in log.get("backend_gate_paths", [])
+    })
+    backend_gate_backends = sorted({
+        backend
+        for log in logs
+        for backend in log.get("backend_gate_backends", [])
+    })
+    backend_gate_render_bridge_paths = sorted({
+        path
+        for log in logs
+        for path in log.get("backend_gate_render_bridge_paths", [])
+    })
+    backend_gate_render_bridge_active = any(
+        bool(log.get("backend_gate_render_bridge_active"))
+        for log in logs
+    )
     missing_logs = [log["log_path"] for log in logs if not log["exists"]]
     metric_evidence_present = bool(average_values or render_max_values)
     threshold_failures: list[dict[str, Any]] = []
@@ -270,6 +319,11 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
             "idwt_fallback_sum": sum(idwt_fallback_sums),
             "cpu_idwt_sum": sum(cpu_idwt_sums),
             "idwt_backend_values": idwt_backend_values,
+            "backend_gate_event_count": backend_gate_event_count,
+            "backend_gate_paths": backend_gate_paths,
+            "backend_gate_backends": backend_gate_backends,
+            "backend_gate_render_bridge_paths": backend_gate_render_bridge_paths,
+            "backend_gate_render_bridge_active": backend_gate_render_bridge_active,
             "threshold_failures": threshold_failures,
             "max_average_ms": args.max_average_ms,
             "max_render_ms": args.max_render_ms,
@@ -306,6 +360,13 @@ def build_icc_evidence(summary: dict[str, Any],
         "idwt_fallback_sum": aggregate["idwt_fallback_sum"],
         "cpu_idwt_sum": aggregate["cpu_idwt_sum"],
         "idwt_backend_values": aggregate["idwt_backend_values"],
+        "backend_gate_event_count": aggregate["backend_gate_event_count"],
+        "backend_gate_paths": aggregate["backend_gate_paths"],
+        "backend_gate_backends": aggregate["backend_gate_backends"],
+        "backend_gate_render_bridge_paths": aggregate[
+            "backend_gate_render_bridge_paths"],
+        "backend_gate_render_bridge_active": aggregate[
+            "backend_gate_render_bridge_active"],
         "max_average_ms": aggregate["max_average_ms"],
         "max_render_ms": aggregate["max_render_ms"],
         "threshold_failures": aggregate["threshold_failures"],

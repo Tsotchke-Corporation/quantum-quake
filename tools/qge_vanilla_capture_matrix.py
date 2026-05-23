@@ -185,6 +185,9 @@ def build_moonlab_domain_readiness(
         (render_primary_fb > 0 or sparse_dwt_count > 0) and
         (render_native_count > 0 or render_cpu_count > 0 or sparse_dwt_count > 0)
     )
+    performance_gate_ready = (
+        int_from(summary.get("qge_backend_gate_event_count")) > 0
+    )
 
     entropy_count = int_from(records.get("entropy"))
     measurement_count = int_from(records.get("measurement"))
@@ -333,14 +336,26 @@ def build_moonlab_domain_readiness(
             ["sprite ownership counter must be nonzero"],
         ),
         "qge_performance": readiness_entry(
-            bool(summary.get("performance_sidecars_success")),
+            bool(summary.get("performance_sidecars_success")) and
+            performance_gate_ready,
             {
                 "classic_status": summary.get("classic_performance_status"),
                 "qge_status": summary.get("qge_performance_status"),
                 "qge_threshold_failures": summary.get(
                     "qge_performance_threshold_failures"),
+                "backend_gate_event_count": summary.get(
+                    "qge_backend_gate_event_count"),
+                "backend_gate_backends": summary.get(
+                    "qge_backend_gate_backends"),
+                "backend_gate_paths": summary.get("qge_backend_gate_paths"),
+                "backend_gate_render_bridge_paths": summary.get(
+                    "qge_backend_gate_render_bridge_paths"),
+                "backend_gate_render_bridge_active": summary.get(
+                    "qge_backend_gate_render_bridge_active"),
             },
-            ["performance sidecars must pass without threshold failures"],
+            [
+                "performance sidecars must pass and expose backend-gate runtime evidence"
+            ],
         ),
     }
     return domains
@@ -468,6 +483,11 @@ def performance_summary(path: Path) -> dict[str, Any]:
         "render_time_ms_max": None,
         "threshold_failures": [],
         "metric_evidence_present": None,
+        "backend_gate_event_count": 0,
+        "backend_gate_paths": [],
+        "backend_gate_backends": [],
+        "backend_gate_render_bridge_paths": [],
+        "backend_gate_render_bridge_active": False,
     }
     if not path.is_file():
         return summary
@@ -487,6 +507,18 @@ def performance_summary(path: Path) -> dict[str, Any]:
         "render_time_ms_max": aggregate.get("render_time_ms_max"),
         "threshold_failures": failures if isinstance(failures, list) else [],
         "metric_evidence_present": aggregate.get("metric_evidence_present"),
+        "backend_gate_event_count": int_from(
+            aggregate.get("backend_gate_event_count")),
+        "backend_gate_paths": aggregate.get("backend_gate_paths")
+        if isinstance(aggregate.get("backend_gate_paths"), list) else [],
+        "backend_gate_backends": aggregate.get("backend_gate_backends")
+        if isinstance(aggregate.get("backend_gate_backends"), list) else [],
+        "backend_gate_render_bridge_paths": aggregate.get(
+            "backend_gate_render_bridge_paths")
+        if isinstance(
+            aggregate.get("backend_gate_render_bridge_paths"), list) else [],
+        "backend_gate_render_bridge_active": bool(
+            aggregate.get("backend_gate_render_bridge_active")),
     })
     return summary
 
@@ -794,6 +826,14 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
         "qge_render_native_idwt": qge_render_native_idwt,
         "qge_render_cpu_idwt": qge_render_cpu_idwt,
         "qge_render_idwt_backend": qge_render_idwt_backend,
+        "qge_backend_gate_event_count": qge_perf.get(
+            "backend_gate_event_count"),
+        "qge_backend_gate_paths": qge_perf.get("backend_gate_paths"),
+        "qge_backend_gate_backends": qge_perf.get("backend_gate_backends"),
+        "qge_backend_gate_render_bridge_paths": qge_perf.get(
+            "backend_gate_render_bridge_paths"),
+        "qge_backend_gate_render_bridge_active": qge_perf.get(
+            "backend_gate_render_bridge_active"),
     }
     moonlab_domains = build_moonlab_domain_readiness(
         conformance_summary,
@@ -904,6 +944,14 @@ def build_icc_evidence(matrix: dict[str, Any],
             "qge_performance_threshold_failures"),
         "performance_sidecars_success": summary.get(
             "performance_sidecars_success"),
+        "qge_backend_gate_event_count": summary.get(
+            "qge_backend_gate_event_count"),
+        "qge_backend_gate_paths": summary.get("qge_backend_gate_paths"),
+        "qge_backend_gate_backends": summary.get("qge_backend_gate_backends"),
+        "qge_backend_gate_render_bridge_paths": summary.get(
+            "qge_backend_gate_render_bridge_paths"),
+        "qge_backend_gate_render_bridge_active": summary.get(
+            "qge_backend_gate_render_bridge_active"),
         "runtime_evidence_ready": summary.get("runtime_evidence_ready"),
         "moonlab_authority_ready": summary.get("moonlab_authority_ready"),
         "moonlab_authority_blockers": summary.get(

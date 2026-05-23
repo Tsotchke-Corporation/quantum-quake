@@ -142,6 +142,15 @@ def matrix_run_summary(path: Path) -> dict[str, Any]:
     idwt_backend = (
         render.get("idwt_backend") or summary.get("qge_render_idwt_backend"))
     qge_primary_owner = primary.get("owner") or summary.get("qge_primary_owner")
+    backend_gate_event_count = as_int(
+        summary.get("qge_backend_gate_event_count"))
+    backend_gate_backends = string_list(
+        summary.get("qge_backend_gate_backends"))
+    backend_gate_paths = string_list(summary.get("qge_backend_gate_paths"))
+    backend_gate_render_bridge_paths = string_list(
+        summary.get("qge_backend_gate_render_bridge_paths"))
+    backend_gate_render_bridge_active = as_bool(
+        summary.get("qge_backend_gate_render_bridge_active"))
 
     issues = []
     if not as_bool(summary.get("ready_for_complete_claim")):
@@ -160,6 +169,10 @@ def matrix_run_summary(path: Path) -> dict[str, Any]:
         issues.append("native_bridge_missing")
     if cpu_idwt_count != 0:
         issues.append("cpu_idwt_nonzero")
+    if backend_gate_event_count <= 0:
+        issues.append("backend_gate_missing")
+    if idwt_backend == "native" and not backend_gate_render_bridge_active:
+        issues.append("backend_gate_render_bridge_inactive")
 
     return {
         "kind": "vanilla_capture_matrix",
@@ -179,6 +192,11 @@ def matrix_run_summary(path: Path) -> dict[str, Any]:
         "idwt_backend": idwt_backend,
         "native_bridge_count": native_bridge_count,
         "cpu_idwt_count": cpu_idwt_count,
+        "backend_gate_event_count": backend_gate_event_count,
+        "backend_gate_backends": backend_gate_backends,
+        "backend_gate_paths": backend_gate_paths,
+        "backend_gate_render_bridge_paths": backend_gate_render_bridge_paths,
+        "backend_gate_render_bridge_active": backend_gate_render_bridge_active,
     }
 
 
@@ -225,6 +243,12 @@ def unique_sorted(values: list[Any]) -> list[Any]:
     return sorted({value for value in values if value is not None})
 
 
+def string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
+
 def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     matrix_paths = list(args.matrix or [])
     publication_paths = list(args.publication_pack or [])
@@ -253,6 +277,27 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     total_cpu_idwt_count = sum(as_int(run.get("cpu_idwt_count")) for run in matrix_runs)
     total_native_bridge_count = sum(
         as_int(run.get("native_bridge_count")) for run in matrix_runs)
+    total_backend_gate_event_count = sum(
+        as_int(run.get("backend_gate_event_count")) for run in matrix_runs)
+    backend_gate_backends = unique_sorted([
+        backend
+        for run in matrix_runs
+        for backend in string_list(run.get("backend_gate_backends"))
+    ])
+    backend_gate_paths = unique_sorted([
+        path
+        for run in matrix_runs
+        for path in string_list(run.get("backend_gate_paths"))
+    ])
+    backend_gate_render_bridge_paths = unique_sorted([
+        path
+        for run in matrix_runs
+        for path in string_list(run.get("backend_gate_render_bridge_paths"))
+    ])
+    backend_gate_render_bridge_run_count = sum(
+        1 for run in matrix_runs
+        if as_bool(run.get("backend_gate_render_bridge_active"))
+    )
     issues = []
     if not min_runs_met:
         issues.append("minimum_matrix_runs_not_met")
@@ -273,7 +318,9 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         total_fallback_count == 0 and
         total_surrogate_count == 0 and
         total_cpu_idwt_count == 0 and
-        total_native_bridge_count > 0
+        total_native_bridge_count > 0 and
+        total_backend_gate_event_count > 0 and
+        backend_gate_render_bridge_run_count == len(matrix_runs)
     )
 
     return {
@@ -301,6 +348,12 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "total_surrogate_count": total_surrogate_count,
             "total_cpu_idwt_count": total_cpu_idwt_count,
             "total_native_bridge_count": total_native_bridge_count,
+            "total_backend_gate_event_count": total_backend_gate_event_count,
+            "backend_gate_backends": backend_gate_backends,
+            "backend_gate_paths": backend_gate_paths,
+            "backend_gate_render_bridge_paths": backend_gate_render_bridge_paths,
+            "backend_gate_render_bridge_run_count": (
+                backend_gate_render_bridge_run_count),
             "issue_count": len(issues),
             "issues": issues,
         },
@@ -344,6 +397,14 @@ def build_icc_evidence(manifest: dict[str, Any],
         "total_surrogate_count": aggregate.get("total_surrogate_count"),
         "total_cpu_idwt_count": aggregate.get("total_cpu_idwt_count"),
         "total_native_bridge_count": aggregate.get("total_native_bridge_count"),
+        "total_backend_gate_event_count": aggregate.get(
+            "total_backend_gate_event_count"),
+        "backend_gate_backends": aggregate.get("backend_gate_backends"),
+        "backend_gate_paths": aggregate.get("backend_gate_paths"),
+        "backend_gate_render_bridge_paths": aggregate.get(
+            "backend_gate_render_bridge_paths"),
+        "backend_gate_render_bridge_run_count": aggregate.get(
+            "backend_gate_render_bridge_run_count"),
         "issue_count": aggregate.get("issue_count"),
         "status": "success" if ready else "incomplete",
     }
