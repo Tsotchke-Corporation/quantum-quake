@@ -435,6 +435,14 @@ audited across every supplied run. It also emits
 ledger that stays `partial` until every target map has a ready QGE/Moonlab run.
 Use `--min-maps` when the artifact needs to prove breadth across distinct maps
 instead of repeated captures of one map.
+`tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>` turns
+that ledger into `qge.full_game_capture_queue.v0` plus a runnable
+`run_missing_maps.sh` script. The generated script runs
+`tools/quake_graphics_harness.sh` for each missing canonical map using the
+Noesis-fire authority-smoke profile by default, orders combat maps before
+`start`/`end`, marks those noncombat/endgame maps as
+`special_route_required`, and then rebuilds breadth evidence with the previous
+ready matrices plus the new capture directories.
 
 `tools/qge_noesis_summary.py` reads the stream manifest, Noesis action trace,
 translated command buffer, runtime log, `noesis/gameplay_outcomes.ndjson`,

@@ -21,6 +21,7 @@ if str(TOOLS_DIR) not in sys.path:
 
 import qge_advantage_benchmark as advantage  # noqa: E402
 import qge_breadth_evidence as breadth_evidence  # noqa: E402
+import qge_full_game_capture_queue as full_game_capture_queue  # noqa: E402
 import qge_image_metrics as image_metrics  # noqa: E402
 import qge_moonlab_job_runner as moonlab_job_runner  # noqa: E402
 import qge_noesis_summary as noesis_summary  # noqa: E402
@@ -1050,6 +1051,113 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(
                 icc["completion_reason"],
                 "qge_breadth_evidence_pack_evidence_only",
+            )
+
+    def test_full_game_capture_queue_from_breadth_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            matrix_a = self.write_matrix(tmpdir / "run_a", map_name="e1m1")
+            matrix_b = self.write_matrix(tmpdir / "run_b", map_name="e1m2")
+            args = SimpleNamespace(
+                inputs=[],
+                matrix=[matrix_a, matrix_b],
+                publication_pack=[],
+                min_runs=2,
+                min_maps=2,
+                map_set="quake_registered_single_player",
+            )
+            manifest = breadth_evidence.build_manifest(args)
+            breadth_path = tmpdir / "breadth_evidence.json"
+            breadth_evidence.write_json(breadth_path, manifest)
+
+            queue = full_game_capture_queue.build_queue(SimpleNamespace(
+                source=breadth_path,
+                limit=2,
+                frames=3,
+                wait_frames=12,
+                trace=True,
+                special_maps_last=True,
+                authority_smoke=True,
+                force_world_metrics=True,
+                env=["QGE_STREAM_LAUNCH=open"],
+            ))
+
+            self.assertEqual(queue["schema"], "qge.full_game_capture_queue.v0")
+            self.assertEqual(queue["queue_job_count"], 2)
+            self.assertTrue(queue["special_maps_last"])
+            self.assertEqual(queue["jobs"][0]["map"], "e1m3")
+            self.assertEqual(queue["jobs"][1]["map"], "e1m4")
+            self.assertEqual(
+                queue["jobs"][0]["route_profile"],
+                "noesis_authority_smoke",
+            )
+            self.assertEqual(queue["covered_map_count_before"], 2)
+            self.assertEqual(queue["covered_map_count_after_queue"], 4)
+            self.assertEqual(queue["post_capture"]["breadth_min_runs"], 4)
+            self.assertEqual(queue["post_capture"]["breadth_min_maps"], 4)
+            self.assertEqual(
+                queue["jobs"][0]["environment"]
+                ["QGE_HARNESS_FORCE_WORLD_METRICS"],
+                "1",
+            )
+            self.assertEqual(
+                queue["jobs"][0]["environment"]["QGE_STREAM_LAUNCH"],
+                "open",
+            )
+            self.assertEqual(
+                queue["jobs"][0]["environment"]["QGE_STREAM_PLAYER"],
+                "noesis",
+            )
+            self.assertEqual(
+                queue["jobs"][0]["environment"]["QGE_STREAM_FIRE_MIN_FRAMES"],
+                "4",
+            )
+            self.assertEqual(
+                queue["jobs"][0]["environment"]["QGE_NOESIS_MIN_CAPTURE_WAIT"],
+                "100",
+            )
+            self.assertEqual(
+                queue["jobs"][0]["environment"]["QGE_HARNESS_FIRE_TEST"],
+                "1",
+            )
+            self.assertEqual(
+                queue["jobs"][0]["environment"]["QGE_HARNESS_SPRITE_TEST"],
+                "1",
+            )
+            self.assertEqual(
+                queue["jobs"][0]["environment"]
+                ["QGE_HARNESS_SND_QUANTUM_SOURCE_AUTHORITY"],
+                "1",
+            )
+            self.assertEqual(
+                queue["jobs"][0]["environment"]
+                ["QGE_HARNESS_PHYSICS_AUTHORITATIVE"],
+                "1",
+            )
+            script = "\n".join(full_game_capture_queue.script_lines(queue))
+            self.assertIn("QGE_FULL_GAME_CAPTURE_QUEUE_MAP e1m3", script)
+            self.assertIn("--min-runs 4", script)
+            self.assertIn("--min-maps 4", script)
+            self.assertIn(str(matrix_a), script)
+            markdown = full_game_capture_queue.markdown_report(queue)
+            self.assertIn("QGE Full Game Capture Queue", markdown)
+            self.assertIn("noesis_authority_smoke", markdown)
+
+            canonical_queue = full_game_capture_queue.build_queue(SimpleNamespace(
+                source=breadth_path,
+                limit=1,
+                frames=3,
+                wait_frames=12,
+                trace=True,
+                special_maps_last=False,
+                authority_smoke=True,
+                force_world_metrics=True,
+                env=[],
+            ))
+            self.assertEqual(canonical_queue["jobs"][0]["map"], "start")
+            self.assertEqual(
+                canonical_queue["jobs"][0]["route_profile"],
+                "special_route_required",
             )
 
 

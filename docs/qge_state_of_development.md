@@ -633,10 +633,10 @@ Known current visual state:
   fixed-view renderer comparisons.
 - `tools/qge_breadth_evidence.py --min-maps` now enforces distinct-map breadth
   in addition to strict ownership counters. The current strongest breadth pack
-  is `diagnostics/breadth_evidence/20260523-131947`, covering four ready
-  Noesis-fire matrices across `e1m1`, `e1m2`, `e1m3`, and `e1m4` with zero
-  fallback, zero surrogate, zero CPU-IDWT, 420 native bridge events, 12 parsed
-  backend-gate events, and 16 native backend runtime-probe events across
+  is `diagnostics/breadth_evidence/20260523-135812`, covering five ready
+  Noesis-fire matrices across `e1m1` through `e1m5` with zero
+  fallback, zero surrogate, zero CPU-IDWT, 525 native bridge events, 15 parsed
+  backend-gate events, and 20 native backend runtime-probe events across
   `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`, and
   `qge_metal_init_common`. Runtime performance, vanilla matrix, breadth, and
   publication artifacts now carry per-target `runtime_backend_probe_proofs`,
@@ -644,11 +644,16 @@ Known current visual state:
   `resource/qge_native_backend_boundary.json` so native backend evidence is
   auditable by boundary instead of only as aggregate counts. The same breadth
   sidecar now emits `qge.full_game_map_coverage.v0` full-game map coverage:
-  the canonical registered single-player ledger is 4/32 covered, 28 missing,
-  status `partial`.
+  the canonical registered single-player ledger is 5/32 covered, 27 missing,
+  status `partial`. `tools/qge_full_game_capture_queue.py` turns that ledger
+  into `qge.full_game_capture_queue.v0` and a runnable
+  `run_missing_maps.sh`; against the current publication pack it queues the 27
+  missing maps, runs Noesis-fire authority-smoke combat maps first, defers
+  `start`/`end` as `special_route_required`, and rebuilds breadth evidence
+  with `--min-runs 32 --min-maps 32` when the queued captures complete.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
-  publication pack is `diagnostics/publication_pack/20260523-132000`, with
+  publication pack is `diagnostics/publication_pack/20260523-140556`, with
   `qge_publication_artifact_pack_complete`, the e1m1 ready vanilla/QGE capture,
   vanilla ICC evidence sidecar, agent stream, oracle/claims exports, QAE
   benchmark artifacts, `resource/qge_resource_envelope.json`,
@@ -656,7 +661,7 @@ Known current visual state:
   `resource/qge_native_backend_boundary.json`,
   `resource/qge_moonlab_job_specs.json`,
   `resource/qge_moonlab_job_results.json`,
-  `resource/qge_moonlab_replay_plan.json`, and the four-map breadth counters
+  `resource/qge_moonlab_replay_plan.json`, and the five-map breadth counters
   plus per-target native backend proof maps. The job results complete four
   simulator jobs total: the three simulator/native evidence jobs plus the
   coverage-ledger replay, with two native replay jobs, zero blocked jobs, zero
