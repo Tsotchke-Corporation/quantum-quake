@@ -488,6 +488,11 @@ Implemented:
   transparent palette rule. Palette alpha is now reserved for fence/transparent
   world surfaces so ordinary world texels do not punch dark holes through the
   raster.
+- Sub-pixel projected BSP surfaces now stay in the owned projected-polygon path
+  and use the existing QGE micro-fill encoder instead of being counted as
+  polygon surrogates. The `e1m2` capture at
+  `diagnostics/quake_graphics/20260522-231423` verifies zero fallback,
+  zero surrogate surfaces, native IDWT, and Moonlab authority readiness.
 - World textures with fullbright masks now split palette indices
   `>=QGE_SURFACE_FULLBRIGHT_INDEX` out of the lightmapped base color and add
   them back through `QGE_SURFACE_FULLBRIGHT_SCALE`, matching classic Quake's
@@ -626,6 +631,11 @@ Known current visual state:
   and viewmodel crops. The paired graphics harness falls back to it when
   numpy/Pillow are not available and defaults to flat lightstyles for
   fixed-view renderer comparisons.
+- `tools/qge_breadth_evidence.py --min-maps` now enforces distinct-map breadth
+  in addition to strict ownership counters. The current strongest breadth pack
+  is `diagnostics/breadth_evidence/20260522-231644`, covering five ready
+  matrices across `e1m1` and `e1m2` with zero fallback, zero surrogate,
+  zero CPU-IDWT, and native IDWT evidence.
 - The current renderer should be described as improved, not fixed. In the
   latest fixed-view capture the world projection, contrast, and brightness are
   much closer to classic Quake, but floors, walls, and ceilings still do not

@@ -398,6 +398,8 @@ machine-readable multi-run evidence sidecar. It emits
 `qge_breadth_evidence_pack_complete` only when every supplied matrix keeps
 Moonlab authority ready, uses the QGE primary framebuffer with native IDWT, and
 reports zero fallback, surrogate, and CPU-IDWT counts.
+Use `--min-maps` when the artifact needs to prove breadth across distinct maps
+instead of repeated captures of one map.
 
 `tools/qge_noesis_summary.py` reads the stream manifest, Noesis action trace,
 translated command buffer, runtime log, `noesis/gameplay_outcomes.ndjson`,

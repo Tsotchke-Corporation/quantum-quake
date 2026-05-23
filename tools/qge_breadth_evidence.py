@@ -246,6 +246,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     matrix_ready = all(run["ready"] for run in matrix_runs)
     publication_ready = all(pack["ready"] for pack in publication_packs)
     min_runs_met = len(matrix_runs) >= args.min_runs
+    maps = unique_sorted([run.get("map") for run in matrix_runs])
+    min_maps_met = len(maps) >= args.min_maps
     total_fallback_count = sum(as_int(run.get("fallback_count")) for run in all_runs)
     total_surrogate_count = sum(as_int(run.get("surrogate_count")) for run in all_runs)
     total_cpu_idwt_count = sum(as_int(run.get("cpu_idwt_count")) for run in matrix_runs)
@@ -254,6 +256,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     issues = []
     if not min_runs_met:
         issues.append("minimum_matrix_runs_not_met")
+    if not min_maps_met:
+        issues.append("minimum_map_count_not_met")
     for index, run in enumerate(matrix_runs):
         for issue in run["issues"]:
             issues.append(f"matrix_{index}:{issue}")
@@ -263,6 +267,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
 
     complete = (
         min_runs_met and
+        min_maps_met and
         matrix_ready and
         publication_ready and
         total_fallback_count == 0 and
@@ -276,6 +281,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "status": "success" if complete else "incomplete",
         "min_matrix_runs": args.min_runs,
+        "min_maps": args.min_maps,
         "matrix_runs": matrix_runs,
         "publication_packs": publication_packs,
         "aggregate": {
@@ -285,8 +291,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "ready_matrix_run_count": sum(1 for run in matrix_runs if run["ready"]),
             "ready_publication_pack_count": sum(
                 1 for pack in publication_packs if pack["ready"]),
-            "map_count": len(unique_sorted([run.get("map") for run in matrix_runs])),
-            "maps": unique_sorted([run.get("map") for run in matrix_runs]),
+            "map_count": len(maps),
+            "maps": maps,
             "qge_primary_owners": unique_sorted([
                 run.get("qge_primary_owner") for run in matrix_runs]),
             "idwt_backends": unique_sorted([
@@ -354,6 +360,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                         help="publication_manifest.json or publication pack directory")
     parser.add_argument("--min-runs", type=int, default=1,
                         help="Minimum ready vanilla matrix runs required")
+    parser.add_argument("--min-maps", type=int, default=1,
+                        help="Minimum distinct map names required")
     parser.add_argument("--out", type=Path,
                         default=REPO_ROOT / "diagnostics" /
                         "breadth_evidence" / stamp / "breadth_evidence.json")
@@ -365,6 +373,9 @@ def main(argv: list[str]) -> int:
     args = parse_args(argv)
     if args.min_runs <= 0:
         print("qge_breadth_evidence: --min-runs must be > 0", file=sys.stderr)
+        return 1
+    if args.min_maps <= 0:
+        print("qge_breadth_evidence: --min-maps must be > 0", file=sys.stderr)
         return 1
     icc_path = args.icc_out or args.out.parent / "qge_breadth_icc_evidence.json"
     try:

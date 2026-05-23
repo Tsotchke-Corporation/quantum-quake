@@ -444,6 +444,7 @@ class BreadthEvidenceTests(unittest.TestCase):
                 matrix=[matrix_a, matrix_b],
                 publication_pack=[pack],
                 min_runs=2,
+                min_maps=2,
             )
 
             manifest = breadth_evidence.build_manifest(args)
@@ -481,6 +482,7 @@ class BreadthEvidenceTests(unittest.TestCase):
                 matrix=[matrix],
                 publication_pack=[],
                 min_runs=1,
+                min_maps=1,
             )
 
             manifest = breadth_evidence.build_manifest(args)
@@ -488,6 +490,34 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertFalse(aggregate["breadth_ready_for_complete_claim"])
             self.assertIn("matrix_0:fallback_count_nonzero",
                           aggregate["issues"])
+            icc = breadth_evidence.build_icc_evidence(
+                manifest,
+                tmpdir / "breadth_evidence.json",
+                tmpdir / "qge_breadth_icc_evidence.json",
+            )
+            self.assertEqual(
+                icc["completion_reason"],
+                "qge_breadth_evidence_pack_evidence_only",
+            )
+
+    def test_breadth_evidence_blocks_insufficient_map_count(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            matrix_a = self.write_matrix(tmpdir / "run_a", map_name="e1m1")
+            matrix_b = self.write_matrix(tmpdir / "run_b", map_name="e1m1")
+            args = SimpleNamespace(
+                inputs=[],
+                matrix=[matrix_a, matrix_b],
+                publication_pack=[],
+                min_runs=2,
+                min_maps=2,
+            )
+
+            manifest = breadth_evidence.build_manifest(args)
+            aggregate = manifest["aggregate"]
+            self.assertFalse(aggregate["breadth_ready_for_complete_claim"])
+            self.assertEqual(aggregate["map_count"], 1)
+            self.assertIn("minimum_map_count_not_met", aggregate["issues"])
             icc = breadth_evidence.build_icc_evidence(
                 manifest,
                 tmpdir / "breadth_evidence.json",

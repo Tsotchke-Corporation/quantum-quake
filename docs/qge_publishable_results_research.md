@@ -165,6 +165,8 @@ Minimum publishable artifact package:
    - Required pass: `qge_breadth_evidence_pack_complete`
    - Evidence: aggregated `vanilla_capture_matrix.json` runs plus optional
      publication packs, with zero fallback, surrogate, and CPU-IDWT counts.
+   - For multi-map claims, run `tools/qge_breadth_evidence.py --min-maps N`
+     so repeated captures of a single map cannot satisfy the breadth gate.
 
 3. Runtime traces
    - QGE trace file for each capture.

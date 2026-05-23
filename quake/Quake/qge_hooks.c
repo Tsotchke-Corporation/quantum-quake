@@ -5552,11 +5552,6 @@ static qboolean QGE_ProjectSurfacePolygon(const qge_scene_surface_t *surface,
 		if (verts[i].y > max_y) max_y = verts[i].y;
 		depth_sum += verts[i].depth;
 	}
-	signed_area = fabsf(signed_area) * 0.5f;
-	if (signed_area < QGE_PROJECTED_AREA_EPSILON)
-		return QGE_ProjectSurfaceFail(fail_reason,
-									  QGE_PROJECT_FAIL_MICRO_AREA);
-
 	if (max_x <= min_x) max_x = min_x + 1.0f;
 	if (max_y <= min_y) max_y = min_y + 1.0f;
 	bounds->x1 = (int)min_x;
@@ -5565,6 +5560,7 @@ static qboolean QGE_ProjectSurfacePolygon(const qge_scene_surface_t *surface,
 	bounds->y2 = (int)max_y;
 	*num_verts = count;
 	*depth = depth_sum / (float)count;
+	signed_area = fabsf(signed_area) * 0.5f;
 	*area = signed_area;
 	return true;
 }
