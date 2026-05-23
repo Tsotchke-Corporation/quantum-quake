@@ -51,16 +51,19 @@ when all of these are true:
 
 The full-port acceptance target is the ICC completion oracle
 `qge_vanilla_quake_conformance`. As of
-`diagnostics/publication_pack/20260523-034017`, ICC reports
+`diagnostics/publication_pack/20260523-035110`, ICC reports
 `qge_vanilla_runtime_complete` ready for the bundled e1m1 QGE/vanilla capture
 matrix. That evidence proves the ownership counters for the captured workload;
 it does not by itself close renderer fidelity, all-map breadth, or whole-game
 hardware deployment claims. The bundled `resource/qge_resource_envelope.json`
 states the current Moonlab simulator/native-backend posture, and
 `resource/qge_moonlab_job_specs.json` breaks that posture into selected replay
-and benchmark jobs. The pack still keeps full-game hardware execution, hardware
-quantum advantage, and dense-state claims out of scope until separate hardware
-deployment evidence exists.
+and benchmark jobs. `resource/qge_moonlab_job_results.json` records the local
+simulator/native replay results: three simulator jobs completed, two native
+replay jobs completed, zero blocked jobs, and zero hardware submissions. The
+pack still keeps full-game hardware execution, hardware quantum advantage, and
+dense-state claims out of scope until separate hardware deployment evidence
+exists.
 
 ## Current State
 
@@ -225,8 +228,8 @@ A complete port is credible when these are true:
 2. Improve `quantum_render 2` visual fidelity without weakening ownership
    counters or native sparse-DWT evidence.
 3. Move particles/projectile visuals from separate effects into the scene graph.
-4. Execute the selected `qge_moonlab_job_specs.json` workloads through Moonlab:
-   simulator backend IDs first, then hardware backend IDs where the QAE
-   benchmark job is actually submitted.
+4. Submit the QAE hardware-candidate job from `qge_moonlab_job_specs.json`
+   through Moonlab hardware when available, recording backend IDs and readout
+   metadata in `qge_moonlab_job_results.json`.
 5. Push per-source audio/media transduction from post-mix authority toward
    decoded-stream ownership.

@@ -421,30 +421,95 @@ class PublicationPackTests(unittest.TestCase):
             resource_envelope["domains"]["light_transport_qae_benchmark"]
             ["logical_qubits"],
             11)
-        moonlab_job_specs = publication_pack.build_moonlab_job_specs(
-            resource_envelope,
-            {
-                "oracle_scene": "oracle/oracle_scene.json",
-                "advantage_metrics": "advantage/advantage_metrics.json",
-                "qae_circuit": "advantage/qae_circuit.txt",
-                "trace": "capture/qge_trace.bin",
-                "frame": "capture/frame_001.png",
-                "vanilla_matrix": "vanilla/vanilla_capture_matrix.json",
-                "performance_summary": "capture/qge_perf_summary.json",
-                "breadth_evidence": "breadth/breadth_evidence.json",
-            },
-        )
-        self.assertEqual(
-            moonlab_job_specs["schema"], "qge.moonlab_job_specs.v0")
-        self.assertEqual(moonlab_job_specs["selected_job_count"], 3)
-        self.assertEqual(
-            moonlab_job_specs["hardware_candidate_job_count"], 1)
-        self.assertFalse(
-            moonlab_job_specs["posture"]
-            ["whole_game_hardware_execution_claimed"])
-        self.assertEqual(
-            moonlab_job_specs["jobs"][1]["hardware_submission_status"],
-            "not_submitted")
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs_tmp = Path(tmp)
+            oracle_scene_path = jobs_tmp / "oracle_scene.json"
+            advantage_metrics_path = jobs_tmp / "advantage_metrics.json"
+            qae_circuit_path = jobs_tmp / "qae_circuit.txt"
+            trace_path = jobs_tmp / "qge_trace.bin"
+            frame_path = jobs_tmp / "frame_001.png"
+            vanilla_matrix_path = jobs_tmp / "vanilla_capture_matrix.json"
+            performance_path = jobs_tmp / "qge_perf_summary.json"
+            breadth_path = jobs_tmp / "breadth_evidence.json"
+            publication_pack.write_json(oracle_scene_path, {"scene": {}})
+            publication_pack.write_json(
+                advantage_metrics_path,
+                {
+                    "advantage_problem_id": "advantage.test",
+                    "comparison": {
+                        "best_qae": {
+                            "mean_reference_value": 0.5,
+                            "rmse": 0.01,
+                            "shots": 8,
+                            "oracle_eval_count": 24,
+                        },
+                    },
+                },
+            )
+            qae_circuit_path.write_text("qae circuit\n", encoding="utf-8")
+            trace_path.write_bytes(b"trace")
+            frame_path.write_bytes(b"png")
+            publication_pack.write_json(
+                vanilla_matrix_path,
+                {
+                    "conformance_summary": {
+                        "ready_for_complete_claim": True,
+                        "fallback_count": 0,
+                        "qge_surface_surrogates": 0,
+                    },
+                },
+            )
+            publication_pack.write_json(
+                performance_path,
+                {
+                    "runtime_backend_probe_resolved": True,
+                    "runtime_backend_probe_native_targets": ["qge_dwt_render"],
+                    "runtime_backend_probe_missing_targets": [],
+                },
+            )
+            publication_pack.write_json(
+                breadth_path,
+                {
+                    "map_count": 4,
+                    "runtime_backend_probe_resolved_run_count": 4,
+                    "total_native_bridge_count": 420,
+                },
+            )
+            moonlab_job_specs = publication_pack.build_moonlab_job_specs(
+                resource_envelope,
+                {
+                    "oracle_scene": str(oracle_scene_path),
+                    "advantage_metrics": str(advantage_metrics_path),
+                    "qae_circuit": str(qae_circuit_path),
+                    "trace": str(trace_path),
+                    "frame": str(frame_path),
+                    "vanilla_matrix": str(vanilla_matrix_path),
+                    "performance_summary": str(performance_path),
+                    "breadth_evidence": str(breadth_path),
+                },
+            )
+            moonlab_job_results = publication_pack.build_moonlab_job_results(
+                moonlab_job_specs)
+            self.assertEqual(
+                moonlab_job_specs["schema"], "qge.moonlab_job_specs.v0")
+            self.assertEqual(moonlab_job_specs["selected_job_count"], 3)
+            self.assertEqual(
+                moonlab_job_specs["hardware_candidate_job_count"], 1)
+            self.assertFalse(
+                moonlab_job_specs["posture"]
+                ["whole_game_hardware_execution_claimed"])
+            self.assertEqual(
+                moonlab_job_specs["jobs"][1]["hardware_submission_status"],
+                "not_submitted")
+            self.assertEqual(
+                moonlab_job_results["schema"], "qge.moonlab_job_results.v0")
+            self.assertEqual(
+                moonlab_job_results["completed_simulator_job_count"], 3)
+            self.assertEqual(
+                moonlab_job_results["completed_native_replay_job_count"], 2)
+            self.assertEqual(
+                moonlab_job_results["hardware_submitted_job_count"], 0)
+            self.assertEqual(moonlab_job_results["blocked_job_count"], 0)
 
         manifest = {
             "pack_dir": "pack",
@@ -461,6 +526,9 @@ class PublicationPackTests(unittest.TestCase):
                     "envelope": {"path": "resource/qge_resource_envelope.json"},
                     "moonlab_job_specs": {
                         "path": "resource/qge_moonlab_job_specs.json"
+                    },
+                    "moonlab_job_results": {
+                        "path": "resource/qge_moonlab_job_results.json"
                     },
                 },
                 "vanilla": {
@@ -491,6 +559,13 @@ class PublicationPackTests(unittest.TestCase):
                 "moonlab_job_specs_summary": {
                     "selected_job_count": 3,
                     "hardware_candidate_job_count": 1,
+                },
+                "moonlab_job_results_summary": {
+                    "overall_status": "simulator_complete_hardware_not_submitted",
+                    "completed_simulator_job_count": 3,
+                    "completed_native_replay_job_count": 2,
+                    "hardware_submitted_job_count": 0,
+                    "blocked_job_count": 0,
                 },
             },
             "runtime_summary": {
@@ -527,8 +602,17 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(
             icc["moonlab_job_specs_file"],
             "resource/qge_moonlab_job_specs.json")
+        self.assertEqual(
+            icc["moonlab_job_results_file"],
+            "resource/qge_moonlab_job_results.json")
         self.assertEqual(icc["moonlab_selected_job_count"], 3)
         self.assertEqual(icc["moonlab_hardware_candidate_job_count"], 1)
+        self.assertEqual(icc["moonlab_completed_simulator_job_count"], 3)
+        self.assertEqual(icc["moonlab_completed_native_replay_job_count"], 2)
+        self.assertEqual(icc["moonlab_hardware_submitted_job_count"], 0)
+        self.assertEqual(
+            icc["moonlab_job_results_status"],
+            "simulator_complete_hardware_not_submitted")
         self.assertFalse(icc["whole_game_hardware_execution_claimed"])
         self.assertEqual(icc["breadth_map_count"], 4)
         self.assertEqual(

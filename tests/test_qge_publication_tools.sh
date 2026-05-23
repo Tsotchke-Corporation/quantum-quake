@@ -289,15 +289,21 @@ assert manifest["artifacts"]["oracle"]["oracle_scene"]["exists"] is True
 assert manifest["artifacts"]["advantage"]["metrics"]["exists"] is True
 assert manifest["artifacts"]["resource"]["envelope"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_job_specs"]["exists"] is True
+assert manifest["artifacts"]["resource"]["moonlab_job_results"]["exists"] is True
 assert manifest["advantage_summary"]["resource_envelope_summary"]["whole_game_hardware_execution_claimed"] is False
 assert manifest["advantage_summary"]["moonlab_job_specs_summary"]["hardware_candidate_job_count"] == 1
+assert manifest["advantage_summary"]["moonlab_job_results_summary"]["completed_simulator_job_count"] >= 2
+assert manifest["advantage_summary"]["moonlab_job_results_summary"]["hardware_submitted_job_count"] == 0
 assert manifest["artifacts"]["vanilla"]["icc_evidence"]["packed"]["exists"] is True
 assert icc["completion_reason"] == "qge_publication_artifact_pack_complete"
 assert icc["runtime_backend"] == "qge_publication_pack"
 assert icc["publication_ready_for_complete_claim"] is True
 assert icc["resource_envelope_file"].endswith("resource/qge_resource_envelope.json")
 assert icc["moonlab_job_specs_file"].endswith("resource/qge_moonlab_job_specs.json")
+assert icc["moonlab_job_results_file"].endswith("resource/qge_moonlab_job_results.json")
 assert icc["moonlab_hardware_candidate_job_count"] == 1
+assert icc["moonlab_completed_simulator_job_count"] >= 2
+assert icc["moonlab_hardware_submitted_job_count"] == 0
 assert icc["whole_game_hardware_execution_claimed"] is False
 assert icc["vanilla_icc_evidence_file"].endswith("vanilla/qge_vanilla_icc_evidence.json")
 assert icc["status"] == "success"
