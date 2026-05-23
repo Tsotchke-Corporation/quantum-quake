@@ -332,6 +332,9 @@ assert manifest["artifacts"]["resource"]["envelope"]["exists"] is True
 assert manifest["artifacts"]["resource"]["full_game_map_coverage"]["exists"] is True
 assert manifest["artifacts"]["resource"]["asset_inventory"]["exists"] is True
 assert manifest["artifacts"]["resource"]["asset_inventory_icc_evidence"]["exists"] is True
+assert manifest["artifacts"]["resource"]["asset_requirements"]["exists"] is True
+assert manifest["artifacts"]["resource"]["asset_requirements_markdown"]["exists"] is True
+assert manifest["artifacts"]["resource"]["asset_requirements_icc_evidence"]["exists"] is True
 assert manifest["artifacts"]["resource"]["native_backend_boundary"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_job_specs"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_job_results"]["exists"] is True
@@ -347,6 +350,10 @@ assert manifest["advantage_summary"]["full_game_map_coverage_summary"]["target_m
 assert manifest["advantage_summary"]["full_game_map_coverage_summary"]["covered_map_count"] == 0
 assert manifest["advantage_summary"]["asset_inventory_summary"]["missing_map_count"] == 32
 assert manifest["advantage_summary"]["asset_inventory_summary"]["full_game_asset_ready"] is False
+assert manifest["advantage_summary"]["asset_requirements_summary"]["schema"] == "qge.asset_requirements.v0"
+assert manifest["advantage_summary"]["asset_requirements_summary"]["status"] == "blocked_missing_registered_assets"
+assert manifest["advantage_summary"]["asset_requirements_summary"]["missing_map_count"] == 32
+assert manifest["advantage_summary"]["asset_requirements_summary"]["asset_requirements_satisfied"] is False
 assert manifest["advantage_summary"]["native_backend_boundary_summary"]["status"] == "pass"
 assert manifest["advantage_summary"]["native_backend_boundary_summary"]["passed_target_count"] == 3
 assert manifest["advantage_summary"]["moonlab_job_specs_summary"]["hardware_candidate_job_count"] == 1
@@ -373,6 +380,13 @@ assert icc["full_game_map_covered_count"] == 0
 assert icc["asset_inventory_file"].endswith("resource/qge_asset_inventory.json")
 assert icc["asset_inventory_missing_map_count"] == 32
 assert icc["full_game_asset_ready"] is False
+assert icc["asset_requirements_file"].endswith("resource/qge_asset_requirements.json")
+assert icc["asset_requirements_markdown_file"].endswith("resource/qge_asset_requirements.md")
+assert icc["asset_requirements_icc_evidence_file"].endswith("resource/qge_asset_requirements_icc_evidence.json")
+assert icc["asset_requirements_schema"] == "qge.asset_requirements.v0"
+assert icc["asset_requirement_status"] == "blocked_missing_registered_assets"
+assert icc["asset_requirements_missing_map_count"] == 32
+assert icc["asset_requirements_satisfied"] is False
 assert icc["native_backend_boundary_file"].endswith("resource/qge_native_backend_boundary.json")
 assert icc["native_backend_boundary_status"] == "pass"
 assert icc["moonlab_job_specs_file"].endswith("resource/qge_moonlab_job_specs.json")
@@ -482,6 +496,30 @@ assert plan["claim_posture"]["whole_game_moonlab_deployment_claimed"] is False
 assert icc["runtime_backend"] == "qge_moonlab_full_game_plan"
 assert icc["deployment_status"] == plan["status"]
 assert icc["whole_game_moonlab_deployment_claimed"] is False
+PY
+
+python3 "$repo_root/tools/qge_asset_requirements.py" \
+  --asset-root "$tmpdir/missing-id1" \
+  --json "$tmpdir/qge_asset_requirements.json" \
+  --markdown "$tmpdir/qge_asset_requirements.md" \
+  --icc-json "$tmpdir/qge_asset_requirements_icc_evidence.json" \
+  > "$tmpdir/asset_requirements.stdout"
+grep -F 'QGE_ASSET_REQUIREMENTS' "$tmpdir/asset_requirements.stdout" >/dev/null
+grep -F 'QGE_ASSET_REQUIREMENTS_MARKDOWN' "$tmpdir/asset_requirements.stdout" >/dev/null
+grep -F 'QGE_ASSET_REQUIREMENTS_ICC_EVIDENCE' "$tmpdir/asset_requirements.stdout" >/dev/null
+python3 - "$tmpdir/qge_asset_requirements.json" "$tmpdir/qge_asset_requirements_icc_evidence.json" <<'PY'
+import json
+import sys
+
+requirements = json.load(open(sys.argv[1], encoding="utf-8"))
+icc = json.load(open(sys.argv[2], encoding="utf-8"))
+assert requirements["schema"] == "qge.asset_requirements.v0"
+assert requirements["status"] == "blocked_missing_registered_assets"
+assert requirements["missing_map_count"] == 32
+assert "maps/e1m1.bsp" in requirements["missing_required_entries"]
+assert requirements["claim_posture"]["whole_game_moonlab_deployment_claimed"] is False
+assert icc["runtime_backend"] == "qge_asset_requirements"
+assert icc["asset_requirement_status"] == "blocked_missing_registered_assets"
 PY
 
 if python3 "$repo_root/tools/qge_image_metrics.py" --check-deps > "$tmpdir/image_deps.stdout" 2> "$tmpdir/image_deps.stderr"; then

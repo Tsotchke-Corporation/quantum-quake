@@ -98,11 +98,12 @@ Current artifact status:
   `scaling_summary.json`, `qae_curve.csv`, `qae_circuit.txt`, and
   `qge_advantage_icc_evidence.json`.
 - The publication pack at
-  `diagnostics/publication_pack/20260523-171542/` bundles the benchmark,
+  `diagnostics/publication_pack/20260523-180201/` bundles the benchmark,
   oracle, trace, stream, vanilla, vanilla ICC evidence sidecar, claims, source
   artifacts, `resource/qge_resource_envelope.json`,
   `resource/qge_full_game_map_coverage.json`,
   `resource/qge_asset_inventory.json`,
+  `resource/qge_asset_requirements.json`,
   `resource/qge_moonlab_full_game_plan.json`,
   `resource/qge_native_backend_boundary.json`,
   `resource/qge_moonlab_job_specs.json`,

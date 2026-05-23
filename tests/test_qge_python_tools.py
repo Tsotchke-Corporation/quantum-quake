@@ -21,6 +21,7 @@ if str(TOOLS_DIR) not in sys.path:
 
 import qge_advantage_benchmark as advantage  # noqa: E402
 import qge_asset_inventory as asset_inventory  # noqa: E402
+import qge_asset_requirements as asset_requirements  # noqa: E402
 import qge_breadth_evidence as breadth_evidence  # noqa: E402
 import qge_full_game_capture_queue as full_game_capture_queue  # noqa: E402
 import qge_image_metrics as image_metrics  # noqa: E402
@@ -464,6 +465,8 @@ class PublicationPackTests(unittest.TestCase):
             breadth_path = jobs_tmp / "breadth_evidence.json"
             full_game_path = jobs_tmp / "qge_full_game_map_coverage.json"
             asset_inventory_path = jobs_tmp / "qge_asset_inventory.json"
+            asset_requirements_path = (
+                jobs_tmp / "qge_asset_requirements.json")
             publication_pack.write_json(oracle_scene_path, {"scene": {}})
             publication_pack.write_json(
                 advantage_metrics_path,
@@ -521,6 +524,18 @@ class PublicationPackTests(unittest.TestCase):
                     "full_game_asset_ready": False,
                 },
             )
+            publication_pack.write_json(
+                asset_requirements_path,
+                {
+                    "schema": "qge.asset_requirements.v0",
+                    "status": "blocked_missing_registered_assets",
+                    "present_map_count": 4,
+                    "missing_map_count": 28,
+                    "claim_posture": {
+                        "asset_requirements_satisfied": False,
+                    },
+                },
+            )
             moonlab_job_specs = publication_pack.build_moonlab_job_specs(
                 resource_envelope,
                 {
@@ -534,6 +549,7 @@ class PublicationPackTests(unittest.TestCase):
                     "breadth_evidence": str(breadth_path),
                     "full_game_map_coverage": str(full_game_path),
                     "asset_inventory": str(asset_inventory_path),
+                    "asset_requirements": str(asset_requirements_path),
                 },
             )
             moonlab_job_results = (
@@ -563,6 +579,18 @@ class PublicationPackTests(unittest.TestCase):
             self.assertEqual(
                 moonlab_job_results["hardware_submitted_job_count"], 0)
             self.assertEqual(moonlab_job_results["blocked_job_count"], 0)
+            full_game_job = next(
+                job for job in moonlab_job_results["jobs"]
+                if job["domain"] == "full_game_map_coverage")
+            self.assertEqual(
+                full_game_job["observations"]["asset_requirement_status"],
+                "blocked_missing_registered_assets")
+            self.assertEqual(
+                full_game_job["observations"]
+                ["asset_requirements_missing_map_count"],
+                28)
+            self.assertFalse(
+                full_game_job["observations"]["asset_requirements_satisfied"])
             moonlab_specs_path = jobs_tmp / "qge_moonlab_job_specs.json"
             moonlab_results_path = jobs_tmp / "qge_moonlab_job_results.json"
             moonlab_verify_path = (
@@ -704,6 +732,17 @@ class PublicationPackTests(unittest.TestCase):
                     "asset_inventory": {
                         "path": "resource/qge_asset_inventory.json"
                     },
+                    "asset_requirements": {
+                        "path": "resource/qge_asset_requirements.json"
+                    },
+                    "asset_requirements_markdown": {
+                        "path": "resource/qge_asset_requirements.md"
+                    },
+                    "asset_requirements_icc_evidence": {
+                        "path": (
+                            "resource/"
+                            "qge_asset_requirements_icc_evidence.json")
+                    },
                     "native_backend_boundary": {
                         "path": "resource/qge_native_backend_boundary.json"
                     },
@@ -819,6 +858,14 @@ class PublicationPackTests(unittest.TestCase):
                     "missing_map_count": 28,
                     "full_game_asset_ready": False,
                 },
+                "asset_requirements_summary": {
+                    "schema": "qge.asset_requirements.v0",
+                    "status": "blocked_missing_registered_assets",
+                    "target_map_count": 32,
+                    "present_map_count": 4,
+                    "missing_map_count": 28,
+                    "asset_requirements_satisfied": False,
+                },
             },
             "runtime_summary": {
                 "publication_ready_for_complete_claim": True,
@@ -869,6 +916,24 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(icc["asset_inventory_available_map_count"], 4)
         self.assertEqual(icc["asset_inventory_missing_map_count"], 28)
         self.assertFalse(icc["full_game_asset_ready"])
+        self.assertEqual(
+            icc["asset_requirements_file"],
+            "resource/qge_asset_requirements.json")
+        self.assertEqual(
+            icc["asset_requirements_markdown_file"],
+            "resource/qge_asset_requirements.md")
+        self.assertEqual(
+            icc["asset_requirements_icc_evidence_file"],
+            "resource/qge_asset_requirements_icc_evidence.json")
+        self.assertEqual(
+            icc["asset_requirements_schema"],
+            "qge.asset_requirements.v0")
+        self.assertEqual(
+            icc["asset_requirement_status"],
+            "blocked_missing_registered_assets")
+        self.assertEqual(icc["asset_requirements_present_map_count"], 4)
+        self.assertEqual(icc["asset_requirements_missing_map_count"], 28)
+        self.assertFalse(icc["asset_requirements_satisfied"])
         self.assertEqual(
             icc["native_backend_boundary_file"],
             "resource/qge_native_backend_boundary.json")
@@ -1338,6 +1403,59 @@ class BreadthEvidenceTests(unittest.TestCase):
                 "qge_registered_asset_inventory_complete",
             )
             self.assertFalse(icc["whole_game_moonlab_coverage_claimed"])
+
+            requirements = asset_requirements.build_requirements(inventory)
+            self.assertEqual(
+                requirements["schema"], "qge.asset_requirements.v0")
+            self.assertEqual(
+                requirements["status"],
+                "blocked_missing_registered_assets")
+            self.assertEqual(requirements["present_map_count"], 3)
+            self.assertEqual(requirements["missing_map_count"], 29)
+            self.assertIn(
+                "maps/e2m1.bsp",
+                requirements["missing_required_entries"])
+            e1m2 = next(
+                item for item in requirements["requirements"]
+                if item["map"] == "e1m2")
+            self.assertEqual(e1m2["status"], "present")
+            self.assertEqual(
+                e1m2["next_action"], "keep_existing_registered_asset")
+            req_icc = asset_requirements.build_icc_evidence(
+                requirements,
+                out_path=Path("qge_asset_requirements.json"),
+            )
+            self.assertEqual(
+                req_icc["runtime_backend"], "qge_asset_requirements")
+            self.assertEqual(req_icc["missing_map_count"], 29)
+            self.assertFalse(
+                req_icc["whole_game_moonlab_deployment_claimed"])
+            self.assertIn(
+                "blocked_missing_registered_assets",
+                asset_requirements.markdown_report(requirements))
+
+            req_path = Path(tmp) / "qge_asset_requirements.json"
+            req_md = Path(tmp) / "qge_asset_requirements.md"
+            req_icc_path = Path(tmp) / "qge_asset_requirements_icc.json"
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(
+                    asset_requirements.main([
+                        "--asset-root",
+                        str(asset_root),
+                        "--json",
+                        str(req_path),
+                        "--markdown",
+                        str(req_md),
+                        "--icc-json",
+                        str(req_icc_path),
+                    ]),
+                    0,
+                )
+            self.assertIn("QGE_ASSET_REQUIREMENTS", stdout.getvalue())
+            cli_req = publication_pack.load_json(req_path)
+            self.assertEqual(
+                cli_req["schema"], "qge.asset_requirements.v0")
 
     def write_matrix(self,
                      directory: Path,

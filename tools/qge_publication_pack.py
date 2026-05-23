@@ -27,6 +27,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import qge_advantage_benchmark  # noqa: E402
 import qge_asset_inventory  # noqa: E402
+import qge_asset_requirements  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
 import qge_moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest  # noqa: E402
@@ -696,6 +697,7 @@ def build_moonlab_job_specs(
                 "full_game_map_coverage": artifact_paths.get(
                     "full_game_map_coverage"),
                 "asset_inventory": artifact_paths.get("asset_inventory"),
+                "asset_requirements": artifact_paths.get("asset_requirements"),
             },
             "fallback_policy": (
                 "ledger remains partial until every target map has a ready "
@@ -1084,6 +1086,32 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         args.outdir / "resource" / "qge_asset_inventory_icc_evidence.json"
     )
     write_json(asset_inventory_icc_path, asset_inventory_icc)
+    asset_requirements = qge_asset_requirements.build_requirements(
+        asset_inventory,
+        map_set=str(
+            full_game_map_coverage.get("map_set") or
+            qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
+        ),
+    )
+    asset_requirements_path = (
+        args.outdir / "resource" / "qge_asset_requirements.json"
+    )
+    write_json(asset_requirements_path, asset_requirements)
+    asset_requirements_markdown_path = (
+        args.outdir / "resource" / "qge_asset_requirements.md"
+    )
+    asset_requirements_markdown_path.write_text(
+        qge_asset_requirements.markdown_report(asset_requirements),
+        encoding="utf-8",
+    )
+    asset_requirements_icc = qge_asset_requirements.build_icc_evidence(
+        asset_requirements,
+        out_path=asset_requirements_path,
+    )
+    asset_requirements_icc_path = (
+        args.outdir / "resource" / "qge_asset_requirements_icc_evidence.json"
+    )
+    write_json(asset_requirements_icc_path, asset_requirements_icc)
     native_backend_boundary = capture_perf_summary.get(
         "runtime_backend_boundary")
     if not isinstance(native_backend_boundary, dict):
@@ -1109,6 +1137,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 breadth_artifacts["evidence"]["packed"]["path"]),
             "full_game_map_coverage": str(full_game_map_coverage_path),
             "asset_inventory": str(asset_inventory_path),
+            "asset_requirements": str(asset_requirements_path),
         },
     )
     moonlab_job_specs_path = (
@@ -1193,6 +1222,11 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "full_game_map_coverage": file_info(full_game_map_coverage_path),
         "asset_inventory": file_info(asset_inventory_path),
         "asset_inventory_icc_evidence": file_info(asset_inventory_icc_path),
+        "asset_requirements": file_info(asset_requirements_path),
+        "asset_requirements_markdown": file_info(
+            asset_requirements_markdown_path),
+        "asset_requirements_icc_evidence": file_info(
+            asset_requirements_icc_path),
         "native_backend_boundary": file_info(native_backend_boundary_path),
         "moonlab_job_specs": file_info(moonlab_job_specs_path),
         "moonlab_job_results": file_info(moonlab_job_results_path),
@@ -1423,6 +1457,19 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "full_game_asset_ready": asset_inventory.get(
                     "full_game_asset_ready"),
             },
+            "asset_requirements_summary": {
+                "schema": asset_requirements.get("schema"),
+                "status": asset_requirements.get("status"),
+                "target_map_count": asset_requirements.get(
+                    "target_map_count"),
+                "present_map_count": asset_requirements.get(
+                    "present_map_count"),
+                "missing_map_count": asset_requirements.get(
+                    "missing_map_count"),
+                "asset_requirements_satisfied": (
+                    asset_requirements.get("claim_posture", {}).get(
+                        "asset_requirements_satisfied")),
+            },
             "native_backend_boundary_summary": {
                 "status": native_backend_boundary.get("status"),
                 "required_target_count": native_backend_boundary.get(
@@ -1516,6 +1563,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_vanilla_capture_matrix.py <graphics_capture_dir>",
             "tools/qge_breadth_evidence.py --matrix <graphics_capture_dir> --min-maps N",
             "tools/qge_publication_pack.py --capture-dir <trace_capture_dir> --vanilla-matrix <graphics_capture_dir>/vanilla_capture_matrix.json --graphics-capture-dir <graphics_capture_dir> --breadth-evidence <breadth_dir>",
+            "tools/qge_asset_requirements.py --asset-root <asset_root> --json /tmp/qge_asset_requirements.json --markdown /tmp/qge_asset_requirements.md --icc-json /tmp/qge_asset_requirements_icc_evidence.json",
             "tools/qge_moonlab_job_runner.py <pack_dir>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack_dir>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json --submission-out /tmp/qge_moonlab_submission_packet.verify.json",
             "tools/qge_moonlab_hardware_ingest.py <pack_dir>/resource/qge_moonlab_submission_packet.json --template-out /tmp/qge_moonlab_hardware_record.template.json",
             "tools/qge_moonlab_full_game_plan.py <pack_dir> --out /tmp/qge_moonlab_full_game_plan.json --markdown /tmp/qge_moonlab_full_game_plan.md --icc-json /tmp/qge_moonlab_full_game_plan_icc_evidence.json",
@@ -1549,6 +1597,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("full_game_map_coverage_summary"))
     asset_inventory_summary = dict_or_empty(
         advantage_summary.get("asset_inventory_summary"))
+    asset_requirements_summary = dict_or_empty(
+        advantage_summary.get("asset_requirements_summary"))
     ready = bool(runtime.get("publication_ready_for_complete_claim"))
     return {
         "schema": "qge.icc_evidence.v0",
@@ -1577,6 +1627,13 @@ def build_icc_evidence(manifest: dict[str, Any],
             "missing_map_count"),
         "asset_inventory_file": artifacts.get("resource", {}).get(
             "asset_inventory", {}).get("path"),
+        "asset_requirements_file": artifacts.get("resource", {}).get(
+            "asset_requirements", {}).get("path"),
+        "asset_requirements_markdown_file": artifacts.get("resource", {}).get(
+            "asset_requirements_markdown", {}).get("path"),
+        "asset_requirements_icc_evidence_file": (
+            artifacts.get("resource", {}).get(
+                "asset_requirements_icc_evidence", {}).get("path")),
         "asset_inventory_status": asset_inventory_summary.get("status"),
         "asset_inventory_available_map_count": (
             asset_inventory_summary.get("available_map_count")),
@@ -1584,6 +1641,14 @@ def build_icc_evidence(manifest: dict[str, Any],
             asset_inventory_summary.get("missing_map_count")),
         "full_game_asset_ready": asset_inventory_summary.get(
             "full_game_asset_ready"),
+        "asset_requirements_schema": asset_requirements_summary.get("schema"),
+        "asset_requirement_status": asset_requirements_summary.get("status"),
+        "asset_requirements_present_map_count": (
+            asset_requirements_summary.get("present_map_count")),
+        "asset_requirements_missing_map_count": (
+            asset_requirements_summary.get("missing_map_count")),
+        "asset_requirements_satisfied": (
+            asset_requirements_summary.get("asset_requirements_satisfied")),
         "native_backend_boundary_file": artifacts.get("resource", {}).get(
             "native_backend_boundary", {}).get("path"),
         "native_backend_boundary_status": native_boundary_summary.get(
