@@ -29,10 +29,25 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #import "SDL.h"
 #endif
 #import "SDLMain.h"
+#import <stdio.h>
 
 NSString *FQPrefCommandLineKey = @"CommandLine";
 NSString *FQPrefFullscreenKey = @"Fullscreen";
 NSString *FQPrefScreenModeKey = @"ScreenMode";
+
+static void QGE_LauncherProbe(const char *target,
+                              const char *phase,
+                              const char *path,
+                              const char *result)
+{
+    fprintf(stderr,
+            "QGE launcher probe target=%s symbol=QGE_LauncherProbe phase=%s path=%s result=%s\n",
+            target ? target : "unknown",
+            phase ? phase : "runtime",
+            path ? path : "macos_app_launcher",
+            result ? result : "unknown");
+    fflush(stderr);
+}
 
 @interface AppController ()
 - (void)launchQuakeUsingLauncherControls:(BOOL)useLauncherControls;
@@ -42,6 +57,8 @@ NSString *FQPrefScreenModeKey = @"ScreenMode";
 
 +(void) initialize {
     NSMutableDictionary *defaults = [NSMutableDictionary dictionary];
+    QGE_LauncherProbe("AppController", "initialize",
+                      "macos_app_launcher", "defaults_registered");
     
     [defaults setObject:@"" forKey:FQPrefCommandLineKey];
     [defaults setObject:[NSNumber numberWithBool:YES] forKey:FQPrefFullscreenKey];
@@ -82,12 +99,20 @@ NSString *FQPrefScreenModeKey = @"ScreenMode";
     if (!self)
         return nil;
 
+    QGE_LauncherProbe("AppController", "init",
+                      "macos_app_launcher", "created");
+
     arguments = [[QuakeArguments alloc] initWithArguments:gArgv + 1 count:gArgc - 1];
     screenModes = [[NSMutableArray alloc] init];
     [screenModes addObject:@"Default or command line arguments"];
 
-    if ([arguments argument:@"-nolauncher"] != nil)
+    if ([arguments argument:@"-nolauncher"] != nil) {
+        QGE_LauncherProbe("ScreenInfo", "display_modes",
+                          "nolauncher", "intentional_skip");
+        QGE_LauncherProbe("sender", "launcher_controls",
+                          "nolauncher", "intentional_skip");
         return self;
+    }
 
     if (SDL_InitSubSystem(SDL_INIT_VIDEO) == -1)
         return self;
@@ -157,6 +182,8 @@ NSString *FQPrefScreenModeKey = @"ScreenMode";
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
+    QGE_LauncherProbe("AppController", "applicationDidFinishLaunching",
+                      "macos_app_launcher", "ready");
 	if ([arguments argument:@"-nolauncher"] != nil) {
 		[arguments removeArgument:@"-nolauncher"];
 		[self launchQuakeUsingLauncherControls:NO];
@@ -173,11 +200,16 @@ NSString *FQPrefScreenModeKey = @"ScreenMode";
 
 - (IBAction)launchQuake:(id)sender {
     (void)sender;
+    QGE_LauncherProbe("sender", "launchQuake",
+                      "launcher_controls", "received");
     [self launchQuakeUsingLauncherControls:YES];
 }
 
 - (void)launchQuakeUsingLauncherControls:(BOOL)useLauncherControls {
     int index = 0;
+    QGE_LauncherProbe("AppController", "launchQuakeUsingLauncherControls",
+                      useLauncherControls ? "launcher_controls" : "nolauncher",
+                      "handoff");
 
     if (useLauncherControls) {
         [arguments parseArguments:[paramTextField stringValue]];

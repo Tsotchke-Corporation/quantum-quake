@@ -20,6 +20,21 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #import "QuakeArguments.h"
 #import "QuakeArgument.h"
+#import <stdio.h>
+
+static void QGE_LauncherProbe(const char *target,
+                              const char *phase,
+                              const char *result,
+                              int count)
+{
+    fprintf(stderr,
+            "QGE launcher probe target=%s symbol=QGE_LauncherProbe phase=%s path=macos_app_launcher result=%s count=%d\n",
+            target ? target : "unknown",
+            phase ? phase : "runtime",
+            result ? result : "unknown",
+            count);
+    fflush(stderr);
+}
 
 @implementation QuakeArguments
 
@@ -27,6 +42,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
     self = [super init];
     if (!self)
         return nil;
+
+    QGE_LauncherProbe("QuakeArguments", "init", "created", 0);
     
     quakeArgs = [[NSMutableArray alloc] init];
     return self;
@@ -41,6 +58,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
     self = [self init];
     if (!self)
         return nil;
+
+    QGE_LauncherProbe("QuakeArguments", "initWithArguments",
+                      "parse_argv", argc);
     
     if (argc > 0) {
         for (i = 0; argv[i]; i++) {
@@ -72,6 +92,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
     BOOL quoted = FALSE;
 
     [quakeArgs removeAllObjects];
+    QGE_LauncherProbe("QuakeArguments", "parseArguments",
+                      "parse_string", (int)[args length]);
     
     for (i = 0; i < [args length]; i++) {
         const unichar c = [args characterAtIndex:i];
@@ -188,9 +210,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 - (void)setArguments:(char **)args {
     int i = 0;
+    int count = [self count];
     
     NSEnumerator *enumerator = [quakeArgs objectEnumerator];
     QuakeArgument *argument;
+
+    QGE_LauncherProbe("QuakeArguments", "setArguments", "emit_argv", count);
     
     while ((argument = [enumerator nextObject])) {
         args[i++] = (char *)[[argument name] cStringUsingEncoding:NSASCIIStringEncoding];

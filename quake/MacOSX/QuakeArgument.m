@@ -19,6 +19,19 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #import "QuakeArgument.h"
+#import <stdio.h>
+
+static void QGE_LauncherProbe(const char *target,
+                              const char *phase,
+                              const char *result)
+{
+    fprintf(stderr,
+            "QGE launcher probe target=%s symbol=QGE_LauncherProbe phase=%s path=macos_app_launcher result=%s\n",
+            target ? target : "unknown",
+            phase ? phase : "runtime",
+            result ? result : "unknown");
+    fflush(stderr);
+}
 
 
 @implementation QuakeArgument
@@ -33,6 +46,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
     self = [super init];
     if (self == nil)
         return nil;
+
+    QGE_LauncherProbe("QuakeArgument", "init",
+                      v != nil ? "with_value" : "without_value");
     
     name = [n retain];
     if (v != nil)

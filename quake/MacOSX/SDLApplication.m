@@ -19,6 +19,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #import "SDLApplication.h"
+#import <stdio.h>
+
+__attribute__((constructor))
+static void QGE_SDLApplicationRuntimeProbe(void)
+{
+    fprintf(stderr,
+            "QGE launcher probe target=SDLApplication symbol=QGE_SDLApplicationRuntimeProbe phase=load path=macos_app_launcher result=loaded\n");
+    fflush(stderr);
+}
 
 // ericw -- with SDL2, this is unneeded and clashes; it has an SDLApplication class internally which does the same thing
 #if !defined(USE_SDL2)

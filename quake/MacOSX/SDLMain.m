@@ -18,11 +18,29 @@
 #import <sys/param.h> /* for MAXPATHLEN */
 #import <unistd.h>
 #import "SDLApplication.h"
+#import <stdio.h>
 
 int    gArgc;
 char  **gArgv;
 BOOL   gFinderLaunch;
 BOOL   gCalledAppMainline = FALSE;
+
+static void QGE_LauncherProbe(const char *target,
+                              const char *phase,
+                              const char *path,
+                              const char *result,
+                              int argc)
+{
+    fprintf(stderr,
+            "QGE launcher probe target=%s symbol=QGE_LauncherProbe phase=%s path=%s result=%s finder=%d argc=%d\n",
+            target ? target : "unknown",
+            phase ? phase : "runtime",
+            path ? path : "macos_app_launcher",
+            result ? result : "unknown",
+            gFinderLaunch ? 1 : 0,
+            argc);
+    fflush(stderr);
+}
 
 /* The main class of the application, the application's delegate */
 @implementation SDLMain
@@ -48,6 +66,9 @@ BOOL   gCalledAppMainline = FALSE;
 - (void) applicationDidFinishLaunching: (NSNotification *) note
 {
     int status;
+
+    QGE_LauncherProbe("SDLMain", "applicationDidFinishLaunching",
+                      "macos_app_launcher", "sdl_main", gArgc);
 
     /* Set the working directory to the .app's parent directory */
     [self setupWorkingDirectory:gFinderLaunch];
@@ -78,20 +99,31 @@ static int IsFinderLaunch(const int argc, char **argv)
 {
     /* -psn_XXX is passed if we are launched from Finder, SOMETIMES */
     if ( (argc >= 2) && (strncmp(argv[1], "-psn", 4) == 0) ) {
+        QGE_LauncherProbe("IsFinderLaunch", "argv",
+                          "macos_app_launcher", "finder_psn", argc);
         return 1;
     } else if ((argc == 1) && IsRootCwd()) {
         /* we might still be launched from the Finder; on 10.9+, you might not
         get the -psn command line anymore. If there's no
         command line, and if our current working directory is "/", it
         might as well be a Finder launch. */
+        QGE_LauncherProbe("IsFinderLaunch", "cwd",
+                          "macos_app_launcher", "finder_root_cwd", argc);
         return 1;
     }
+    QGE_LauncherProbe("IsFinderLaunch", "argv",
+                      "macos_app_launcher", "direct_args", argc);
     return 0;  /* not a Finder launch. */
 }
 
 /* Main entry point to executable - should *not* be SDL_main! */
 int main (int argc, char **argv)
 {
+    QGE_LauncherProbe("SDLMain", "main",
+                      "macos_app_launcher", "enter", argc);
+    QGE_LauncherProbe("SDLApplication", "principal_class",
+                      "macos_app_launcher", "delegated", argc);
+
     /* Copy the arguments into a global variable */
     if (IsFinderLaunch(argc, argv)) {
         gArgv = (char **) SDL_malloc(sizeof (char *) * 2);

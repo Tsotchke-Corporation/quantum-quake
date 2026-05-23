@@ -297,6 +297,13 @@ refreshes audio byte counts while the app is still running. After the run, the
 harness archives the log into the capture and agent-stream directories and
 removes the root `qconsole.log` copy so generated runtime output does not
 pollute source-drift checks.
+The macOS bootstrap emits `QGE launcher probe` lines for host-side AppKit/SDL
+entry points (`SDLMain`, `SDLApplication`, `AppController`, `QuakeArguments`,
+`QuakeArgument`, `IsFinderLaunch`, and `ScreenInfo`). These lines are host
+launch evidence only, not Moonlab authority claims. In `-nolauncher`
+automation, launcher UI controls and display-mode enumeration are reported as
+intentional skips so ICC can distinguish the deliberate automation path from an
+unexercised production launch path.
 The harness also passes `-display "$QGE_STREAM_DISPLAY"` when set. On the
 current capture workstation the default is SDL display `1`, which maps to the
 BenQ PD3200U; SDL display `0` is the LG. The engine logs the available display

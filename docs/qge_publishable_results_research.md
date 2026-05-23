@@ -155,10 +155,12 @@ Do claim, once proven:
 Minimum publishable artifact package:
 
 Current strongest publication bundle:
-`diagnostics/publication_pack/20260523-022043`. It packages a ready e1m1
+`diagnostics/publication_pack/20260523-025710`. It packages a ready e1m1
 QGE/vanilla capture, agent stream, oracle scene, claims evidence, finite-shot
 QAE benchmark artifacts, and the four-map breadth sidecar from
-`diagnostics/breadth_evidence/20260523-022036`.
+`diagnostics/breadth_evidence/20260523-022036`. The bundled agent stream also
+records host-side macOS AppKit/SDL launcher probes and marks UI-only
+`-nolauncher` paths as intentional skips.
 
 1. Strict ownership matrix
    - ICC target: `qge_vanilla_quake_conformance`
@@ -189,7 +191,7 @@ QAE benchmark artifacts, and the four-map breadth sidecar from
      count of matrix runs where all required native boundaries resolved to the
      native sparse DWT render bridge.
    - The current publication bundle carries those breadth counters directly:
-     `diagnostics/publication_pack/20260523-022043` reports
+     `diagnostics/publication_pack/20260523-025710` reports
      `breadth_map_count=4`, `breadth_total_native_bridge_count=420`, and
      `breadth_total_runtime_backend_probe_event_count=16`, with
      `breadth_runtime_backend_probe_resolved_run_count=4`.
