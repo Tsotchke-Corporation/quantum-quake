@@ -373,6 +373,11 @@ class PublicationPackTests(unittest.TestCase):
                 },
                 "vanilla": {
                     "matrix": {"packed": {"path": "vanilla_capture_matrix.json"}},
+                    "icc_evidence": {
+                        "packed": {
+                            "path": "vanilla/qge_vanilla_icc_evidence.json"
+                        }
+                    },
                 },
                 "breadth": {
                     "evidence": {"packed": {"path": "breadth_evidence.json"}},
@@ -415,6 +420,9 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(icc["runtime_backend"], "qge_publication_pack")
         self.assertEqual(icc["completion_reason"], "qge_publication_artifact_pack_complete")
         self.assertTrue(icc["publication_ready_for_complete_claim"])
+        self.assertEqual(
+            icc["vanilla_icc_evidence_file"],
+            "vanilla/qge_vanilla_icc_evidence.json")
         self.assertEqual(icc["breadth_map_count"], 4)
         self.assertEqual(
             icc["breadth_total_runtime_backend_probe_event_count"], 16)

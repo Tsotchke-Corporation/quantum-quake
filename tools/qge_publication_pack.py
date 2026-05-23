@@ -313,6 +313,20 @@ def explicit_performance_failure(summary: dict[str, Any]) -> bool:
     return False
 
 
+def resolve_vanilla_icc_evidence_path(
+    vanilla_matrix: Path,
+    graphics_capture_dir: Path | None,
+) -> Path | None:
+    candidates: list[Path] = []
+    if graphics_capture_dir is not None:
+        candidates.append(graphics_capture_dir / "qge_vanilla_icc_evidence.json")
+    candidates.append(vanilla_matrix.parent / "qge_vanilla_icc_evidence.json")
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def latest_file(pattern: str) -> Path | None:
     matches = sorted(REPO_ROOT.glob(pattern),
                      key=lambda path: path.stat().st_mtime if path.exists() else 0)
@@ -505,6 +519,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                                           args.outdir / "advantage",
                                           args)
     vanilla = load_json(vanilla_matrix)
+    vanilla_icc_evidence = resolve_vanilla_icc_evidence_path(
+        vanilla_matrix, graphics_capture_dir)
     conformance = vanilla.get("conformance_summary", {})
     perf_summary_path, perf_icc_path, perf_source = publication_performance_paths(
         capture_dir, graphics_capture_dir)
@@ -556,6 +572,9 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     vanilla_artifacts = {
         "matrix": pack_file(vanilla_matrix, args.outdir,
                             "vanilla/vanilla_capture_matrix.json"),
+        "icc_evidence": pack_file(
+            vanilla_icc_evidence, args.outdir,
+            "vanilla/qge_vanilla_icc_evidence.json"),
         "classic_frame": pack_file(
             Path(vanilla.get("modes", [{}])[0].get("frame", {}).get("path", "")),
             args.outdir,
@@ -609,6 +628,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "source_inputs": {
             "capture_dir": str(capture_dir),
             "vanilla_matrix": str(vanilla_matrix),
+            "vanilla_icc_evidence": (
+                str(vanilla_icc_evidence) if vanilla_icc_evidence else None),
             "graphics_capture_dir": (
                 str(graphics_capture_dir) if graphics_capture_dir else None),
             "publication_performance_source": perf_source,
@@ -815,6 +836,7 @@ def build_icc_evidence(manifest: dict[str, Any],
         "advantage_metrics_file": artifacts["advantage"]["metrics"]["path"],
         "scaling_summary_file": artifacts["advantage"]["scaling_summary"]["path"],
         "vanilla_capture_matrix_file": artifacts["vanilla"]["matrix"]["packed"]["path"],
+        "vanilla_icc_evidence_file": artifacts["vanilla"]["icc_evidence"]["packed"]["path"],
         "breadth_evidence_file": artifacts.get("breadth", {}).get(
             "evidence", {}).get("packed", {}).get("path"),
         "breadth_icc_evidence_file": artifacts.get("breadth", {}).get(

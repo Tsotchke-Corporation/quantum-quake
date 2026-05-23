@@ -98,11 +98,12 @@ Current artifact status:
   `scaling_summary.json`, `qae_curve.csv`, `qae_circuit.txt`, and
   `qge_advantage_icc_evidence.json`.
 - The publication pack at
-  `diagnostics/publication_pack/20260523-025710/` bundles the benchmark,
-  oracle, trace, stream, vanilla, claims, source artifacts, and the four-map
-  breadth evidence sidecar with per-target native backend proof maps. Its
-  agent stream also carries macOS AppKit/SDL launcher probes, including
-  intentional `-nolauncher` skips for UI-only launcher controls.
+  `diagnostics/publication_pack/20260523-031110/` bundles the benchmark,
+  oracle, trace, stream, vanilla, vanilla ICC evidence sidecar, claims, source
+  artifacts, and the four-map breadth evidence sidecar with per-target native
+  backend proof maps. Its agent stream also carries macOS AppKit/SDL launcher
+  probes, including intentional `-nolauncher` skips for UI-only launcher
+  controls.
 - Current metrics are evidence for a reproducible QAE-style benchmark under an
   explicit oracle model, not evidence for hardware advantage or end-to-end
   renderer acceleration.

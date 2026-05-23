@@ -188,6 +188,14 @@ write_json(matrix / "vanilla_capture_matrix.json", {
         "qge_performance_threshold_failures": [],
     },
 })
+write_json(matrix / "qge_vanilla_icc_evidence.json", {
+    "schema": "qge.icc_evidence.v0",
+    "runtime_backend": "qge_vanilla_capture_matrix",
+    "completion_reason": "qge_vanilla_capture_matrix_complete",
+    "vanilla_capture_matrix_file": str(matrix / "vanilla_capture_matrix.json"),
+    "ready_for_complete_claim": True,
+    "status": "success",
+})
 PY
 
 python3 "$repo_root/tools/qge_oracle_export.py" "$capture_dir" \
@@ -279,9 +287,11 @@ assert runtime["performance_ok"] is True
 assert runtime["vanilla_performance_ok"] is True
 assert manifest["artifacts"]["oracle"]["oracle_scene"]["exists"] is True
 assert manifest["artifacts"]["advantage"]["metrics"]["exists"] is True
+assert manifest["artifacts"]["vanilla"]["icc_evidence"]["packed"]["exists"] is True
 assert icc["completion_reason"] == "qge_publication_artifact_pack_complete"
 assert icc["runtime_backend"] == "qge_publication_pack"
 assert icc["publication_ready_for_complete_claim"] is True
+assert icc["vanilla_icc_evidence_file"].endswith("vanilla/qge_vanilla_icc_evidence.json")
 assert icc["status"] == "success"
 PY
 
