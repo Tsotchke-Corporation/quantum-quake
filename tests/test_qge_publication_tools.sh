@@ -337,6 +337,7 @@ assert manifest["artifacts"]["resource"]["moonlab_job_specs"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_job_results"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_replay_plan"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_submission_packet"]["exists"] is True
+assert manifest["artifacts"]["resource"]["moonlab_hardware_record_template"]["exists"] is True
 assert manifest["advantage_summary"]["resource_envelope_summary"]["whole_game_hardware_execution_claimed"] is False
 assert manifest["advantage_summary"]["full_game_map_coverage_summary"]["status"] == "partial"
 assert manifest["advantage_summary"]["full_game_map_coverage_summary"]["target_map_count"] == 32
@@ -351,6 +352,8 @@ assert manifest["advantage_summary"]["moonlab_job_results_summary"]["hardware_su
 assert manifest["advantage_summary"]["moonlab_replay_plan_summary"]["schema"] == "qge.moonlab_replay_plan.v0"
 assert manifest["advantage_summary"]["moonlab_submission_packet_summary"]["schema"] == "qge.moonlab_submission_packet.v0"
 assert manifest["advantage_summary"]["moonlab_submission_packet_summary"]["ready_candidate_count"] == 1
+assert manifest["advantage_summary"]["moonlab_hardware_record_template_summary"]["schema"] == "qge.moonlab_hardware_record_template.v0"
+assert manifest["advantage_summary"]["moonlab_hardware_record_template_summary"]["record_schema"] == "qge.moonlab_hardware_record.v0"
 assert manifest["artifacts"]["vanilla"]["icc_evidence"]["packed"]["exists"] is True
 assert icc["completion_reason"] == "qge_publication_artifact_pack_complete"
 assert icc["runtime_backend"] == "qge_publication_pack"
@@ -372,6 +375,9 @@ assert icc["moonlab_replay_plan_schema"] == "qge.moonlab_replay_plan.v0"
 assert icc["moonlab_submission_packet_file"].endswith("resource/qge_moonlab_submission_packet.json")
 assert icc["moonlab_submission_packet_schema"] == "qge.moonlab_submission_packet.v0"
 assert icc["moonlab_submission_ready_candidate_count"] == 1
+assert icc["moonlab_hardware_record_template_file"].endswith("resource/qge_moonlab_hardware_record_template.json")
+assert icc["moonlab_hardware_record_template_schema"] == "qge.moonlab_hardware_record_template.v0"
+assert icc["moonlab_hardware_record_schema"] == "qge.moonlab_hardware_record.v0"
 assert icc["moonlab_hardware_candidate_job_count"] == 1
 assert icc["moonlab_completed_simulator_job_count"] >= 2
 assert icc["moonlab_hardware_submitted_job_count"] == 0
@@ -413,6 +419,29 @@ assert submission["schema"] == "qge.moonlab_submission_packet.v0"
 assert submission["hardware_candidate_job_count"] == 1
 assert submission["ready_candidate_count"] == 1
 assert submission["candidate_jobs"][0]["submission_status"] == "ready_for_hardware_submission_metadata"
+PY
+
+python3 "$repo_root/tools/qge_moonlab_hardware_ingest.py" \
+  "$pack_dir/resource/qge_moonlab_submission_packet.json" \
+  --template-out "$tmpdir/qge_moonlab_hardware_record.template.json" \
+  > "$tmpdir/moonlab_hardware_template.stdout"
+grep -F 'QGE_MOONLAB_HARDWARE_RECORD_TEMPLATE' "$tmpdir/moonlab_hardware_template.stdout" >/dev/null
+python3 - "$tmpdir/qge_moonlab_hardware_record.template.json" "$pack_dir/publication_manifest.json" <<'PY'
+import json
+import sys
+
+template = json.load(open(sys.argv[1], encoding="utf-8"))
+manifest = json.load(open(sys.argv[2], encoding="utf-8"))
+summary = manifest["advantage_summary"]["moonlab_hardware_record_template_summary"]
+assert template["schema"] == "qge.moonlab_hardware_record_template.v0"
+assert template["record_schema"] == "qge.moonlab_hardware_record.v0"
+assert template["record"]["schema"] == "qge.moonlab_hardware_record.v0"
+assert template["record"]["backend_kind"] == "moonlab_hardware"
+assert template["record"]["hardware_quantum_advantage_claimed"] is False
+assert template["record"]["whole_game_hardware_execution_claimed"] is False
+assert template["record"]["dense_70000_qubit_state_claimed"] is False
+assert template["job_id"] == summary["job_id"]
+assert template["candidate_digest"] == summary["candidate_digest"]
 PY
 
 if python3 "$repo_root/tools/qge_image_metrics.py" --check-deps > "$tmpdir/image_deps.stdout" 2> "$tmpdir/image_deps.stderr"; then

@@ -98,7 +98,7 @@ Current artifact status:
   `scaling_summary.json`, `qae_curve.csv`, `qae_circuit.txt`, and
   `qge_advantage_icc_evidence.json`.
 - The publication pack at
-  `diagnostics/publication_pack/20260523-162303/` bundles the benchmark,
+  `diagnostics/publication_pack/20260523-164954/` bundles the benchmark,
   oracle, trace, stream, vanilla, vanilla ICC evidence sidecar, claims, source
   artifacts, `resource/qge_resource_envelope.json`,
   `resource/qge_full_game_map_coverage.json`,
@@ -107,7 +107,8 @@ Current artifact status:
   `resource/qge_moonlab_job_specs.json`,
   `resource/qge_moonlab_job_results.json`,
   `resource/qge_moonlab_replay_plan.json`,
-  `resource/qge_moonlab_submission_packet.json`, and the nine-map breadth
+  `resource/qge_moonlab_submission_packet.json`,
+  `resource/qge_moonlab_hardware_record_template.json`, and the nine-map breadth
   evidence sidecar with per-target native backend proof maps. The map coverage
   artifact is `partial`: 9/32 canonical registered single-player maps covered
   and 23 pending. The current local asset inventory has zero locally runnable
@@ -115,9 +116,10 @@ Current artifact status:
   also carries macOS AppKit/SDL launcher probes,
   including intentional
   `-nolauncher` skips for UI-only launcher controls. A real hardware return
-  should be merged with `tools/qge_moonlab_hardware_ingest.py`, which records a
-  bounded hardware comparison while keeping hardware advantage and whole-game
-  hardware claims false.
+  should start from the generated hardware record template and be merged with
+  `tools/qge_moonlab_hardware_ingest.py`, which records a bounded hardware
+  comparison while keeping hardware advantage and whole-game hardware claims
+  false.
 - Current metrics are evidence for a reproducible QAE-style benchmark under an
   explicit oracle model, not evidence for hardware advantage or end-to-end
   renderer acceleration.

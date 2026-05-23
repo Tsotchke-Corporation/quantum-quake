@@ -63,7 +63,7 @@ Important known limitations:
 
 - The full-port ICC target is `qge_vanilla_quake_conformance`. The current
   strongest self-contained evidence pack is
-  `diagnostics/publication_pack/20260523-162303`, where ICC reports the strict
+  `diagnostics/publication_pack/20260523-164954`, where ICC reports the strict
   vanilla/QGE runtime ownership matrix and `qge_vanilla_runtime_complete`
   ready. The pack includes `resource/qge_resource_envelope.json`, which scopes
   Moonlab simulator/native-backend deployment,
@@ -80,7 +80,10 @@ Important known limitations:
   submissions, plus `resource/qge_moonlab_replay_plan.json` with the exact
   replay/validation contract and
   `resource/qge_moonlab_submission_packet.json` with the deterministic
-  hardware-candidate handoff contract. `tools/qge_moonlab_job_runner.py` can
+  hardware-candidate handoff contract, plus
+  `resource/qge_moonlab_hardware_record_template.json` with the exact
+  no-claim record Moonlab must fill after a hardware run.
+  `tools/qge_moonlab_job_runner.py` can
   regenerate those results directly from the job specs, compare them against
   the packed expected results, and emit both a replay plan and submission
   packet. After a real Moonlab hardware run, use
@@ -90,7 +93,7 @@ Important known limitations:
   hardware execution, hardware quantum advantage, or a dense 70,000-qubit
   state. This is a captured workload proof, not a claim that every Quake domain
   is visually or hardware complete. Use
-  `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-162303`
+  `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-164954`
   to generate the remaining harness queue and breadth rebuild script; the queue
   inventories loose/Pak BSP assets, skips missing local BSPs unless
   `--include-unavailable-assets` is set, and currently reports zero locally

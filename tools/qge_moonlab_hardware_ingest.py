@@ -86,6 +86,99 @@ def candidate_jobs_by_id(packet: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return indexed
 
 
+def select_candidate_job(
+    submission_packet: dict[str, Any],
+    job_id: str | None = None,
+) -> dict[str, Any]:
+    require_schema(
+        submission_packet, "qge.moonlab_submission_packet.v0",
+        "submission packet")
+    candidates = [
+        job for job in list_or_empty(submission_packet.get("candidate_jobs"))
+        if isinstance(job, dict)
+    ]
+    if job_id:
+        for candidate in candidates:
+            if candidate.get("job_id") == job_id:
+                return candidate
+        raise ValueError(f"submission packet has no candidate job {job_id!r}")
+    if len(candidates) != 1:
+        raise ValueError("multiple hardware candidates require --job-id")
+    return candidates[0]
+
+
+def build_hardware_record_template(
+    submission_packet: dict[str, Any],
+    *,
+    job_id: str | None = None,
+) -> dict[str, Any]:
+    candidate = select_candidate_job(submission_packet, job_id)
+    missing = list_or_empty(candidate.get("missing_required_artifacts"))
+    if missing:
+        raise ValueError(
+            f"hardware candidate has missing required artifacts: {missing}")
+    if candidate.get("submission_status") not in (
+        "ready_for_hardware_submission_metadata",
+        "hardware_submission_recorded",
+    ):
+        raise ValueError("hardware candidate is not ready for a record template")
+
+    resource = dict_or_empty(candidate.get("resource"))
+    record = {
+        "schema": "qge.moonlab_hardware_record.v0",
+        "job_id": candidate.get("job_id"),
+        "candidate_digest": candidate.get("candidate_digest"),
+        "backend_id": "",
+        "backend_kind": "moonlab_hardware",
+        "status": "completed",
+        "run_id": "",
+        "submitted_utc": "",
+        "completed_utc": "",
+        "shot_schedule": {
+            "shots": resource.get("shots"),
+            "batches": None,
+            "schedule_id": "",
+        },
+        "readout_metadata": {
+            "shots_completed": None,
+            "readout_format": "",
+            "mitigation": "",
+        },
+        "observations": {
+            "mean_value": None,
+            "shots": resource.get("shots"),
+            "readout_error": None,
+        },
+        "hardware_quantum_advantage_claimed": False,
+        "whole_game_hardware_execution_claimed": False,
+        "dense_70000_qubit_state_claimed": False,
+    }
+    return {
+        "schema": "qge.moonlab_hardware_record_template.v0",
+        "record_schema": "qge.moonlab_hardware_record.v0",
+        "job_id": candidate.get("job_id"),
+        "candidate_digest": candidate.get("candidate_digest"),
+        "domain": candidate.get("domain"),
+        "kind": candidate.get("kind"),
+        "backend_kind": "moonlab_hardware",
+        "source_submission_packet": {
+            "job_specs": submission_packet.get("job_specs"),
+            "job_results": submission_packet.get("job_results"),
+            "candidate_count": submission_packet.get(
+                "hardware_candidate_job_count"),
+        },
+        "required_artifacts": dict_or_empty(candidate.get("required_artifacts")),
+        "artifact_evidence": list_or_empty(candidate.get("artifact_evidence")),
+        "resource": resource,
+        "record": record,
+        "limits": [
+            "Fill the record object with real Moonlab backend output before ingestion.",
+            "Do not set hardware quantum advantage, whole-game hardware execution, or dense-state claim flags to true.",
+            "This template covers one bounded hardware-candidate job, not the full game.",
+        ],
+    }
+
+
 def result_jobs_by_id(results: dict[str, Any]) -> dict[str, dict[str, Any]]:
     indexed: dict[str, dict[str, Any]] = {}
     for job in list_or_empty(results.get("jobs")):
@@ -311,30 +404,50 @@ def ingest_hardware_record(
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("submission_packet", type=Path)
-    parser.add_argument("--job-results", required=True, type=Path)
-    parser.add_argument("--hardware-record", required=True, type=Path)
-    parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--job-results", type=Path)
+    parser.add_argument("--hardware-record", type=Path)
+    parser.add_argument("--out", type=Path)
     parser.add_argument("--comparison-out", type=Path)
     parser.add_argument("--icc-out", type=Path)
+    parser.add_argument("--template-out", type=Path)
+    parser.add_argument("--job-id")
     return parser.parse_args(argv)
+
+
+def require_arg(args: argparse.Namespace, name: str, flag: str) -> Path:
+    value = getattr(args, name)
+    if value is None:
+        raise ValueError(f"{flag} is required unless --template-out is used")
+    return value
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         submission_packet = load_json(args.submission_packet)
-        job_results = load_json(args.job_results)
-        hardware_record = load_json(args.hardware_record)
+        if args.template_out:
+            template = build_hardware_record_template(
+                submission_packet, job_id=args.job_id)
+            write_json(args.template_out, template)
+            print(f"QGE_MOONLAB_HARDWARE_RECORD_TEMPLATE {args.template_out}")
+            return 0
+
+        job_results_path = require_arg(args, "job_results", "--job-results")
+        hardware_record_path = require_arg(
+            args, "hardware_record", "--hardware-record")
+        out_path = require_arg(args, "out", "--out")
+        job_results = load_json(job_results_path)
+        hardware_record = load_json(hardware_record_path)
         updated_results, comparison = ingest_hardware_record(
             submission_packet, job_results, hardware_record)
-        write_json(args.out, updated_results)
+        write_json(out_path, updated_results)
         if args.comparison_out:
             write_json(args.comparison_out, comparison)
         if args.icc_out:
             icc = build_icc_evidence(
                 updated_results,
                 comparison,
-                out_path=args.out,
+                out_path=out_path,
                 comparison_path=args.comparison_out,
             )
             write_json(args.icc_out, icc)
@@ -342,7 +455,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"qge_moonlab_hardware_ingest: {exc}", file=sys.stderr)
         return 1
 
-    print(f"QGE_MOONLAB_HARDWARE_RESULTS {args.out}")
+    print(f"QGE_MOONLAB_HARDWARE_RESULTS {out_path}")
     if args.comparison_out:
         print(f"QGE_MOONLAB_HARDWARE_COMPARISON {args.comparison_out}")
     if args.icc_out:
