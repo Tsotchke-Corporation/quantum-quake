@@ -621,7 +621,7 @@ static void qa_record_source_attenuation_pan_fallback(int subject_id,
 
     q_snprintf(message, sizeof(message),
                "audio_attenuation_pan_fallback reason=%s readiness=%s "
-               "classic=%d/%d qge=%d/%d abs_error=%d/%d max_error=%d "
+               "classic=%d/%d qge=%d/%d abs_delta=%d/%d max_delta=%d "
                "requested=%d ready=%d",
                qa_attenuation_pan_off_reason_name(
                    spatial->attenuation_pan_off_reason),
@@ -1162,12 +1162,12 @@ void S_QuantumSourceEndFrame(void)
                     "attenuation_pan_requested=%d "
                     "attenuation_pan_selected=%d "
                     "attenuation_pan_fallback=%d "
-                    "attenuation_pan_avg_abs_error=%.3f "
-                    "attenuation_pan_max_error=%d "
+                    "attenuation_pan_avg_abs_delta=%.3f "
+                    "attenuation_pan_max_delta=%d "
                     "attenuation_pan_last_classic=%d/%d "
                     "attenuation_pan_last_qge=%d/%d "
-                    "attenuation_pan_last_abs_error=%d/%d "
-                    "attenuation_pan_last_max_error=%d "
+                    "attenuation_pan_last_abs_delta=%d/%d "
+                    "attenuation_pan_last_max_delta=%d "
                     "attenuation_pan_readiness=%s "
                     "attenuation_pan_off_reason=%s "
                     "source_origin=(%.1f,%.1f,%.1f) "

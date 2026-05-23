@@ -17,8 +17,8 @@ REQUIRED_AUTHORITY_KEYS = (
     "attenuation_pan_requested",
     "attenuation_pan_selected",
     "attenuation_pan_fallback",
-    "attenuation_pan_avg_abs_error",
-    "attenuation_pan_max_error",
+    "attenuation_pan_avg_abs_delta",
+    "attenuation_pan_max_delta",
 )
 
 
