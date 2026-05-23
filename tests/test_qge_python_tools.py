@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import struct
 import sys
@@ -20,6 +22,7 @@ if str(TOOLS_DIR) not in sys.path:
 import qge_advantage_benchmark as advantage  # noqa: E402
 import qge_breadth_evidence as breadth_evidence  # noqa: E402
 import qge_image_metrics as image_metrics  # noqa: E402
+import qge_moonlab_job_runner as moonlab_job_runner  # noqa: E402
 import qge_noesis_summary as noesis_summary  # noqa: E402
 import qge_oracle_export as oracle_export  # noqa: E402
 import qge_perf_summary as perf_summary  # noqa: E402
@@ -488,8 +491,10 @@ class PublicationPackTests(unittest.TestCase):
                     "breadth_evidence": str(breadth_path),
                 },
             )
-            moonlab_job_results = publication_pack.build_moonlab_job_results(
-                moonlab_job_specs)
+            moonlab_job_results = (
+                moonlab_job_runner.build_moonlab_job_results(
+                    moonlab_job_specs)
+            )
             self.assertEqual(
                 moonlab_job_specs["schema"], "qge.moonlab_job_specs.v0")
             self.assertEqual(moonlab_job_specs["selected_job_count"], 3)
@@ -510,6 +515,29 @@ class PublicationPackTests(unittest.TestCase):
             self.assertEqual(
                 moonlab_job_results["hardware_submitted_job_count"], 0)
             self.assertEqual(moonlab_job_results["blocked_job_count"], 0)
+            moonlab_specs_path = jobs_tmp / "qge_moonlab_job_specs.json"
+            moonlab_results_path = jobs_tmp / "qge_moonlab_job_results.json"
+            publication_pack.write_json(moonlab_specs_path, moonlab_job_specs)
+            moonlab_stdout = io.StringIO()
+            with contextlib.redirect_stdout(moonlab_stdout):
+                self.assertEqual(
+                    moonlab_job_runner.main([
+                        str(moonlab_specs_path),
+                        "--out",
+                        str(moonlab_results_path),
+                    ]),
+                    0,
+                )
+            self.assertIn(
+                "QGE_MOONLAB_JOB_RESULTS",
+                moonlab_stdout.getvalue(),
+            )
+            moonlab_cli_results = publication_pack.load_json(
+                moonlab_results_path)
+            self.assertEqual(
+                moonlab_cli_results["schema"], "qge.moonlab_job_results.v0")
+            self.assertEqual(
+                moonlab_cli_results["completed_simulator_job_count"], 3)
 
         manifest = {
             "pack_dir": "pack",

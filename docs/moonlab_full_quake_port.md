@@ -51,7 +51,7 @@ when all of these are true:
 
 The full-port acceptance target is the ICC completion oracle
 `qge_vanilla_quake_conformance`. As of
-`diagnostics/publication_pack/20260523-035110`, ICC reports
+`diagnostics/publication_pack/20260523-040433`, ICC reports
 `qge_vanilla_runtime_complete` ready for the bundled e1m1 QGE/vanilla capture
 matrix. That evidence proves the ownership counters for the captured workload;
 it does not by itself close renderer fidelity, all-map breadth, or whole-game
@@ -60,10 +60,12 @@ states the current Moonlab simulator/native-backend posture, and
 `resource/qge_moonlab_job_specs.json` breaks that posture into selected replay
 and benchmark jobs. `resource/qge_moonlab_job_results.json` records the local
 simulator/native replay results: three simulator jobs completed, two native
-replay jobs completed, zero blocked jobs, and zero hardware submissions. The
-pack still keeps full-game hardware execution, hardware quantum advantage, and
-dense-state claims out of scope until separate hardware deployment evidence
-exists.
+replay jobs completed, zero blocked jobs, and zero hardware submissions.
+`tools/qge_moonlab_job_runner.py` regenerates those results independently from
+the job specs so the Moonlab execution evidence is not trapped inside the pack
+builder. The pack still keeps full-game hardware execution, hardware quantum
+advantage, and dense-state claims out of scope until separate hardware
+deployment evidence exists.
 
 ## Current State
 

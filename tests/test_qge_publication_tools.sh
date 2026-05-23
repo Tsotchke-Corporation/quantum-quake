@@ -309,6 +309,24 @@ assert icc["vanilla_icc_evidence_file"].endswith("vanilla/qge_vanilla_icc_eviden
 assert icc["status"] == "success"
 PY
 
+python3 "$repo_root/tools/qge_moonlab_job_runner.py" \
+  "$pack_dir/resource/qge_moonlab_job_specs.json" \
+  --out "$tmpdir/qge_moonlab_job_results.json" > "$tmpdir/moonlab_job_runner.stdout"
+grep -F 'QGE_MOONLAB_JOB_RESULTS' "$tmpdir/moonlab_job_runner.stdout" >/dev/null
+python3 - "$tmpdir/qge_moonlab_job_results.json" "$pack_dir/publication_manifest.json" <<'PY'
+import json
+import sys
+
+results = json.load(open(sys.argv[1], encoding="utf-8"))
+manifest = json.load(open(sys.argv[2], encoding="utf-8"))
+summary = manifest["advantage_summary"]["moonlab_job_results_summary"]
+assert results["schema"] == "qge.moonlab_job_results.v0"
+assert results["completed_simulator_job_count"] >= 2
+assert results["hardware_submitted_job_count"] == 0
+assert results["completed_simulator_job_count"] == summary["completed_simulator_job_count"]
+assert results["blocked_job_count"] == summary["blocked_job_count"]
+PY
+
 if python3 "$repo_root/tools/qge_image_metrics.py" --check-deps > "$tmpdir/image_deps.stdout" 2> "$tmpdir/image_deps.stderr"; then
   grep -F 'QGE_IMAGE_METRICS_DEPS_OK' "$tmpdir/image_deps.stdout" >/dev/null
 
