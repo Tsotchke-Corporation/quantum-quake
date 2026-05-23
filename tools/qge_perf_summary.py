@@ -31,6 +31,15 @@ BACKEND_GATE_RE = re.compile(
     r"reason=(?P<reason>\S+) "
     r"probe=(?P<probe>\S+)"
 )
+RUNTIME_BACKEND_PROBE_RE = re.compile(
+    r"^QGE: Runtime backend probe "
+    r"target=(?P<target>\S+) "
+    r"phase=(?P<phase>\S+) "
+    r"backend=(?P<backend>\S+) "
+    r"path=(?P<path>\S+) "
+    r"result=(?P<result>\S+)"
+    r"(?: (?P<rest>.*))?$"
+)
 NUMBER_RE = re.compile(r"^-?[0-9]+(?:\.[0-9]+)?$")
 
 
@@ -71,6 +80,31 @@ def parse_backend_gate_line(line: str) -> dict[str, Any] | None:
     return fields
 
 
+def parse_key_values(text: str) -> dict[str, Any]:
+    fields: dict[str, Any] = {}
+    for token in text.split():
+        if "=" not in token:
+            continue
+        key, value = token.split("=", 1)
+        fields[key] = numeric_value(value)
+    return fields
+
+
+def parse_runtime_backend_probe_line(line: str) -> dict[str, Any] | None:
+    match = RUNTIME_BACKEND_PROBE_RE.match(line)
+    if not match:
+        return None
+    fields: dict[str, Any] = {
+        key: value
+        for key, value in match.groupdict().items()
+        if key != "rest" and value is not None
+    }
+    rest = match.group("rest")
+    if rest:
+        fields.update(parse_key_values(rest))
+    return fields
+
+
 def parse_log(path: Path) -> dict[str, Any]:
     log_path = resolve_log_path(path)
     render_frames: list[dict[str, Any]] = []
@@ -78,6 +112,8 @@ def parse_log(path: Path) -> dict[str, Any]:
     average_frames: int | None = None
     backend_gate_lines: list[str] = []
     backend_gate_events: list[dict[str, Any]] = []
+    runtime_backend_probe_lines: list[str] = []
+    runtime_backend_probe_events: list[dict[str, Any]] = []
     exists = log_path.is_file()
     if exists:
         with log_path.open("r", encoding="utf-8", errors="replace") as f:
@@ -99,6 +135,12 @@ def parse_log(path: Path) -> dict[str, Any]:
                     backend_gate = parse_backend_gate_line(line)
                     if backend_gate is not None:
                         backend_gate_events.append(backend_gate)
+                    continue
+                if line.startswith("QGE: Runtime backend probe "):
+                    runtime_backend_probe_lines.append(line)
+                    probe = parse_runtime_backend_probe_line(line)
+                    if probe is not None:
+                        runtime_backend_probe_events.append(probe)
 
     render_times = [
         float(frame["time"])
@@ -166,6 +208,26 @@ def parse_log(path: Path) -> dict[str, Any]:
         int(event.get("active") or 0) > 0
         for event in render_bridge_events
     )
+    runtime_backend_probe_targets = sorted({
+        str(event["target"])
+        for event in runtime_backend_probe_events
+        if isinstance(event.get("target"), str)
+    })
+    runtime_backend_probe_backends = sorted({
+        str(event["backend"])
+        for event in runtime_backend_probe_events
+        if isinstance(event.get("backend"), str)
+    })
+    runtime_backend_probe_paths = sorted({
+        str(event["path"])
+        for event in runtime_backend_probe_events
+        if isinstance(event.get("path"), str)
+    })
+    runtime_backend_probe_results = sorted({
+        str(event["result"])
+        for event in runtime_backend_probe_events
+        if isinstance(event.get("result"), str)
+    })
 
     return {
         "input_path": str(path),
@@ -221,6 +283,14 @@ def parse_log(path: Path) -> dict[str, Any]:
         "backend_gate_shutdown_event": (
             backend_gate_events[-1] if len(backend_gate_events) > 1 else None
         ),
+        "runtime_backend_probe_count": len(runtime_backend_probe_lines),
+        "runtime_backend_probe_event_count": len(
+            runtime_backend_probe_events),
+        "runtime_backend_probe_targets": runtime_backend_probe_targets,
+        "runtime_backend_probe_backends": runtime_backend_probe_backends,
+        "runtime_backend_probe_paths": runtime_backend_probe_paths,
+        "runtime_backend_probe_results": runtime_backend_probe_results,
+        "runtime_backend_probe_events": runtime_backend_probe_events,
     }
 
 
@@ -277,6 +347,30 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
         bool(log.get("backend_gate_render_bridge_active"))
         for log in logs
     )
+    runtime_backend_probe_event_count = sum(
+        int(log.get("runtime_backend_probe_event_count") or 0)
+        for log in logs
+    )
+    runtime_backend_probe_targets = sorted({
+        target
+        for log in logs
+        for target in log.get("runtime_backend_probe_targets", [])
+    })
+    runtime_backend_probe_backends = sorted({
+        backend
+        for log in logs
+        for backend in log.get("runtime_backend_probe_backends", [])
+    })
+    runtime_backend_probe_paths = sorted({
+        path
+        for log in logs
+        for path in log.get("runtime_backend_probe_paths", [])
+    })
+    runtime_backend_probe_results = sorted({
+        result
+        for log in logs
+        for result in log.get("runtime_backend_probe_results", [])
+    })
     missing_logs = [log["log_path"] for log in logs if not log["exists"]]
     metric_evidence_present = bool(average_values or render_max_values)
     threshold_failures: list[dict[str, Any]] = []
@@ -324,6 +418,12 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
             "backend_gate_backends": backend_gate_backends,
             "backend_gate_render_bridge_paths": backend_gate_render_bridge_paths,
             "backend_gate_render_bridge_active": backend_gate_render_bridge_active,
+            "runtime_backend_probe_event_count": (
+                runtime_backend_probe_event_count),
+            "runtime_backend_probe_targets": runtime_backend_probe_targets,
+            "runtime_backend_probe_backends": runtime_backend_probe_backends,
+            "runtime_backend_probe_paths": runtime_backend_probe_paths,
+            "runtime_backend_probe_results": runtime_backend_probe_results,
             "threshold_failures": threshold_failures,
             "max_average_ms": args.max_average_ms,
             "max_render_ms": args.max_render_ms,
@@ -367,6 +467,16 @@ def build_icc_evidence(summary: dict[str, Any],
             "backend_gate_render_bridge_paths"],
         "backend_gate_render_bridge_active": aggregate[
             "backend_gate_render_bridge_active"],
+        "runtime_backend_probe_event_count": aggregate[
+            "runtime_backend_probe_event_count"],
+        "runtime_backend_probe_targets": aggregate[
+            "runtime_backend_probe_targets"],
+        "runtime_backend_probe_backends": aggregate[
+            "runtime_backend_probe_backends"],
+        "runtime_backend_probe_paths": aggregate[
+            "runtime_backend_probe_paths"],
+        "runtime_backend_probe_results": aggregate[
+            "runtime_backend_probe_results"],
         "max_average_ms": aggregate["max_average_ms"],
         "max_render_ms": aggregate["max_render_ms"],
         "threshold_failures": aggregate["threshold_failures"],

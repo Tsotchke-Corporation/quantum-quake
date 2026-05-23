@@ -321,19 +321,58 @@ const char* qge_context_backend_runtime_path(qge_context_t* ctx) {
     return "portable_render_path";
 }
 
+static void qge_context_log_render_acceleration_probe(
+    qge_context_t* ctx,
+    const char* phase,
+    const char* result,
+    int screen_res,
+    bool* logged
+) {
+    if (!ctx) {
+        return;
+    }
+    if (logged && *logged) {
+        return;
+    }
+    if (logged) {
+        *logged = true;
+    }
+    fprintf(stderr,
+            "QGE: Runtime backend probe target=qge_context_get_or_create_render_acceleration phase=%s backend=%s path=%s result=%s native=%d active=%d screen_res=%d reason=%s probe=%s\n",
+            phase ? phase : "runtime",
+            qge_backend_name(ctx->backend),
+            qge_context_backend_runtime_path(ctx),
+            result ? result : "unknown",
+            ctx->backend_native_available ? 1 : 0,
+            qge_context_has_active_acceleration(ctx) ? 1 : 0,
+            screen_res,
+            qge_context_backend_reason(ctx),
+            qge_context_backend_probe_reason(ctx));
+}
+
 void* qge_context_get_or_create_render_acceleration(qge_context_t* ctx,
                                                     int screen_res) {
+    static bool logged_cache_hit = false;
+    static bool logged_unavailable = false;
+    static bool logged_created = false;
+    static bool logged_init_failed = false;
+    static bool logged_unsupported = false;
+
     if (!ctx || screen_res <= 0) {
         return NULL;
     }
     if (ctx->gpu_context) {
         if (ctx->gpu_context_screen_res == screen_res) {
+            qge_context_log_render_acceleration_probe(
+                ctx, "cache_hit", "cached", screen_res, &logged_cache_hit);
             return ctx->gpu_context;
         }
         qge_context_free_gpu_context(ctx);
     }
     if (!ctx->backend_native_available ||
         !qge_backend_uses_native_render_bridge(ctx->backend)) {
+        qge_context_log_render_acceleration_probe(
+            ctx, "gate", "unavailable", screen_res, &logged_unavailable);
         return NULL;
     }
 
@@ -343,14 +382,21 @@ void* qge_context_get_or_create_render_acceleration(qge_context_t* ctx,
             qge_metal_init_render_bridge(ctx->num_qubits, screen_res);
         if (!metal) {
             ctx->backend_probe_reason = "metal_render_bridge_init_failed";
+            qge_context_log_render_acceleration_probe(
+                ctx, "create", "init_failed", screen_res,
+                &logged_init_failed);
             return NULL;
         }
         ctx->gpu_context = metal;
         ctx->gpu_context_screen_res = screen_res;
+        qge_context_log_render_acceleration_probe(
+            ctx, "create", "created", screen_res, &logged_created);
         return ctx->gpu_context;
     }
 #endif
 
+    qge_context_log_render_acceleration_probe(
+        ctx, "gate", "unsupported_backend", screen_res, &logged_unsupported);
     return NULL;
 }
 

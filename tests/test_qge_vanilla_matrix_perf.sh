@@ -61,6 +61,9 @@ LOG
 cat > "$tmpdir/quantum.log" <<'LOG'
 QGE: Backend gate phase=init backend=Metal status=capable, inactive native=1 active=0 flags=0x3d path=sparse_dwt_cpu_render_path reason=native_backend_available_sparse_dwt_cpu_path_pending_renderer_bridge probe=metal_system_device_available
 QGE: Backend gate phase=render_bridge backend=Metal status=active acceleration native=1 active=1 flags=0x17 path=native_sparse_dwt_render_bridge reason=native_sparse_dwt_render_bridge_active probe=metal_system_device_available
+QGE: Runtime backend probe target=qge_metal_init_common phase=create backend=Metal path=native_sparse_dwt_render_bridge result=active dense_amplitudes=0 qubits=28 screen_res=1024
+QGE: Runtime backend probe target=qge_context_get_or_create_render_acceleration phase=create backend=Metal path=native_sparse_dwt_render_bridge result=created native=1 active=1 screen_res=1024 reason=native_sparse_dwt_render_bridge_active probe=metal_system_device_available
+QGE: Runtime backend probe target=qge_dwt_render phase=idwt backend=Metal path=native_sparse_dwt_render_bridge result=native native_render_backend=native native=1 active=1 screen_res=1024 levels=6 gpu_reconstruct=1 mode=0 active_coeffs=192495 reason=native_sparse_dwt_render_bridge_active
 QGE render frame=0 mode=primary owner=qge_3d classic3d=0 suppressed3d=9 classic2d=1 suppressed2d=0 res=1024 time=26.0 encode=12.0 setup=0.0 raster=9.0 fdwt=4.0 dwt=3.0 convert=3.0 blit=8.0 reuse=0 interval=8 coeffs=192495 snapshot=117 snapshot_miss=0 texcache=234/0 lightcache=234/0 poly=117 tris=348 edgefills=0 microfill=0 culled=0 surrogate=0 micro=0 clipped=0 fallback=0 encoded=117 material=117 edicts=1 alias=1 sprites=0 sbill=0 emesh=0 ecoeff=4 viewmodel=1 entity_miss=0 particles=0 pcoeff=0 own_world=117 own_textures=117 own_lightmaps=117 own_entities=1 own_sprites=1 own_particles=1 own_viewmodel=1 own_hud=0 own_console=1 gate_kernel=1 gates=26 shots=64 primary_fb=1 native_idwt=1 cpu_idwt=0 idwt_backend=native readout=0.953 edgeq=0.031 ggain=1.054 egain=0.727 nonzero=448991/1048576 fallback_reason=classic2d_unowned
 QGE render frame=3 mode=primary owner=qge_3d classic3d=0 suppressed3d=9 classic2d=0 suppressed2d=4 res=1024 time=27.0 encode=13.0 setup=0.0 raster=9.0 fdwt=4.0 dwt=3.0 convert=3.0 blit=8.0 reuse=0 interval=8 coeffs=192495 snapshot=117 snapshot_miss=0 texcache=234/0 lightcache=234/0 poly=117 tris=348 edgefills=0 microfill=0 culled=0 surrogate=0 micro=0 clipped=0 fallback=0 encoded=117 material=117 edicts=1 alias=1 sprites=0 sbill=0 emesh=0 ecoeff=4 viewmodel=1 entity_miss=0 particles=0 pcoeff=0 own_world=117 own_textures=117 own_lightmaps=117 own_entities=1 own_sprites=1 own_particles=1 own_viewmodel=1 own_hud=1 own_console=1 gate_kernel=1 gates=26 shots=64 primary_fb=1 native_idwt=1 cpu_idwt=0 idwt_backend=native readout=0.953 edgeq=0.031 ggain=1.054 egain=0.727 nonzero=448991/1048576
 QGE: Average quantum render time: 16.27 ms (24 frames)
@@ -142,6 +145,12 @@ assert summary["qge_backend_gate_event_count"] == 3
 assert summary["qge_backend_gate_backends"] == ["Metal"]
 assert summary["qge_backend_gate_render_bridge_paths"] == ["native_sparse_dwt_render_bridge"]
 assert summary["qge_backend_gate_render_bridge_active"] is True
+assert summary["qge_runtime_backend_probe_event_count"] == 3
+assert summary["qge_runtime_backend_probe_targets"] == [
+    "qge_context_get_or_create_render_acceleration",
+    "qge_dwt_render",
+    "qge_metal_init_common",
+]
 assert summary["qge_classic_output_hidden"] is True
 assert summary["qge_classic_output_seen_any_frame"] is True
 assert summary["classic2d_count"] == 1
@@ -156,6 +165,7 @@ assert icc["moonlab_authority_ready"] is True
 assert icc["qge_performance_status"] == "pass"
 assert icc["qge_backend_gate_event_count"] == 3
 assert icc["qge_backend_gate_render_bridge_active"] is True
+assert icc["qge_runtime_backend_probe_event_count"] == 3
 assert icc["status"] == "success"
 PY
 

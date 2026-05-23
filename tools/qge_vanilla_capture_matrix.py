@@ -186,7 +186,8 @@ def build_moonlab_domain_readiness(
         (render_native_count > 0 or render_cpu_count > 0 or sparse_dwt_count > 0)
     )
     performance_gate_ready = (
-        int_from(summary.get("qge_backend_gate_event_count")) > 0
+        int_from(summary.get("qge_backend_gate_event_count")) > 0 and
+        int_from(summary.get("qge_runtime_backend_probe_event_count")) > 0
     )
 
     entropy_count = int_from(records.get("entropy"))
@@ -352,9 +353,15 @@ def build_moonlab_domain_readiness(
                     "qge_backend_gate_render_bridge_paths"),
                 "backend_gate_render_bridge_active": summary.get(
                     "qge_backend_gate_render_bridge_active"),
+                "runtime_backend_probe_event_count": summary.get(
+                    "qge_runtime_backend_probe_event_count"),
+                "runtime_backend_probe_targets": summary.get(
+                    "qge_runtime_backend_probe_targets"),
+                "runtime_backend_probe_paths": summary.get(
+                    "qge_runtime_backend_probe_paths"),
             },
             [
-                "performance sidecars must pass and expose backend-gate runtime evidence"
+                "performance sidecars must pass and expose backend-gate and native backend runtime probes"
             ],
         ),
     }
@@ -488,6 +495,11 @@ def performance_summary(path: Path) -> dict[str, Any]:
         "backend_gate_backends": [],
         "backend_gate_render_bridge_paths": [],
         "backend_gate_render_bridge_active": False,
+        "runtime_backend_probe_event_count": 0,
+        "runtime_backend_probe_targets": [],
+        "runtime_backend_probe_backends": [],
+        "runtime_backend_probe_paths": [],
+        "runtime_backend_probe_results": [],
     }
     if not path.is_file():
         return summary
@@ -519,6 +531,24 @@ def performance_summary(path: Path) -> dict[str, Any]:
             aggregate.get("backend_gate_render_bridge_paths"), list) else [],
         "backend_gate_render_bridge_active": bool(
             aggregate.get("backend_gate_render_bridge_active")),
+        "runtime_backend_probe_event_count": int_from(
+            aggregate.get("runtime_backend_probe_event_count")),
+        "runtime_backend_probe_targets": aggregate.get(
+            "runtime_backend_probe_targets")
+        if isinstance(aggregate.get("runtime_backend_probe_targets"), list)
+        else [],
+        "runtime_backend_probe_backends": aggregate.get(
+            "runtime_backend_probe_backends")
+        if isinstance(aggregate.get("runtime_backend_probe_backends"), list)
+        else [],
+        "runtime_backend_probe_paths": aggregate.get(
+            "runtime_backend_probe_paths")
+        if isinstance(aggregate.get("runtime_backend_probe_paths"), list)
+        else [],
+        "runtime_backend_probe_results": aggregate.get(
+            "runtime_backend_probe_results")
+        if isinstance(aggregate.get("runtime_backend_probe_results"), list)
+        else [],
     })
     return summary
 
@@ -834,6 +864,16 @@ def build_matrix(args: argparse.Namespace) -> dict[str, Any]:
             "backend_gate_render_bridge_paths"),
         "qge_backend_gate_render_bridge_active": qge_perf.get(
             "backend_gate_render_bridge_active"),
+        "qge_runtime_backend_probe_event_count": qge_perf.get(
+            "runtime_backend_probe_event_count"),
+        "qge_runtime_backend_probe_targets": qge_perf.get(
+            "runtime_backend_probe_targets"),
+        "qge_runtime_backend_probe_backends": qge_perf.get(
+            "runtime_backend_probe_backends"),
+        "qge_runtime_backend_probe_paths": qge_perf.get(
+            "runtime_backend_probe_paths"),
+        "qge_runtime_backend_probe_results": qge_perf.get(
+            "runtime_backend_probe_results"),
     }
     moonlab_domains = build_moonlab_domain_readiness(
         conformance_summary,
@@ -952,6 +992,16 @@ def build_icc_evidence(matrix: dict[str, Any],
             "qge_backend_gate_render_bridge_paths"),
         "qge_backend_gate_render_bridge_active": summary.get(
             "qge_backend_gate_render_bridge_active"),
+        "qge_runtime_backend_probe_event_count": summary.get(
+            "qge_runtime_backend_probe_event_count"),
+        "qge_runtime_backend_probe_targets": summary.get(
+            "qge_runtime_backend_probe_targets"),
+        "qge_runtime_backend_probe_backends": summary.get(
+            "qge_runtime_backend_probe_backends"),
+        "qge_runtime_backend_probe_paths": summary.get(
+            "qge_runtime_backend_probe_paths"),
+        "qge_runtime_backend_probe_results": summary.get(
+            "qge_runtime_backend_probe_results"),
         "runtime_evidence_ready": summary.get("runtime_evidence_ready"),
         "moonlab_authority_ready": summary.get("moonlab_authority_ready"),
         "moonlab_authority_blockers": summary.get(

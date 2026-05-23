@@ -397,6 +397,17 @@ class BreadthEvidenceTests(unittest.TestCase):
                     "native_sparse_dwt_render_bridge",
                 ],
                 "qge_backend_gate_render_bridge_active": True,
+                "qge_runtime_backend_probe_event_count": 3,
+                "qge_runtime_backend_probe_targets": [
+                    "qge_context_get_or_create_render_acceleration",
+                    "qge_dwt_render",
+                    "qge_metal_init_common",
+                ],
+                "qge_runtime_backend_probe_backends": ["Metal"],
+                "qge_runtime_backend_probe_paths": [
+                    "native_sparse_dwt_render_bridge",
+                ],
+                "qge_runtime_backend_probe_results": ["active", "created", "native"],
                 "moonlab_domain_readiness": {
                     "qge_primary_framebuffer": {
                         "ready": ready,
@@ -472,6 +483,17 @@ class BreadthEvidenceTests(unittest.TestCase):
                 ["native_sparse_dwt_render_bridge"],
             )
             self.assertEqual(aggregate["backend_gate_render_bridge_run_count"], 2)
+            self.assertEqual(
+                aggregate["total_runtime_backend_probe_event_count"], 6)
+            self.assertEqual(
+                aggregate["runtime_backend_probe_targets"],
+                [
+                    "qge_context_get_or_create_render_acceleration",
+                    "qge_dwt_render",
+                    "qge_metal_init_common",
+                ],
+            )
+            self.assertEqual(aggregate["runtime_backend_probe_run_count"], 2)
 
             icc = breadth_evidence.build_icc_evidence(
                 manifest,
@@ -485,6 +507,7 @@ class BreadthEvidenceTests(unittest.TestCase):
             )
             self.assertTrue(icc["breadth_ready_for_complete_claim"])
             self.assertEqual(icc["total_backend_gate_event_count"], 6)
+            self.assertEqual(icc["total_runtime_backend_probe_event_count"], 6)
 
     def test_breadth_evidence_blocks_fallback_matrix(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -711,6 +734,25 @@ class PerformanceSummaryTests(unittest.TestCase):
                         "flags=0x17 path=native_sparse_dwt_render_bridge "
                         "reason=native_sparse_dwt_render_bridge_active "
                         "probe=metal_system_device_available",
+                        "QGE: Runtime backend probe "
+                        "target=qge_metal_init_common phase=create "
+                        "backend=Metal path=native_sparse_dwt_render_bridge "
+                        "result=active dense_amplitudes=0 qubits=28 "
+                        "screen_res=1024",
+                        "QGE: Runtime backend probe "
+                        "target=qge_context_get_or_create_render_acceleration "
+                        "phase=create backend=Metal "
+                        "path=native_sparse_dwt_render_bridge result=created "
+                        "native=1 active=1 screen_res=1024 "
+                        "reason=native_sparse_dwt_render_bridge_active "
+                        "probe=metal_system_device_available",
+                        "QGE: Runtime backend probe target=qge_dwt_render "
+                        "phase=idwt backend=Metal "
+                        "path=native_sparse_dwt_render_bridge result=native "
+                        "native_render_backend=native native=1 active=1 "
+                        "screen_res=1024 levels=6 gpu_reconstruct=1 mode=0 "
+                        "active_coeffs=192495 "
+                        "reason=native_sparse_dwt_render_bridge_active",
                     ]
                 )
                 + "\n",
@@ -730,6 +772,15 @@ class PerformanceSummaryTests(unittest.TestCase):
             self.assertEqual(parsed["components"]["encode"]["max_ms"], 14.0)
             self.assertEqual(parsed["backend_gate_count"], 2)
             self.assertEqual(parsed["backend_gate_event_count"], 2)
+            self.assertEqual(parsed["runtime_backend_probe_event_count"], 3)
+            self.assertEqual(
+                parsed["runtime_backend_probe_targets"],
+                [
+                    "qge_context_get_or_create_render_acceleration",
+                    "qge_dwt_render",
+                    "qge_metal_init_common",
+                ],
+            )
             self.assertEqual(
                 parsed["backend_gate_paths"],
                 ["native_sparse_dwt_render_bridge", "sparse_dwt_cpu_render_path"],
@@ -741,6 +792,8 @@ class PerformanceSummaryTests(unittest.TestCase):
             self.assertTrue(summary["aggregate"]["metric_evidence_present"])
             self.assertEqual(summary["aggregate"]["native_idwt_sum"], 3)
             self.assertEqual(summary["aggregate"]["backend_gate_event_count"], 2)
+            self.assertEqual(
+                summary["aggregate"]["runtime_backend_probe_event_count"], 3)
             icc = perf_summary.build_icc_evidence(
                 summary,
                 tmpdir / "qge_perf_summary.json",
@@ -757,6 +810,7 @@ class PerformanceSummaryTests(unittest.TestCase):
                 icc["backend_gate_render_bridge_paths"],
                 ["native_sparse_dwt_render_bridge"],
             )
+            self.assertEqual(icc["runtime_backend_probe_event_count"], 3)
 
 
 class NoesisSummaryTests(unittest.TestCase):
@@ -3375,6 +3429,21 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
                     "native_sparse_dwt_render_bridge",
                 ],
                 "backend_gate_render_bridge_active": True,
+                "runtime_backend_probe_event_count": 3,
+                "runtime_backend_probe_targets": [
+                    "qge_context_get_or_create_render_acceleration",
+                    "qge_dwt_render",
+                    "qge_metal_init_common",
+                ],
+                "runtime_backend_probe_backends": ["Metal"],
+                "runtime_backend_probe_paths": [
+                    "native_sparse_dwt_render_bridge",
+                ],
+                "runtime_backend_probe_results": [
+                    "active",
+                    "created",
+                    "native",
+                ],
             },
         }
         with tempfile.TemporaryDirectory() as tmp:
@@ -3491,6 +3560,15 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
             self.assertEqual(summary["qge_backend_gate_event_count"], 3)
             self.assertEqual(summary["qge_backend_gate_backends"], ["Metal"])
             self.assertTrue(summary["qge_backend_gate_render_bridge_active"])
+            self.assertEqual(summary["qge_runtime_backend_probe_event_count"], 3)
+            self.assertEqual(
+                summary["qge_runtime_backend_probe_targets"],
+                [
+                    "qge_context_get_or_create_render_acceleration",
+                    "qge_dwt_render",
+                    "qge_metal_init_common",
+                ],
+            )
             self.assertTrue(
                 summary["moonlab_domain_readiness"]["projectile_live_authority"]["ready"]
             )
@@ -3515,6 +3593,7 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
                 icc["qge_backend_gate_render_bridge_paths"],
                 ["native_sparse_dwt_render_bridge"],
             )
+            self.assertEqual(icc["qge_runtime_backend_probe_event_count"], 3)
             self.assertEqual(icc["runtime_evidence_ai_decision_count"], 2)
             self.assertEqual(
                 icc["completion_reason"],

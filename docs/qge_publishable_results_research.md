@@ -168,9 +168,11 @@ Minimum publishable artifact package:
    - For multi-map claims, run `tools/qge_breadth_evidence.py --min-maps N`
      so repeated captures of a single map cannot satisfy the breadth gate.
    - Current strongest local checkpoint:
-     `diagnostics/breadth_evidence/20260522-235635`, which aggregates seven
-     ready strict matrices across `e1m1`, `e1m2`, `e1m3`, and `e1m4` with
-     backend-gate runtime events parsed into every matrix run.
+     `diagnostics/breadth_evidence/20260523-003430`, which aggregates four
+     ready Noesis-fire matrices across `e1m1`, `e1m2`, `e1m3`, and `e1m4` with
+     zero fallback, zero surrogate, zero CPU-IDWT, 420 native bridge events,
+     12 backend-gate events, and 16 native backend runtime-probe events parsed
+     into every matrix run.
 
 3. Runtime traces
    - QGE trace file for each capture.

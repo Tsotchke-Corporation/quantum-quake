@@ -298,6 +298,25 @@ struct qge_metal_internal {
  * INITIALIZATION
  * ============================================================================ */
 
+static const char* qge_metal_init_path(bool allocate_dense_amplitudes) {
+    return allocate_dense_amplitudes
+        ? "metal_dense_state"
+        : "native_sparse_dwt_render_bridge";
+}
+
+static void qge_metal_log_runtime_probe(int num_qubits,
+                                        int screen_res,
+                                        bool allocate_dense_amplitudes,
+                                        const char* result) {
+    fprintf(stderr,
+            "QGE: Runtime backend probe target=qge_metal_init_common phase=create backend=Metal path=%s result=%s dense_amplitudes=%d qubits=%d screen_res=%d\n",
+            qge_metal_init_path(allocate_dense_amplitudes),
+            result ? result : "unknown",
+            allocate_dense_amplitudes ? 1 : 0,
+            num_qubits,
+            screen_res);
+}
+
 static qge_metal_ctx_t* qge_metal_init_common(int num_qubits,
                                               int screen_res,
                                               bool allocate_dense_amplitudes) {
@@ -306,12 +325,20 @@ static qge_metal_ctx_t* qge_metal_init_common(int num_qubits,
         id<MTLDevice> device = MTLCreateSystemDefaultDevice();
         if (!device) {
             fprintf(stderr, "[QGE Metal] No Metal device available\n");
+            qge_metal_log_runtime_probe(num_qubits, screen_res,
+                                        allocate_dense_amplitudes,
+                                        "no_device");
             return NULL;
         }
 
         /* Allocate context */
         qge_metal_ctx_t* ctx = (qge_metal_ctx_t*)calloc(1, sizeof(qge_metal_ctx_t));
-        if (!ctx) return NULL;
+        if (!ctx) {
+            qge_metal_log_runtime_probe(num_qubits, screen_res,
+                                        allocate_dense_amplitudes,
+                                        "context_alloc_failed");
+            return NULL;
+        }
 
         struct qge_metal_internal* internal = new qge_metal_internal();
         internal->device = device;
@@ -320,6 +347,9 @@ static qge_metal_ctx_t* qge_metal_init_common(int num_qubits,
             fprintf(stderr, "[QGE Metal] Failed to create command queue\n");
             delete internal;
             free(ctx);
+            qge_metal_log_runtime_probe(num_qubits, screen_res,
+                                        allocate_dense_amplitudes,
+                                        "command_queue_failed");
             return NULL;
         }
 
@@ -333,6 +363,9 @@ static qge_metal_ctx_t* qge_metal_init_common(int num_qubits,
                     [[error localizedDescription] UTF8String]);
             delete internal;
             free(ctx);
+            qge_metal_log_runtime_probe(num_qubits, screen_res,
+                                        allocate_dense_amplitudes,
+                                        "shader_compile_failed");
             return NULL;
         }
 
@@ -372,6 +405,8 @@ static qge_metal_ctx_t* qge_metal_init_common(int num_qubits,
         printf("[QGE Metal] Device: %s\n", [[device name] UTF8String]);
         printf("[QGE Metal] Position qubits: %d, non-position: %d\n",
                ctx->position_qubits, num_qubits - ctx->position_qubits);
+        qge_metal_log_runtime_probe(num_qubits, screen_res,
+                                    allocate_dense_amplitudes, "active");
 
         /* Allocate GPU buffers. The sparse render bridge deliberately avoids
          * the dense amplitude buffer used by full-state marginalization; live

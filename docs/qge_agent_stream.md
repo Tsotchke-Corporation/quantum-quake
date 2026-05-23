@@ -254,7 +254,13 @@ traces prove both the selected backend and the teardown path. The performance
 summary sidecar parses these lines into `backend_gate_event_count`,
 `backend_gate_paths`, and `backend_gate_render_bridge_paths`; the vanilla matrix
 requires that backend-gate evidence before marking the QGE performance domain
-ready.
+ready. Native backend selection points also emit `QGE: Runtime backend probe`
+lines for `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`,
+and `qge_metal_init_common`. The performance sidecar parses them into
+`runtime_backend_probe_event_count`, `runtime_backend_probe_targets`,
+`runtime_backend_probe_paths`, and `runtime_backend_probe_results`, and the
+vanilla matrix requires those probes alongside the backend gate before marking
+QGE performance ready.
 Texture/material setup emits `texture_signal_cache` and
 `lightmap_signal_cache` probes as well. These mark the surface texture and
 lightmap signal paths as intentional CPU-side metadata/sample caches and record
@@ -401,7 +407,9 @@ rather than `qge_publication_artifact_pack_complete`.
 machine-readable multi-run evidence sidecar. It emits
 `qge_breadth_evidence_pack_complete` only when every supplied matrix keeps
 Moonlab authority ready, uses the QGE primary framebuffer with native IDWT, and
-reports zero fallback, surrogate, and CPU-IDWT counts.
+reports zero fallback, surrogate, and CPU-IDWT counts. The breadth aggregate
+also carries backend-gate and runtime-backend-probe counts, paths, results, and
+targets so the native backend claims can be audited across every supplied run.
 Use `--min-maps` when the artifact needs to prove breadth across distinct maps
 instead of repeated captures of one map.
 

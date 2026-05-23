@@ -1178,6 +1178,56 @@ void qge_dwt_encode_spatial_inplace(dwt_framebuffer_t* fb,
  * Full DWT Rendering Pipeline
  * ============================================================================ */
 
+static void qge_dwt_render_log_runtime_probe_once(dwt_framebuffer_t* fb,
+                                                  const char* result) {
+    static bool logged_native = false;
+    static bool logged_native_fallback = false;
+    static bool logged_cpu = false;
+    bool* logged = &logged_cpu;
+    const char* backend_name = "uninitialized";
+    const char* path = "uninitialized";
+    const char* reason = "uninitialized";
+    int native_available = 0;
+    int active = 0;
+
+    if (!fb) {
+        return;
+    }
+    if (fb->last_render_backend == QGE_DWT_RENDER_BACKEND_NATIVE) {
+        logged = &logged_native;
+    } else if (fb->last_render_backend ==
+               QGE_DWT_RENDER_BACKEND_NATIVE_FALLBACK) {
+        logged = &logged_native_fallback;
+    }
+    if (*logged) {
+        return;
+    }
+    *logged = true;
+
+    if (fb->ctx) {
+        backend_name = qge_backend_name(qge_get_backend(fb->ctx));
+        path = qge_context_backend_runtime_path(fb->ctx);
+        reason = qge_context_backend_reason(fb->ctx);
+        native_available =
+            qge_context_backend_native_available(fb->ctx) ? 1 : 0;
+        active = qge_context_has_active_acceleration(fb->ctx) ? 1 : 0;
+    }
+    fprintf(stderr,
+            "QGE: Runtime backend probe target=qge_dwt_render phase=idwt backend=%s path=%s result=%s native_render_backend=%s native=%d active=%d screen_res=%d levels=%d gpu_reconstruct=%d mode=%d active_coeffs=%d reason=%s\n",
+            backend_name,
+            path,
+            result ? result : "unknown",
+            qge_dwt_render_backend_name(fb->last_render_backend),
+            native_available,
+            active,
+            fb->config.base_resolution,
+            fb->config.num_levels,
+            fb->config.gpu_reconstruct ? 1 : 0,
+            (int)fb->config.mode,
+            fb->active_coeff_count,
+            reason);
+}
+
 /**
  * @brief Render DWT framebuffer to output pixels
  *
@@ -1213,6 +1263,7 @@ void qge_dwt_render(dwt_framebuffer_t* fb, float* output) {
             qge_metal_inverse_dwt(metal, output, output,
                                   fb->config.num_levels) == 0) {
             fb->last_render_backend = QGE_DWT_RENDER_BACKEND_NATIVE;
+            qge_dwt_render_log_runtime_probe_once(fb, "native");
             return;
         }
         if (metal) {
@@ -1226,6 +1277,12 @@ void qge_dwt_render(dwt_framebuffer_t* fb, float* output) {
                                    base_res, base_res, fb->config.num_levels,
                                    fb->config.mode, fb->transform_scratch,
                                    fb->coeff_buffer);
+    if (fb->last_render_backend == QGE_DWT_RENDER_BACKEND_NATIVE_FALLBACK) {
+        qge_dwt_render_log_runtime_probe_once(
+            fb, "native_fallback_cpu_reconstruct");
+    } else {
+        qge_dwt_render_log_runtime_probe_once(fb, "cpu");
+    }
 }
 
 qge_dwt_render_backend_t qge_dwt_last_render_backend(dwt_framebuffer_t* fb) {

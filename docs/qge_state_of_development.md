@@ -633,10 +633,12 @@ Known current visual state:
   fixed-view renderer comparisons.
 - `tools/qge_breadth_evidence.py --min-maps` now enforces distinct-map breadth
   in addition to strict ownership counters. The current strongest breadth pack
-  is `diagnostics/breadth_evidence/20260522-235635`, covering seven ready
-  matrices across `e1m1`, `e1m2`, `e1m3`, and `e1m4` with zero fallback, zero
-  surrogate, zero CPU-IDWT, native IDWT evidence, and parsed backend-gate
-  runtime events for every matrix run.
+  is `diagnostics/breadth_evidence/20260523-003430`, covering four ready
+  Noesis-fire matrices across `e1m1`, `e1m2`, `e1m3`, and `e1m4` with zero
+  fallback, zero surrogate, zero CPU-IDWT, 420 native bridge events, 12 parsed
+  backend-gate events, and 16 native backend runtime-probe events across
+  `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`, and
+  `qge_metal_init_common`.
 - The current renderer should be described as improved, not fixed. In the
   latest fixed-view capture the world projection, contrast, and brightness are
   much closer to classic Quake, but floors, walls, and ceilings still do not

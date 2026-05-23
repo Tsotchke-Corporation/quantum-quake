@@ -201,7 +201,7 @@ def flags_summary(flags: int, mapping: dict[str, int]) -> dict[str, bool]:
     return {name: bool(flags & bit) for name, bit in mapping.items()}
 
 
-def render_idwt_backend_name(flags: int) -> str:
+def classify_render_idwt_backend_name(flags: int) -> str:
     selected = []
     if flags & RENDER_FLAGS["native_idwt"]:
         selected.append("native")
@@ -381,7 +381,7 @@ def build_runtime_evidence(summary: dict) -> dict:
             "sparse_dwt_count": render_sparse_count,
             "flags": flags_summary(render_flags, RENDER_FLAGS),
             "flags_or": render_flags,
-            "idwt_backend": render_idwt_backend_name(render_flags),
+            "idwt_backend": classify_render_idwt_backend_name(render_flags),
             "native_bridge_count": (
                 render_sparse_count
                 if render_flags & RENDER_FLAGS["native_idwt"]
