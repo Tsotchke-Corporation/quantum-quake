@@ -849,7 +849,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for entry in list_or_empty(discovery.get("found_candidates"))
                 if isinstance(entry, dict) and isinstance(entry.get("path"), str)
             )
-        if not candidates:
+        if not candidates and not discovery_roots:
             raise ValueError(
                 "provide --candidate, --discover-root, or --discover-common")
         intake = build_intake(

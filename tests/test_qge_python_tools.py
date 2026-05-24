@@ -760,6 +760,8 @@ class PublicationPackTests(unittest.TestCase):
             asset_inventory_path = jobs_tmp / "qge_asset_inventory.json"
             asset_requirements_path = (
                 jobs_tmp / "qge_asset_requirements.json")
+            registered_asset_intake_path = (
+                jobs_tmp / "qge_registered_asset_intake.json")
             publication_pack.write_json(oracle_scene_path, {"scene": {}})
             publication_pack.write_json(
                 advantage_metrics_path,
@@ -951,6 +953,18 @@ class PublicationPackTests(unittest.TestCase):
                     },
                 },
             )
+            publication_pack.write_json(
+                registered_asset_intake_path,
+                {
+                    "schema": "qge.registered_asset_intake.v0",
+                    "status": "blocked_no_candidate_assets",
+                    "candidate_new_map_count": 0,
+                    "missing_map_count_after_plan": 28,
+                    "claim_posture": {
+                        "asset_intake_copies_game_data": False,
+                    },
+                },
+            )
             moonlab_job_specs = publication_pack.build_moonlab_job_specs(
                 resource_envelope,
                 {
@@ -972,6 +986,8 @@ class PublicationPackTests(unittest.TestCase):
                     "full_game_map_coverage": str(full_game_path),
                     "asset_inventory": str(asset_inventory_path),
                     "asset_requirements": str(asset_requirements_path),
+                    "registered_asset_intake": str(
+                        registered_asset_intake_path),
                 },
             )
             moonlab_job_results = (
@@ -2945,6 +2961,29 @@ class BreadthEvidenceTests(unittest.TestCase):
             cli_intake = publication_pack.load_json(out_path)
             self.assertEqual(cli_intake["discovered_candidate_count"], 1)
             self.assertEqual(cli_intake["candidate_new_map_count"], 2)
+
+            empty_root = tmpdir / "empty-library"
+            empty_root.mkdir()
+            empty_path = tmpdir / "empty_intake.json"
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(
+                    registered_asset_intake.main([
+                        "--current-root",
+                        str(current_root),
+                        "--discover-root",
+                        str(empty_root),
+                        "--json",
+                        str(empty_path),
+                    ]),
+                    0,
+                )
+            self.assertIn(
+                "QGE_REGISTERED_ASSET_INTAKE", stdout.getvalue())
+            empty_intake = publication_pack.load_json(empty_path)
+            self.assertEqual(
+                empty_intake["status"], "blocked_no_candidate_assets")
+            self.assertEqual(empty_intake["discovered_candidate_count"], 0)
 
     def write_matrix(self,
                      directory: Path,

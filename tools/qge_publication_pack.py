@@ -40,6 +40,7 @@ import qge_moonlab_qae_transpile  # noqa: E402
 import qge_moonlab_submission_bundle  # noqa: E402
 import qge_oracle_export  # noqa: E402
 import qge_perf_summary  # noqa: E402
+import qge_registered_asset_intake  # noqa: E402
 
 DEFAULT_SAMPLE_COUNTS = [16, 32, 64, 128]
 
@@ -401,6 +402,10 @@ def dict_or_empty(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def list_or_empty(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
 def full_game_coverage_from_summary(
     value: Any,
     maps: list[Any],
@@ -712,6 +717,8 @@ def build_moonlab_job_specs(
                     "full_game_map_coverage"),
                 "asset_inventory": artifact_paths.get("asset_inventory"),
                 "asset_requirements": artifact_paths.get("asset_requirements"),
+                "registered_asset_intake": artifact_paths.get(
+                    "registered_asset_intake"),
             },
             "fallback_policy": (
                 "ledger remains partial until every target map has a ready "
@@ -1262,6 +1269,67 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         args.outdir / "resource" / "qge_asset_requirements_icc_evidence.json"
     )
     write_json(asset_requirements_icc_path, asset_requirements_icc)
+    registered_asset_candidates = list(
+        getattr(args, "registered_asset_candidate", []) or [])
+    registered_asset_discovery_roots = list(
+        getattr(args, "registered_asset_discover_root", []) or [])
+    if getattr(args, "registered_asset_discover_common", False):
+        registered_asset_discovery_roots.extend(
+            qge_registered_asset_intake.common_discovery_roots())
+    registered_asset_discovery = None
+    if registered_asset_discovery_roots:
+        registered_asset_discovery = (
+            qge_registered_asset_intake.discover_candidate_paths(
+                registered_asset_discovery_roots,
+                max_depth=getattr(
+                    args, "registered_asset_discover_max_depth", 5),
+            )
+        )
+        registered_asset_candidates.extend(
+            Path(entry["path"])
+            for entry in list_or_empty(
+                registered_asset_discovery.get("found_candidates"))
+            if isinstance(entry, dict) and isinstance(entry.get("path"), str)
+        )
+    registered_asset_intake = qge_registered_asset_intake.build_intake(
+        Path(getattr(args, "asset_root", qge_asset_inventory.DEFAULT_ASSET_ROOT)),
+        registered_asset_candidates,
+        map_set=str(
+            full_game_map_coverage.get("map_set") or
+            qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
+        ),
+        discovery=registered_asset_discovery,
+    )
+    registered_asset_intake_path = (
+        args.outdir / "resource" / "qge_registered_asset_intake.json"
+    )
+    write_json(registered_asset_intake_path, registered_asset_intake)
+    registered_asset_intake_markdown_path = (
+        args.outdir / "resource" / "qge_registered_asset_intake.md"
+    )
+    registered_asset_intake_markdown_path.write_text(
+        qge_registered_asset_intake.markdown_report(registered_asset_intake),
+        encoding="utf-8",
+    )
+    registered_asset_intake_script_path = (
+        args.outdir / "resource" / "install_registered_assets.sh"
+    )
+    registered_asset_intake_script_path.write_text(
+        "\n".join(qge_registered_asset_intake.script_lines(
+            registered_asset_intake)),
+        encoding="utf-8",
+    )
+    registered_asset_intake_icc = (
+        qge_registered_asset_intake.build_icc_evidence(
+            registered_asset_intake,
+            out_path=registered_asset_intake_path,
+        )
+    )
+    registered_asset_intake_icc_path = (
+        args.outdir / "resource" /
+        "qge_registered_asset_intake_icc_evidence.json"
+    )
+    write_json(registered_asset_intake_icc_path, registered_asset_intake_icc)
     native_backend_boundary = capture_perf_summary.get(
         "runtime_backend_boundary")
     if not isinstance(native_backend_boundary, dict):
@@ -1297,6 +1365,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "full_game_map_coverage": str(full_game_map_coverage_path),
             "asset_inventory": str(asset_inventory_path),
             "asset_requirements": str(asset_requirements_path),
+            "registered_asset_intake": str(registered_asset_intake_path),
         },
     )
     moonlab_job_specs_path = (
@@ -1452,6 +1521,13 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             asset_requirements_markdown_path),
         "asset_requirements_icc_evidence": file_info(
             asset_requirements_icc_path),
+        "registered_asset_intake": file_info(registered_asset_intake_path),
+        "registered_asset_intake_markdown": file_info(
+            registered_asset_intake_markdown_path),
+        "registered_asset_intake_script": file_info(
+            registered_asset_intake_script_path),
+        "registered_asset_intake_icc_evidence": file_info(
+            registered_asset_intake_icc_path),
         "native_backend_boundary": file_info(native_backend_boundary_path),
         "moonlab_job_specs": file_info(moonlab_job_specs_path),
         "moonlab_job_results": file_info(moonlab_job_results_path),
@@ -1666,6 +1742,15 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 asset_inventory.get("invalid_bsp_count")),
             "full_game_asset_ready": (
                 asset_inventory.get("full_game_asset_ready")),
+            "registered_asset_intake": registered_asset_intake,
+            "registered_asset_intake_status": (
+                registered_asset_intake.get("status")),
+            "registered_asset_intake_candidate_new_map_count": (
+                registered_asset_intake.get("candidate_new_map_count")),
+            "registered_asset_intake_missing_map_count_after_plan": (
+                registered_asset_intake.get("missing_map_count_after_plan")),
+            "registered_asset_intake_discovered_candidate_count": (
+                registered_asset_intake.get("discovered_candidate_count", 0)),
             "breadth_total_fallback_count": breadth_summary.get(
                 "total_fallback_count"),
             "breadth_total_surrogate_count": breadth_summary.get(
@@ -1846,6 +1931,21 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "asset_requirements_satisfied": (
                     asset_requirements.get("claim_posture", {}).get(
                         "asset_requirements_satisfied")),
+            },
+            "registered_asset_intake_summary": {
+                "schema": registered_asset_intake.get("schema"),
+                "status": registered_asset_intake.get("status"),
+                "candidate_new_map_count": registered_asset_intake.get(
+                    "candidate_new_map_count"),
+                "missing_map_count_after_plan": registered_asset_intake.get(
+                    "missing_map_count_after_plan"),
+                "copy_plan_count": registered_asset_intake.get(
+                    "copy_plan_count"),
+                "discovered_candidate_count": registered_asset_intake.get(
+                    "discovered_candidate_count", 0),
+                "asset_intake_copies_game_data": (
+                    registered_asset_intake.get("claim_posture", {}).get(
+                        "asset_intake_copies_game_data")),
             },
             "native_backend_boundary_summary": {
                 "status": native_backend_boundary.get("status"),
@@ -2072,6 +2172,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("asset_inventory_summary"))
     asset_requirements_summary = dict_or_empty(
         advantage_summary.get("asset_requirements_summary"))
+    registered_asset_intake_summary = dict_or_empty(
+        advantage_summary.get("registered_asset_intake_summary"))
     ready = bool(runtime.get("publication_ready_for_complete_claim"))
     return {
         "schema": "qge.icc_evidence.v0",
@@ -2220,6 +2322,34 @@ def build_icc_evidence(manifest: dict[str, Any],
             asset_requirements_summary.get("missing_map_count")),
         "asset_requirements_satisfied": (
             asset_requirements_summary.get("asset_requirements_satisfied")),
+        "registered_asset_intake_file": (
+            artifacts.get("resource", {}).get(
+                "registered_asset_intake", {}).get("path")),
+        "registered_asset_intake_markdown_file": (
+            artifacts.get("resource", {}).get(
+                "registered_asset_intake_markdown", {}).get("path")),
+        "registered_asset_intake_script_file": (
+            artifacts.get("resource", {}).get(
+                "registered_asset_intake_script", {}).get("path")),
+        "registered_asset_intake_icc_evidence_file": (
+            artifacts.get("resource", {}).get(
+                "registered_asset_intake_icc_evidence", {}).get("path")),
+        "registered_asset_intake_schema": (
+            registered_asset_intake_summary.get("schema")),
+        "registered_asset_intake_status": (
+            registered_asset_intake_summary.get("status")),
+        "registered_asset_intake_candidate_new_map_count": (
+            registered_asset_intake_summary.get("candidate_new_map_count")),
+        "registered_asset_intake_missing_map_count_after_plan": (
+            registered_asset_intake_summary.get(
+                "missing_map_count_after_plan")),
+        "registered_asset_intake_copy_plan_count": (
+            registered_asset_intake_summary.get("copy_plan_count")),
+        "registered_asset_intake_discovered_candidate_count": (
+            registered_asset_intake_summary.get("discovered_candidate_count")),
+        "asset_intake_copies_game_data": (
+            registered_asset_intake_summary.get(
+                "asset_intake_copies_game_data")),
         "native_backend_boundary_file": artifacts.get("resource", {}).get(
             "native_backend_boundary", {}).get("path"),
         "native_backend_boundary_status": native_boundary_summary.get(
@@ -2515,6 +2645,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--asset-root", type=Path,
                         default=qge_asset_inventory.DEFAULT_ASSET_ROOT,
                         help="Directory containing loose maps/ and pak*.pak assets")
+    parser.add_argument("--registered-asset-candidate", action="append",
+                        type=Path, default=[],
+                        help="Optional registered PAK/BSP/install path to validate in the packed intake ledger")
+    parser.add_argument("--registered-asset-discover-root", action="append",
+                        type=Path, default=[],
+                        help="Optional root to scan for registered PAK/BSP/id1 candidates")
+    parser.add_argument("--registered-asset-discover-common",
+                        action=argparse.BooleanOptionalAction,
+                        default=False,
+                        help="Scan bounded common Quake install locations for the packed intake ledger")
+    parser.add_argument("--registered-asset-discover-max-depth",
+                        type=int, default=5)
     parser.add_argument("--claims", type=Path,
                         default=REPO_ROOT / "docs/claims/qge_claims.json")
     parser.add_argument("--seed", type=int, default=1337)
@@ -2544,6 +2686,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--qae-grid-steps must be > 0")
     if args.contribution_bits <= 0 or args.contribution_bits > 16:
         raise ValueError("--contribution-bits must be in 1..16")
+    if args.registered_asset_discover_max_depth < 0:
+        raise ValueError("--registered-asset-discover-max-depth must be >= 0")
 
 
 def main(argv: list[str]) -> int:

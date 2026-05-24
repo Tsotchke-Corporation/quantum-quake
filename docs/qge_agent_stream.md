@@ -463,7 +463,9 @@ external Quake install roots, PAK files, or loose BSPs, validates BSP29 payloads
 and writes `qge.registered_asset_intake.v0` plus an optional copy script so
 registered assets can be installed locally without bundling copyrighted data in
 the repo. `--discover-root` and `--discover-common` add bounded local discovery
-for candidate installs when the exact registered asset path is unknown.
+for candidate installs when the exact registered asset path is unknown. The
+publication pack records this intake ledger, Markdown, ICC evidence, and safe
+install script under `resource/` even when no candidate assets are found.
 
 `tools/qge_noesis_summary.py` reads the stream manifest, Noesis action trace,
 translated command buffer, runtime log, `noesis/gameplay_outcomes.ndjson`,

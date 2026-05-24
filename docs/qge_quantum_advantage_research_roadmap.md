@@ -98,7 +98,7 @@ Current artifact status:
   `scaling_summary.json`, `qae_curve.csv`, `qae_circuit.txt`, and
   `qge_advantage_icc_evidence.json`.
 - The publication pack at
-  `diagnostics/publication_pack/20260524-ccx-qgtl/` bundles the benchmark,
+  `diagnostics/publication_pack/20260524-asset-intake-ledger/` bundles the benchmark,
   oracle, trace, stream, vanilla, vanilla ICC evidence sidecar, claims, source
   artifacts, `resource/qge_resource_envelope.json`,
   `resource/qge_full_game_map_coverage.json`,

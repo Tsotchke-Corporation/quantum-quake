@@ -351,6 +351,10 @@ assert manifest["artifacts"]["resource"]["asset_inventory_icc_evidence"]["exists
 assert manifest["artifacts"]["resource"]["asset_requirements"]["exists"] is True
 assert manifest["artifacts"]["resource"]["asset_requirements_markdown"]["exists"] is True
 assert manifest["artifacts"]["resource"]["asset_requirements_icc_evidence"]["exists"] is True
+assert manifest["artifacts"]["resource"]["registered_asset_intake"]["exists"] is True
+assert manifest["artifacts"]["resource"]["registered_asset_intake_markdown"]["exists"] is True
+assert manifest["artifacts"]["resource"]["registered_asset_intake_script"]["exists"] is True
+assert manifest["artifacts"]["resource"]["registered_asset_intake_icc_evidence"]["exists"] is True
 assert manifest["artifacts"]["resource"]["native_backend_boundary"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_job_specs"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_job_results"]["exists"] is True
@@ -377,6 +381,11 @@ assert manifest["advantage_summary"]["asset_requirements_summary"]["schema"] == 
 assert manifest["advantage_summary"]["asset_requirements_summary"]["status"] == "blocked_missing_registered_assets"
 assert manifest["advantage_summary"]["asset_requirements_summary"]["missing_map_count"] == 32
 assert manifest["advantage_summary"]["asset_requirements_summary"]["asset_requirements_satisfied"] is False
+assert manifest["advantage_summary"]["registered_asset_intake_summary"]["schema"] == "qge.registered_asset_intake.v0"
+assert manifest["advantage_summary"]["registered_asset_intake_summary"]["status"] == "blocked_no_candidate_assets"
+assert manifest["advantage_summary"]["registered_asset_intake_summary"]["candidate_new_map_count"] == 0
+assert manifest["advantage_summary"]["registered_asset_intake_summary"]["missing_map_count_after_plan"] == 32
+assert manifest["advantage_summary"]["registered_asset_intake_summary"]["asset_intake_copies_game_data"] is False
 assert manifest["advantage_summary"]["native_backend_boundary_summary"]["status"] == "pass"
 assert manifest["advantage_summary"]["native_backend_boundary_summary"]["passed_target_count"] == 3
 assert manifest["advantage_summary"]["moonlab_qae_payload_summary"]["schema"] == "qge.moonlab_qae_payload.v0"
@@ -461,6 +470,15 @@ assert icc["asset_requirements_schema"] == "qge.asset_requirements.v0"
 assert icc["asset_requirement_status"] == "blocked_missing_registered_assets"
 assert icc["asset_requirements_missing_map_count"] == 32
 assert icc["asset_requirements_satisfied"] is False
+assert icc["registered_asset_intake_file"].endswith("resource/qge_registered_asset_intake.json")
+assert icc["registered_asset_intake_markdown_file"].endswith("resource/qge_registered_asset_intake.md")
+assert icc["registered_asset_intake_script_file"].endswith("resource/install_registered_assets.sh")
+assert icc["registered_asset_intake_icc_evidence_file"].endswith("resource/qge_registered_asset_intake_icc_evidence.json")
+assert icc["registered_asset_intake_schema"] == "qge.registered_asset_intake.v0"
+assert icc["registered_asset_intake_status"] == "blocked_no_candidate_assets"
+assert icc["registered_asset_intake_candidate_new_map_count"] == 0
+assert icc["registered_asset_intake_missing_map_count_after_plan"] == 32
+assert icc["asset_intake_copies_game_data"] is False
 assert icc["native_backend_boundary_file"].endswith("resource/qge_native_backend_boundary.json")
 assert icc["native_backend_boundary_status"] == "pass"
 assert icc["moonlab_qae_payload_file"].endswith("advantage/qae_moonlab_payload.json")
