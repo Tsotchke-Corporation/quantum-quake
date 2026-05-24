@@ -73,6 +73,13 @@
       "task_id": "qge_domain_ownership_swarm",
       "reason": "This reducer is still the single compatibility point for stream manifest parsing, Noesis action traces, gameplay outcome telemetry, quality gates, scoring, and ICC evidence emission while the Noesis evidence schema is changing quickly.",
       "mitigation": "Keep additions schema-focused and unit-tested. Once the no-script gameplay telemetry stabilizes, split gameplay parsing, scoring, and ICC evidence emission into focused helper modules."
+    },
+    {
+      "path": "tools/qge_publication_pack.py",
+      "status": "temporary_publication_orchestrator",
+      "task_id": "qge_domain_ownership_swarm",
+      "reason": "This tool is a temporary compatibility facade and single reproducibility orchestrator for the current publication bundle. It copies source artifacts, builds resource ledgers, selects Moonlab simulator/native replay jobs, emits hardware handoff contracts, and writes the ICC manifest so the pack can be regenerated from one CLI while the publishable-results schema is still moving.",
+      "mitigation": "Keep domain logic in focused tools such as qge_asset_inventory.py, qge_asset_requirements.py, qge_moonlab_job_runner.py, qge_moonlab_full_game_plan.py, and qge_moonlab_deployment_gate.py. Limit qge_publication_pack.py to orchestration and manifest assembly; when the publication schema stabilizes, split artifact packing, resource-ledger assembly, Moonlab job assembly, and ICC evidence emission into separate modules with the existing contract tests as migration coverage."
     }
   ]
 }

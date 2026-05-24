@@ -344,6 +344,9 @@ assert manifest["artifacts"]["resource"]["moonlab_hardware_record_template"]["ex
 assert manifest["artifacts"]["resource"]["moonlab_full_game_plan"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_full_game_plan_markdown"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_full_game_plan_icc_evidence"]["exists"] is True
+assert manifest["artifacts"]["resource"]["moonlab_deployment_gate"]["exists"] is True
+assert manifest["artifacts"]["resource"]["moonlab_deployment_gate_markdown"]["exists"] is True
+assert manifest["artifacts"]["resource"]["moonlab_deployment_gate_icc_evidence"]["exists"] is True
 assert manifest["advantage_summary"]["resource_envelope_summary"]["whole_game_hardware_execution_claimed"] is False
 assert manifest["advantage_summary"]["full_game_map_coverage_summary"]["status"] == "partial"
 assert manifest["advantage_summary"]["full_game_map_coverage_summary"]["target_map_count"] == 32
@@ -369,6 +372,12 @@ assert manifest["advantage_summary"]["moonlab_full_game_plan_summary"]["schema"]
 assert manifest["advantage_summary"]["moonlab_full_game_plan_summary"]["status"] == "blocked_asset_unavailable"
 assert manifest["advantage_summary"]["moonlab_full_game_plan_summary"]["asset_unavailable_map_count"] == 32
 assert manifest["advantage_summary"]["moonlab_full_game_plan_summary"]["whole_game_moonlab_deployment_claimed"] is False
+assert manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["schema"] == "qge.moonlab_deployment_gate.v0"
+assert manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["status"] == "blocked"
+assert manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["whole_game_moonlab_deployment_claim_allowed"] is False
+assert manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["whole_game_hardware_execution_claim_allowed"] is False
+assert manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["hardware_quantum_advantage_claim_allowed"] is False
+assert manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["dense_70000_qubit_state_claim_allowed"] is False
 assert manifest["artifacts"]["vanilla"]["icc_evidence"]["packed"]["exists"] is True
 assert icc["completion_reason"] == "qge_publication_artifact_pack_complete"
 assert icc["runtime_backend"] == "qge_publication_pack"
@@ -408,6 +417,16 @@ assert icc["moonlab_full_game_plan_schema"] == "qge.moonlab_full_game_deployment
 assert icc["moonlab_full_game_deployment_status"] == "blocked_asset_unavailable"
 assert icc["moonlab_full_game_asset_unavailable_map_count"] == 32
 assert icc["whole_game_moonlab_deployment_claimed"] is False
+assert icc["moonlab_deployment_gate_file"].endswith("resource/qge_moonlab_deployment_gate.json")
+assert icc["moonlab_deployment_gate_markdown_file"].endswith("resource/qge_moonlab_deployment_gate.md")
+assert icc["moonlab_deployment_gate_icc_evidence_file"].endswith("resource/qge_moonlab_deployment_gate_icc_evidence.json")
+assert icc["moonlab_deployment_gate_schema"] == "qge.moonlab_deployment_gate.v0"
+assert icc["moonlab_deployment_gate_status"] == "blocked"
+assert icc["moonlab_deployment_gate_blocker_count"] >= 4
+assert icc["whole_game_moonlab_deployment_claim_allowed"] is False
+assert icc["whole_game_hardware_execution_claim_allowed"] is False
+assert icc["hardware_quantum_advantage_claim_allowed"] is False
+assert icc["dense_70000_qubit_state_claim_allowed"] is False
 assert icc["moonlab_hardware_candidate_job_count"] == 1
 assert icc["moonlab_completed_simulator_job_count"] >= 2
 assert icc["moonlab_hardware_submitted_job_count"] == 0
@@ -498,6 +517,35 @@ assert plan["claim_posture"]["whole_game_moonlab_deployment_claimed"] is False
 assert icc["runtime_backend"] == "qge_moonlab_full_game_plan"
 assert icc["deployment_status"] == plan["status"]
 assert icc["whole_game_moonlab_deployment_claimed"] is False
+PY
+
+python3 "$repo_root/tools/qge_moonlab_deployment_gate.py" \
+  "$pack_dir" \
+  --out "$tmpdir/qge_moonlab_deployment_gate.json" \
+  --markdown "$tmpdir/qge_moonlab_deployment_gate.md" \
+  --icc-json "$tmpdir/qge_moonlab_deployment_gate_icc_evidence.json" \
+  > "$tmpdir/moonlab_deployment_gate.stdout"
+grep -F 'QGE_MOONLAB_DEPLOYMENT_GATE' "$tmpdir/moonlab_deployment_gate.stdout" >/dev/null
+grep -F 'QGE_MOONLAB_DEPLOYMENT_GATE_MARKDOWN' "$tmpdir/moonlab_deployment_gate.stdout" >/dev/null
+grep -F 'QGE_MOONLAB_DEPLOYMENT_GATE_ICC_EVIDENCE' "$tmpdir/moonlab_deployment_gate.stdout" >/dev/null
+python3 - "$tmpdir/qge_moonlab_deployment_gate.json" "$tmpdir/qge_moonlab_deployment_gate_icc_evidence.json" "$pack_dir/publication_manifest.json" <<'PY'
+import json
+import sys
+
+gate = json.load(open(sys.argv[1], encoding="utf-8"))
+icc = json.load(open(sys.argv[2], encoding="utf-8"))
+manifest = json.load(open(sys.argv[3], encoding="utf-8"))
+summary = manifest["advantage_summary"]["moonlab_deployment_gate_summary"]
+assert gate["schema"] == "qge.moonlab_deployment_gate.v0"
+assert gate["status"] == summary["status"]
+assert gate["whole_game_moonlab_deployment_claim_allowed"] is False
+assert gate["whole_game_hardware_execution_claim_allowed"] is False
+assert gate["hardware_quantum_advantage_claim_allowed"] is False
+assert gate["dense_70000_qubit_state_claim_allowed"] is False
+assert len(gate["blockers"]) == gate["blocker_count"]
+assert icc["runtime_backend"] == "qge_moonlab_deployment_gate"
+assert icc["gate_status"] == gate["status"]
+assert icc["whole_game_moonlab_deployment_claim_allowed"] is False
 PY
 
 python3 "$repo_root/tools/qge_asset_requirements.py" \

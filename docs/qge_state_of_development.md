@@ -658,7 +658,7 @@ Known current visual state:
   zero invalid BSP entries, and no whole-game Moonlab coverage claim.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
-  publication pack is `diagnostics/publication_pack/20260523-204706`, with
+  publication pack is `diagnostics/publication_pack/20260523-220349`, with
   `qge_publication_artifact_pack_complete`, the e1m1 ready vanilla/QGE capture,
   vanilla ICC evidence sidecar, agent stream, oracle/claims exports, QAE
   benchmark artifacts, `resource/qge_resource_envelope.json`,
@@ -671,11 +671,16 @@ Known current visual state:
   `resource/qge_moonlab_job_results.json`,
   `resource/qge_moonlab_replay_plan.json`,
   `resource/qge_moonlab_submission_packet.json`,
-  `resource/qge_moonlab_hardware_record_template.json`, and the nine-map breadth
+  `resource/qge_moonlab_hardware_record_template.json`,
+  `resource/qge_moonlab_deployment_gate.json`, and the nine-map breadth
   counters plus per-target native backend proof maps. The full-game plan joins
   coverage and asset inventory into one deployment ledger; current status is
   `blocked_asset_unavailable`, with 9/32 maps covered, zero capture-required
   maps queueable with local assets, and 23 registered BSP assets unavailable.
+  The deployment gate turns that ledger into the hard claim verdict:
+  `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
+  hardware execution, hardware advantage, and dense 70,000-qubit state claims
+  all disallowed.
   The asset requirements packet enumerates those missing `maps/*.bsp` entries
   separately from the no-claim deployment ledger.
   The job results complete

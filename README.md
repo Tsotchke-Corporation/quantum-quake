@@ -63,7 +63,7 @@ Important known limitations:
 
 - The full-port ICC target is `qge_vanilla_quake_conformance`. The current
   strongest self-contained evidence pack is
-  `diagnostics/publication_pack/20260523-204706`, where ICC reports the strict
+  `diagnostics/publication_pack/20260523-220349`, where ICC reports the strict
   vanilla/QGE runtime ownership matrix and `qge_vanilla_runtime_complete`
   ready. The pack includes `resource/qge_resource_envelope.json`, which scopes
   Moonlab simulator/native-backend deployment,
@@ -74,7 +74,10 @@ Important known limitations:
   registered `maps/*.bsp` entries needed to unblock the remaining captures,
   `resource/qge_moonlab_full_game_plan.json`, which joins coverage,
   asset status, capture requirements, and no-claim posture into one full-game
-  Moonlab deployment ledger, plus
+  Moonlab deployment ledger, and
+  `resource/qge_moonlab_deployment_gate.json`, which is the hard fail-closed
+  eligibility gate for any "the full game runs in Moonlab" simulator/native
+  deployment claim, plus
   `resource/qge_native_backend_boundary.json` with the pass/fail proof for the
   three native backend boundaries,
   `resource/qge_moonlab_job_specs.json` with selected simulator/native replay
@@ -95,9 +98,11 @@ Important known limitations:
   shot schedule, readout metadata, and candidate digest before updating
   `qge_moonlab_job_results.json`. The pack explicitly does not claim whole-game
   hardware execution, hardware quantum advantage, or a dense 70,000-qubit
-  state. This is a captured workload proof, not a claim that every Quake domain
-  is visually or hardware complete. Use
-  `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-204706`
+  state. The deployment gate is currently `blocked`: 9/32 canonical maps are
+  covered, 23 registered BSP assets are still missing, and the whole-game
+  Moonlab deployment claim is not allowed yet. This is a captured workload
+  proof, not a claim that every Quake domain is visually or hardware complete. Use
+  `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-220349`
   to generate the remaining harness queue and breadth rebuild script; the queue
   inventories loose/Pak BSP assets, skips missing local BSPs unless
   `--include-unavailable-assets` is set, and currently reports zero locally

@@ -29,6 +29,7 @@ import qge_advantage_benchmark  # noqa: E402
 import qge_asset_inventory  # noqa: E402
 import qge_asset_requirements  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
+import qge_moonlab_deployment_gate  # noqa: E402
 import qge_moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest  # noqa: E402
 import qge_moonlab_job_runner  # noqa: E402
@@ -1217,6 +1218,40 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "qge_moonlab_full_game_plan_icc_evidence.json"
     )
     write_json(moonlab_full_game_plan_icc_path, moonlab_full_game_plan_icc)
+    moonlab_deployment_gate = qge_moonlab_deployment_gate.build_gate(
+        full_game_map_coverage,
+        asset_inventory,
+        asset_requirements,
+        moonlab_full_game_plan,
+        moonlab_job_specs,
+        moonlab_job_results,
+        moonlab_submission_packet,
+        moonlab_hardware_record_template,
+        resource_envelope=resource_envelope,
+        source_path=args.outdir,
+    )
+    moonlab_deployment_gate_path = (
+        args.outdir / "resource" / "qge_moonlab_deployment_gate.json"
+    )
+    write_json(moonlab_deployment_gate_path, moonlab_deployment_gate)
+    moonlab_deployment_gate_markdown_path = (
+        args.outdir / "resource" / "qge_moonlab_deployment_gate.md"
+    )
+    moonlab_deployment_gate_markdown_path.write_text(
+        qge_moonlab_deployment_gate.markdown_report(moonlab_deployment_gate),
+        encoding="utf-8",
+    )
+    moonlab_deployment_gate_icc = (
+        qge_moonlab_deployment_gate.build_icc_evidence(
+            moonlab_deployment_gate,
+            out_path=moonlab_deployment_gate_path,
+        )
+    )
+    moonlab_deployment_gate_icc_path = (
+        args.outdir / "resource" /
+        "qge_moonlab_deployment_gate_icc_evidence.json"
+    )
+    write_json(moonlab_deployment_gate_icc_path, moonlab_deployment_gate_icc)
     resource_artifacts = {
         "envelope": file_info(resource_path),
         "full_game_map_coverage": file_info(full_game_map_coverage_path),
@@ -1239,6 +1274,11 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             moonlab_full_game_plan_markdown_path),
         "moonlab_full_game_plan_icc_evidence": file_info(
             moonlab_full_game_plan_icc_path),
+        "moonlab_deployment_gate": file_info(moonlab_deployment_gate_path),
+        "moonlab_deployment_gate_markdown": file_info(
+            moonlab_deployment_gate_markdown_path),
+        "moonlab_deployment_gate_icc_evidence": file_info(
+            moonlab_deployment_gate_icc_path),
     }
     return {
         "schema": "qge.publication_pack.v0",
@@ -1547,6 +1587,40 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                     moonlab_full_game_plan.get("claim_posture", {}).get(
                         "whole_game_moonlab_deployment_claimed")),
             },
+            "moonlab_deployment_gate_summary": {
+                "schema": moonlab_deployment_gate.get("schema"),
+                "status": moonlab_deployment_gate.get("status"),
+                "failed_criterion_count": moonlab_deployment_gate.get(
+                    "failed_criterion_count"),
+                "blocker_count": moonlab_deployment_gate.get("blocker_count"),
+                "whole_game_moonlab_deployment_claim_allowed": (
+                    moonlab_deployment_gate.get(
+                        "whole_game_moonlab_deployment_claim_allowed")),
+                "whole_game_hardware_execution_claim_allowed": (
+                    moonlab_deployment_gate.get(
+                        "whole_game_hardware_execution_claim_allowed")),
+                "hardware_quantum_advantage_claim_allowed": (
+                    moonlab_deployment_gate.get(
+                        "hardware_quantum_advantage_claim_allowed")),
+                "dense_70000_qubit_state_claim_allowed": (
+                    moonlab_deployment_gate.get(
+                        "dense_70000_qubit_state_claim_allowed")),
+                "target_map_count": (
+                    moonlab_deployment_gate.get("summary", {}).get(
+                        "target_map_count")),
+                "covered_map_count": (
+                    moonlab_deployment_gate.get("summary", {}).get(
+                        "covered_map_count")),
+                "coverage_missing_map_count": (
+                    moonlab_deployment_gate.get("summary", {}).get(
+                        "coverage_missing_map_count")),
+                "asset_missing_map_count": (
+                    moonlab_deployment_gate.get("summary", {}).get(
+                        "asset_missing_map_count")),
+                "invalid_bsp_count": (
+                    moonlab_deployment_gate.get("summary", {}).get(
+                        "invalid_bsp_count")),
+            },
         },
         "claim_posture": {
             "allowed_wording": (
@@ -1570,6 +1644,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_moonlab_job_runner.py <pack_dir>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack_dir>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json --submission-out /tmp/qge_moonlab_submission_packet.verify.json",
             "tools/qge_moonlab_hardware_ingest.py <pack_dir>/resource/qge_moonlab_submission_packet.json --template-out /tmp/qge_moonlab_hardware_record.template.json",
             "tools/qge_moonlab_full_game_plan.py <pack_dir> --out /tmp/qge_moonlab_full_game_plan.json --markdown /tmp/qge_moonlab_full_game_plan.md --icc-json /tmp/qge_moonlab_full_game_plan_icc_evidence.json",
+            "tools/qge_moonlab_deployment_gate.py <pack_dir> --out /tmp/qge_moonlab_deployment_gate.json --markdown /tmp/qge_moonlab_deployment_gate.md --icc-json /tmp/qge_moonlab_deployment_gate_icc_evidence.json",
         ],
     }
 
@@ -1594,6 +1669,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("moonlab_hardware_record_template_summary"))
     full_game_plan_summary = dict_or_empty(
         advantage_summary.get("moonlab_full_game_plan_summary"))
+    deployment_gate_summary = dict_or_empty(
+        advantage_summary.get("moonlab_deployment_gate_summary"))
     native_boundary_summary = dict_or_empty(
         advantage_summary.get("native_backend_boundary_summary"))
     full_game_summary = dict_or_empty(
@@ -1681,6 +1758,14 @@ def build_icc_evidence(manifest: dict[str, Any],
         "moonlab_full_game_plan_icc_evidence_file": (
             artifacts.get("resource", {}).get(
                 "moonlab_full_game_plan_icc_evidence", {}).get("path")),
+        "moonlab_deployment_gate_file": artifacts.get("resource", {}).get(
+            "moonlab_deployment_gate", {}).get("path"),
+        "moonlab_deployment_gate_markdown_file": (
+            artifacts.get("resource", {}).get(
+                "moonlab_deployment_gate_markdown", {}).get("path")),
+        "moonlab_deployment_gate_icc_evidence_file": (
+            artifacts.get("resource", {}).get(
+                "moonlab_deployment_gate_icc_evidence", {}).get("path")),
         "moonlab_selected_job_count": job_specs_summary.get(
             "selected_job_count"),
         "moonlab_hardware_candidate_job_count": job_specs_summary.get(
@@ -1716,6 +1801,26 @@ def build_icc_evidence(manifest: dict[str, Any],
         "whole_game_moonlab_deployment_claimed": (
             full_game_plan_summary.get(
                 "whole_game_moonlab_deployment_claimed")),
+        "moonlab_deployment_gate_schema": deployment_gate_summary.get(
+            "schema"),
+        "moonlab_deployment_gate_status": deployment_gate_summary.get(
+            "status"),
+        "moonlab_deployment_gate_failed_criterion_count": (
+            deployment_gate_summary.get("failed_criterion_count")),
+        "moonlab_deployment_gate_blocker_count": (
+            deployment_gate_summary.get("blocker_count")),
+        "whole_game_moonlab_deployment_claim_allowed": (
+            deployment_gate_summary.get(
+                "whole_game_moonlab_deployment_claim_allowed")),
+        "whole_game_hardware_execution_claim_allowed": (
+            deployment_gate_summary.get(
+                "whole_game_hardware_execution_claim_allowed")),
+        "hardware_quantum_advantage_claim_allowed": (
+            deployment_gate_summary.get(
+                "hardware_quantum_advantage_claim_allowed")),
+        "dense_70000_qubit_state_claim_allowed": (
+            deployment_gate_summary.get(
+                "dense_70000_qubit_state_claim_allowed")),
         "vanilla_capture_matrix_file": artifacts["vanilla"]["matrix"]["packed"]["path"],
         "vanilla_icc_evidence_file": artifacts["vanilla"]["icc_evidence"]["packed"]["path"],
         "breadth_evidence_file": artifacts.get("breadth", {}).get(

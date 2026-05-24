@@ -98,7 +98,7 @@ Current artifact status:
   `scaling_summary.json`, `qae_curve.csv`, `qae_circuit.txt`, and
   `qge_advantage_icc_evidence.json`.
 - The publication pack at
-  `diagnostics/publication_pack/20260523-204706/` bundles the benchmark,
+  `diagnostics/publication_pack/20260523-220349/` bundles the benchmark,
   oracle, trace, stream, vanilla, vanilla ICC evidence sidecar, claims, source
   artifacts, `resource/qge_resource_envelope.json`,
   `resource/qge_full_game_map_coverage.json`,
@@ -110,12 +110,15 @@ Current artifact status:
   `resource/qge_moonlab_job_results.json`,
   `resource/qge_moonlab_replay_plan.json`,
   `resource/qge_moonlab_submission_packet.json`,
-  `resource/qge_moonlab_hardware_record_template.json`, and the nine-map breadth
+  `resource/qge_moonlab_hardware_record_template.json`,
+  `resource/qge_moonlab_deployment_gate.json`, and the nine-map breadth
   evidence sidecar with per-target native backend proof maps. The map coverage
   artifact is `partial`: 9/32 canonical registered single-player maps covered
   and 23 pending. The full-game Moonlab plan makes the same blocker explicit:
   zero missing maps are locally runnable with current assets, and 23 registered
-  maps are `blocked_asset_unavailable`. Its agent stream
+  maps are `blocked_asset_unavailable`. The deployment gate is therefore
+  `blocked` and does not allow a whole-game Moonlab deployment claim yet. Its
+  agent stream
   also carries macOS AppKit/SDL launcher probes,
   including intentional
   `-nolauncher` skips for UI-only launcher controls. A real hardware return
