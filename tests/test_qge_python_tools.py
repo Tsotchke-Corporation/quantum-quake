@@ -62,16 +62,50 @@ def write_rgb_png(path: Path, rows: list[list[tuple[int, int, int]]]) -> None:
     )
 
 
-def write_pak(path: Path, names: list[str]) -> None:
+def minimal_bsp_bytes() -> bytes:
+    entities = b'{"classname" "worldspawn"}\n\0'
+    model = b"\0" * 64
+    lumps = [(0, 0)] * 15
+    body = bytearray()
+    offset = 4 + 15 * 8
+    for lump_index, payload in ((0, entities), (14, model)):
+        lumps[lump_index] = (offset, len(payload))
+        body.extend(payload)
+        offset += len(payload)
+    header = bytearray(struct.pack("<i", 29))
+    for lump_offset, lump_length in lumps:
+        header.extend(struct.pack("<ii", lump_offset, lump_length))
+    return bytes(header + body)
+
+
+def write_pak(
+    path: Path,
+    names: list[str],
+    payloads: dict[str, bytes] | None = None,
+) -> None:
+    payloads = payloads or {}
+    file_data = bytearray()
+    entries = []
     directory = bytearray()
     for name in names:
         raw_name = name.encode("ascii")
         if len(raw_name) > 55:
             raise ValueError("PAK entry name is too long")
+        payload = payloads.get(
+            name,
+            minimal_bsp_bytes() if name.lower().endswith(".bsp") else b"",
+        )
+        file_offset = 12 + len(file_data)
+        entries.append((raw_name, file_offset, len(payload)))
+        file_data.extend(payload)
+    for raw_name, file_offset, file_size in entries:
         directory.extend(raw_name + b"\0" * (56 - len(raw_name)))
-        directory.extend(struct.pack("<II", 12, 0))
+        directory.extend(struct.pack("<II", file_offset, file_size))
+    directory_offset = 12 + len(file_data)
     path.write_bytes(
-        struct.pack("<4sII", b"PACK", 12, len(directory)) + directory
+        struct.pack("<4sII", b"PACK", directory_offset, len(directory)) +
+        file_data +
+        directory
     )
 
 
@@ -856,6 +890,7 @@ class PublicationPackTests(unittest.TestCase):
                     "status": "partial",
                     "available_map_count": 4,
                     "missing_map_count": 28,
+                    "invalid_bsp_count": 0,
                     "full_game_asset_ready": False,
                 },
                 "asset_requirements_summary": {
@@ -915,6 +950,7 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(icc["asset_inventory_status"], "partial")
         self.assertEqual(icc["asset_inventory_available_map_count"], 4)
         self.assertEqual(icc["asset_inventory_missing_map_count"], 28)
+        self.assertEqual(icc["asset_inventory_invalid_bsp_count"], 0)
         self.assertFalse(icc["full_game_asset_ready"])
         self.assertEqual(
             icc["asset_requirements_file"],
@@ -1373,7 +1409,7 @@ class BreadthEvidenceTests(unittest.TestCase):
             asset_root = Path(tmp) / "id1"
             maps_dir = asset_root / "maps"
             maps_dir.mkdir(parents=True)
-            (maps_dir / "e1m2.bsp").write_bytes(b"loose-bsp")
+            (maps_dir / "e1m2.bsp").write_bytes(minimal_bsp_bytes())
             write_pak(asset_root / "pak0.pak", [
                 "maps/start.bsp",
                 "maps/e1m1.bsp",
@@ -1393,6 +1429,9 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertFalse(inventory["full_game_asset_ready"])
             self.assertEqual(inventory["pak_count"], 1)
             self.assertEqual(inventory["loose_bsp_count"], 1)
+            self.assertEqual(inventory["invalid_bsp_count"], 0)
+            self.assertTrue(
+                inventory["available_map_sources"]["e1m1"][0]["bsp_valid"])
             self.assertIn(
                 "QGE Asset Inventory",
                 asset_inventory.markdown_report(inventory),
@@ -1456,6 +1495,71 @@ class BreadthEvidenceTests(unittest.TestCase):
             cli_req = publication_pack.load_json(req_path)
             self.assertEqual(
                 cli_req["schema"], "qge.asset_requirements.v0")
+
+    def test_asset_inventory_rejects_placeholder_bsp_assets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            asset_root = tmpdir / "id1"
+            maps_dir = asset_root / "maps"
+            maps_dir.mkdir(parents=True)
+            (maps_dir / "e1m3.bsp").write_bytes(b"not a bsp")
+            write_pak(
+                asset_root / "pak0.pak",
+                ["maps/e1m4.bsp", "maps/e1m5.bsp"],
+                payloads={"maps/e1m4.bsp": b"not a bsp either"},
+            )
+
+            inventory = asset_inventory.build_inventory(asset_root)
+
+            self.assertEqual(inventory["available_maps"], ["e1m5"])
+            self.assertIn("e1m3", inventory["missing_maps"])
+            self.assertIn("e1m4", inventory["missing_maps"])
+            self.assertEqual(inventory["invalid_bsp_count"], 2)
+            invalid_maps = {
+                item["map"] for item in inventory["invalid_bsp_sources"]
+            }
+            self.assertEqual(invalid_maps, {"e1m3", "e1m4"})
+            self.assertEqual(
+                inventory["pak_files"][0]["invalid_bsp_entry_count"], 1)
+            self.assertIn(
+                "Invalid BSPs",
+                asset_inventory.markdown_report(inventory))
+
+            breadth_path = tmpdir / "breadth_evidence.json"
+            breadth_evidence.write_json(
+                breadth_path,
+                {
+                    "schema": "qge.full_game_map_coverage.v0",
+                    "map_set": "quake_registered_single_player",
+                    "target_map_count": 32,
+                    "covered_map_count": 2,
+                    "missing_map_count": 30,
+                    "coverage_ratio": 2 / 32,
+                    "covered_maps": ["e1m1", "e1m2"],
+                    "missing_maps": [
+                        "e1m3",
+                        "e1m4",
+                        "e1m5",
+                    ],
+                },
+            )
+            queue = full_game_capture_queue.build_queue(SimpleNamespace(
+                source=breadth_path,
+                limit=3,
+                frames=3,
+                wait_frames=12,
+                trace=True,
+                special_maps_last=True,
+                authority_smoke=True,
+                force_world_metrics=True,
+                asset_root=asset_root,
+                include_unavailable_assets=False,
+                env=[],
+            ))
+            self.assertEqual(queue["available_asset_maps"], ["e1m5"])
+            self.assertEqual([job["map"] for job in queue["jobs"]], ["e1m5"])
+            self.assertIn("e1m3", queue["asset_unavailable_missing_maps"])
+            self.assertIn("e1m4", queue["asset_unavailable_missing_maps"])
 
     def write_matrix(self,
                      directory: Path,

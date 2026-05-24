@@ -440,7 +440,9 @@ that ledger into `qge.full_game_capture_queue.v0` plus a runnable
 `run_missing_maps.sh` script. The queue inventories loose `maps/*.bsp` files
 and `pak*.pak` directories before it writes jobs, skips maps whose BSP is
 absent unless `--include-unavailable-assets` is set, and records the
-asset-unavailable missing maps in JSON/Markdown. The generated script runs
+asset-unavailable missing maps in JSON/Markdown. BSP assets must pass the
+dependency-free Quake BSP29 header/lump validation before they are accepted as
+available or turned into capture jobs. The generated script runs
 `tools/quake_graphics_harness.sh` for each missing canonical map using the
 Noesis-fire authority-smoke profile by default, gives `start` the dedicated
 `start_hub_route_authority_smoke` route with `QGE_NOESIS_PLAN=start-hub-route`,
@@ -452,8 +454,9 @@ it still uses rocket projectile authority so branch/writeback evidence remains
 required.
 `tools/qge_asset_inventory.py --asset-root assets/id1` emits the standalone
 `qge.asset_inventory.v0` JSON/Markdown audit with PAK SHA-256 hashes, loose BSP
-hashes, available canonical maps, and missing registered maps, so asset blockers
-can be checked before running the queue.
+hashes, BSP validation status, available canonical maps, invalid BSP entries,
+and missing registered maps, so asset blockers can be checked before running
+the queue.
 
 `tools/qge_noesis_summary.py` reads the stream manifest, Noesis action trace,
 translated command buffer, runtime log, `noesis/gameplay_outcomes.ndjson`,

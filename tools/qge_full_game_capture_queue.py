@@ -57,6 +57,12 @@ START_HUB_ROUTE_ENV = {
     "QGE_STREAM_FIRE_MIN_START_WAIT": "0",
 }
 DEFAULT_ASSET_ROOT = REPO_ROOT / "assets" / "id1"
+QUAKE_BSP_VERSION = 29
+BSP_LUMP_COUNT = 15
+BSP_HEADER_SIZE = 4 + BSP_LUMP_COUNT * 8
+BSP_LUMP_ENTITIES = 0
+BSP_LUMP_MODELS = 14
+BSP_DMODEL_SIZE = 64
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -95,7 +101,7 @@ def list_or_empty(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
-def pak_directory_entries(path: Path) -> list[str]:
+def pak_directory_records(path: Path) -> list[dict[str, Any]]:
     data = path.read_bytes()
     if len(data) < 12:
         raise ValueError(f"{path} is too short to be a PAK file")
@@ -107,13 +113,98 @@ def pak_directory_entries(path: Path) -> list[str]:
     directory_end = directory_offset + directory_size
     if directory_offset > len(data) or directory_end > len(data):
         raise ValueError(f"{path} has an out-of-bounds PAK directory")
-    entries = []
+    records = []
     for offset in range(directory_offset, directory_end, 64):
         raw_name = data[offset:offset + 56].split(b"\0", 1)[0]
         name = raw_name.decode("ascii", "ignore").replace("\\", "/").lower()
+        file_offset, file_size = struct.unpack("<II", data[offset + 56:offset + 64])
         if name:
-            entries.append(name)
-    return entries
+            if file_offset > len(data) or file_offset + file_size > len(data):
+                raise ValueError(f"{path}:{name} has an out-of-bounds PAK entry")
+            records.append({
+                "name": name,
+                "file_offset": file_offset,
+                "file_size": file_size,
+            })
+    return records
+
+
+def pak_directory_entries(path: Path) -> list[str]:
+    return [record["name"] for record in pak_directory_records(path)]
+
+
+def bsp_validation_report(data: bytes) -> dict[str, Any]:
+    if len(data) < 4:
+        return {
+            "valid": False,
+            "format": "quake_bsp",
+            "version": None,
+            "reason": "bsp_too_short",
+        }
+    version = struct.unpack("<i", data[:4])[0]
+    if version != QUAKE_BSP_VERSION:
+        return {
+            "valid": False,
+            "format": "quake_bsp",
+            "version": version,
+            "reason": "unsupported_bsp_version",
+        }
+    if len(data) < BSP_HEADER_SIZE:
+        return {
+            "valid": False,
+            "format": "quake_bsp",
+            "version": version,
+            "reason": "bsp_header_truncated",
+        }
+    lumps = []
+    for index in range(BSP_LUMP_COUNT):
+        offset = 4 + index * 8
+        file_offset, file_length = struct.unpack("<ii", data[offset:offset + 8])
+        lumps.append((file_offset, file_length))
+        if file_offset < 0 or file_length < 0:
+            return {
+                "valid": False,
+                "format": "quake_bsp",
+                "version": version,
+                "reason": "negative_lump_bounds",
+                "lump": index,
+            }
+        if file_offset > len(data) or file_offset + file_length > len(data):
+            return {
+                "valid": False,
+                "format": "quake_bsp",
+                "version": version,
+                "reason": "lump_out_of_bounds",
+                "lump": index,
+            }
+    entities_length = lumps[BSP_LUMP_ENTITIES][1]
+    models_length = lumps[BSP_LUMP_MODELS][1]
+    if entities_length <= 0:
+        return {
+            "valid": False,
+            "format": "quake_bsp",
+            "version": version,
+            "reason": "missing_entities_lump",
+        }
+    if models_length < BSP_DMODEL_SIZE or models_length % BSP_DMODEL_SIZE != 0:
+        return {
+            "valid": False,
+            "format": "quake_bsp",
+            "version": version,
+            "reason": "invalid_models_lump_size",
+        }
+    return {
+        "valid": True,
+        "format": "quake_bsp",
+        "version": version,
+        "reason": "valid_quake_bsp29",
+        "lump_count": BSP_LUMP_COUNT,
+        "model_count": models_length // BSP_DMODEL_SIZE,
+    }
+
+
+def is_valid_bsp_payload(data: bytes) -> bool:
+    return bool(bsp_validation_report(data).get("valid"))
 
 
 def available_bsp_maps(asset_root: Path) -> set[str]:
@@ -123,11 +214,17 @@ def available_bsp_maps(asset_root: Path) -> set[str]:
     loose_maps = asset_root / "maps"
     if loose_maps.is_dir():
         for path in loose_maps.glob("*.bsp"):
-            maps.add(path.stem.lower())
+            if is_valid_bsp_payload(path.read_bytes()):
+                maps.add(path.stem.lower())
     for pak_path in sorted(asset_root.glob("pak*.pak")):
-        for entry in pak_directory_entries(pak_path):
+        data = pak_path.read_bytes()
+        for record in pak_directory_records(pak_path):
+            entry = record["name"]
             if entry.startswith("maps/") and entry.endswith(".bsp"):
-                maps.add(Path(entry).stem.lower())
+                start = int(record["file_offset"])
+                end = start + int(record["file_size"])
+                if is_valid_bsp_payload(data[start:end]):
+                    maps.add(Path(entry).stem.lower())
     return maps
 
 

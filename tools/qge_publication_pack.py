@@ -1395,6 +1395,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 asset_inventory.get("available_map_count")),
             "asset_inventory_missing_map_count": (
                 asset_inventory.get("missing_map_count")),
+            "asset_inventory_invalid_bsp_count": (
+                asset_inventory.get("invalid_bsp_count")),
             "full_game_asset_ready": (
                 asset_inventory.get("full_game_asset_ready")),
             "breadth_total_fallback_count": breadth_summary.get(
@@ -1454,6 +1456,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "missing_map_count": asset_inventory.get("missing_map_count"),
                 "pak_count": asset_inventory.get("pak_count"),
                 "invalid_pak_count": asset_inventory.get("invalid_pak_count"),
+                "invalid_bsp_count": asset_inventory.get("invalid_bsp_count"),
                 "full_game_asset_ready": asset_inventory.get(
                     "full_game_asset_ready"),
             },
@@ -1639,6 +1642,8 @@ def build_icc_evidence(manifest: dict[str, Any],
             asset_inventory_summary.get("available_map_count")),
         "asset_inventory_missing_map_count": (
             asset_inventory_summary.get("missing_map_count")),
+        "asset_inventory_invalid_bsp_count": (
+            asset_inventory_summary.get("invalid_bsp_count")),
         "full_game_asset_ready": asset_inventory_summary.get(
             "full_game_asset_ready"),
         "asset_requirements_schema": asset_requirements_summary.get("schema"),

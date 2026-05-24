@@ -145,6 +145,7 @@ def job_observations(job: dict[str, Any]) -> dict[str, Any]:
                 "asset_available_map_count": (
                     inventory.get("available_map_count")),
                 "asset_missing_map_count": inventory.get("missing_map_count"),
+                "asset_invalid_bsp_count": inventory.get("invalid_bsp_count"),
                 "full_game_asset_ready": (
                     inventory.get("full_game_asset_ready")),
             })

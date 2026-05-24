@@ -349,6 +349,7 @@ assert manifest["advantage_summary"]["full_game_map_coverage_summary"]["status"]
 assert manifest["advantage_summary"]["full_game_map_coverage_summary"]["target_map_count"] == 32
 assert manifest["advantage_summary"]["full_game_map_coverage_summary"]["covered_map_count"] == 0
 assert manifest["advantage_summary"]["asset_inventory_summary"]["missing_map_count"] == 32
+assert manifest["advantage_summary"]["asset_inventory_summary"]["invalid_bsp_count"] == 0
 assert manifest["advantage_summary"]["asset_inventory_summary"]["full_game_asset_ready"] is False
 assert manifest["advantage_summary"]["asset_requirements_summary"]["schema"] == "qge.asset_requirements.v0"
 assert manifest["advantage_summary"]["asset_requirements_summary"]["status"] == "blocked_missing_registered_assets"
@@ -379,6 +380,7 @@ assert icc["full_game_map_target_count"] == 32
 assert icc["full_game_map_covered_count"] == 0
 assert icc["asset_inventory_file"].endswith("resource/qge_asset_inventory.json")
 assert icc["asset_inventory_missing_map_count"] == 32
+assert icc["asset_inventory_invalid_bsp_count"] == 0
 assert icc["full_game_asset_ready"] is False
 assert icc["asset_requirements_file"].endswith("resource/qge_asset_requirements.json")
 assert icc["asset_requirements_markdown_file"].endswith("resource/qge_asset_requirements.md")

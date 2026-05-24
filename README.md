@@ -63,7 +63,7 @@ Important known limitations:
 
 - The full-port ICC target is `qge_vanilla_quake_conformance`. The current
   strongest self-contained evidence pack is
-  `diagnostics/publication_pack/20260523-180201`, where ICC reports the strict
+  `diagnostics/publication_pack/20260523-204706`, where ICC reports the strict
   vanilla/QGE runtime ownership matrix and `qge_vanilla_runtime_complete`
   ready. The pack includes `resource/qge_resource_envelope.json`, which scopes
   Moonlab simulator/native-backend deployment,
@@ -97,14 +97,15 @@ Important known limitations:
   hardware execution, hardware quantum advantage, or a dense 70,000-qubit
   state. This is a captured workload proof, not a claim that every Quake domain
   is visually or hardware complete. Use
-  `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-180201`
+  `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-204706`
   to generate the remaining harness queue and breadth rebuild script; the queue
   inventories loose/Pak BSP assets, skips missing local BSPs unless
   `--include-unavailable-assets` is set, and currently reports zero locally
   queueable missing maps while 23 registered maps require additional registered
   BSP assets before capture. `tools/qge_asset_inventory.py` emits the companion
-  hash-backed asset audit; the current local inventory is one `pak0.pak`
-  containing 9/32 canonical maps.
+  hash-backed asset audit and rejects placeholder BSPs unless they pass the
+  Quake BSP29 header/lump gate; the current local inventory is one `pak0.pak`
+  containing 9/32 canonical maps with zero invalid BSP entries.
 - `quantum_render 2` is not visually complete. The current renderer has
   improved world-surface coverage, Quake-FOV world projection, bilinear
   surface/light sampling, darker lightmap-preserving surface shading, and

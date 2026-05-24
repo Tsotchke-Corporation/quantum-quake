@@ -52,12 +52,20 @@ def source_summary(sources: list[Any]) -> list[dict[str, Any]]:
                 "path": source.get("path"),
                 "bytes": source.get("bytes"),
                 "sha256": source.get("sha256"),
+                "bsp_valid": source.get("bsp_valid"),
+                "bsp_version": source.get("bsp_version"),
+                "bsp_model_count": source.get("bsp_model_count"),
             })
         elif source.get("kind") == "pak_entry":
             summaries.append({
                 "kind": "pak_entry",
                 "pak": source.get("pak"),
                 "entry": source.get("entry"),
+                "bytes": source.get("bytes"),
+                "file_offset": source.get("file_offset"),
+                "bsp_valid": source.get("bsp_valid"),
+                "bsp_version": source.get("bsp_version"),
+                "bsp_model_count": source.get("bsp_model_count"),
             })
         else:
             summaries.append(dict(source))

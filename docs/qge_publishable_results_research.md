@@ -155,7 +155,7 @@ Do claim, once proven:
 Minimum publishable artifact package:
 
 Current strongest publication bundle:
-`diagnostics/publication_pack/20260523-180201`. It packages a ready e1m1
+`diagnostics/publication_pack/20260523-204706`. It packages a ready e1m1
 QGE/vanilla capture, vanilla ICC evidence sidecar, agent stream, oracle scene,
 claims evidence, finite-shot QAE benchmark artifacts,
 `resource/qge_resource_envelope.json`,
@@ -225,23 +225,25 @@ and marks UI-only `-nolauncher` paths as intentional skips.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for
-     `diagnostics/publication_pack/20260523-180201` inventories local loose/Pak
+     `diagnostics/publication_pack/20260523-204706` inventories local loose/Pak
      BSP assets before queuing. With the current `assets/id1/pak0.pak`, it
      reports zero locally queueable missing maps and 23 missing registered maps
      as asset-unavailable; those maps require additional registered BSP assets
-     before capture.
+     before capture. The queue now accepts assets only after the dependency-free
+     BSP29 header/lump validator confirms a real Quake BSP payload.
    - `tools/qge_asset_inventory.py --asset-root assets/id1` emits
      `qge.asset_inventory.v0` and `qge_registered_asset_inventory_complete`
-     ICC evidence with PAK SHA-256 hashes and the exact available/missing map
-     ledger. The current local inventory is one `pak0.pak`, 9/32 canonical maps
-     available, 23 missing, and no whole-game Moonlab coverage claim.
+     ICC evidence with PAK SHA-256 hashes, BSP validation status, invalid-BSP
+     counts, and the exact available/missing map ledger. The current local
+     inventory is one `pak0.pak`, 9/32 canonical maps available, 23 missing,
+     zero invalid BSP entries, and no whole-game Moonlab coverage claim.
    - The sidecar also records per-target runtime backend proofs for
      `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`, and
      `qge_metal_init_common`, including missing/native target sets and the
      count of matrix runs where all required native boundaries resolved to the
      native sparse DWT render bridge.
    - The current publication bundle carries those breadth counters directly:
-     `diagnostics/publication_pack/20260523-180201` reports
+     `diagnostics/publication_pack/20260523-204706` reports
      `breadth_map_count=9`, `breadth_total_native_bridge_count=945`, and
      `breadth_total_runtime_backend_probe_event_count=36`, with
      `breadth_runtime_backend_probe_resolved_run_count=9`, plus
@@ -283,7 +285,7 @@ qge_vanilla_runtime_complete -> produce_ready_vanilla_capture_matrix
 ```
 
 That blocker is now cleared for the current self-contained publication pack:
-`diagnostics/publication_pack/20260523-180201` carries
+`diagnostics/publication_pack/20260523-204706` carries
 `qge_vanilla_capture_matrix_complete`, the vanilla ICC sidecar, native backend
 proofs, the agent stream, the benchmark bundle, and the nine-map breadth
 sidecar. It also carries `resource/qge_resource_envelope.json`, which records
@@ -326,7 +328,7 @@ The next hard work is therefore:
    coverage ledger, while preserving zero fallback/surrogate/CPU-IDWT counters.
    Install the remaining registered BSP assets, verify them with
    `tools/qge_asset_inventory.py`, then start from
-   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-180201`
+   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-204706`
    so the 23 registered asset-unavailable maps become explicit capture jobs
    rather than weakening the authority gate.
 2. Submit the QAE hardware-candidate job through Moonlab hardware when
