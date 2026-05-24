@@ -34,6 +34,7 @@ import qge_moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest  # noqa: E402
 import qge_moonlab_job_runner  # noqa: E402
 import qge_moonlab_oracle_transpile  # noqa: E402
+import qge_moonlab_qae_observation_transpile  # noqa: E402
 import qge_moonlab_qae_transpile  # noqa: E402
 import qge_moonlab_submission_bundle  # noqa: E402
 import qge_oracle_export  # noqa: E402
@@ -646,6 +647,8 @@ def build_moonlab_job_specs(
                     "moonlab_qae_payload"),
                 "moonlab_qae_oracle_kernel": artifact_paths.get(
                     "moonlab_qae_oracle_kernel"),
+                "moonlab_qae_observation_zero": artifact_paths.get(
+                    "moonlab_qae_observation_zero"),
             },
             "fallback_policy": (
                 "simulator result is publishable; hardware result requires backend id, "
@@ -876,6 +879,13 @@ def build_advantage_artifacts(oracle_scene_path: Path,
         outdir / "qae_moonlab_oracle_kernel.md")
     moonlab_oracle_kernel_icc_path = (
         outdir / "qae_moonlab_oracle_kernel_icc_evidence.json")
+    moonlab_observation_path = outdir / "qae_moonlab_observation_zero.json"
+    moonlab_observation_circuit_path = (
+        outdir / "qae_moonlab_observation_zero.moonlab")
+    moonlab_observation_markdown_path = (
+        outdir / "qae_moonlab_observation_zero.md")
+    moonlab_observation_icc_path = (
+        outdir / "qae_moonlab_observation_zero_icc_evidence.json")
     scaling_path = outdir / "scaling_summary.json"
     scaling_csv_path = outdir / "scaling_summary.csv"
     icc_path = outdir / "qge_advantage_icc_evidence.json"
@@ -923,6 +933,28 @@ def build_advantage_artifacts(oracle_scene_path: Path,
             out_path=moonlab_oracle_kernel_path,
         ),
     )
+    moonlab_observation = (
+        qge_moonlab_qae_observation_transpile.build_observation_circuit(
+            metrics,
+            oracle_scene,
+            metrics_path=metrics_path,
+            oracle_scene_path=oracle_scene_path,
+            circuit_path=moonlab_observation_circuit_path,
+        )
+    )
+    write_json(moonlab_observation_path, moonlab_observation)
+    moonlab_observation_markdown_path.write_text(
+        qge_moonlab_qae_observation_transpile.markdown_report(
+            moonlab_observation),
+        encoding="utf-8",
+    )
+    write_json(
+        moonlab_observation_icc_path,
+        qge_moonlab_qae_observation_transpile.build_icc_evidence(
+            moonlab_observation,
+            out_path=moonlab_observation_path,
+        ),
+    )
     qge_advantage_benchmark.write_json(
         icc_path,
         qge_advantage_benchmark.build_icc_evidence(
@@ -947,6 +979,14 @@ def build_advantage_artifacts(oracle_scene_path: Path,
         "qae_moonlab_oracle_kernel_icc_evidence": file_info(
             moonlab_oracle_kernel_icc_path),
         "qae_moonlab_oracle_kernel_data": moonlab_oracle_kernel,
+        "qae_moonlab_observation_zero": file_info(moonlab_observation_path),
+        "qae_moonlab_observation_zero_circuit": file_info(
+            moonlab_observation_circuit_path),
+        "qae_moonlab_observation_zero_markdown": file_info(
+            moonlab_observation_markdown_path),
+        "qae_moonlab_observation_zero_icc_evidence": file_info(
+            moonlab_observation_icc_path),
+        "qae_moonlab_observation_zero_data": moonlab_observation,
         "scaling_summary": file_info(scaling_path),
         "scaling_summary_csv": file_info(scaling_csv_path),
         "icc_evidence": file_info(icc_path),
@@ -1203,6 +1243,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "moonlab_qae_payload": advantage["qae_moonlab_payload"]["path"],
             "moonlab_qae_oracle_kernel": (
                 advantage["qae_moonlab_oracle_kernel"]["path"]),
+            "moonlab_qae_observation_zero": (
+                advantage["qae_moonlab_observation_zero"]["path"]),
             "trace": capture_artifacts["trace"]["packed"]["path"],
             "frame": capture_artifacts["frame"]["packed"]["path"],
             "vanilla_matrix": vanilla_artifacts["matrix"]["packed"]["path"],
@@ -1440,6 +1482,14 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                     advantage["qae_moonlab_oracle_kernel_markdown"]),
                 "qae_moonlab_oracle_kernel_icc_evidence": (
                     advantage["qae_moonlab_oracle_kernel_icc_evidence"]),
+                "qae_moonlab_observation_zero": (
+                    advantage["qae_moonlab_observation_zero"]),
+                "qae_moonlab_observation_zero_circuit": (
+                    advantage["qae_moonlab_observation_zero_circuit"]),
+                "qae_moonlab_observation_zero_markdown": (
+                    advantage["qae_moonlab_observation_zero_markdown"]),
+                "qae_moonlab_observation_zero_icc_evidence": (
+                    advantage["qae_moonlab_observation_zero_icc_evidence"]),
                 "scaling_summary": advantage["scaling_summary"],
                 "scaling_summary_csv": advantage["scaling_summary_csv"],
                 "icc_evidence": advantage["icc_evidence"],
@@ -1642,6 +1692,39 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                         "claim_posture", {}).get(
                             "full_qae_oracle_transpiled")),
             },
+            "moonlab_qae_observation_zero_summary": {
+                "schema": (
+                    advantage["qae_moonlab_observation_zero_data"].get(
+                        "schema")),
+                "status": (
+                    advantage["qae_moonlab_observation_zero_data"].get(
+                        "status")),
+                "semantic_scope": (
+                    advantage["qae_moonlab_observation_zero_data"].get(
+                        "semantic_scope")),
+                "resource_estimate": (
+                    advantage["qae_moonlab_observation_zero_data"].get(
+                        "resource_estimate")),
+                "state_preparation": (
+                    advantage["qae_moonlab_observation_zero_data"].get(
+                        "state_preparation")),
+                "control_plane_executable": (
+                    advantage["qae_moonlab_observation_zero_data"].get(
+                        "moonlab_control_plane", {}).get(
+                            "control_plane_executable")),
+                "candidate_state_preparation_transpiled": (
+                    advantage["qae_moonlab_observation_zero_data"].get(
+                        "claim_posture", {}).get(
+                            "candidate_state_preparation_transpiled")),
+                "power_zero_observation_transpiled": (
+                    advantage["qae_moonlab_observation_zero_data"].get(
+                        "claim_posture", {}).get(
+                            "power_zero_observation_transpiled")),
+                "full_qae_oracle_transpiled": (
+                    advantage["qae_moonlab_observation_zero_data"].get(
+                        "claim_posture", {}).get(
+                            "full_qae_oracle_transpiled")),
+            },
             "resource_envelope_summary": resource_envelope.get("posture"),
             "full_game_map_coverage_summary": {
                 "status": full_game_map_coverage.get("status"),
@@ -1743,6 +1826,9 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "oracle_kernel_ready_count": (
                     moonlab_submission_bundle.get(
                         "oracle_kernel_ready_count")),
+                "qae_observation_ready_count": (
+                    moonlab_submission_bundle.get(
+                        "qae_observation_ready_count")),
                 "transpilation_required_count": (
                     moonlab_submission_bundle.get(
                         "transpilation_required_count")),
@@ -1758,6 +1844,9 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "oracle_kernel_directly_executable": (
                     moonlab_submission_bundle.get(
                         "oracle_kernel_directly_executable")),
+                "qae_observation_directly_executable": (
+                    moonlab_submission_bundle.get(
+                        "qae_observation_directly_executable")),
             },
             "moonlab_hardware_record_template_summary": {
                 "schema": moonlab_hardware_record_template.get("schema"),
@@ -1835,6 +1924,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_advantage_benchmark.py <oracle_scene.json> --outdir <outdir>",
             "tools/qge_moonlab_qae_transpile.py --metrics <pack_dir>/advantage/advantage_metrics.json --abstract-circuit <pack_dir>/advantage/qae_circuit.txt --out /tmp/qae_moonlab_payload.json --circuit-dir /tmp/moonlab_qae_circuits --markdown /tmp/qae_moonlab_payload.md --icc-json /tmp/qae_moonlab_payload_icc_evidence.json",
             "tools/qge_moonlab_oracle_transpile.py --metrics <pack_dir>/advantage/advantage_metrics.json --oracle-scene <pack_dir>/oracle/oracle_scene.json --out /tmp/qae_moonlab_oracle_kernel.json --circuit /tmp/qae_moonlab_oracle_kernel.moonlab --markdown /tmp/qae_moonlab_oracle_kernel.md --icc-json /tmp/qae_moonlab_oracle_kernel_icc_evidence.json",
+            "tools/qge_moonlab_qae_observation_transpile.py --metrics <pack_dir>/advantage/advantage_metrics.json --oracle-scene <pack_dir>/oracle/oracle_scene.json --out /tmp/qae_moonlab_observation_zero.json --circuit /tmp/qae_moonlab_observation_zero.moonlab --markdown /tmp/qae_moonlab_observation_zero.md --icc-json /tmp/qae_moonlab_observation_zero_icc_evidence.json",
             "tools/qge_vanilla_capture_matrix.py <graphics_capture_dir>",
             "tools/qge_breadth_evidence.py --matrix <graphics_capture_dir> --min-maps N",
             "tools/qge_publication_pack.py --capture-dir <trace_capture_dir> --vanilla-matrix <graphics_capture_dir>/vanilla_capture_matrix.json --graphics-capture-dir <graphics_capture_dir> --breadth-evidence <breadth_dir>",
@@ -1861,6 +1951,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("moonlab_qae_payload_summary"))
     qae_oracle_kernel_summary = dict_or_empty(
         advantage_summary.get("moonlab_qae_oracle_kernel_summary"))
+    qae_observation_summary = dict_or_empty(
+        advantage_summary.get("moonlab_qae_observation_zero_summary"))
     job_specs_summary = dict_or_empty(
         advantage_summary.get("moonlab_job_specs_summary"))
     job_results_summary = dict_or_empty(
@@ -1941,6 +2033,34 @@ def build_icc_evidence(manifest: dict[str, Any],
             qae_oracle_kernel_summary.get("qf_oracle_kernel_transpiled")),
         "moonlab_qae_oracle_kernel_full_qae_oracle_transpiled": (
             qae_oracle_kernel_summary.get("full_qae_oracle_transpiled")),
+        "moonlab_qae_observation_zero_file": (
+            artifacts["advantage"].get(
+                "qae_moonlab_observation_zero", {}).get("path")),
+        "moonlab_qae_observation_zero_circuit_file": (
+            artifacts["advantage"].get(
+                "qae_moonlab_observation_zero_circuit", {}).get("path")),
+        "moonlab_qae_observation_zero_markdown_file": (
+            artifacts["advantage"].get(
+                "qae_moonlab_observation_zero_markdown", {}).get("path")),
+        "moonlab_qae_observation_zero_icc_evidence_file": (
+            artifacts["advantage"].get(
+                "qae_moonlab_observation_zero_icc_evidence", {}).get("path")),
+        "moonlab_qae_observation_zero_schema": (
+            qae_observation_summary.get("schema")),
+        "moonlab_qae_observation_zero_status": (
+            qae_observation_summary.get("status")),
+        "moonlab_qae_observation_zero_semantic_scope": (
+            qae_observation_summary.get("semantic_scope")),
+        "moonlab_qae_observation_zero_control_plane_executable": (
+            qae_observation_summary.get("control_plane_executable")),
+        "moonlab_qae_candidate_state_preparation_transpiled": (
+            qae_observation_summary.get(
+                "candidate_state_preparation_transpiled")),
+        "moonlab_qae_power_zero_observation_transpiled": (
+            qae_observation_summary.get(
+                "power_zero_observation_transpiled")),
+        "moonlab_qae_observation_zero_full_qae_oracle_transpiled": (
+            qae_observation_summary.get("full_qae_oracle_transpiled")),
         "scaling_summary_file": artifacts["advantage"]["scaling_summary"]["path"],
         "resource_envelope_file": artifacts.get("resource", {}).get(
             "envelope", {}).get("path"),
@@ -2055,6 +2175,8 @@ def build_icc_evidence(manifest: dict[str, Any],
                 "calibration_payload_ready_count")),
         "moonlab_submission_oracle_kernel_ready_count": (
             submission_bundle_summary.get("oracle_kernel_ready_count")),
+        "moonlab_submission_qae_observation_ready_count": (
+            submission_bundle_summary.get("qae_observation_ready_count")),
         "moonlab_submission_transpilation_required_count": (
             submission_bundle_summary.get("transpilation_required_count")),
         "moonlab_submission_missing_artifact_candidate_count": (
@@ -2069,6 +2191,9 @@ def build_icc_evidence(manifest: dict[str, Any],
         "moonlab_oracle_kernel_directly_executable": (
             submission_bundle_summary.get(
                 "oracle_kernel_directly_executable")),
+        "moonlab_qae_observation_directly_executable": (
+            submission_bundle_summary.get(
+                "qae_observation_directly_executable")),
         "moonlab_hardware_record_template_schema": (
             hardware_record_template_summary.get("schema")),
         "moonlab_hardware_record_schema": (

@@ -15,6 +15,9 @@ MOONLAB_CIRCUIT_HEADER = "# moonlab-circuit v1"
 MOONLAB_CONTROL_MAX_BODY_BYTES = 1 << 22
 ABSTRACT_QGE_QAE_HEADER = "QGE QAE abstract circuit v0"
 QF_KERNEL_READY_STATUS = "qf_oracle_kernel_ready_qae_transpilation_required"
+QAE_OBSERVATION_ZERO_READY_STATUS = (
+    "qae_observation_zero_ready_grover_schedule_required"
+)
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -299,6 +302,85 @@ def classify_moonlab_qae_oracle_kernel(path: Path | None) -> dict[str, Any]:
     return check
 
 
+def classify_moonlab_qae_observation_zero(path: Path | None) -> dict[str, Any]:
+    info = file_info(path)
+    check: dict[str, Any] = {
+        "artifact": info,
+        "schema": None,
+        "status": "missing",
+        "semantic_scope": None,
+        "qae_observation_directly_executable": False,
+        "candidate_state_preparation_transpiled": False,
+        "power_zero_observation_transpiled": False,
+        "qf_oracle_kernel_transpiled": False,
+        "full_qae_oracle_transpiled": False,
+        "logical_qubits": None,
+        "gate_count": None,
+        "body_bytes": None,
+        "blockers": ["moonlab_qae_observation_zero artifact is missing"],
+    }
+    if path is None or not path.is_file():
+        return check
+
+    try:
+        observation = load_json(path)
+    except (OSError, ValueError) as exc:
+        check.update({
+            "status": "blocked_invalid_qae_observation",
+            "blockers": [
+                f"moonlab_qae_observation_zero could not be read: {exc}",
+            ],
+        })
+        return check
+
+    resource = dict_or_empty(observation.get("resource_estimate"))
+    control = dict_or_empty(observation.get("moonlab_control_plane"))
+    claim_posture = dict_or_empty(observation.get("claim_posture"))
+    circuit_path_raw = observation.get("moonlab_circuit_file")
+    circuit_path = (
+        Path(circuit_path_raw)
+        if isinstance(circuit_path_raw, str) and circuit_path_raw
+        else None
+    )
+    circuit_check = classify_qae_circuit(circuit_path)
+    blockers = []
+    if observation.get("schema") != "qge.moonlab_qae_observation_circuit.v0":
+        blockers.append(
+            "moonlab_qae_observation_zero schema is not "
+            "qge.moonlab_qae_observation_circuit.v0")
+    if circuit_check.get("status") != "ready_for_control_plane_submission":
+        blockers.append(
+            "power-zero observation circuit is not ready Moonlab text")
+    if not claim_posture.get("candidate_state_preparation_transpiled"):
+        blockers.append("candidate state preparation is not marked transpiled")
+    if not claim_posture.get("qf_oracle_kernel_transpiled"):
+        blockers.append("Q_f kernel is not marked transpiled in observation")
+    if not claim_posture.get("power_zero_observation_transpiled"):
+        blockers.append("power-zero observation is not marked transpiled")
+    executable = not blockers and bool(
+        control.get("control_plane_executable"))
+    check.update({
+        "schema": observation.get("schema"),
+        "status": observation.get("status"),
+        "semantic_scope": observation.get("semantic_scope"),
+        "qae_observation_directly_executable": executable,
+        "candidate_state_preparation_transpiled": bool(
+            claim_posture.get("candidate_state_preparation_transpiled")),
+        "power_zero_observation_transpiled": bool(
+            claim_posture.get("power_zero_observation_transpiled")),
+        "qf_oracle_kernel_transpiled": bool(
+            claim_posture.get("qf_oracle_kernel_transpiled")),
+        "full_qae_oracle_transpiled": bool(
+            claim_posture.get("full_qae_oracle_transpiled")),
+        "logical_qubits": resource.get("logical_qubits"),
+        "gate_count": resource.get("gate_count"),
+        "body_bytes": control.get("body_bytes"),
+        "circuit_check": circuit_check,
+        "blockers": blockers,
+    })
+    return check
+
+
 def artifact_checks(job: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
     required = dict_or_empty(job.get("required_artifacts"))
     evidence_by_name = {
@@ -372,11 +454,19 @@ def build_candidate_bundle(job: dict[str, Any]) -> dict[str, Any]:
         required.get("moonlab_qae_oracle_kernel")
         else None
     )
+    observation_path = (
+        Path(required["moonlab_qae_observation_zero"])
+        if isinstance(required.get("moonlab_qae_observation_zero"), str) and
+        required.get("moonlab_qae_observation_zero")
+        else None
+    )
     artifacts, missing = artifact_checks(job)
     qae_check = classify_qae_circuit(qae_path)
     payload_check = classify_moonlab_qae_payload(payload_path)
     oracle_kernel_check = classify_moonlab_qae_oracle_kernel(
         oracle_kernel_path)
+    observation_check = classify_moonlab_qae_observation_zero(
+        observation_path)
     blockers = list(missing)
     blockers.extend(qae_check.get("blockers", []))
     payload_blockers = list_or_empty(payload_check.get("blockers"))
@@ -386,6 +476,9 @@ def build_candidate_bundle(job: dict[str, Any]) -> dict[str, Any]:
         oracle_kernel_check.get("blockers"))
     if oracle_kernel_path is not None:
         blockers.extend(oracle_kernel_blockers)
+    observation_blockers = list_or_empty(observation_check.get("blockers"))
+    if observation_path is not None:
+        blockers.extend(observation_blockers)
     direct = bool(qae_check.get("moonlab_control_plane_executable")) and not missing
     payload_direct = bool(
         payload_check.get("control_plane_payload_directly_executable")) and (
@@ -393,8 +486,15 @@ def build_candidate_bundle(job: dict[str, Any]) -> dict[str, Any]:
     oracle_kernel_direct = bool(
         oracle_kernel_check.get("oracle_kernel_directly_executable")) and (
             "moonlab_qae_oracle_kernel" not in missing)
+    observation_direct = bool(
+        observation_check.get("qae_observation_directly_executable")) and (
+            "moonlab_qae_observation_zero" not in missing)
     if missing:
         status = "blocked_missing_required_artifact"
+    elif observation_direct and qae_check.get("status") == (
+        "blocked_transpilation_required"
+    ):
+        status = QAE_OBSERVATION_ZERO_READY_STATUS
     elif oracle_kernel_direct and payload_direct and qae_check.get("status") == (
         "blocked_transpilation_required"
     ):
@@ -421,15 +521,22 @@ def build_candidate_bundle(job: dict[str, Any]) -> dict[str, Any]:
         "qae_circuit_check": qae_check,
         "moonlab_qae_payload_check": payload_check,
         "moonlab_qae_oracle_kernel_check": oracle_kernel_check,
+        "moonlab_qae_observation_zero_check": observation_check,
         "moonlab_control_plane_request": control_plane_request_contract(job),
         "blockers": blockers,
         "control_plane_payload_directly_executable": payload_direct,
         "oracle_kernel_directly_executable": oracle_kernel_direct,
+        "qae_observation_directly_executable": observation_direct,
         "qf_oracle_kernel_transpiled": bool(
             oracle_kernel_check.get("qf_oracle_kernel_transpiled")),
+        "candidate_state_preparation_transpiled": bool(
+            observation_check.get("candidate_state_preparation_transpiled")),
+        "power_zero_observation_transpiled": bool(
+            observation_check.get("power_zero_observation_transpiled")),
         "full_qae_oracle_transpiled": bool(
             payload_check.get("full_qae_oracle_transpiled")) or bool(
-                oracle_kernel_check.get("full_qae_oracle_transpiled")),
+                oracle_kernel_check.get("full_qae_oracle_transpiled")) or bool(
+                    observation_check.get("full_qae_oracle_transpiled")),
         "claim_posture": {
             "hardware_result_claimed": False,
             "hardware_quantum_advantage_claimed": False,
@@ -451,6 +558,9 @@ def overall_status(
     if any(status == "blocked_missing_required_artifact"
            for status in statuses):
         return "blocked_missing_required_artifact"
+    if any(status == QAE_OBSERVATION_ZERO_READY_STATUS
+           for status in statuses):
+        return QAE_OBSERVATION_ZERO_READY_STATUS
     if any(status == QF_KERNEL_READY_STATUS for status in statuses):
         return QF_KERNEL_READY_STATUS
     if any(status == "calibration_payload_ready_oracle_transpilation_required"
@@ -497,12 +607,20 @@ def build_submission_bundle(
         1 for candidate in candidates
         if candidate.get("oracle_kernel_directly_executable")
     )
+    qae_observation_ready = sum(
+        1 for candidate in candidates
+        if candidate.get("qae_observation_directly_executable")
+    )
     payload_direct = bool(candidates) and all(
         bool(candidate.get("control_plane_payload_directly_executable"))
         for candidate in candidates
     )
     oracle_kernel_direct = bool(candidates) and all(
         bool(candidate.get("oracle_kernel_directly_executable"))
+        for candidate in candidates
+    )
+    observation_direct = bool(candidates) and all(
+        bool(candidate.get("qae_observation_directly_executable"))
         for candidate in candidates
     )
     direct = bool(candidates) and all(
@@ -518,11 +636,13 @@ def build_submission_bundle(
         "ready_for_control_plane_submission_count": ready,
         "calibration_payload_ready_count": calibration_ready,
         "oracle_kernel_ready_count": oracle_kernel_ready,
+        "qae_observation_ready_count": qae_observation_ready,
         "transpilation_required_count": transpilation_required,
         "missing_artifact_candidate_count": missing,
         "hardware_submission_directly_executable": direct,
         "control_plane_payload_directly_executable": payload_direct,
         "oracle_kernel_directly_executable": oracle_kernel_direct,
+        "qae_observation_directly_executable": observation_direct,
         "moonlab_control_plane_requirements": {
             "payload_header": MOONLAB_CIRCUIT_HEADER,
             "required_payload_fields": ["NUM_QUBITS"],
@@ -542,6 +662,7 @@ def build_submission_bundle(
             "Abstract QGE QAE circuit text requires a transpilation step before control-plane submission.",
             "Readout-equivalent Moonlab payloads can validate shot plumbing without proving the full QAE oracle is transpiled.",
             "A ready Q_f kernel still needs candidate state preparation, Grover diffusion, and MLAE circuit assembly before a full QAE submission.",
+            "A ready power-zero QAE observation still needs Grover diffusion and nonzero-power MLAE assembly before a full QAE submission.",
             "This bundle records submission readiness, not a hardware result.",
         ],
     }
@@ -553,26 +674,29 @@ def markdown_report(bundle: dict[str, Any]) -> str:
         "",
         f"Status: `{bundle['status']}`",
         "",
-        "| Jobs | Ready | Calibration Ready | Q_f Kernel Ready | Transpilation Required | Missing Artifacts | Directly Executable |",
-        "| ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| Jobs | Ready | Calibration Ready | Q_f Kernel Ready | Observation Ready | Transpilation Required | Missing Artifacts | Directly Executable |",
+        "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
         (
             f"| {bundle['hardware_candidate_job_count']} | "
             f"{bundle['ready_for_control_plane_submission_count']} | "
             f"{bundle['calibration_payload_ready_count']} | "
             f"{bundle['oracle_kernel_ready_count']} | "
+            f"{bundle['qae_observation_ready_count']} | "
             f"{bundle['transpilation_required_count']} | "
             f"{bundle['missing_artifact_candidate_count']} | "
             f"{bundle['control_plane_payload_directly_executable']} |"
         ),
         "",
-        "| Job | Control-Plane Status | Circuit Format | Payload Scope | Kernel Scope | Qubits | Blockers |",
-        "| --- | --- | --- | --- | --- | ---: | --- |",
+        "| Job | Control-Plane Status | Circuit Format | Payload Scope | Kernel Scope | Observation Scope | Qubits | Blockers |",
+        "| --- | --- | --- | --- | --- | --- | ---: | --- |",
     ]
     for job in bundle["candidate_jobs"]:
         qae_check = dict_or_empty(job.get("qae_circuit_check"))
         payload_check = dict_or_empty(job.get("moonlab_qae_payload_check"))
         kernel_check = dict_or_empty(
             job.get("moonlab_qae_oracle_kernel_check"))
+        observation_check = dict_or_empty(
+            job.get("moonlab_qae_observation_zero_check"))
         blockers = job.get("blockers", [])
         if isinstance(blockers, list):
             blocker_text = "; ".join(str(item) for item in blockers) or "none"
@@ -584,6 +708,7 @@ def markdown_report(bundle: dict[str, Any]) -> str:
             f"{qae_check.get('format')} | "
             f"{payload_check.get('semantic_scope')} | "
             f"{kernel_check.get('semantic_scope')} | "
+            f"{observation_check.get('semantic_scope')} | "
             f"{qae_check.get('logical_qubits_declared')} | "
             f"{blocker_text} |"
         )
@@ -615,6 +740,8 @@ def build_icc_evidence(
             "calibration_payload_ready_count"),
         "oracle_kernel_ready_count": bundle.get(
             "oracle_kernel_ready_count"),
+        "qae_observation_ready_count": bundle.get(
+            "qae_observation_ready_count"),
         "transpilation_required_count": bundle.get(
             "transpilation_required_count"),
         "missing_artifact_candidate_count": bundle.get(
@@ -625,6 +752,8 @@ def build_icc_evidence(
             "control_plane_payload_directly_executable"),
         "oracle_kernel_directly_executable": bundle.get(
             "oracle_kernel_directly_executable"),
+        "qae_observation_directly_executable": bundle.get(
+            "qae_observation_directly_executable"),
         "hardware_quantum_advantage_claimed": False,
         "whole_game_hardware_execution_claimed": False,
         "dense_70000_qubit_state_claimed": False,

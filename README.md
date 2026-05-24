@@ -63,7 +63,7 @@ Important known limitations:
 
 - The full-port ICC target is `qge_vanilla_quake_conformance`. The current
   strongest self-contained evidence pack is
-  `diagnostics/publication_pack/20260524-132843`, where ICC reports the strict
+  `diagnostics/publication_pack/20260524-140254`, where ICC reports the strict
   vanilla/QGE runtime ownership matrix and `qge_vanilla_runtime_complete`
   ready. The pack includes `resource/qge_resource_envelope.json`, which scopes
   Moonlab simulator/native-backend deployment,
@@ -93,6 +93,10 @@ Important known limitations:
   MLAE observation/readout schedule,
   `advantage/qae_moonlab_oracle_kernel.moonlab`, a 32-qubit, 189,041-gate
   supported-gate Moonlab `Q_f` predicate kernel under the 4 MB control-plane
+  body limit,
+  `advantage/qae_moonlab_observation_zero.moonlab`, a 32-qubit, 191,018-gate
+  Moonlab power-zero QAE observation circuit with exact 234-candidate state
+  preparation, uniform threshold preparation, and inline `Q_f` under the same
   body limit, and
   `resource/qge_moonlab_submission_bundle.json` with the stricter
   control-plane readiness verdict, plus
@@ -103,10 +107,11 @@ Important known limitations:
   the packed expected results, and emit both a replay plan and submission
   packet. `tools/qge_moonlab_submission_bundle.py` then verifies whether the
   candidate circuit artifact is actually `# moonlab-circuit v1`; the current
-  bundle is `qf_oracle_kernel_ready_qae_transpilation_required` because
-  the readout-equivalent Moonlab payload and reversible `Q_f` kernel are
-  executable, while non-power-of-two candidate state preparation, Grover
-  diffusion, and full MLAE circuit assembly remain pending. After a real
+  bundle is `qae_observation_zero_ready_grover_schedule_required` because
+  the readout-equivalent Moonlab payload, reversible `Q_f` kernel, and
+  power-zero observation with non-power-of-two candidate state preparation are
+  executable, while Grover diffusion and full MLAE circuit assembly remain
+  pending. After a real
   Moonlab hardware run, use
   `tools/qge_moonlab_hardware_ingest.py` to validate the returned backend ID,
   shot schedule, readout metadata, and candidate digest before updating
@@ -116,7 +121,7 @@ Important known limitations:
   covered, 23 registered BSP assets are still missing, and the whole-game
   Moonlab deployment claim is not allowed yet. This is a captured workload
   proof, not a claim that every Quake domain is visually or hardware complete. Use
-  `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-132843`
+  `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-140254`
   to generate the remaining harness queue and breadth rebuild script; the queue
   inventories loose/Pak BSP assets, skips missing local BSPs unless
   `--include-unavailable-assets` is set, and currently reports zero locally
