@@ -1490,6 +1490,15 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         moonlab_submission_packet,
         moonlab_hardware_record_template,
         resource_envelope=resource_envelope,
+        asset_remediation=(
+            qge_moonlab_deployment_gate.asset_remediation_from_intake(
+                registered_asset_intake,
+                intake_path=registered_asset_intake_path,
+                markdown_path=registered_asset_intake_markdown_path,
+                script_path=registered_asset_intake_script_path,
+                icc_evidence_path=registered_asset_intake_icc_path,
+            )
+        ),
         source_path=args.outdir,
     )
     moonlab_deployment_gate_path = (
@@ -2110,6 +2119,24 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "invalid_bsp_count": (
                     moonlab_deployment_gate.get("summary", {}).get(
                         "invalid_bsp_count")),
+                "registered_asset_install_script": (
+                    moonlab_deployment_gate.get("summary", {}).get(
+                        "registered_asset_install_script")),
+                "registered_asset_intake_file": (
+                    moonlab_deployment_gate.get("summary", {}).get(
+                        "registered_asset_intake_file")),
+                "post_install_verification_command_count": (
+                    moonlab_deployment_gate.get("summary", {}).get(
+                        "post_install_verification_command_count")),
+                "post_install_capture_queue_command_present": (
+                    moonlab_deployment_gate.get("summary", {}).get(
+                        "post_install_capture_queue_command_present")),
+                "post_install_capture_queue_command": (
+                    moonlab_deployment_gate.get("summary", {}).get(
+                        "post_install_capture_queue_command")),
+                "post_install_capture_queue_script": (
+                    moonlab_deployment_gate.get("summary", {}).get(
+                        "post_install_capture_queue_script")),
             },
         },
         "claim_posture": {
@@ -2491,6 +2518,22 @@ def build_icc_evidence(manifest: dict[str, Any],
             deployment_gate_summary.get("failed_criterion_count")),
         "moonlab_deployment_gate_blocker_count": (
             deployment_gate_summary.get("blocker_count")),
+        "moonlab_deployment_gate_registered_asset_install_script": (
+            deployment_gate_summary.get("registered_asset_install_script")),
+        "moonlab_deployment_gate_registered_asset_intake_file": (
+            deployment_gate_summary.get("registered_asset_intake_file")),
+        "moonlab_deployment_gate_post_install_verification_command_count": (
+            deployment_gate_summary.get(
+                "post_install_verification_command_count")),
+        "moonlab_deployment_gate_post_install_capture_queue_command_present": (
+            deployment_gate_summary.get(
+                "post_install_capture_queue_command_present")),
+        "moonlab_deployment_gate_post_install_capture_queue_command": (
+            deployment_gate_summary.get(
+                "post_install_capture_queue_command")),
+        "moonlab_deployment_gate_post_install_capture_queue_script": (
+            deployment_gate_summary.get(
+                "post_install_capture_queue_script")),
         "whole_game_moonlab_deployment_claim_allowed": (
             deployment_gate_summary.get(
                 "whole_game_moonlab_deployment_claim_allowed")),

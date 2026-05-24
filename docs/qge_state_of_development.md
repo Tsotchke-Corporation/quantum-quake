@@ -664,10 +664,12 @@ Known current visual state:
   missing-map asset blocker operational without checking game payloads into the
   repo. Publication packs now carry the intake ledger and safe install script
   as first-class resource artifacts; that script verifies copied SHA-256s and
-  emits the post-install full-game capture queue command for the same pack.
+  emits the post-install full-game capture queue command for the same pack,
+  and the Moonlab deployment gate now repeats those remediation artifacts in
+  its summary, next actions, Markdown, and ICC evidence.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
-  publication pack is `diagnostics/publication_pack/20260524-asset-postinstall-queue`, with
+  publication pack is `diagnostics/publication_pack/20260524-asset-gate-remediation`, with
   `qge_publication_artifact_pack_complete`, the e1m1 ready vanilla/QGE capture,
   vanilla ICC evidence sidecar, agent stream, oracle/claims exports, QAE
   benchmark artifacts, `resource/qge_resource_envelope.json`,

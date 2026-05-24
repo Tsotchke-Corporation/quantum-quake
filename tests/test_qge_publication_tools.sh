@@ -452,6 +452,11 @@ assert manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["whole_g
 assert manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["whole_game_hardware_execution_claim_allowed"] is False
 assert manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["hardware_quantum_advantage_claim_allowed"] is False
 assert manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["dense_70000_qubit_state_claim_allowed"] is False
+assert manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["registered_asset_install_script"].endswith("resource/install_registered_assets.sh")
+assert manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["registered_asset_intake_file"].endswith("resource/qge_registered_asset_intake.json")
+assert manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["post_install_verification_command_count"] == 2
+assert manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["post_install_capture_queue_command_present"] is True
+assert "qge_full_game_capture_queue.py" in manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["post_install_capture_queue_command"]
 assert manifest["artifacts"]["vanilla"]["icc_evidence"]["packed"]["exists"] is True
 assert icc["completion_reason"] == "qge_publication_artifact_pack_complete"
 assert icc["runtime_backend"] == "qge_publication_pack"
@@ -570,6 +575,11 @@ assert icc["moonlab_deployment_gate_icc_evidence_file"].endswith("resource/qge_m
 assert icc["moonlab_deployment_gate_schema"] == "qge.moonlab_deployment_gate.v0"
 assert icc["moonlab_deployment_gate_status"] == "blocked"
 assert icc["moonlab_deployment_gate_blocker_count"] >= 4
+assert icc["moonlab_deployment_gate_registered_asset_install_script"].endswith("resource/install_registered_assets.sh")
+assert icc["moonlab_deployment_gate_registered_asset_intake_file"].endswith("resource/qge_registered_asset_intake.json")
+assert icc["moonlab_deployment_gate_post_install_verification_command_count"] == 2
+assert icc["moonlab_deployment_gate_post_install_capture_queue_command_present"] is True
+assert "qge_full_game_capture_queue.py" in icc["moonlab_deployment_gate_post_install_capture_queue_command"]
 assert icc["whole_game_moonlab_deployment_claim_allowed"] is False
 assert icc["whole_game_hardware_execution_claim_allowed"] is False
 assert icc["hardware_quantum_advantage_claim_allowed"] is False
@@ -868,9 +878,14 @@ assert gate["whole_game_hardware_execution_claim_allowed"] is False
 assert gate["hardware_quantum_advantage_claim_allowed"] is False
 assert gate["dense_70000_qubit_state_claim_allowed"] is False
 assert len(gate["blockers"]) == gate["blocker_count"]
+assert gate["asset_remediation"]["registered_asset_install_script"].endswith("resource/install_registered_assets.sh")
+assert gate["summary"]["post_install_capture_queue_command_present"] is True
+assert "qge_full_game_capture_queue.py" in gate["summary"]["post_install_capture_queue_command"]
 assert icc["runtime_backend"] == "qge_moonlab_deployment_gate"
 assert icc["gate_status"] == gate["status"]
 assert icc["whole_game_moonlab_deployment_claim_allowed"] is False
+assert icc["registered_asset_install_script"].endswith("resource/install_registered_assets.sh")
+assert icc["post_install_capture_queue_command_present"] is True
 PY
 
 python3 "$repo_root/tools/qge_asset_requirements.py" \

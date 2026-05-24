@@ -51,7 +51,7 @@ when all of these are true:
 
 The full-port acceptance target is the ICC completion oracle
 `qge_vanilla_quake_conformance`. As of
-`diagnostics/publication_pack/20260524-asset-postinstall-queue`, ICC reports
+`diagnostics/publication_pack/20260524-asset-gate-remediation`, ICC reports
 `qge_vanilla_runtime_complete` ready for the bundled e1m1 QGE/vanilla capture
 matrix. That evidence proves the ownership counters for the captured workload;
 it does not by itself close renderer fidelity, all-map breadth, or whole-game
@@ -73,7 +73,10 @@ BSP assets.
 the sentence "the entire game runs in Moonlab." It is currently `blocked`
 because coverage is 9/32, the remaining 23 registered BSP assets are
 unavailable locally, and the whole-game simulator/native deployment claim is
-not allowed until those criteria all pass.
+not allowed until those criteria all pass. The gate summary, Markdown, next
+actions, and ICC evidence now cite the registered-asset install script and the
+post-install capture queue command needed to continue without weakening the
+claim gate.
 `resource/qge_native_backend_boundary.json` records the native bridge boundary
 verdict for `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`,
 and `qge_metal_init_common`.
@@ -290,7 +293,7 @@ A complete port is credible when these are true:
 
 1. Expand the ready matrix beyond the current 9/32 partial full-game map
    coverage ledger. Re-run the missing-map queue with
-   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-asset-postinstall-queue`
+   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-asset-gate-remediation`
    after installing registered BSP assets. With the current `assets/id1/pak0.pak`,
    the queue has zero locally runnable missing maps and 23 registered maps
    require additional registered BSP assets before capture. Use

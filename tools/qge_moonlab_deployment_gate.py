@@ -65,6 +65,101 @@ def bool_true(value: Any) -> bool:
     return value is True
 
 
+def artifact_path(
+    artifacts: dict[str, Any],
+    key: str,
+) -> str | None:
+    entry = artifacts.get(key)
+    if not isinstance(entry, dict):
+        return None
+    path = entry.get("path")
+    return path if isinstance(path, str) else None
+
+
+def asset_remediation_from_intake(
+    intake: dict[str, Any] | None,
+    *,
+    intake_path: Path | str | None = None,
+    markdown_path: Path | str | None = None,
+    script_path: Path | str | None = None,
+    icc_evidence_path: Path | str | None = None,
+) -> dict[str, Any]:
+    data = dict_or_empty(intake)
+    if not data and all(
+        value is None
+        for value in (intake_path, markdown_path, script_path, icc_evidence_path)
+    ):
+        return {}
+    post_install = dict_or_empty(data.get("post_install_verification"))
+    commands = [
+        command for command in list_or_empty(post_install.get("commands"))
+        if isinstance(command, dict)
+    ]
+    capture_queue_commands = [
+        command for command in commands
+        if command.get("kind") == "capture_queue"
+    ]
+    capture_queue = capture_queue_commands[0] if capture_queue_commands else {}
+    return {
+        "registered_asset_intake_status": data.get("status"),
+        "registered_asset_intake_file": (
+            str(intake_path) if intake_path is not None else None),
+        "registered_asset_intake_markdown_file": (
+            str(markdown_path) if markdown_path is not None else None),
+        "registered_asset_install_script": (
+            str(script_path) if script_path is not None else None),
+        "registered_asset_intake_icc_evidence_file": (
+            str(icc_evidence_path) if icc_evidence_path is not None else None),
+        "candidate_new_map_count": data.get("candidate_new_map_count"),
+        "candidate_new_maps": data.get("candidate_new_maps"),
+        "missing_map_count_after_plan": data.get(
+            "missing_map_count_after_plan"),
+        "missing_maps_after_plan": data.get("missing_maps_after_plan"),
+        "copy_plan_count": data.get("copy_plan_count"),
+        "discovered_candidate_count": data.get(
+            "discovered_candidate_count", 0),
+        "post_install_verification_command_count": data.get(
+            "post_install_verification_command_count",
+            post_install.get("command_count"),
+        ),
+        "post_install_capture_queue_command_present": bool(
+            capture_queue_commands),
+        "post_install_capture_queue_command": capture_queue.get(
+            "shell_command"),
+        "post_install_capture_queue_json": capture_queue.get("json"),
+        "post_install_capture_queue_script": capture_queue.get("script"),
+        "post_install_capture_queue_markdown": capture_queue.get("markdown"),
+        "asset_intake_copies_game_data": (
+            dict_or_empty(data.get("claim_posture")).get(
+                "asset_intake_copies_game_data", False)
+        ),
+    }
+
+
+def asset_remediation_from_manifest(
+    manifest: dict[str, Any],
+    *,
+    manifest_path: Path | None = None,
+) -> dict[str, Any]:
+    resource_artifacts = dict_or_empty(
+        dict_or_empty(manifest.get("artifacts")).get("resource"))
+    intake = qge_moonlab_full_game_plan.load_resource_json(
+        manifest,
+        "registered_asset_intake",
+        manifest_path=manifest_path,
+    )
+    return asset_remediation_from_intake(
+        intake,
+        intake_path=artifact_path(resource_artifacts, "registered_asset_intake"),
+        markdown_path=artifact_path(
+            resource_artifacts, "registered_asset_intake_markdown"),
+        script_path=artifact_path(
+            resource_artifacts, "registered_asset_intake_script"),
+        icc_evidence_path=artifact_path(
+            resource_artifacts, "registered_asset_intake_icc_evidence"),
+    )
+
+
 def criterion(
     criterion_id: str,
     passed: bool,
@@ -168,7 +263,9 @@ def gate_summary(
     job_specs: dict[str, Any],
     job_results: dict[str, Any],
     submission_packet: dict[str, Any],
+    asset_remediation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    remediation = dict_or_empty(asset_remediation)
     return {
         "map_set": coverage.get("map_set") or inventory.get("map_set"),
         "coverage_status": coverage.get("status"),
@@ -208,6 +305,32 @@ def gate_summary(
             "hardware_submitted_job_count"),
         "ready_hardware_candidate_count": submission_packet.get(
             "ready_candidate_count"),
+        "registered_asset_intake_status": remediation.get(
+            "registered_asset_intake_status"),
+        "registered_asset_install_script": remediation.get(
+            "registered_asset_install_script"),
+        "registered_asset_intake_file": remediation.get(
+            "registered_asset_intake_file"),
+        "registered_asset_intake_markdown_file": remediation.get(
+            "registered_asset_intake_markdown_file"),
+        "registered_asset_intake_icc_evidence_file": remediation.get(
+            "registered_asset_intake_icc_evidence_file"),
+        "registered_asset_intake_missing_map_count_after_plan": (
+            remediation.get("missing_map_count_after_plan")),
+        "registered_asset_intake_copy_plan_count": remediation.get(
+            "copy_plan_count"),
+        "registered_asset_intake_candidate_new_map_count": remediation.get(
+            "candidate_new_map_count"),
+        "registered_asset_intake_discovered_candidate_count": remediation.get(
+            "discovered_candidate_count"),
+        "post_install_verification_command_count": remediation.get(
+            "post_install_verification_command_count"),
+        "post_install_capture_queue_command_present": remediation.get(
+            "post_install_capture_queue_command_present"),
+        "post_install_capture_queue_command": remediation.get(
+            "post_install_capture_queue_command"),
+        "post_install_capture_queue_script": remediation.get(
+            "post_install_capture_queue_script"),
     }
 
 
@@ -222,6 +345,7 @@ def build_criteria(
     resource_envelope: dict[str, Any] | None = None,
     submission_packet: dict[str, Any] | None = None,
     hardware_record_template: dict[str, Any] | None = None,
+    asset_remediation: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     target_count = int_or_none(coverage.get("target_map_count"))
     covered_count = int_or_none(coverage.get("covered_map_count"))
@@ -294,6 +418,7 @@ def build_criteria(
         submission_packet=submission_packet,
         hardware_record_template=hardware_record_template,
     )
+    remediation = dict_or_empty(asset_remediation)
 
     return [
         criterion(
@@ -318,6 +443,12 @@ def build_criteria(
                 "missing_maps": inventory.get("missing_maps"),
                 "invalid_pak_count": invalid_pak_count,
                 "invalid_bsp_count": invalid_bsp_count,
+                "registered_asset_install_script": remediation.get(
+                    "registered_asset_install_script"),
+                "registered_asset_intake_file": remediation.get(
+                    "registered_asset_intake_file"),
+                "post_install_capture_queue_command": remediation.get(
+                    "post_install_capture_queue_command"),
             },
             "registered BSP assets are missing or invalid",
         ),
@@ -330,6 +461,12 @@ def build_criteria(
                 "missing_maps": requirements.get("missing_maps"),
                 "asset_requirements_satisfied": requirement_posture.get(
                     "asset_requirements_satisfied"),
+                "registered_asset_intake_status": remediation.get(
+                    "registered_asset_intake_status"),
+                "registered_asset_intake_missing_map_count_after_plan": (
+                    remediation.get("missing_map_count_after_plan")),
+                "registered_asset_install_script": remediation.get(
+                    "registered_asset_install_script"),
             },
             "registered asset requirements are not satisfied",
         ),
@@ -344,6 +481,10 @@ def build_criteria(
                 "asset_unavailable_map_count": asset_unavailable,
                 "asset_unavailable_maps": full_game_plan.get(
                     "asset_unavailable_maps"),
+                "post_install_capture_queue_command": remediation.get(
+                    "post_install_capture_queue_command"),
+                "post_install_capture_queue_script": remediation.get(
+                    "post_install_capture_queue_script"),
             },
             "full-game deployment plan still has capture or asset blockers",
         ),
@@ -368,17 +509,29 @@ def build_criteria(
     ]
 
 
-def next_actions_for_blockers(blockers: list[dict[str, Any]]) -> list[str]:
+def next_actions_for_blockers(
+    blockers: list[dict[str, Any]],
+    *,
+    asset_remediation: dict[str, Any] | None = None,
+) -> list[str]:
     actions: list[str] = []
     failed_ids = {
         blocker.get("id")
         for blocker in blockers
         if isinstance(blocker.get("id"), str)
     }
+    remediation = dict_or_empty(asset_remediation)
+    install_script = remediation.get("registered_asset_install_script")
+    queue_command = remediation.get("post_install_capture_queue_command")
     if "registered_bsp_assets_ready" in failed_ids:
-        actions.append(
-            "Install registered Quake BSP assets and rerun qge_asset_inventory.py plus qge_asset_requirements.py."
-        )
+        if install_script:
+            actions.append(
+                f"Run {install_script} after placing licensed registered Quake assets where the intake ledger expects them."
+            )
+        else:
+            actions.append(
+                "Install registered Quake BSP assets and rerun qge_asset_inventory.py plus qge_asset_requirements.py."
+            )
     if "full_game_map_coverage_complete" in failed_ids:
         actions.append(
             "Capture every missing canonical map with the strict QGE/vanilla harness and rebuild breadth evidence."
@@ -388,9 +541,14 @@ def next_actions_for_blockers(blockers: list[dict[str, Any]]) -> list[str]:
             "Resolve every missing maps/*.bsp entry listed by qge_asset_requirements.json before weakening no-claim posture."
         )
     if "full_game_deployment_plan_complete" in failed_ids:
-        actions.append(
-            "Regenerate qge_moonlab_full_game_plan.json after assets and captures are complete."
-        )
+        if queue_command:
+            actions.append(
+                f"After asset installation, run the post-install capture queue command: {queue_command}"
+            )
+        else:
+            actions.append(
+                "Regenerate qge_moonlab_full_game_plan.json after assets and captures are complete."
+            )
     if "moonlab_selected_jobs_unblocked" in failed_ids:
         actions.append(
             "Rerun qge_moonlab_job_runner.py with --expect so selected simulator/native jobs match the packed evidence."
@@ -415,6 +573,7 @@ def build_gate(
     hardware_record_template: dict[str, Any],
     *,
     resource_envelope: dict[str, Any] | None = None,
+    asset_remediation: dict[str, Any] | None = None,
     source_path: Path | str | None = None,
 ) -> dict[str, Any]:
     criteria = build_criteria(
@@ -427,6 +586,7 @@ def build_gate(
         resource_envelope=resource_envelope,
         submission_packet=submission_packet,
         hardware_record_template=hardware_record_template,
+        asset_remediation=asset_remediation,
     )
     blockers = failed_criteria(criteria)
     simulator_claim_allowed = not blockers
@@ -453,6 +613,7 @@ def build_gate(
         "blocker_count": len(blockers),
         "criteria": criteria,
         "blockers": blockers,
+        "asset_remediation": dict_or_empty(asset_remediation),
         "summary": gate_summary(
             coverage,
             inventory,
@@ -461,8 +622,12 @@ def build_gate(
             job_specs,
             job_results,
             submission_packet,
+            asset_remediation,
         ),
-        "next_actions": next_actions_for_blockers(blockers),
+        "next_actions": next_actions_for_blockers(
+            blockers,
+            asset_remediation=asset_remediation,
+        ),
         "limits": [
             "This gate is an eligibility verdict; it is not proof by itself that the whole game runs in Moonlab.",
             "A simulator/native deployment claim requires this gate to be ready and the cited artifacts to be published with it.",
@@ -518,6 +683,10 @@ def build_gate_from_manifest(
     ) or {}
     resource_envelope = qge_moonlab_full_game_plan.load_resource_json(
         manifest, "envelope", manifest_path=manifest_path) or {}
+    asset_remediation = asset_remediation_from_manifest(
+        manifest,
+        manifest_path=manifest_path,
+    )
     return build_gate(
         coverage,
         inventory,
@@ -528,6 +697,7 @@ def build_gate_from_manifest(
         submission_packet,
         hardware_record_template,
         resource_envelope=resource_envelope,
+        asset_remediation=asset_remediation,
         source_path=manifest_path,
     )
 
@@ -556,6 +726,32 @@ def build_icc_evidence(
         "invalid_bsp_count": summary.get("invalid_bsp_count"),
         "asset_requirements_missing_map_count": summary.get(
             "asset_requirements_missing_map_count"),
+        "registered_asset_intake_status": summary.get(
+            "registered_asset_intake_status"),
+        "registered_asset_intake_file": summary.get(
+            "registered_asset_intake_file"),
+        "registered_asset_intake_markdown_file": summary.get(
+            "registered_asset_intake_markdown_file"),
+        "registered_asset_install_script": summary.get(
+            "registered_asset_install_script"),
+        "registered_asset_intake_icc_evidence_file": summary.get(
+            "registered_asset_intake_icc_evidence_file"),
+        "registered_asset_intake_missing_map_count_after_plan": summary.get(
+            "registered_asset_intake_missing_map_count_after_plan"),
+        "registered_asset_intake_copy_plan_count": summary.get(
+            "registered_asset_intake_copy_plan_count"),
+        "registered_asset_intake_candidate_new_map_count": summary.get(
+            "registered_asset_intake_candidate_new_map_count"),
+        "registered_asset_intake_discovered_candidate_count": summary.get(
+            "registered_asset_intake_discovered_candidate_count"),
+        "post_install_verification_command_count": summary.get(
+            "post_install_verification_command_count"),
+        "post_install_capture_queue_command_present": summary.get(
+            "post_install_capture_queue_command_present"),
+        "post_install_capture_queue_command": summary.get(
+            "post_install_capture_queue_command"),
+        "post_install_capture_queue_script": summary.get(
+            "post_install_capture_queue_script"),
         "capture_required_map_count": summary.get(
             "capture_required_map_count"),
         "asset_unavailable_map_count": summary.get(
@@ -626,6 +822,31 @@ def markdown_report(gate: dict[str, Any]) -> str:
     lines.extend(["", "## Next Actions", ""])
     for action in list_or_empty(gate.get("next_actions")):
         lines.append(f"- {action}")
+    remediation = dict_or_empty(gate.get("asset_remediation"))
+    if remediation:
+        lines.extend([
+            "",
+            "## Asset Remediation",
+            "",
+            "| Artifact | Path / Command |",
+            "| --- | --- |",
+            (
+                "| intake JSON | "
+                f"`{remediation.get('registered_asset_intake_file') or ''}` |"
+            ),
+            (
+                "| intake Markdown | "
+                f"`{remediation.get('registered_asset_intake_markdown_file') or ''}` |"
+            ),
+            (
+                "| install script | "
+                f"`{remediation.get('registered_asset_install_script') or ''}` |"
+            ),
+            (
+                "| post-install queue | "
+                f"`{remediation.get('post_install_capture_queue_command') or ''}` |"
+            ),
+        ])
     lines.append("")
     return "\n".join(lines)
 

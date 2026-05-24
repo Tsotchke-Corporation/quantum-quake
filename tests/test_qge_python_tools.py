@@ -2455,6 +2455,55 @@ class PublicationPackTests(unittest.TestCase):
             submission_packet=submission_packet,
             hardware_record_template=hardware_template,
         )
+        partial_asset_remediation = (
+            moonlab_deployment_gate.asset_remediation_from_intake(
+                {
+                    "status": "blocked_no_candidate_assets",
+                    "candidate_new_map_count": 0,
+                    "missing_map_count_after_plan": 30,
+                    "copy_plan_count": 0,
+                    "discovered_candidate_count": 1,
+                    "post_install_verification_command_count": 2,
+                    "post_install_verification": {
+                        "command_count": 2,
+                        "commands": [
+                            {
+                                "kind": "asset_inventory",
+                                "shell_command": (
+                                    "python3 tools/qge_asset_inventory.py "
+                                    "--asset-root assets/id1"
+                                ),
+                            },
+                            {
+                                "kind": "capture_queue",
+                                "shell_command": (
+                                    "python3 tools/"
+                                    "qge_full_game_capture_queue.py "
+                                    "partial-pack --asset-root assets/id1"
+                                ),
+                                "json": (
+                                    "/tmp/"
+                                    "qge_full_game_capture_queue.after.json"
+                                ),
+                                "script": "/tmp/run_missing_maps.after.sh",
+                                "markdown": (
+                                    "/tmp/"
+                                    "qge_full_game_capture_queue.after.md"
+                                ),
+                            },
+                        ],
+                    },
+                    "claim_posture": {
+                        "asset_intake_copies_game_data": False,
+                    },
+                },
+                intake_path=Path("resource/qge_registered_asset_intake.json"),
+                markdown_path=Path("resource/qge_registered_asset_intake.md"),
+                script_path=Path("resource/install_registered_assets.sh"),
+                icc_evidence_path=Path(
+                    "resource/qge_registered_asset_intake_icc_evidence.json"),
+            )
+        )
         blocked_gate = moonlab_deployment_gate.build_gate(
             partial_coverage,
             partial_inventory,
@@ -2464,6 +2513,7 @@ class PublicationPackTests(unittest.TestCase):
             job_results,
             submission_packet,
             hardware_template,
+            asset_remediation=partial_asset_remediation,
             source_path=Path("partial-pack"),
         )
         self.assertEqual(
@@ -2476,10 +2526,41 @@ class PublicationPackTests(unittest.TestCase):
         self.assertIn("registered_bsp_assets_ready", blocker_ids)
         self.assertIn("asset_requirements_satisfied", blocker_ids)
         self.assertIn("full_game_deployment_plan_complete", blocker_ids)
-        self.assertIn(
-            "blocked",
-            moonlab_deployment_gate.markdown_report(blocked_gate),
+        self.assertEqual(
+            blocked_gate["asset_remediation"][
+                "registered_asset_install_script"],
+            "resource/install_registered_assets.sh",
         )
+        self.assertTrue(
+            blocked_gate["summary"][
+                "post_install_capture_queue_command_present"])
+        self.assertIn(
+            "qge_full_game_capture_queue.py",
+            blocked_gate["summary"]["post_install_capture_queue_command"],
+        )
+        self.assertTrue(any(
+            "install_registered_assets.sh" in action
+            for action in blocked_gate["next_actions"]
+        ))
+        self.assertTrue(any(
+            "qge_full_game_capture_queue.py" in action
+            for action in blocked_gate["next_actions"]
+        ))
+        blocked_markdown = moonlab_deployment_gate.markdown_report(
+            blocked_gate)
+        self.assertIn("blocked", blocked_markdown)
+        self.assertIn("## Asset Remediation", blocked_markdown)
+        self.assertIn("install_registered_assets.sh", blocked_markdown)
+        blocked_icc = moonlab_deployment_gate.build_icc_evidence(
+            blocked_gate,
+            out_path=Path("qge_moonlab_deployment_gate.blocked.json"),
+        )
+        self.assertEqual(
+            blocked_icc["registered_asset_install_script"],
+            "resource/install_registered_assets.sh",
+        )
+        self.assertTrue(
+            blocked_icc["post_install_capture_queue_command_present"])
 
         all_maps = breadth_evidence.QUAKE_REGISTERED_SINGLE_PLAYER_MAPS
         complete_coverage = breadth_evidence.build_full_game_map_coverage(
@@ -2573,6 +2654,32 @@ class PublicationPackTests(unittest.TestCase):
                 resource / "qge_moonlab_hardware_record_template.json",
                 hardware_template,
             )
+            publication_pack.write_json(
+                resource / "qge_registered_asset_intake.json",
+                {
+                    "schema": "qge.registered_asset_intake.v0",
+                    "status": "blocked_no_candidate_assets",
+                    "candidate_new_map_count": 0,
+                    "missing_map_count_after_plan": 30,
+                    "copy_plan_count": 0,
+                    "discovered_candidate_count": 1,
+                    "post_install_verification_command_count": 2,
+                    "post_install_verification": {
+                        "command_count": 2,
+                        "commands": [
+                            {
+                                "kind": "capture_queue",
+                                "shell_command": (
+                                    "python3 tools/"
+                                    "qge_full_game_capture_queue.py "
+                                    "partial-pack --asset-root assets/id1"
+                                ),
+                                "script": "/tmp/run_missing_maps.after.sh",
+                            },
+                        ],
+                    },
+                },
+            )
             manifest = {
                 "schema": "qge.publication_pack.v0",
                 "artifacts": {
@@ -2610,6 +2717,26 @@ class PublicationPackTests(unittest.TestCase):
                                 resource /
                                 "qge_moonlab_hardware_record_template.json")
                         },
+                        "registered_asset_intake": {
+                            "path": str(
+                                resource /
+                                "qge_registered_asset_intake.json")
+                        },
+                        "registered_asset_intake_markdown": {
+                            "path": str(
+                                resource /
+                                "qge_registered_asset_intake.md")
+                        },
+                        "registered_asset_intake_script": {
+                            "path": str(
+                                resource / "install_registered_assets.sh")
+                        },
+                        "registered_asset_intake_icc_evidence": {
+                            "path": str(
+                                resource /
+                                "qge_registered_asset_intake_icc_evidence.json"
+                            )
+                        },
                     }
                 },
             }
@@ -2636,9 +2763,23 @@ class PublicationPackTests(unittest.TestCase):
                 "QGE_MOONLAB_DEPLOYMENT_GATE", stdout.getvalue())
             cli_gate = publication_pack.load_json(out_path)
             self.assertEqual(cli_gate["status"], "blocked")
+            self.assertEqual(
+                cli_gate["asset_remediation"][
+                    "registered_asset_install_script"],
+                str(resource / "install_registered_assets.sh"),
+            )
+            self.assertTrue(
+                cli_gate["summary"][
+                    "post_install_capture_queue_command_present"])
             cli_icc = publication_pack.load_json(icc_path)
             self.assertFalse(
                 cli_icc["whole_game_moonlab_deployment_claim_allowed"])
+            self.assertEqual(
+                cli_icc["registered_asset_install_script"],
+                str(resource / "install_registered_assets.sh"),
+            )
+            self.assertTrue(
+                cli_icc["post_install_capture_queue_command_present"])
 
 
 class BreadthEvidenceTests(unittest.TestCase):

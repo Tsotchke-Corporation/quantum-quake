@@ -155,7 +155,7 @@ Do claim, once proven:
 Minimum publishable artifact package:
 
 Current strongest publication bundle:
-`diagnostics/publication_pack/20260524-asset-postinstall-queue`. It packages a ready e1m1
+`diagnostics/publication_pack/20260524-asset-gate-remediation`. It packages a ready e1m1
 QGE/vanilla capture, vanilla ICC evidence sidecar, agent stream, oracle scene,
 claims evidence, finite-shot QAE benchmark artifacts,
 `resource/qge_resource_envelope.json`,
@@ -186,7 +186,9 @@ deployment claim not allowed, whole-game hardware execution not allowed,
 hardware advantage not allowed, and dense 70,000-qubit state claim not
 allowed. The asset requirements packet lists the exact registered
 `maps/*.bsp` entries needed to turn those blockers into capture jobs without
-bundling copyrighted game data. The Moonlab job results record
+bundling copyrighted game data, and the deployment gate now cites the
+registered-asset install script plus the post-install capture queue command.
+The Moonlab job results record
 four completed simulator jobs, two completed native replay jobs, zero blocked
 jobs, and zero hardware submissions; `tools/qge_moonlab_job_runner.py` can
 regenerate the same result evidence from the job specs and emits
@@ -263,7 +265,7 @@ and marks UI-only `-nolauncher` paths as intentional skips.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for
-     `diagnostics/publication_pack/20260524-asset-postinstall-queue` inventories local loose/Pak
+     `diagnostics/publication_pack/20260524-asset-gate-remediation` inventories local loose/Pak
      BSP assets before queuing. With the current `assets/id1/pak0.pak`, it
      reports zero locally queueable missing maps and 23 missing registered maps
      as asset-unavailable; those maps require additional registered BSP assets
@@ -287,14 +289,16 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      `--registered-asset-discover-common` to preserve discovery attempts in the
      publication bundle. The generated install script verifies copied
      SHA-256s and emits a post-install `qge_full_game_capture_queue.py`
-     command against the same publication pack.
+     command against the same publication pack. The Moonlab deployment gate now
+     repeats the install script and post-install queue command in its summary,
+     next actions, Markdown, and ICC evidence.
    - The sidecar also records per-target runtime backend proofs for
      `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`, and
      `qge_metal_init_common`, including missing/native target sets and the
      count of matrix runs where all required native boundaries resolved to the
      native sparse DWT render bridge.
    - The current publication bundle carries those breadth counters directly:
-     `diagnostics/publication_pack/20260524-asset-postinstall-queue` reports
+     `diagnostics/publication_pack/20260524-asset-gate-remediation` reports
      `breadth_map_count=9`, `breadth_total_native_bridge_count=945`, and
      `breadth_total_runtime_backend_probe_event_count=36`, with
      `breadth_runtime_backend_probe_resolved_run_count=9`, plus
@@ -336,7 +340,7 @@ qge_vanilla_runtime_complete -> produce_ready_vanilla_capture_matrix
 ```
 
 That blocker is now cleared for the current self-contained publication pack:
-`diagnostics/publication_pack/20260524-asset-postinstall-queue` carries
+`diagnostics/publication_pack/20260524-asset-gate-remediation` carries
 `qge_vanilla_capture_matrix_complete`, the vanilla ICC sidecar, native backend
 proofs, the agent stream, the benchmark bundle, and the nine-map breadth
 sidecar. It also carries `resource/qge_resource_envelope.json`, which records
@@ -411,7 +415,7 @@ The next hard work is therefore:
    Quake install or PAKs, run the generated copy script only for assets the
    user is licensed to install locally, verify them with
    `tools/qge_asset_inventory.py`, then start from
-   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-asset-postinstall-queue`
+   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-asset-gate-remediation`
    so the 23 registered asset-unavailable maps become explicit capture jobs
    rather than weakening the authority gate.
 2. Submit the QAE hardware-candidate job through Moonlab hardware when
