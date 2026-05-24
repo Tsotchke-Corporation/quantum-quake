@@ -51,7 +51,7 @@ when all of these are true:
 
 The full-port acceptance target is the ICC completion oracle
 `qge_vanilla_quake_conformance`. As of
-`diagnostics/publication_pack/20260523-224321`, ICC reports
+`diagnostics/publication_pack/20260524-024129`, ICC reports
 `qge_vanilla_runtime_complete` ready for the bundled e1m1 QGE/vanilla capture
 matrix. That evidence proves the ownership counters for the captured workload;
 it does not by itself close renderer fidelity, all-map breadth, or whole-game
@@ -262,7 +262,7 @@ A complete port is credible when these are true:
 
 1. Expand the ready matrix beyond the current 9/32 partial full-game map
    coverage ledger. Re-run the missing-map queue with
-   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260523-224321`
+   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-024129`
    after installing registered BSP assets. With the current `assets/id1/pak0.pak`,
    the queue has zero locally runnable missing maps and 23 registered maps
    require additional registered BSP assets before capture. Use

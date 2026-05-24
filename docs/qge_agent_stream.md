@@ -440,7 +440,9 @@ that ledger into `qge.full_game_capture_queue.v0` plus a runnable
 `run_missing_maps.sh` script. The queue inventories loose `maps/*.bsp` files
 and `pak*.pak` directories before it writes jobs, skips maps whose BSP is
 absent unless `--include-unavailable-assets` is set, and records the
-asset-unavailable missing maps in JSON/Markdown. BSP assets must pass the
+asset-unavailable missing maps in JSON/Markdown. Queues with no runnable jobs
+but remaining asset-unavailable maps are marked `blocked_asset_unavailable`, not
+complete. BSP assets must pass the
 dependency-free Quake BSP29 header/lump validation before they are accepted as
 available or turned into capture jobs. The generated script runs
 `tools/quake_graphics_harness.sh` for each missing canonical map using the
@@ -460,7 +462,8 @@ the queue. `tools/qge_registered_asset_intake.py --candidate <path>` scans
 external Quake install roots, PAK files, or loose BSPs, validates BSP29 payloads,
 and writes `qge.registered_asset_intake.v0` plus an optional copy script so
 registered assets can be installed locally without bundling copyrighted data in
-the repo.
+the repo. `--discover-root` and `--discover-common` add bounded local discovery
+for candidate installs when the exact registered asset path is unknown.
 
 `tools/qge_noesis_summary.py` reads the stream manifest, Noesis action trace,
 translated command buffer, runtime log, `noesis/gameplay_outcomes.ndjson`,

@@ -352,6 +352,24 @@ def ordered_missing_maps(
     return selected_missing_maps(coverage, None, special_maps_last)
 
 
+def queue_status(
+    *,
+    missing_maps: list[str],
+    jobs: list[dict[str, Any]],
+    asset_unavailable_missing_maps: list[str],
+    include_unavailable_assets: bool,
+) -> str:
+    if not missing_maps:
+        return "complete"
+    if jobs:
+        if asset_unavailable_missing_maps and not include_unavailable_assets:
+            return "pending_partial_asset_blocked"
+        return "pending"
+    if asset_unavailable_missing_maps:
+        return "blocked_asset_unavailable"
+    return "blocked_no_queueable_maps"
+
+
 def build_queue(args: argparse.Namespace) -> dict[str, Any]:
     source_path = resolve_source_path(args.source)
     data = load_json(source_path)
@@ -400,12 +418,18 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
         })
     target_after_queue = int(coverage.get("covered_map_count", 0) or 0) + len(jobs)
     target_map_count = int(coverage.get("target_map_count", 0) or 0)
+    status = queue_status(
+        missing_maps=missing_maps,
+        jobs=jobs,
+        asset_unavailable_missing_maps=asset_unavailable_missing_maps,
+        include_unavailable_assets=include_unavailable_assets,
+    )
     return {
         "schema": "qge.full_game_capture_queue.v0",
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "source_path": str(source_path),
         "source_schema": data.get("schema"),
-        "status": "complete" if not jobs else "pending",
+        "status": status,
         "special_maps_last": special_maps_last,
         "special_route_maps": sorted(SPECIAL_ROUTE_MAPS),
         "start_hub_route_maps": sorted(START_HUB_ROUTE_MAPS),

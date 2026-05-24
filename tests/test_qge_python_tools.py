@@ -1971,6 +1971,68 @@ class BreadthEvidenceTests(unittest.TestCase):
                 cli_icc["completion_reason"],
                 "qge_registered_asset_intake_plan_recorded")
 
+    def test_registered_asset_intake_discovers_candidate_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            current_root = tmpdir / "current-id1"
+            search_root = tmpdir / "library"
+            candidate_root = search_root / "Quake" / "ID1"
+            current_root.mkdir()
+            candidate_root.mkdir(parents=True)
+            write_pak(current_root / "pak0.pak", [
+                "maps/start.bsp",
+                "maps/e1m1.bsp",
+            ])
+            write_pak(candidate_root / "PAK1.PAK", [
+                "maps/e2m1.bsp",
+                "maps/e2m2.bsp",
+            ])
+
+            discovery = registered_asset_intake.discover_candidate_paths(
+                [search_root],
+                max_depth=3,
+            )
+            self.assertEqual(discovery["found_candidate_count"], 1)
+            self.assertEqual(
+                discovery["found_candidates"][0]["reason"],
+                "contains_pak_files",
+            )
+            intake = registered_asset_intake.build_intake(
+                current_root,
+                [Path(discovery["found_candidates"][0]["path"])],
+                discovery=discovery,
+            )
+            self.assertEqual(intake["discovered_candidate_count"], 1)
+            self.assertEqual(intake["candidate_new_map_count"], 2)
+            self.assertIn(
+                "Candidate paths found: 1",
+                registered_asset_intake.markdown_report(intake),
+            )
+            icc = registered_asset_intake.build_icc_evidence(intake)
+            self.assertEqual(icc["discovered_candidate_count"], 1)
+
+            out_path = tmpdir / "intake.json"
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(
+                    registered_asset_intake.main([
+                        "--current-root",
+                        str(current_root),
+                        "--discover-root",
+                        str(search_root),
+                        "--discover-max-depth",
+                        "3",
+                        "--json",
+                        str(out_path),
+                    ]),
+                    0,
+                )
+            self.assertIn(
+                "QGE_REGISTERED_ASSET_INTAKE", stdout.getvalue())
+            cli_intake = publication_pack.load_json(out_path)
+            self.assertEqual(cli_intake["discovered_candidate_count"], 1)
+            self.assertEqual(cli_intake["candidate_new_map_count"], 2)
+
     def write_matrix(self,
                      directory: Path,
                      *,
@@ -2402,6 +2464,7 @@ class BreadthEvidenceTests(unittest.TestCase):
             ))
 
             self.assertEqual(queue["queue_job_count"], 1)
+            self.assertEqual(queue["status"], "pending_partial_asset_blocked")
             self.assertEqual(queue["jobs"][0]["map"], "e1m3")
             self.assertTrue(queue["asset_filter_enabled"])
             self.assertEqual(queue["available_asset_maps"], ["e1m3"])
@@ -2424,8 +2487,27 @@ class BreadthEvidenceTests(unittest.TestCase):
                 env=[],
             ))
             self.assertFalse(override["asset_filter_enabled"])
+            self.assertEqual(override["status"], "pending")
             self.assertEqual([job["map"] for job in override["jobs"]],
                              ["e1m3", "e1m4"])
+
+            blocked = full_game_capture_queue.build_queue(SimpleNamespace(
+                source=breadth_path,
+                limit=2,
+                frames=3,
+                wait_frames=12,
+                trace=True,
+                special_maps_last=True,
+                authority_smoke=True,
+                force_world_metrics=True,
+                asset_root=tmpdir / "empty-id1",
+                include_unavailable_assets=False,
+                env=[],
+            ))
+            self.assertEqual(blocked["queue_job_count"], 0)
+            self.assertEqual(blocked["status"], "blocked_asset_unavailable")
+            self.assertIn("Status: blocked_asset_unavailable",
+                          full_game_capture_queue.markdown_report(blocked))
 
 
 class ImageMetricsTests(unittest.TestCase):

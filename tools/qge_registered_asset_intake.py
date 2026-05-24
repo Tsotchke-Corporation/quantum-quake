@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shlex
 import sys
+from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
@@ -25,6 +27,18 @@ if str(SCRIPT_DIR) not in sys.path:
 import qge_asset_inventory  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
 import qge_full_game_capture_queue  # noqa: E402
+
+COMMON_DISCOVERY_PATHS = [
+    Path("~/Library/Application Support/Steam/steamapps/common/Quake"),
+    Path("~/Library/Application Support/Steam/steamapps/common/Quake/id1"),
+    Path("~/Library/Application Support/Steam/steamapps/common/Quake/rerelease/id1"),
+    Path("~/Library/Application Support/GOG.com"),
+    Path("~/Games/Quake"),
+    Path("~/Desktop/Quake"),
+    Path("~/Documents/Quake"),
+    Path("~/Downloads/Quake"),
+    Path("/Applications/Quake.app/Contents/Resources/id1"),
+]
 
 
 def write_json(path: Path, data: dict[str, Any]) -> None:
@@ -45,6 +59,13 @@ def shell_quote(path: Path | str) -> str:
     return shlex.quote(str(path))
 
 
+def safe_iterdir(path: Path) -> list[Path]:
+    try:
+        return list(path.iterdir())
+    except OSError:
+        return []
+
+
 def safe_sha256_file(path: Path) -> str | None:
     try:
         return qge_asset_inventory.sha256_file(path)
@@ -57,7 +78,7 @@ def files_matching(path: Path, suffix: str, *, prefix: str = "") -> list[Path]:
         return []
     return sorted(
         [
-            child for child in path.iterdir()
+            child for child in safe_iterdir(path)
             if child.is_file()
             and child.name.lower().startswith(prefix)
             and child.suffix.lower() == suffix
@@ -73,7 +94,7 @@ def pak_files(path: Path) -> list[Path]:
 def maps_directory(path: Path) -> Path | None:
     if not path.is_dir():
         return None
-    for child in path.iterdir():
+    for child in safe_iterdir(path):
         if child.is_dir() and child.name.lower() == "maps":
             return child
     return None
@@ -81,6 +102,123 @@ def maps_directory(path: Path) -> Path | None:
 
 def bsp_files(path: Path) -> list[Path]:
     return files_matching(path, ".bsp")
+
+
+def env_candidate_paths() -> list[Path]:
+    paths: list[Path] = []
+    for key in ("QGE_REGISTERED_ASSET_CANDIDATE", "QUAKE_ID1", "QUAKE_ROOT"):
+        value = os.environ.get(key)
+        if value:
+            paths.append(Path(value))
+    return paths
+
+
+def common_discovery_roots() -> list[Path]:
+    return env_candidate_paths() + COMMON_DISCOVERY_PATHS
+
+
+def discovery_candidate_reason(path: Path) -> str | None:
+    if path.is_file():
+        suffix = path.suffix.lower()
+        if suffix == ".pak":
+            return "pak_file"
+        if suffix == ".bsp":
+            return "bsp_file"
+        return None
+    if not path.is_dir():
+        return None
+    if pak_files(path):
+        return "contains_pak_files"
+    if maps_directory(path):
+        return "contains_maps_directory"
+    return None
+
+
+def discover_candidate_paths(
+    roots: Sequence[Path],
+    *,
+    max_depth: int,
+) -> dict[str, Any]:
+    found: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    seen_dirs: set[str] = set()
+    seen_candidates: set[str] = set()
+
+    for raw_root in roots:
+        root = raw_root.expanduser()
+        if not root.exists():
+            skipped.append({
+                "path": str(root),
+                "reason": "missing_path",
+            })
+            continue
+        reason = discovery_candidate_reason(root)
+        if reason:
+            key = str(root.resolve())
+            if key not in seen_candidates:
+                seen_candidates.add(key)
+                found.append({
+                    "path": str(root),
+                    "reason": reason,
+                    "depth": 0,
+                })
+            continue
+        if not root.is_dir():
+            skipped.append({
+                "path": str(root),
+                "reason": "unsupported_file",
+            })
+            continue
+
+        queue: deque[tuple[Path, int]] = deque([(root, 0)])
+        while queue:
+            path, depth = queue.popleft()
+            try:
+                directory_key = str(path.resolve())
+            except OSError:
+                skipped.append({
+                    "path": str(path),
+                    "reason": "resolve_error",
+                })
+                continue
+            if directory_key in seen_dirs:
+                continue
+            seen_dirs.add(directory_key)
+            reason = discovery_candidate_reason(path)
+            if reason:
+                if directory_key not in seen_candidates:
+                    seen_candidates.add(directory_key)
+                    found.append({
+                        "path": str(path),
+                        "reason": reason,
+                        "depth": depth,
+                    })
+                continue
+            if depth >= max_depth:
+                continue
+            for child in safe_iterdir(path):
+                if not child.is_dir():
+                    continue
+                if child.name.startswith("."):
+                    continue
+                if child.name in {
+                    "__pycache__",
+                    "build",
+                    "diagnostics",
+                    "node_modules",
+                    "target",
+                }:
+                    continue
+                queue.append((child, depth + 1))
+
+    return {
+        "roots": [str(path.expanduser()) for path in roots],
+        "max_depth": max_depth,
+        "found_candidate_count": len(found),
+        "found_candidates": found,
+        "skipped_root_count": len(skipped),
+        "skipped_roots": skipped,
+    }
 
 
 def candidate_scan_targets(inputs: Sequence[Path]) -> list[dict[str, Any]]:
@@ -453,6 +591,7 @@ def build_intake(
     candidates: Sequence[Path],
     *,
     map_set: str = qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+    discovery: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     current_inventory = qge_asset_inventory.build_inventory(
         current_root,
@@ -490,7 +629,7 @@ def build_intake(
         map_name for map_name in missing_maps
         if map_name not in set(newly_available_maps)
     ]
-    return {
+    intake = {
         "schema": "qge.registered_asset_intake.v0",
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "current_asset_root": str(current_root),
@@ -532,6 +671,11 @@ def build_intake(
             "A complete asset intake only unblocks capture jobs; it is not a whole-game Moonlab deployment claim.",
         ],
     }
+    if discovery is not None:
+        intake["discovery"] = discovery
+        intake["discovered_candidate_count"] = discovery.get(
+            "found_candidate_count", 0)
+    return intake
 
 
 def script_lines(intake: dict[str, Any]) -> list[str]:
@@ -589,6 +733,17 @@ def markdown_report(intake: dict[str, Any]) -> str:
             f"{intake.get('invalid_candidate_source_count')} |"
         ),
         "",
+    ]
+    discovery = dict_or_empty(intake.get("discovery"))
+    if discovery:
+        lines.extend([
+            "## Discovery",
+            "",
+            f"Roots scanned: {len(discovery.get('roots', []))}",
+            f"Candidate paths found: {discovery.get('found_candidate_count')}",
+            "",
+        ])
+    lines.extend([
         "## Candidate New Maps",
         "",
         ", ".join(intake.get("candidate_new_maps", [])) or "none",
@@ -597,7 +752,7 @@ def markdown_report(intake: dict[str, Any]) -> str:
         "",
         "| Kind | Status | Source | Destination | Maps |",
         "| --- | --- | --- | --- | --- |",
-    ]
+    ])
     for entry in list_or_empty(intake.get("copy_plan")):
         if not isinstance(entry, dict):
             continue
@@ -635,6 +790,8 @@ def build_icc_evidence(
         "current_available_map_count": intake.get("current_available_map_count"),
         "current_missing_map_count": intake.get("current_missing_map_count"),
         "candidate_new_map_count": intake.get("candidate_new_map_count"),
+        "discovered_candidate_count": intake.get(
+            "discovered_candidate_count", 0),
         "missing_map_count_after_plan": intake.get(
             "missing_map_count_after_plan"),
         "invalid_candidate_source_count": intake.get(
@@ -653,8 +810,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--current-root", type=Path,
                         default=qge_asset_inventory.DEFAULT_ASSET_ROOT)
     parser.add_argument("--candidate", action="append", type=Path,
-                        required=True,
+                        default=[],
                         help="Candidate PAK/BSP file or directory to scan")
+    parser.add_argument("--discover-root", action="append", type=Path,
+                        default=[],
+                        help="Root to scan for candidate PAK/BSP/id1 paths")
+    parser.add_argument("--discover-common",
+                        action=argparse.BooleanOptionalAction,
+                        default=False,
+                        help="Scan bounded common Quake install locations")
+    parser.add_argument("--discover-max-depth", type=int, default=5)
     parser.add_argument("--map-set",
                         default=qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET)
     parser.add_argument("--json", type=Path, required=True)
@@ -667,10 +832,31 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     try:
+        if args.discover_max_depth < 0:
+            raise ValueError("--discover-max-depth must be non-negative")
+        discovery_roots: list[Path] = list(args.discover_root)
+        if args.discover_common:
+            discovery_roots.extend(common_discovery_roots())
+        discovery = None
+        candidates = list(args.candidate)
+        if discovery_roots:
+            discovery = discover_candidate_paths(
+                discovery_roots,
+                max_depth=args.discover_max_depth,
+            )
+            candidates.extend(
+                Path(entry["path"])
+                for entry in list_or_empty(discovery.get("found_candidates"))
+                if isinstance(entry, dict) and isinstance(entry.get("path"), str)
+            )
+        if not candidates:
+            raise ValueError(
+                "provide --candidate, --discover-root, or --discover-common")
         intake = build_intake(
             args.current_root,
-            args.candidate,
+            candidates,
             map_set=args.map_set,
+            discovery=discovery,
         )
         write_json(args.json, intake)
         if args.markdown:
