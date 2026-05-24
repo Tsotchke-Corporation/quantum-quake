@@ -895,6 +895,7 @@ def build_advantage_artifacts(oracle_scene_path: Path,
         outdir / "qae_moonlab_grover_schedule_plan.md")
     moonlab_grover_plan_icc_path = (
         outdir / "qae_moonlab_grover_schedule_plan_icc_evidence.json")
+    moonlab_grover_circuit_dir = outdir / "qae_moonlab_grover_circuits"
     scaling_path = outdir / "scaling_summary.json"
     scaling_csv_path = outdir / "scaling_summary.csv"
     icc_path = outdir / "qge_advantage_icc_evidence.json"
@@ -969,6 +970,7 @@ def build_advantage_artifacts(oracle_scene_path: Path,
         oracle_scene,
         metrics_path=metrics_path,
         oracle_scene_path=oracle_scene_path,
+        circuit_dir=moonlab_grover_circuit_dir,
     )
     write_json(moonlab_grover_plan_path, moonlab_grover_plan)
     moonlab_grover_plan_markdown_path.write_text(
@@ -1020,6 +1022,8 @@ def build_advantage_artifacts(oracle_scene_path: Path,
             moonlab_grover_plan_markdown_path),
         "qae_moonlab_grover_schedule_plan_icc_evidence": file_info(
             moonlab_grover_plan_icc_path),
+        "qae_moonlab_grover_circuits": directory_info(
+            moonlab_grover_circuit_dir),
         "qae_moonlab_grover_schedule_plan_data": moonlab_grover_plan,
         "scaling_summary": file_info(scaling_path),
         "scaling_summary_csv": file_info(scaling_csv_path),
@@ -1281,6 +1285,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 advantage["qae_moonlab_observation_zero"]["path"]),
             "moonlab_qae_grover_schedule_plan": (
                 advantage["qae_moonlab_grover_schedule_plan"]["path"]),
+            "moonlab_qae_grover_circuits": (
+                advantage["qae_moonlab_grover_circuits"]["path"]),
             "trace": capture_artifacts["trace"]["packed"]["path"],
             "frame": capture_artifacts["frame"]["packed"]["path"],
             "vanilla_matrix": vanilla_artifacts["matrix"]["packed"]["path"],
@@ -1534,6 +1540,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "qae_moonlab_grover_schedule_plan_icc_evidence": (
                     advantage[
                         "qae_moonlab_grover_schedule_plan_icc_evidence"]),
+                "qae_moonlab_grover_circuits": (
+                    advantage["qae_moonlab_grover_circuits"]),
                 "scaling_summary": advantage["scaling_summary"],
                 "scaling_summary_csv": advantage["scaling_summary_csv"],
                 "icc_evidence": advantage["icc_evidence"],
@@ -1907,6 +1915,9 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "qae_observation_ready_count": (
                     moonlab_submission_bundle.get(
                         "qae_observation_ready_count")),
+                "grover_schedule_ready_count": (
+                    moonlab_submission_bundle.get(
+                        "grover_schedule_ready_count")),
                 "transpilation_required_count": (
                     moonlab_submission_bundle.get(
                         "transpilation_required_count")),
@@ -1925,6 +1936,9 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "qae_observation_directly_executable": (
                     moonlab_submission_bundle.get(
                         "qae_observation_directly_executable")),
+                "grover_schedule_directly_executable": (
+                    moonlab_submission_bundle.get(
+                        "grover_schedule_directly_executable")),
             },
             "moonlab_hardware_record_template_summary": {
                 "schema": moonlab_hardware_record_template.get("schema"),
@@ -2284,6 +2298,8 @@ def build_icc_evidence(manifest: dict[str, Any],
             submission_bundle_summary.get("oracle_kernel_ready_count")),
         "moonlab_submission_qae_observation_ready_count": (
             submission_bundle_summary.get("qae_observation_ready_count")),
+        "moonlab_submission_grover_schedule_ready_count": (
+            submission_bundle_summary.get("grover_schedule_ready_count")),
         "moonlab_submission_transpilation_required_count": (
             submission_bundle_summary.get("transpilation_required_count")),
         "moonlab_submission_missing_artifact_candidate_count": (
@@ -2301,6 +2317,9 @@ def build_icc_evidence(manifest: dict[str, Any],
         "moonlab_qae_observation_directly_executable": (
             submission_bundle_summary.get(
                 "qae_observation_directly_executable")),
+        "moonlab_qae_grover_schedule_directly_executable": (
+            submission_bundle_summary.get(
+                "grover_schedule_directly_executable")),
         "moonlab_hardware_record_template_schema": (
             hardware_record_template_summary.get("schema")),
         "moonlab_hardware_record_schema": (

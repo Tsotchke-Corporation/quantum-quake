@@ -102,6 +102,9 @@ class MoonlabCircuitBuilder:
     def cnot(self, target: int, control: int) -> None:
         self.add(f"CNOT {target} {control}")
 
+    def ccx(self, target: int, control_a: int, control_b: int) -> None:
+        self.add(f"CCX {target} {control_a} {control_b}")
+
     def text(self) -> str:
         return "\n".join(self.lines) + "\n"
 
@@ -113,33 +116,9 @@ def emit_toffoli(circuit: MoonlabCircuitBuilder,
                  control_a: int,
                  control_b: int,
                  target: int) -> None:
-    """Emit an exact CCX using Moonlab's supported Clifford+T text gates.
+    """Emit Moonlab's native Toffoli/CCX text gate."""
 
-    The sequence is the standard seven-T Toffoli decomposition. `Tdg` is
-    represented as `Z S T`, which is equivalent up to the same global phase
-    already present when spelling the decomposition with RZ(-pi/4).
-    """
-
-    def tdg(qubit: int) -> None:
-        circuit.z(qubit)
-        circuit.s(qubit)
-        circuit.t(qubit)
-
-    circuit.h(target)
-    circuit.cnot(target, control_b)
-    tdg(target)
-    circuit.cnot(target, control_a)
-    circuit.t(target)
-    circuit.cnot(target, control_b)
-    tdg(target)
-    circuit.cnot(target, control_a)
-    circuit.t(control_b)
-    circuit.t(target)
-    circuit.h(target)
-    circuit.cnot(control_b, control_a)
-    circuit.t(control_a)
-    tdg(control_b)
-    circuit.cnot(control_b, control_a)
+    circuit.ccx(target, control_a, control_b)
 
 
 def emit_mcx(circuit: MoonlabCircuitBuilder,
@@ -530,7 +509,7 @@ def build_kernel(metrics: dict[str, Any],
             "gate_count": circuit.gate_count(),
             "body_bytes": body_bytes,
             "candidate_entries": candidate_count,
-            "gate_set": ["H", "S", "T", "X", "Z", "CNOT"],
+            "gate_set": ["CCX", "CNOT", "H", "X"],
         },
         "claim_posture": {
             "qf_oracle_kernel_transpiled": control_plane_ready,

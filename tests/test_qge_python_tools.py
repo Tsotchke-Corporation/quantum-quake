@@ -1857,7 +1857,28 @@ class PublicationPackTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            def packet_for(path: Path) -> dict:
+            def packet_for(path: Path, schedule_path: Path | None = None) -> dict:
+                required_artifacts = {
+                    "qae_circuit": str(path),
+                }
+                evidence = [
+                    {
+                        "name": "qae_circuit",
+                        "exists": True,
+                        "sha256": (
+                            moonlab_submission_bundle.sha256_file(
+                                path)),
+                    },
+                ]
+                if schedule_path is not None:
+                    required_artifacts["moonlab_qae_grover_schedule_plan"] = (
+                        str(schedule_path))
+                    evidence.append({
+                        "name": "moonlab_qae_grover_schedule_plan",
+                        "exists": True,
+                        "sha256": moonlab_submission_bundle.sha256_file(
+                            schedule_path),
+                    })
                 return {
                     "schema": "qge.moonlab_submission_packet.v0",
                     "candidate_jobs": [
@@ -1870,18 +1891,8 @@ class PublicationPackTests(unittest.TestCase):
                             "hardware_submission_status": "not_submitted",
                             "candidate_digest": "candidate-digest",
                             "resource": {"shots": 384},
-                            "required_artifacts": {
-                                "qae_circuit": str(path),
-                            },
-                            "artifact_evidence": [
-                                {
-                                    "name": "qae_circuit",
-                                    "exists": True,
-                                    "sha256": (
-                                        moonlab_submission_bundle.sha256_file(
-                                            path)),
-                                },
-                            ],
+                            "required_artifacts": required_artifacts,
+                            "artifact_evidence": evidence,
                         },
                     ],
                 }
@@ -1909,6 +1920,53 @@ class PublicationPackTests(unittest.TestCase):
                 ready_bundle["candidate_jobs"][0]
                 ["qae_circuit_check"]["logical_qubits_declared"],
                 2)
+
+            grover_schedule = tmpdir / "qae_moonlab_grover_schedule_plan.json"
+            publication_pack.write_json(grover_schedule, {
+                "schema": "qge.moonlab_qae_grover_schedule_plan.v0",
+                "status": (
+                    "qae_grover_schedule_ready_for_control_plane_submission"),
+                "semantic_scope": (
+                    "bernoulli_lift_qae_grover_schedule_control_plane_plan"),
+                "resource_estimate": {
+                    "logical_qubits": 2,
+                    "observation_count": 1,
+                    "ready_observation_count": 1,
+                    "blocked_observation_count": 0,
+                    "max_body_bytes": moonlab_circuit.stat().st_size,
+                    "max_gate_count": 1,
+                },
+                "claim_posture": {
+                    "full_mlae_schedule_transpiled": True,
+                    "full_qae_oracle_transpiled": True,
+                },
+                "observations": [
+                    {
+                        "observation_index": 0,
+                        "grover_power": 0,
+                        "status": "ready_for_control_plane_submission",
+                        "body_bytes": moonlab_circuit.stat().st_size,
+                        "gate_count": 1,
+                        "control_plane_executable": True,
+                        "moonlab_circuit_file": str(moonlab_circuit),
+                        "moonlab_circuit_sha256": (
+                            moonlab_submission_bundle.sha256_file(
+                                moonlab_circuit)),
+                    },
+                ],
+            })
+            schedule_bundle = (
+                moonlab_submission_bundle.build_submission_bundle(
+                    packet_for(abstract_circuit, grover_schedule)))
+            self.assertEqual(
+                schedule_bundle["status"],
+                "ready_for_control_plane_submission")
+            self.assertEqual(
+                schedule_bundle["grover_schedule_ready_count"], 1)
+            self.assertEqual(
+                schedule_bundle["transpilation_required_count"], 0)
+            self.assertTrue(
+                schedule_bundle["hardware_submission_directly_executable"])
 
             packet_path = tmpdir / "qge_moonlab_submission_packet.json"
             out_path = tmpdir / "qge_moonlab_submission_bundle.json"

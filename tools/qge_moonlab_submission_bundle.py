@@ -63,6 +63,22 @@ def file_info(path: Path | None) -> dict[str, Any]:
     }
 
 
+def path_info(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {"path": None, "exists": False, "size_bytes": 0, "sha256": None}
+    if path.is_dir():
+        files = [item for item in path.iterdir() if item.is_file()]
+        return {
+            "path": str(path),
+            "exists": True,
+            "is_dir": True,
+            "file_count": len(files),
+            "size_bytes": sum(item.stat().st_size for item in files),
+            "sha256": None,
+        }
+    return file_info(path)
+
+
 def read_text_prefix(path: Path, limit: int = 65536) -> str:
     with path.open("rb") as f:
         raw = f.read(limit)
@@ -381,6 +397,119 @@ def classify_moonlab_qae_observation_zero(path: Path | None) -> dict[str, Any]:
     return check
 
 
+def classify_moonlab_qae_grover_schedule(path: Path | None) -> dict[str, Any]:
+    info = file_info(path)
+    check: dict[str, Any] = {
+        "artifact": info,
+        "schema": None,
+        "status": "missing",
+        "semantic_scope": None,
+        "grover_schedule_directly_executable": False,
+        "full_mlae_schedule_transpiled": False,
+        "full_qae_oracle_transpiled": False,
+        "logical_qubits": None,
+        "observation_count": 0,
+        "ready_observation_count": 0,
+        "blocked_observation_count": 0,
+        "max_body_bytes": None,
+        "max_gate_count": None,
+        "circuit_checks": [],
+        "blockers": ["moonlab_qae_grover_schedule_plan artifact is missing"],
+    }
+    if path is None or not path.is_file():
+        return check
+
+    try:
+        plan = load_json(path)
+    except (OSError, ValueError) as exc:
+        check.update({
+            "status": "blocked_invalid_grover_schedule_plan",
+            "blockers": [
+                f"moonlab_qae_grover_schedule_plan could not be read: {exc}",
+            ],
+        })
+        return check
+
+    resource = dict_or_empty(plan.get("resource_estimate"))
+    claim_posture = dict_or_empty(plan.get("claim_posture"))
+    observations = [
+        item for item in list_or_empty(plan.get("observations"))
+        if isinstance(item, dict)
+    ]
+    blockers = []
+    if plan.get("schema") != "qge.moonlab_qae_grover_schedule_plan.v0":
+        blockers.append(
+            "moonlab_qae_grover_schedule_plan schema is not "
+            "qge.moonlab_qae_grover_schedule_plan.v0")
+    if not observations:
+        blockers.append("Grover schedule contains no observations")
+    if resource.get("blocked_observation_count") not in (0, None):
+        blockers.append("Grover schedule still has blocked observations")
+    if not claim_posture.get("full_mlae_schedule_transpiled"):
+        blockers.append("full MLAE Grover schedule is not marked transpiled")
+    if not claim_posture.get("full_qae_oracle_transpiled"):
+        blockers.append("full QAE oracle is not marked transpiled")
+
+    circuit_checks = []
+    for observation in observations:
+        raw_path = observation.get("moonlab_circuit_file")
+        circuit_path = Path(raw_path) if isinstance(raw_path, str) and raw_path else None
+        circuit_check = classify_qae_circuit(circuit_path)
+        expected_sha = observation.get("moonlab_circuit_sha256")
+        actual_sha = dict_or_empty(circuit_check.get("artifact")).get("sha256")
+        check_entry = {
+            "observation_index": observation.get("observation_index"),
+            "grover_power": observation.get("grover_power"),
+            "moonlab_circuit_file": str(circuit_path)
+            if circuit_path is not None else None,
+            "status": circuit_check.get("status"),
+            "format": circuit_check.get("format"),
+            "body_bytes": observation.get("body_bytes"),
+            "expected_sha256": expected_sha,
+            "sha256": actual_sha,
+            "blockers": list_or_empty(circuit_check.get("blockers")),
+        }
+        if circuit_check.get("status") != "ready_for_control_plane_submission":
+            blockers.append(
+                "Grover observation circuit is not ready Moonlab text: "
+                f"{raw_path}"
+            )
+        if expected_sha and actual_sha != expected_sha:
+            blockers.append(
+                "Grover observation circuit sha256 does not match plan: "
+                f"{raw_path}"
+            )
+            check_entry["blockers"].append("sha256_mismatch")
+        if observation.get("status") != "ready_for_control_plane_submission":
+            blockers.append(
+                "Grover observation is not ready for control-plane submission: "
+                f"power={observation.get('grover_power')}"
+            )
+        circuit_checks.append(check_entry)
+
+    executable = not blockers and plan.get("status") == (
+        "qae_grover_schedule_ready_for_control_plane_submission")
+    check.update({
+        "schema": plan.get("schema"),
+        "status": plan.get("status"),
+        "semantic_scope": plan.get("semantic_scope"),
+        "grover_schedule_directly_executable": executable,
+        "full_mlae_schedule_transpiled": bool(
+            claim_posture.get("full_mlae_schedule_transpiled")),
+        "full_qae_oracle_transpiled": bool(
+            claim_posture.get("full_qae_oracle_transpiled")),
+        "logical_qubits": resource.get("logical_qubits"),
+        "observation_count": resource.get("observation_count"),
+        "ready_observation_count": resource.get("ready_observation_count"),
+        "blocked_observation_count": resource.get("blocked_observation_count"),
+        "max_body_bytes": resource.get("max_body_bytes"),
+        "max_gate_count": resource.get("max_gate_count"),
+        "circuit_checks": circuit_checks,
+        "blockers": blockers,
+    })
+    return check
+
+
 def artifact_checks(job: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
     required = dict_or_empty(job.get("required_artifacts"))
     evidence_by_name = {
@@ -392,7 +521,7 @@ def artifact_checks(job: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str
     missing = []
     for name, raw_path in sorted(required.items()):
         path = Path(raw_path) if isinstance(raw_path, str) and raw_path else None
-        info = file_info(path)
+        info = path_info(path)
         prior = dict_or_empty(evidence_by_name.get(name))
         check = {
             "name": name,
@@ -460,6 +589,12 @@ def build_candidate_bundle(job: dict[str, Any]) -> dict[str, Any]:
         required.get("moonlab_qae_observation_zero")
         else None
     )
+    grover_schedule_path = (
+        Path(required["moonlab_qae_grover_schedule_plan"])
+        if isinstance(required.get("moonlab_qae_grover_schedule_plan"), str) and
+        required.get("moonlab_qae_grover_schedule_plan")
+        else None
+    )
     artifacts, missing = artifact_checks(job)
     qae_check = classify_qae_circuit(qae_path)
     payload_check = classify_moonlab_qae_payload(payload_path)
@@ -467,8 +602,13 @@ def build_candidate_bundle(job: dict[str, Any]) -> dict[str, Any]:
         oracle_kernel_path)
     observation_check = classify_moonlab_qae_observation_zero(
         observation_path)
+    grover_schedule_check = classify_moonlab_qae_grover_schedule(
+        grover_schedule_path)
     blockers = list(missing)
-    blockers.extend(qae_check.get("blockers", []))
+    grover_schedule_blockers = list_or_empty(
+        grover_schedule_check.get("blockers"))
+    if grover_schedule_path is not None:
+        blockers.extend(grover_schedule_blockers)
     payload_blockers = list_or_empty(payload_check.get("blockers"))
     if payload_path is not None:
         blockers.extend(payload_blockers)
@@ -479,7 +619,15 @@ def build_candidate_bundle(job: dict[str, Any]) -> dict[str, Any]:
     observation_blockers = list_or_empty(observation_check.get("blockers"))
     if observation_path is not None:
         blockers.extend(observation_blockers)
-    direct = bool(qae_check.get("moonlab_control_plane_executable")) and not missing
+    grover_schedule_direct = bool(
+        grover_schedule_check.get("grover_schedule_directly_executable")) and (
+            "moonlab_qae_grover_schedule_plan" not in missing)
+    if not grover_schedule_direct:
+        blockers.extend(qae_check.get("blockers", []))
+    direct = (
+        grover_schedule_direct or
+        bool(qae_check.get("moonlab_control_plane_executable"))
+    ) and not missing
     payload_direct = bool(
         payload_check.get("control_plane_payload_directly_executable")) and (
             "moonlab_qae_payload" not in missing)
@@ -491,6 +639,8 @@ def build_candidate_bundle(job: dict[str, Any]) -> dict[str, Any]:
             "moonlab_qae_observation_zero" not in missing)
     if missing:
         status = "blocked_missing_required_artifact"
+    elif grover_schedule_direct:
+        status = "ready_for_control_plane_submission"
     elif observation_direct and qae_check.get("status") == (
         "blocked_transpilation_required"
     ):
@@ -522,21 +672,26 @@ def build_candidate_bundle(job: dict[str, Any]) -> dict[str, Any]:
         "moonlab_qae_payload_check": payload_check,
         "moonlab_qae_oracle_kernel_check": oracle_kernel_check,
         "moonlab_qae_observation_zero_check": observation_check,
+        "moonlab_qae_grover_schedule_plan_check": grover_schedule_check,
         "moonlab_control_plane_request": control_plane_request_contract(job),
         "blockers": blockers,
         "control_plane_payload_directly_executable": payload_direct,
         "oracle_kernel_directly_executable": oracle_kernel_direct,
         "qae_observation_directly_executable": observation_direct,
+        "grover_schedule_directly_executable": grover_schedule_direct,
         "qf_oracle_kernel_transpiled": bool(
             oracle_kernel_check.get("qf_oracle_kernel_transpiled")),
         "candidate_state_preparation_transpiled": bool(
             observation_check.get("candidate_state_preparation_transpiled")),
         "power_zero_observation_transpiled": bool(
             observation_check.get("power_zero_observation_transpiled")),
+        "full_mlae_schedule_transpiled": bool(
+            grover_schedule_check.get("full_mlae_schedule_transpiled")),
         "full_qae_oracle_transpiled": bool(
             payload_check.get("full_qae_oracle_transpiled")) or bool(
                 oracle_kernel_check.get("full_qae_oracle_transpiled")) or bool(
-                    observation_check.get("full_qae_oracle_transpiled")),
+                    observation_check.get("full_qae_oracle_transpiled")) or bool(
+                        grover_schedule_check.get("full_qae_oracle_transpiled")),
         "claim_posture": {
             "hardware_result_claimed": False,
             "hardware_quantum_advantage_claimed": False,
@@ -591,8 +746,8 @@ def build_submission_bundle(
     )
     transpilation_required = sum(
         1 for candidate in candidates
-        if candidate.get("qae_circuit_check", {}).get(
-            "transpilation_required")
+        if not candidate.get("grover_schedule_directly_executable") and
+        candidate.get("qae_circuit_check", {}).get("transpilation_required")
     )
     missing = sum(
         1 for candidate in candidates
@@ -611,6 +766,10 @@ def build_submission_bundle(
         1 for candidate in candidates
         if candidate.get("qae_observation_directly_executable")
     )
+    grover_schedule_ready = sum(
+        1 for candidate in candidates
+        if candidate.get("grover_schedule_directly_executable")
+    )
     payload_direct = bool(candidates) and all(
         bool(candidate.get("control_plane_payload_directly_executable"))
         for candidate in candidates
@@ -621,6 +780,10 @@ def build_submission_bundle(
     )
     observation_direct = bool(candidates) and all(
         bool(candidate.get("qae_observation_directly_executable"))
+        for candidate in candidates
+    )
+    grover_schedule_direct = bool(candidates) and all(
+        bool(candidate.get("grover_schedule_directly_executable"))
         for candidate in candidates
     )
     direct = bool(candidates) and all(
@@ -637,12 +800,14 @@ def build_submission_bundle(
         "calibration_payload_ready_count": calibration_ready,
         "oracle_kernel_ready_count": oracle_kernel_ready,
         "qae_observation_ready_count": qae_observation_ready,
+        "grover_schedule_ready_count": grover_schedule_ready,
         "transpilation_required_count": transpilation_required,
         "missing_artifact_candidate_count": missing,
         "hardware_submission_directly_executable": direct,
         "control_plane_payload_directly_executable": payload_direct,
         "oracle_kernel_directly_executable": oracle_kernel_direct,
         "qae_observation_directly_executable": observation_direct,
+        "grover_schedule_directly_executable": grover_schedule_direct,
         "moonlab_control_plane_requirements": {
             "payload_header": MOONLAB_CIRCUIT_HEADER,
             "required_payload_fields": ["NUM_QUBITS"],
@@ -658,11 +823,10 @@ def build_submission_bundle(
             "dense_70000_qubit_state_claimed": False,
         },
         "limits": [
-            "A Moonlab hardware candidate is not directly executable until its circuit artifact is moonlab-circuit v1.",
+            "A Moonlab hardware candidate is not directly executable until every selected circuit artifact is moonlab-circuit v1.",
             "Abstract QGE QAE circuit text requires a transpilation step before control-plane submission.",
             "Readout-equivalent Moonlab payloads can validate shot plumbing without proving the full QAE oracle is transpiled.",
-            "A ready Q_f kernel still needs candidate state preparation, Grover diffusion, and MLAE circuit assembly before a full QAE submission.",
-            "A ready power-zero QAE observation still needs Grover diffusion and nonzero-power MLAE assembly before a full QAE submission.",
+            "Q_f and power-zero observations are intermediate artifacts; the selected Grover schedule is the full MLAE control-plane payload set.",
             "This bundle records submission readiness, not a hardware result.",
         ],
     }
@@ -674,21 +838,22 @@ def markdown_report(bundle: dict[str, Any]) -> str:
         "",
         f"Status: `{bundle['status']}`",
         "",
-        "| Jobs | Ready | Calibration Ready | Q_f Kernel Ready | Observation Ready | Transpilation Required | Missing Artifacts | Directly Executable |",
-        "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| Jobs | Ready | Calibration Ready | Q_f Kernel Ready | Observation Ready | Grover Ready | Transpilation Required | Missing Artifacts | Directly Executable |",
+        "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
         (
             f"| {bundle['hardware_candidate_job_count']} | "
             f"{bundle['ready_for_control_plane_submission_count']} | "
             f"{bundle['calibration_payload_ready_count']} | "
             f"{bundle['oracle_kernel_ready_count']} | "
             f"{bundle['qae_observation_ready_count']} | "
+            f"{bundle['grover_schedule_ready_count']} | "
             f"{bundle['transpilation_required_count']} | "
             f"{bundle['missing_artifact_candidate_count']} | "
             f"{bundle['control_plane_payload_directly_executable']} |"
         ),
         "",
-        "| Job | Control-Plane Status | Circuit Format | Payload Scope | Kernel Scope | Observation Scope | Qubits | Blockers |",
-        "| --- | --- | --- | --- | --- | --- | ---: | --- |",
+        "| Job | Control-Plane Status | Circuit Format | Payload Scope | Kernel Scope | Observation Scope | Grover Scope | Qubits | Blockers |",
+        "| --- | --- | --- | --- | --- | --- | --- | ---: | --- |",
     ]
     for job in bundle["candidate_jobs"]:
         qae_check = dict_or_empty(job.get("qae_circuit_check"))
@@ -697,6 +862,8 @@ def markdown_report(bundle: dict[str, Any]) -> str:
             job.get("moonlab_qae_oracle_kernel_check"))
         observation_check = dict_or_empty(
             job.get("moonlab_qae_observation_zero_check"))
+        grover_check = dict_or_empty(
+            job.get("moonlab_qae_grover_schedule_plan_check"))
         blockers = job.get("blockers", [])
         if isinstance(blockers, list):
             blocker_text = "; ".join(str(item) for item in blockers) or "none"
@@ -709,6 +876,7 @@ def markdown_report(bundle: dict[str, Any]) -> str:
             f"{payload_check.get('semantic_scope')} | "
             f"{kernel_check.get('semantic_scope')} | "
             f"{observation_check.get('semantic_scope')} | "
+            f"{grover_check.get('semantic_scope')} | "
             f"{qae_check.get('logical_qubits_declared')} | "
             f"{blocker_text} |"
         )
@@ -742,6 +910,8 @@ def build_icc_evidence(
             "oracle_kernel_ready_count"),
         "qae_observation_ready_count": bundle.get(
             "qae_observation_ready_count"),
+        "grover_schedule_ready_count": bundle.get(
+            "grover_schedule_ready_count"),
         "transpilation_required_count": bundle.get(
             "transpilation_required_count"),
         "missing_artifact_candidate_count": bundle.get(
@@ -754,6 +924,8 @@ def build_icc_evidence(
             "oracle_kernel_directly_executable"),
         "qae_observation_directly_executable": bundle.get(
             "qae_observation_directly_executable"),
+        "grover_schedule_directly_executable": bundle.get(
+            "grover_schedule_directly_executable"),
         "hardware_quantum_advantage_claimed": False,
         "whole_game_hardware_execution_claimed": False,
         "dense_70000_qubit_state_claimed": False,

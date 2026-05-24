@@ -82,6 +82,13 @@ def circuit_body_bytes(num_qubits: int, blocks: Sequence[CircuitBlock]) -> int:
         block.payload_bytes for block in blocks)
 
 
+def circuit_text(num_qubits: int, blocks: Sequence[CircuitBlock]) -> str:
+    lines = [circuit_prefix(num_qubits).rstrip("\n")]
+    for block in blocks:
+        lines.extend(block.lines)
+    return "\n".join(lines) + "\n"
+
+
 def circuit_gate_count(blocks: Sequence[CircuitBlock]) -> int:
     return sum(block.gate_count for block in blocks)
 
@@ -242,7 +249,7 @@ def emit_a_block(
         "threshold_preparation_gates": threshold_prep_gate_count,
         "qf_kernel_gates": qf_gate_count,
         "candidate_entries": int(quantization["candidate_count"]),
-        "gate_set": ["H", "RY", "S", "T", "X", "Z", "CNOT"],
+        "gate_set": ["CCX", "CNOT", "H", "RY", "X"],
     }
     return block, components, layout, state_prep, {**quantization, **resources}
 
@@ -275,6 +282,10 @@ def invert_gate_line(line: str) -> list[str]:
     if gate == "CNOT":
         if len(parts) != 3:
             raise ValueError(f"invalid CNOT line: {line}")
+        return [line]
+    if gate == "CCX":
+        if len(parts) != 4:
+            raise ValueError(f"invalid CCX line: {line}")
         return [line]
     if gate in ("RY", "RZ"):
         if len(parts) != 3:
@@ -372,6 +383,7 @@ def build_schedule_plan(
     metrics_path: Path | None = None,
     oracle_scene_path: Path | None = None,
     powers: list[int] | None = None,
+    circuit_dir: Path | None = None,
 ) -> dict[str, Any]:
     observations = selected_observations(metrics)
     observation_by_power = observation_metadata_by_power(observations)
@@ -419,6 +431,8 @@ def build_schedule_plan(
     ready_count = 0
     blocked_count = 0
     first_blocked_power = None
+    if circuit_dir is not None:
+        circuit_dir.mkdir(parents=True, exist_ok=True)
     for index, power in enumerate(scheduled_powers):
         if power < 0:
             raise ValueError("Grover powers must be >= 0")
@@ -441,6 +455,16 @@ def build_schedule_plan(
             "simulator_success_probability": None,
             "simulator_successes": None,
         })
+        circuit_path = None
+        if circuit_dir is not None:
+            circuit_path = (
+                circuit_dir /
+                f"observation_{index:03d}_power_{power:03d}.moonlab"
+            )
+            circuit_path.write_text(
+                circuit_text(layout["num_qubits"], blocks),
+                encoding="utf-8",
+            )
         schedule.append({
             **metadata,
             "schedule_block_sequence": (
@@ -453,6 +477,8 @@ def build_schedule_plan(
             "body_limit_bytes": MOONLAB_CONTROL_MAX_BODY_BYTES,
             "moonlab_circuit_sha256": circuit_sha256(
                 layout["num_qubits"], blocks),
+            "moonlab_circuit_file": str(circuit_path)
+            if circuit_path is not None else None,
             "control_plane_executable": control_ready,
             "status": (
                 "ready_for_control_plane_submission"
@@ -506,7 +532,7 @@ def build_schedule_plan(
             "max_body_bytes": max(item["body_bytes"] for item in schedule),
             "max_gate_count": max(item["gate_count"] for item in schedule),
             "candidate_entries": quantization.get("candidate_entries"),
-            "gate_set": ["H", "RY", "S", "T", "X", "Z", "CNOT"],
+            "gate_set": ["CCX", "CNOT", "H", "RY", "X"],
         },
         "claim_posture": {
             "candidate_state_preparation_transpiled": bool(
@@ -631,6 +657,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--markdown", type=Path)
     parser.add_argument("--icc-json", type=Path)
+    parser.add_argument("--circuit-dir", type=Path,
+                        help="Optional directory for per-power Moonlab circuits")
     return parser.parse_args(argv)
 
 
@@ -652,6 +680,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             metrics_path=args.metrics,
             oracle_scene_path=oracle_scene_path,
             powers=args.powers,
+            circuit_dir=args.circuit_dir,
         )
         write_json(args.out, plan)
         if args.markdown:
@@ -666,6 +695,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"qge_moonlab_qae_grover_plan: {exc}", file=sys.stderr)
         return 1
     print(f"QGE_MOONLAB_QAE_GROVER_PLAN {args.out}")
+    if args.circuit_dir:
+        print(f"QGE_MOONLAB_QAE_GROVER_CIRCUITS {args.circuit_dir}")
     if args.markdown:
         print(f"QGE_MOONLAB_QAE_GROVER_PLAN_MARKDOWN {args.markdown}")
     if args.icc_json:
