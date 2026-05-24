@@ -665,7 +665,7 @@ Known current visual state:
   repo.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
-  publication pack is `diagnostics/publication_pack/20260524-150018`, with
+  publication pack is `diagnostics/publication_pack/20260524-154046`, with
   `qge_publication_artifact_pack_complete`, the e1m1 ready vanilla/QGE capture,
   vanilla ICC evidence sidecar, agent stream, oracle/claims exports, QAE
   benchmark artifacts, `resource/qge_resource_envelope.json`,
@@ -701,20 +701,20 @@ Known current visual state:
   now emits `advantage/qae_moonlab_payload.json` plus four
   `# moonlab-circuit v1` observation circuits for the MLAE readout schedule.
   `tools/qge_moonlab_oracle_transpile.py` now emits
-  `advantage/qae_moonlab_oracle_kernel.moonlab`, a 32-qubit, 189,041-gate
+  `advantage/qae_moonlab_oracle_kernel.moonlab`, a 32-qubit, 95,555-gate
   supported-gate reversible `Q_f` predicate kernel for the captured
   Bernoulli-lift oracle. `tools/qge_moonlab_qae_observation_transpile.py` now
   emits `advantage/qae_moonlab_observation_zero.moonlab`, a 32-qubit,
-  191,018-gate power-zero observation circuit with exact 234-candidate state
+  98,240-gate power-zero observation circuit with exact 234-candidate state
   preparation, uniform threshold preparation, and inline `Q_f`.
   `tools/qge_moonlab_qae_grover_plan.py` now records the exact selected MLAE
-  Grover schedule body sizes: power 0 fits at 3,173,321 bytes, while power 1
-  expands to 9,539,857 bytes and exceeds the 4 MB control-plane cap.
+  Grover schedule body sizes: powers 0, 1, and 2 fit, while power 4 expands to
+  5,559,499 bytes and exceeds the 4 MB control-plane cap.
   `tools/qge_moonlab_submission_bundle.py` verifies those payloads while
   keeping the current QAE candidate at
   `qae_observation_zero_ready_grover_schedule_required`: readout, `Q_f`, and
-  the power-zero observation are executable, but Grover diffusion and full
-  MLAE circuit assembly are still blocked. `tools/qge_moonlab_hardware_ingest.py`
+  selected Grover observations through power 2 are executable, but full MLAE
+  circuit assembly is still blocked by power 4. `tools/qge_moonlab_hardware_ingest.py`
   is the guarded return path for a real Moonlab hardware record: it can generate
   the no-claim hardware record template from the submission packet, then
   requires backend ID, shot schedule, readout metadata, and matching candidate

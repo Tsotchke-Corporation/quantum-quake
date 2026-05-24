@@ -223,6 +223,27 @@ class OracleExportTests(unittest.TestCase):
 
 
 class AdvantageBenchmarkTests(unittest.TestCase):
+    def test_qrom_value_load_cover_preserves_invalid_candidates(self) -> None:
+        success_counts = [0, 1, 2, 3, 4, 5]
+        candidate_bits = 3
+        cover = moonlab_oracle_transpile.qrom_value_load_cover(
+            success_counts, candidate_bits)
+
+        def covered_value(address: int) -> int:
+            value = 0
+            for bit, cubes in enumerate(cover):
+                for cube in cubes:
+                    mask = int(cube["specified_mask"])
+                    expected = int(cube["specified_value"])
+                    if (address & mask) == expected:
+                        value ^= 1 << bit
+            return value
+
+        for address, expected in enumerate(success_counts):
+            self.assertEqual(covered_value(address), expected)
+        for invalid_address in range(len(success_counts), 1 << candidate_bits):
+            self.assertEqual(covered_value(invalid_address), 0)
+
     def test_build_metrics_and_artifact_helpers(self) -> None:
         oracle_scene = minimal_oracle_scene()
         args = SimpleNamespace(
@@ -1378,8 +1399,8 @@ class PublicationPackTests(unittest.TestCase):
                         "bernoulli_lift_qae_power_zero_observation"),
                     "resource_estimate": {
                         "logical_qubits": 32,
-                        "gate_count": 191018,
-                        "body_bytes": 3173321,
+                        "gate_count": 98240,
+                        "body_bytes": 611783,
                     },
                     "state_preparation": {
                         "candidate_count": 234,
@@ -1401,14 +1422,14 @@ class PublicationPackTests(unittest.TestCase):
                     "resource_estimate": {
                         "logical_qubits": 32,
                         "observation_count": 4,
-                        "ready_observation_count": 1,
-                        "blocked_observation_count": 3,
-                        "first_blocked_power": 1,
-                        "power_zero_body_bytes": 3173321,
+                        "ready_observation_count": 3,
+                        "blocked_observation_count": 1,
+                        "first_blocked_power": 4,
+                        "power_zero_body_bytes": 611783,
                     },
-                    "ready_observation_count": 1,
-                    "blocked_observation_count": 3,
-                    "first_blocked_power": 1,
+                    "ready_observation_count": 3,
+                    "blocked_observation_count": 1,
+                    "first_blocked_power": 4,
                     "grover_schedule_transpiled": False,
                     "full_qae_oracle_transpiled": False,
                 },
@@ -1684,11 +1705,11 @@ class PublicationPackTests(unittest.TestCase):
             icc["moonlab_qae_grover_schedule_plan_semantic_scope"],
             "bernoulli_lift_qae_grover_schedule_control_plane_plan")
         self.assertEqual(
-            icc["moonlab_qae_grover_schedule_ready_observation_count"], 1)
+            icc["moonlab_qae_grover_schedule_ready_observation_count"], 3)
         self.assertEqual(
-            icc["moonlab_qae_grover_schedule_blocked_observation_count"], 3)
+            icc["moonlab_qae_grover_schedule_blocked_observation_count"], 1)
         self.assertEqual(
-            icc["moonlab_qae_grover_schedule_first_blocked_power"], 1)
+            icc["moonlab_qae_grover_schedule_first_blocked_power"], 4)
         self.assertFalse(
             icc["moonlab_qae_grover_schedule_transpiled"])
         self.assertFalse(

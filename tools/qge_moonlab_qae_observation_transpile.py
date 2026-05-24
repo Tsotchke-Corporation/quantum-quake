@@ -356,7 +356,7 @@ def build_observation_circuit(
             "qf_kernel_gates": qf_gate_count,
             "body_bytes": body_bytes,
             "candidate_entries": int(quantization["candidate_count"]),
-            "gate_set": ["H", "X", "RY", "RZ", "CNOT"],
+            "gate_set": ["H", "RY", "S", "T", "X", "Z", "CNOT"],
         },
         "claim_posture": {
             "candidate_state_preparation_transpiled": control_plane_ready,

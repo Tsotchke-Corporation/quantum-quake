@@ -155,7 +155,7 @@ Do claim, once proven:
 Minimum publishable artifact package:
 
 Current strongest publication bundle:
-`diagnostics/publication_pack/20260524-150018`. It packages a ready e1m1
+`diagnostics/publication_pack/20260524-154046`. It packages a ready e1m1
 QGE/vanilla capture, vanilla ICC evidence sidecar, agent stream, oracle scene,
 claims evidence, finite-shot QAE benchmark artifacts,
 `resource/qge_resource_envelope.json`,
@@ -199,19 +199,21 @@ Moonlab control-plane payload for the MLAE observation/readout distribution:
 four `# moonlab-circuit v1` one-qubit `RY` circuits with 384 total shots,
 matching the scheduled observation probabilities. This payload is useful for
 hardware shot plumbing and readout comparison. `tools/qge_moonlab_oracle_transpile.py`
-now emits the next harder artifact: a 32-qubit, 189,041-gate
+now emits the next harder artifact: a 32-qubit, 95,555-gate
 `# moonlab-circuit v1` reversible `Q_f` predicate kernel for the captured
-Bernoulli-lift oracle. It uses only `H`, `X`, `RZ`, and `CNOT`, is 3,141,392
+Bernoulli-lift oracle. It uses only Moonlab-supported `H`, `S`, `T`, `X`, `Z`,
+and `CNOT`, is 594,250
 bytes, and stays under Moonlab's 4,194,304-byte control-plane body cap.
 `tools/qge_moonlab_qae_observation_transpile.py` then assembles the first real
 benchmark observation circuit: exact state preparation over the 234 captured
 candidates, uniform threshold preparation, and inline `Q_f` for
-`grover_power=0`. That Moonlab circuit is 32 qubits, 191,018 gates, 3,173,321
+`grover_power=0`. That Moonlab circuit is 32 qubits, 98,240 gates, 611,783
 bytes, and stays under the same body cap.
 `tools/qge_moonlab_qae_grover_plan.py` now assembles the exact selected
-Grover schedule bodies without writing oversized circuits: power 0 fits, but
-power 1 expands to 573,526 gates and 9,539,857 bytes, so the nonzero-power
-MLAE observations are blocked by Moonlab's current 4,194,304-byte body cap.
+Grover schedule bodies without writing oversized circuits: powers 0, 1, and 2
+fit, while power 4 expands to 894,768 gates and 5,559,499 bytes, so the
+highest selected MLAE observation remains blocked by Moonlab's current
+4,194,304-byte body cap.
 `tools/qge_moonlab_submission_bundle.py` records that distinction. In the
 current pack the bundle status is
 `qae_observation_zero_ready_grover_schedule_required`, with
@@ -261,7 +263,7 @@ and marks UI-only `-nolauncher` paths as intentional skips.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for
-     `diagnostics/publication_pack/20260524-150018` inventories local loose/Pak
+     `diagnostics/publication_pack/20260524-154046` inventories local loose/Pak
      BSP assets before queuing. With the current `assets/id1/pak0.pak`, it
      reports zero locally queueable missing maps and 23 missing registered maps
      as asset-unavailable; those maps require additional registered BSP assets
@@ -285,7 +287,7 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      count of matrix runs where all required native boundaries resolved to the
      native sparse DWT render bridge.
    - The current publication bundle carries those breadth counters directly:
-     `diagnostics/publication_pack/20260524-150018` reports
+     `diagnostics/publication_pack/20260524-154046` reports
      `breadth_map_count=9`, `breadth_total_native_bridge_count=945`, and
      `breadth_total_runtime_backend_probe_event_count=36`, with
      `breadth_runtime_backend_probe_resolved_run_count=9`, plus
@@ -327,7 +329,7 @@ qge_vanilla_runtime_complete -> produce_ready_vanilla_capture_matrix
 ```
 
 That blocker is now cleared for the current self-contained publication pack:
-`diagnostics/publication_pack/20260524-150018` carries
+`diagnostics/publication_pack/20260524-154046` carries
 `qge_vanilla_capture_matrix_complete`, the vanilla ICC sidecar, native backend
 proofs, the agent stream, the benchmark bundle, and the nine-map breadth
 sidecar. It also carries `resource/qge_resource_envelope.json`, which records
@@ -399,7 +401,7 @@ The next hard work is therefore:
    Quake install or PAKs, run the generated copy script only for assets the
    user is licensed to install locally, verify them with
    `tools/qge_asset_inventory.py`, then start from
-   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-150018`
+   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-154046`
    so the 23 registered asset-unavailable maps become explicit capture jobs
    rather than weakening the authority gate.
 2. Submit the QAE hardware-candidate job through Moonlab hardware when

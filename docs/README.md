@@ -37,9 +37,9 @@ state, claims policy, stream/harness operation, and long-range research plans.
   game domain must run under QGE/Moonlab authority, with classic Quake retained
   only as host, compatibility shell, and reference oracle for claimed domains.
 - The current Moonlab QAE artifact chain includes executable readout payloads,
-  an executable 32-qubit `Q_f` kernel, and an executable power-zero observation;
-  `qae_moonlab_grover_schedule_plan.json` records that nonzero selected Grover
-  powers exceed the current 4 MB Moonlab control-plane body limit.
+  an executable 32-qubit `Q_f` kernel, and executable selected Grover
+  observations through power 2; `qae_moonlab_grover_schedule_plan.json` records
+  that power 4 still exceeds the current 4 MB Moonlab control-plane body limit.
 - QGE primary rendering is improved but not visually complete. The current
   fixed-view renderer has better FOV alignment, depth ownership,
   lightmap-preserving contrast, every-frame QGE refresh by default, an ambient

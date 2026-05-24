@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import sys
 from pathlib import Path
 from typing import Any, Sequence
@@ -59,6 +58,15 @@ def list_or_empty(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
+def stable_success_count_order(counts: list[int]) -> list[int]:
+    return sorted(range(len(counts)), key=lambda index: (counts[index], index))
+
+
+def sha256_int_list(values: list[int]) -> str:
+    payload = ",".join(str(value) for value in values).encode("ascii")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def ceil_log2(value: int) -> int:
     if value <= 1:
         return 0
@@ -79,6 +87,15 @@ class MoonlabCircuitBuilder:
     def x(self, qubit: int) -> None:
         self.add(f"X {qubit}")
 
+    def z(self, qubit: int) -> None:
+        self.add(f"Z {qubit}")
+
+    def s(self, qubit: int) -> None:
+        self.add(f"S {qubit}")
+
+    def t(self, qubit: int) -> None:
+        self.add(f"T {qubit}")
+
     def rz(self, qubit: int, theta: float) -> None:
         self.add(f"RZ {qubit} {theta:.17g}")
 
@@ -96,27 +113,32 @@ def emit_toffoli(circuit: MoonlabCircuitBuilder,
                  control_a: int,
                  control_b: int,
                  target: int) -> None:
-    """Emit an exact CCX using H, CNOT, and RZ(+-pi/4).
+    """Emit an exact CCX using Moonlab's supported Clifford+T text gates.
 
-    The sequence is the standard seven-T Toffoli decomposition with T/Tdg
-    represented as RZ rotations. The remaining phase is global.
+    The sequence is the standard seven-T Toffoli decomposition. `Tdg` is
+    represented as `Z S T`, which is equivalent up to the same global phase
+    already present when spelling the decomposition with RZ(-pi/4).
     """
 
-    p = math.pi / 4.0
+    def tdg(qubit: int) -> None:
+        circuit.z(qubit)
+        circuit.s(qubit)
+        circuit.t(qubit)
+
     circuit.h(target)
     circuit.cnot(target, control_b)
-    circuit.rz(target, -p)
+    tdg(target)
     circuit.cnot(target, control_a)
-    circuit.rz(target, p)
+    circuit.t(target)
     circuit.cnot(target, control_b)
-    circuit.rz(target, -p)
+    tdg(target)
     circuit.cnot(target, control_a)
-    circuit.rz(control_b, p)
-    circuit.rz(target, p)
+    circuit.t(control_b)
+    circuit.t(target)
     circuit.h(target)
     circuit.cnot(control_b, control_a)
-    circuit.rz(control_a, p)
-    circuit.rz(control_b, -p)
+    circuit.t(control_a)
+    tdg(control_b)
     circuit.cnot(control_b, control_a)
 
 
@@ -219,20 +241,130 @@ def emit_qrom_value_load(circuit: MoonlabCircuitBuilder,
                          flag_qubit: int,
                          mcx_ancilla: list[int],
                          success_counts: list[int]) -> None:
-    for address, success_count in enumerate(success_counts):
-        zero_bits = [
-            bit for offset, bit in enumerate(candidate_qubits)
-            if ((address >> offset) & 1) == 0
+    cover = qrom_value_load_cover(success_counts, len(candidate_qubits))
+    for bit_index, bit_cubes in enumerate(cover):
+        target = value_qubits[bit_index]
+        for cube in bit_cubes:
+            specified = int(cube["specified_mask"])
+            value = int(cube["specified_value"])
+            controls = []
+            zero_controls = []
+            for offset, qubit in enumerate(candidate_qubits):
+                if ((specified >> offset) & 1) == 0:
+                    continue
+                controls.append(qubit)
+                if ((value >> offset) & 1) == 0:
+                    zero_controls.append(qubit)
+            for qubit in zero_controls:
+                circuit.x(qubit)
+            emit_mcx(circuit, controls, target, mcx_ancilla)
+            for qubit in reversed(zero_controls):
+                circuit.x(qubit)
+
+
+def qrom_value_load_cover(success_counts: list[int],
+                          candidate_bits: int) -> list[list[dict[str, int]]]:
+    if candidate_bits <= 0:
+        raise ValueError("candidate_bits must be > 0")
+    capacity = 1 << candidate_bits
+    if not success_counts or len(success_counts) > capacity:
+        raise ValueError("success_counts length is outside candidate register")
+    max_count = max(success_counts)
+    value_bits = max(max_count.bit_length(), 1)
+    return [
+        qrom_value_bit_cover(success_counts, candidate_bits, bit)
+        for bit in range(value_bits)
+    ]
+
+
+def qrom_value_bit_cover(success_counts: list[int],
+                         candidate_bits: int,
+                         bit: int) -> list[dict[str, int]]:
+    """Build a disjoint exact cover for one QROM value bit.
+
+    Invalid candidate basis states are treated as zero-valued, matching the
+    Bernoulli-lift predicate contract. Cubes are therefore accepted only when
+    they cover valid one-valued addresses and no valid or invalid zero-valued
+    address.
+    """
+
+    capacity = 1 << candidate_bits
+    ones = {
+        address for address, count in enumerate(success_counts)
+        if (count >> bit) & 1
+    }
+    if not ones:
+        return []
+    if candidate_bits > 10:
+        full_mask = capacity - 1
+        return [
+            {
+                "covered_count": 1,
+                "control_count": candidate_bits,
+                "specified_mask": full_mask,
+                "specified_value": int(address),
+            }
+            for address in sorted(ones)
         ]
-        for qubit in zero_bits:
-            circuit.x(qubit)
-        emit_mcx(circuit, candidate_qubits, flag_qubit, mcx_ancilla)
-        for offset, qubit in enumerate(value_qubits):
-            if (success_count >> offset) & 1:
-                circuit.cnot(qubit, flag_qubit)
-        emit_mcx(circuit, candidate_qubits, flag_qubit, mcx_ancilla)
-        for qubit in reversed(zero_bits):
-            circuit.x(qubit)
+    zeros = set(range(capacity)) - ones
+    candidates = []
+    for specified_mask in range(capacity):
+        for specified_value in range(capacity):
+            if specified_value & ~specified_mask:
+                continue
+            covered = {
+                address for address in ones
+                if (address & specified_mask) == specified_value
+            }
+            if not covered:
+                continue
+            if any((address & specified_mask) == specified_value
+                   for address in zeros):
+                continue
+            candidates.append({
+                "covered": covered,
+                "covered_count": len(covered),
+                "control_count": specified_mask.bit_count(),
+                "specified_mask": specified_mask,
+                "specified_value": specified_value,
+            })
+
+    covered: set[int] = set()
+    selected = []
+    while covered != ones:
+        remaining = ones - covered
+        usable = [
+            cube for cube in candidates
+            if cube["covered"] <= remaining and
+            not (cube["covered"] & covered)
+        ]
+        if usable:
+            cube = max(
+                usable,
+                key=lambda item: (
+                    item["covered_count"],
+                    -item["control_count"],
+                    -item["specified_mask"],
+                    -item["specified_value"],
+                ),
+            )
+        else:
+            address = min(remaining)
+            cube = {
+                "covered": {address},
+                "covered_count": 1,
+                "control_count": candidate_bits,
+                "specified_mask": capacity - 1,
+                "specified_value": address,
+            }
+        selected.append({
+            "covered_count": int(cube["covered_count"]),
+            "control_count": int(cube["control_count"]),
+            "specified_mask": int(cube["specified_mask"]),
+            "specified_value": int(cube["specified_value"]),
+        })
+        covered.update(cube["covered"])
+    return selected
 
 
 def contribution_success_counts(oracle_scene: dict[str, Any],
@@ -253,10 +385,14 @@ def contribution_success_counts(oracle_scene: dict[str, Any],
     )
     denominator = 1 << contribution_bits
     max_count = denominator - 1
-    counts = [int(round(value * denominator)) for value in contributions]
-    if any(count < 0 or count > max_count for count in counts):
+    source_counts = [
+        int(round(value * denominator)) for value in contributions
+    ]
+    if any(count < 0 or count > max_count for count in source_counts):
         raise ValueError(
             "contribution success count overflow requires an extra value bit")
+    permutation = stable_success_count_order(source_counts)
+    counts = [source_counts[index] for index in permutation]
     amplitude = sum(counts) / float(len(counts) * denominator)
     reference = float(dict_or_empty(metrics.get("reference")).get("value") or 0.0)
     return counts, {
@@ -264,6 +400,13 @@ def contribution_success_counts(oracle_scene: dict[str, Any],
         "candidate_count": len(counts),
         "contribution_bits": contribution_bits,
         "bernoulli_denominator": denominator,
+        "success_count_ordering": "success_count_ascending_stable",
+        "success_count_ordering_semantics": (
+            "candidate addresses are a bijective uniform-sample permutation; "
+            "sorting preserves Bernoulli probability while reducing exact QROM "
+            "cover size"),
+        "candidate_address_permutation": permutation,
+        "candidate_address_permutation_sha256": sha256_int_list(permutation),
         "success_count_min": min(counts) if counts else None,
         "success_count_max": max(counts) if counts else None,
         "success_count_sum": sum(counts),
@@ -387,7 +530,7 @@ def build_kernel(metrics: dict[str, Any],
             "gate_count": circuit.gate_count(),
             "body_bytes": body_bytes,
             "candidate_entries": candidate_count,
-            "gate_set": ["H", "X", "RZ", "CNOT"],
+            "gate_set": ["H", "S", "T", "X", "Z", "CNOT"],
         },
         "claim_posture": {
             "qf_oracle_kernel_transpiled": control_plane_ready,

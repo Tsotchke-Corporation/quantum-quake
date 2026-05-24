@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -87,6 +86,18 @@ def circuit_gate_count(blocks: Sequence[CircuitBlock]) -> int:
     return sum(block.gate_count for block in blocks)
 
 
+def block_since(
+    circuit: qf_transpile.MoonlabCircuitBuilder,
+    name: str,
+    start_gate_count: int,
+) -> CircuitBlock:
+    end_gate_count = circuit.gate_count()
+    return CircuitBlock(
+        name,
+        circuit.lines[2 + start_gate_count:2 + end_gate_count],
+    )
+
+
 def circuit_sha256(num_qubits: int, blocks: Sequence[CircuitBlock]) -> str:
     digest = hashlib.sha256()
     digest.update(circuit_prefix(num_qubits).encode("utf-8"))
@@ -138,7 +149,13 @@ def selected_estimator_summary(metrics: dict[str, Any]) -> dict[str, Any]:
 def emit_a_block(
     metrics: dict[str, Any],
     oracle_scene: dict[str, Any],
-) -> tuple[CircuitBlock, dict[str, Any], dict[str, Any], dict[str, Any]]:
+) -> tuple[
+    CircuitBlock,
+    dict[str, CircuitBlock],
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+]:
     resource = dict_or_empty(metrics.get("resource_estimate"))
     candidate_bits = int(resource.get("candidate_index_bits") or 0)
     threshold_bits = int(resource.get("contribution_threshold_bits") or 0)
@@ -154,6 +171,7 @@ def emit_a_block(
             "Moonlab text control plane accepts at most 32 for this path")
 
     circuit = qf_transpile.MoonlabCircuitBuilder(layout["num_qubits"])
+    state_start_gate = circuit.gate_count()
     state_prep = observation_transpile.emit_uniform_range_state_preparation(
         circuit,
         layout["candidate"],
@@ -161,11 +179,18 @@ def emit_a_block(
         layout["flag"],
         layout["mcx_ancilla"],
     )
+    state_prep_block = block_since(
+        circuit, "candidate_state_preparation", state_start_gate)
     state_prep_gate_count = circuit.gate_count()
+
+    threshold_start_gate = circuit.gate_count()
     for threshold_qubit in layout["threshold"]:
         circuit.h(threshold_qubit)
+    threshold_prep_block = block_since(
+        circuit, "threshold_preparation", threshold_start_gate)
     threshold_prep_gate_count = circuit.gate_count() - state_prep_gate_count
-    qf_start_gate = circuit.gate_count()
+
+    qrom_start_gate = circuit.gate_count()
     qf_transpile.emit_qrom_value_load(
         circuit,
         layout["candidate"],
@@ -174,6 +199,9 @@ def emit_a_block(
         layout["mcx_ancilla"],
         success_counts,
     )
+    qrom_load_block = block_since(circuit, "qrom_value_load", qrom_start_gate)
+
+    comparator_start_gate = circuit.gate_count()
     qf_transpile.emit_less_than_comparator(
         circuit,
         layout["threshold"],
@@ -181,6 +209,10 @@ def emit_a_block(
         layout["good"],
         layout["comparator_scratch"],
     )
+    comparator_block = block_since(
+        circuit, "less_than_comparator", comparator_start_gate)
+
+    qrom_unload_start_gate = circuit.gate_count()
     qf_transpile.emit_qrom_value_load(
         circuit,
         layout["candidate"],
@@ -189,17 +221,30 @@ def emit_a_block(
         layout["mcx_ancilla"],
         success_counts,
     )
-    qf_gate_count = circuit.gate_count() - qf_start_gate
+    qrom_unload_block = block_since(
+        circuit, "qrom_value_unload", qrom_unload_start_gate)
+    qf_gate_count = (
+        qrom_load_block.gate_count +
+        comparator_block.gate_count +
+        qrom_unload_block.gate_count
+    )
     block = CircuitBlock("A", circuit.lines[2:])
+    components = {
+        "state_preparation": state_prep_block,
+        "threshold_preparation": threshold_prep_block,
+        "qrom_load": qrom_load_block,
+        "less_than_comparator": comparator_block,
+        "qrom_unload": qrom_unload_block,
+    }
     resources = {
         "logical_qubits": layout["num_qubits"],
         "candidate_state_preparation_gates": state_prep_gate_count,
         "threshold_preparation_gates": threshold_prep_gate_count,
         "qf_kernel_gates": qf_gate_count,
         "candidate_entries": int(quantization["candidate_count"]),
-        "gate_set": ["H", "X", "RY", "RZ", "CNOT"],
+        "gate_set": ["H", "RY", "S", "T", "X", "Z", "CNOT"],
     }
-    return block, layout, state_prep, {**quantization, **resources}
+    return block, components, layout, state_prep, {**quantization, **resources}
 
 
 def negate_angle_text(value: str) -> str:
@@ -210,35 +255,61 @@ def negate_angle_text(value: str) -> str:
     return "-" + value
 
 
-def invert_gate_line(line: str) -> str:
+def invert_gate_line(line: str) -> list[str]:
     parts = line.split()
     if not parts:
         raise ValueError("empty gate line cannot be inverted")
     gate = parts[0]
-    if gate in ("H", "X"):
+    if gate in ("H", "X", "Z"):
         if len(parts) != 2:
             raise ValueError(f"invalid {gate} line: {line}")
-        return line
+        return [line]
+    if gate == "S":
+        if len(parts) != 2:
+            raise ValueError(f"invalid S line: {line}")
+        return [f"Z {parts[1]}", line]
+    if gate == "T":
+        if len(parts) != 2:
+            raise ValueError(f"invalid T line: {line}")
+        return [f"Z {parts[1]}", f"S {parts[1]}", line]
     if gate == "CNOT":
         if len(parts) != 3:
             raise ValueError(f"invalid CNOT line: {line}")
-        return line
+        return [line]
     if gate in ("RY", "RZ"):
         if len(parts) != 3:
             raise ValueError(f"invalid {gate} line: {line}")
-        return f"{gate} {parts[1]} {negate_angle_text(parts[2])}"
+        return [f"{gate} {parts[1]} {negate_angle_text(parts[2])}"]
     raise ValueError(f"unsupported Moonlab gate for inversion: {gate}")
 
 
 def inverse_block(block: CircuitBlock) -> CircuitBlock:
+    lines = []
+    for line in reversed(block.lines):
+        lines.extend(invert_gate_line(line))
     return CircuitBlock(
         f"{block.name}_dagger",
-        [invert_gate_line(line) for line in reversed(block.lines)],
+        lines,
+    )
+
+
+def a_dagger_from_components(components: dict[str, CircuitBlock]) -> CircuitBlock:
+    """Invert A without expanding self-inverse QROM and comparator blocks."""
+
+    return CircuitBlock(
+        "A_dagger",
+        (
+            components["qrom_unload"].lines +
+            components["less_than_comparator"].lines +
+            components["qrom_load"].lines +
+            components["threshold_preparation"].lines +
+            inverse_block(components["state_preparation"]).lines
+        ),
     )
 
 
 def s_chi_block(layout: dict[str, Any]) -> CircuitBlock:
-    return CircuitBlock("S_chi", [f"RZ {layout['good']} {math.pi:.17g}"])
+    return CircuitBlock("S_chi", [f"Z {layout['good']}"])
 
 
 def s0_block(layout: dict[str, Any]) -> CircuitBlock:
@@ -311,9 +382,9 @@ def build_schedule_plan(
     if not scheduled_powers:
         raise ValueError("Grover schedule contains no powers")
 
-    a_block, layout, state_prep, quantization = emit_a_block(
+    a_block, a_components, layout, state_prep, quantization = emit_a_block(
         metrics, oracle_scene)
-    a_dagger_block = inverse_block(a_block)
+    a_dagger_block = a_dagger_from_components(a_components)
     chi_block = s_chi_block(layout)
     zero_block = s0_block(layout)
     block_resources = {
@@ -324,6 +395,13 @@ def build_schedule_plan(
         "a_dagger": {
             "gate_count": a_dagger_block.gate_count,
             "payload_bytes": a_dagger_block.payload_bytes,
+        },
+        "a_components": {
+            name: {
+                "gate_count": block.gate_count,
+                "payload_bytes": block.payload_bytes,
+            }
+            for name, block in a_components.items()
         },
         "s_chi": {
             "gate_count": chi_block.gate_count,
@@ -428,7 +506,7 @@ def build_schedule_plan(
             "max_body_bytes": max(item["body_bytes"] for item in schedule),
             "max_gate_count": max(item["gate_count"] for item in schedule),
             "candidate_entries": quantization.get("candidate_entries"),
-            "gate_set": ["H", "X", "RY", "RZ", "CNOT"],
+            "gate_set": ["H", "RY", "S", "T", "X", "Z", "CNOT"],
         },
         "claim_posture": {
             "candidate_state_preparation_transpiled": bool(

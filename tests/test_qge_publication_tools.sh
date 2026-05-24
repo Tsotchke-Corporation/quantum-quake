@@ -406,7 +406,7 @@ assert grover_summary["semantic_scope"] == "bernoulli_lift_qae_grover_schedule_c
 assert grover_summary["ready_observation_count"] >= 1
 assert grover_summary["blocked_observation_count"] >= 0
 if grover_summary["blocked_observation_count"] > 0:
-    assert grover_summary["first_blocked_power"] == 1
+    assert grover_summary["first_blocked_power"] >= 1
     assert grover_summary["grover_schedule_transpiled"] is False
 else:
     assert grover_summary["first_blocked_power"] is None
@@ -503,7 +503,7 @@ assert icc["moonlab_qae_grover_schedule_plan_semantic_scope"] == "bernoulli_lift
 assert icc["moonlab_qae_grover_schedule_ready_observation_count"] >= 1
 assert icc["moonlab_qae_grover_schedule_blocked_observation_count"] >= 0
 if icc["moonlab_qae_grover_schedule_blocked_observation_count"] > 0:
-    assert icc["moonlab_qae_grover_schedule_first_blocked_power"] == 1
+    assert icc["moonlab_qae_grover_schedule_first_blocked_power"] >= 1
     assert icc["moonlab_qae_grover_schedule_transpiled"] is False
     assert icc["moonlab_qae_grover_schedule_full_qae_oracle_transpiled"] is False
 else:
@@ -674,8 +674,11 @@ assert plan["moonlab_control_plane"]["ready_observation_count"] >= 1
 assert plan["moonlab_control_plane"]["blocked_observation_count"] >= 0
 assert plan["observations"][0]["control_plane_executable"] is True
 if plan["moonlab_control_plane"]["blocked_observation_count"] > 0:
-    assert plan["moonlab_control_plane"]["first_blocked_power"] == 1
-    assert plan["observations"][1]["control_plane_executable"] is False
+    blocked = [
+        item for item in plan["observations"]
+        if not item["control_plane_executable"]
+    ]
+    assert plan["moonlab_control_plane"]["first_blocked_power"] == blocked[0]["grover_power"]
     assert plan["claim_posture"]["full_mlae_schedule_transpiled"] is False
 else:
     assert plan["moonlab_control_plane"]["first_blocked_power"] is None
@@ -684,7 +687,7 @@ assert plan["claim_posture"]["power_zero_observation_transpiled"] is True
 assert icc["runtime_backend"] == "qge_moonlab_qae_grover_plan"
 assert icc["blocked_observation_count"] >= 0
 if icc["blocked_observation_count"] > 0:
-    assert icc["first_blocked_power"] == 1
+    assert icc["first_blocked_power"] >= 1
     assert icc["full_qae_oracle_transpiled"] is False
 else:
     assert icc["first_blocked_power"] is None

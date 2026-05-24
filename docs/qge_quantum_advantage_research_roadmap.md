@@ -98,7 +98,7 @@ Current artifact status:
   `scaling_summary.json`, `qae_curve.csv`, `qae_circuit.txt`, and
   `qge_advantage_icc_evidence.json`.
 - The publication pack at
-  `diagnostics/publication_pack/20260524-150018/` bundles the benchmark,
+  `diagnostics/publication_pack/20260524-154046/` bundles the benchmark,
   oracle, trace, stream, vanilla, vanilla ICC evidence sidecar, claims, source
   artifacts, `resource/qge_resource_envelope.json`,
   `resource/qge_full_game_map_coverage.json`,
@@ -126,19 +126,19 @@ Current artifact status:
   `advantage/qae_moonlab_payload.json` and four
   `advantage/moonlab_qae_circuits/*.moonlab` circuits for the MLAE
   observation/readout schedule, plus
-  `advantage/qae_moonlab_oracle_kernel.moonlab`, a 32-qubit, 189,041-gate
+  `advantage/qae_moonlab_oracle_kernel.moonlab`, a 32-qubit, 95,555-gate
   supported-gate `Q_f` predicate kernel for the Bernoulli-lift oracle. The
   pack also includes `advantage/qae_moonlab_observation_zero.moonlab`, a
-  32-qubit, 191,018-gate power-zero observation circuit with exact
+  32-qubit, 98,240-gate power-zero observation circuit with exact
   non-power-of-two candidate state preparation and inline `Q_f`, plus
-  `advantage/qae_moonlab_grover_schedule_plan.json`, which records that the
-  selected nonzero Grover powers exceed the current 4 MB Moonlab control-plane
-  body cap. The
+  `advantage/qae_moonlab_grover_schedule_plan.json`, which records that
+  selected Grover powers 0, 1, and 2 fit the current 4 MB Moonlab
+  control-plane body cap while power 4 remains blocked. The
   submission bundle status is
   `qae_observation_zero_ready_grover_schedule_required`: the readout payload,
-  `Q_f` kernel, and power-zero observation circuit are executable Moonlab
-  control-plane text, but full MLAE circuit assembly is blocked by the
-  measured nonzero-power body sizes. A real full-QAE hardware return should
+  `Q_f` kernel, and selected Grover observations through power 2 are
+  executable Moonlab control-plane text, but full MLAE circuit assembly is
+  blocked by the measured power-4 body size. A real full-QAE hardware return should
   start only after those remaining pieces exist, then use the generated
   hardware record template and be merged with
   `tools/qge_moonlab_hardware_ingest.py`, which records a bounded hardware
