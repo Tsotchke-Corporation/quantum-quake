@@ -665,7 +665,7 @@ Known current visual state:
   repo.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
-  publication pack is `diagnostics/publication_pack/20260524-024129`, with
+  publication pack is `diagnostics/publication_pack/20260524-033901`, with
   `qge_publication_artifact_pack_complete`, the e1m1 ready vanilla/QGE capture,
   vanilla ICC evidence sidecar, agent stream, oracle/claims exports, QAE
   benchmark artifacts, `resource/qge_resource_envelope.json`,
@@ -678,6 +678,7 @@ Known current visual state:
   `resource/qge_moonlab_job_results.json`,
   `resource/qge_moonlab_replay_plan.json`,
   `resource/qge_moonlab_submission_packet.json`,
+  `resource/qge_moonlab_submission_bundle.json`,
   `resource/qge_moonlab_hardware_record_template.json`,
   `resource/qge_moonlab_deployment_gate.json`, and the nine-map breadth
   counters plus per-target native backend proof maps. The full-game plan joins
@@ -696,7 +697,11 @@ Known current visual state:
   hardware submissions; `tools/qge_moonlab_job_runner.py` regenerates that
   result evidence directly from the job-spec artifact, can compare it to the
   packed expected results, and can emit the replay plan plus the
-  hardware-candidate submission packet. `tools/qge_moonlab_hardware_ingest.py`
+  hardware-candidate submission packet. `tools/qge_moonlab_submission_bundle.py`
+  verifies whether that packet contains a directly executable Moonlab
+  control-plane circuit; the current QAE candidate is
+  `blocked_transpilation_required` because it is still abstract QGE QAE text,
+  not `# moonlab-circuit v1`. `tools/qge_moonlab_hardware_ingest.py`
   is the guarded return path for a real Moonlab hardware record: it can generate
   the no-claim hardware record template from the submission packet, then
   requires backend ID, shot schedule, readout metadata, and matching candidate

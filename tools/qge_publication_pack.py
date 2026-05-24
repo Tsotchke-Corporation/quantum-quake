@@ -33,6 +33,7 @@ import qge_moonlab_deployment_gate  # noqa: E402
 import qge_moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest  # noqa: E402
 import qge_moonlab_job_runner  # noqa: E402
+import qge_moonlab_submission_bundle  # noqa: E402
 import qge_oracle_export  # noqa: E402
 import qge_perf_summary  # noqa: E402
 
@@ -1174,6 +1175,38 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         args.outdir / "resource" / "qge_moonlab_submission_packet.json"
     )
     write_json(moonlab_submission_packet_path, moonlab_submission_packet)
+    moonlab_submission_bundle = (
+        qge_moonlab_submission_bundle.build_submission_bundle(
+            moonlab_submission_packet,
+            packet_path=moonlab_submission_packet_path,
+        )
+    )
+    moonlab_submission_bundle_path = (
+        args.outdir / "resource" / "qge_moonlab_submission_bundle.json"
+    )
+    write_json(moonlab_submission_bundle_path, moonlab_submission_bundle)
+    moonlab_submission_bundle_markdown_path = (
+        args.outdir / "resource" / "qge_moonlab_submission_bundle.md"
+    )
+    moonlab_submission_bundle_markdown_path.write_text(
+        qge_moonlab_submission_bundle.markdown_report(
+            moonlab_submission_bundle),
+        encoding="utf-8",
+    )
+    moonlab_submission_bundle_icc = (
+        qge_moonlab_submission_bundle.build_icc_evidence(
+            moonlab_submission_bundle,
+            out_path=moonlab_submission_bundle_path,
+        )
+    )
+    moonlab_submission_bundle_icc_path = (
+        args.outdir / "resource" /
+        "qge_moonlab_submission_bundle_icc_evidence.json"
+    )
+    write_json(
+        moonlab_submission_bundle_icc_path,
+        moonlab_submission_bundle_icc,
+    )
     moonlab_hardware_record_template = (
         qge_moonlab_hardware_ingest.build_hardware_record_template(
             moonlab_submission_packet)
@@ -1267,6 +1300,11 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "moonlab_job_results": file_info(moonlab_job_results_path),
         "moonlab_replay_plan": file_info(moonlab_replay_plan_path),
         "moonlab_submission_packet": file_info(moonlab_submission_packet_path),
+        "moonlab_submission_bundle": file_info(moonlab_submission_bundle_path),
+        "moonlab_submission_bundle_markdown": file_info(
+            moonlab_submission_bundle_markdown_path),
+        "moonlab_submission_bundle_icc_evidence": file_info(
+            moonlab_submission_bundle_icc_path),
         "moonlab_hardware_record_template": file_info(
             moonlab_hardware_record_template_path),
         "moonlab_full_game_plan": file_info(moonlab_full_game_plan_path),
@@ -1563,6 +1601,25 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "submitted_candidate_count": moonlab_submission_packet.get(
                     "submitted_candidate_count"),
             },
+            "moonlab_submission_bundle_summary": {
+                "schema": moonlab_submission_bundle.get("schema"),
+                "status": moonlab_submission_bundle.get("status"),
+                "hardware_candidate_job_count": (
+                    moonlab_submission_bundle.get(
+                        "hardware_candidate_job_count")),
+                "ready_for_control_plane_submission_count": (
+                    moonlab_submission_bundle.get(
+                        "ready_for_control_plane_submission_count")),
+                "transpilation_required_count": (
+                    moonlab_submission_bundle.get(
+                        "transpilation_required_count")),
+                "missing_artifact_candidate_count": (
+                    moonlab_submission_bundle.get(
+                        "missing_artifact_candidate_count")),
+                "hardware_submission_directly_executable": (
+                    moonlab_submission_bundle.get(
+                        "hardware_submission_directly_executable")),
+            },
             "moonlab_hardware_record_template_summary": {
                 "schema": moonlab_hardware_record_template.get("schema"),
                 "record_schema": moonlab_hardware_record_template.get(
@@ -1643,6 +1700,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_registered_asset_intake.py --current-root <asset_root> --candidate <quake_install_or_pak> --discover-common --json /tmp/qge_registered_asset_intake.json --markdown /tmp/qge_registered_asset_intake.md --script-out /tmp/install_registered_assets.sh --icc-json /tmp/qge_registered_asset_intake_icc_evidence.json",
             "tools/qge_asset_requirements.py --asset-root <asset_root> --json /tmp/qge_asset_requirements.json --markdown /tmp/qge_asset_requirements.md --icc-json /tmp/qge_asset_requirements_icc_evidence.json",
             "tools/qge_moonlab_job_runner.py <pack_dir>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack_dir>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json --submission-out /tmp/qge_moonlab_submission_packet.verify.json",
+            "tools/qge_moonlab_submission_bundle.py <pack_dir>/resource/qge_moonlab_submission_packet.json --out /tmp/qge_moonlab_submission_bundle.json --markdown /tmp/qge_moonlab_submission_bundle.md --icc-json /tmp/qge_moonlab_submission_bundle_icc_evidence.json",
             "tools/qge_moonlab_hardware_ingest.py <pack_dir>/resource/qge_moonlab_submission_packet.json --template-out /tmp/qge_moonlab_hardware_record.template.json",
             "tools/qge_moonlab_full_game_plan.py <pack_dir> --out /tmp/qge_moonlab_full_game_plan.json --markdown /tmp/qge_moonlab_full_game_plan.md --icc-json /tmp/qge_moonlab_full_game_plan_icc_evidence.json",
             "tools/qge_moonlab_deployment_gate.py <pack_dir> --out /tmp/qge_moonlab_deployment_gate.json --markdown /tmp/qge_moonlab_deployment_gate.md --icc-json /tmp/qge_moonlab_deployment_gate_icc_evidence.json",
@@ -1666,6 +1724,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("moonlab_replay_plan_summary"))
     submission_packet_summary = dict_or_empty(
         advantage_summary.get("moonlab_submission_packet_summary"))
+    submission_bundle_summary = dict_or_empty(
+        advantage_summary.get("moonlab_submission_bundle_summary"))
     hardware_record_template_summary = dict_or_empty(
         advantage_summary.get("moonlab_hardware_record_template_summary"))
     full_game_plan_summary = dict_or_empty(
@@ -1748,6 +1808,14 @@ def build_icc_evidence(manifest: dict[str, Any],
             "moonlab_replay_plan", {}).get("path"),
         "moonlab_submission_packet_file": artifacts.get("resource", {}).get(
             "moonlab_submission_packet", {}).get("path"),
+        "moonlab_submission_bundle_file": artifacts.get("resource", {}).get(
+            "moonlab_submission_bundle", {}).get("path"),
+        "moonlab_submission_bundle_markdown_file": (
+            artifacts.get("resource", {}).get(
+                "moonlab_submission_bundle_markdown", {}).get("path")),
+        "moonlab_submission_bundle_icc_evidence_file": (
+            artifacts.get("resource", {}).get(
+                "moonlab_submission_bundle_icc_evidence", {}).get("path")),
         "moonlab_hardware_record_template_file": (
             artifacts.get("resource", {}).get(
                 "moonlab_hardware_record_template", {}).get("path")),
@@ -1788,6 +1856,21 @@ def build_icc_evidence(manifest: dict[str, Any],
             submission_packet_summary.get("blocked_candidate_count")),
         "moonlab_submission_submitted_candidate_count": (
             submission_packet_summary.get("submitted_candidate_count")),
+        "moonlab_submission_bundle_schema": (
+            submission_bundle_summary.get("schema")),
+        "moonlab_submission_bundle_status": (
+            submission_bundle_summary.get("status")),
+        "moonlab_submission_ready_for_control_plane_submission_count": (
+            submission_bundle_summary.get(
+                "ready_for_control_plane_submission_count")),
+        "moonlab_submission_transpilation_required_count": (
+            submission_bundle_summary.get("transpilation_required_count")),
+        "moonlab_submission_missing_artifact_candidate_count": (
+            submission_bundle_summary.get(
+                "missing_artifact_candidate_count")),
+        "moonlab_hardware_submission_directly_executable": (
+            submission_bundle_summary.get(
+                "hardware_submission_directly_executable")),
         "moonlab_hardware_record_template_schema": (
             hardware_record_template_summary.get("schema")),
         "moonlab_hardware_record_schema": (

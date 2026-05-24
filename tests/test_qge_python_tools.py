@@ -29,6 +29,7 @@ import qge_moonlab_deployment_gate as moonlab_deployment_gate  # noqa: E402
 import qge_moonlab_full_game_plan as moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest as moonlab_hardware_ingest  # noqa: E402
 import qge_moonlab_job_runner as moonlab_job_runner  # noqa: E402
+import qge_moonlab_submission_bundle as moonlab_submission_bundle  # noqa: E402
 import qge_noesis_summary as noesis_summary  # noqa: E402
 import qge_oracle_export as oracle_export  # noqa: E402
 import qge_perf_summary as perf_summary  # noqa: E402
@@ -518,7 +519,11 @@ class PublicationPackTests(unittest.TestCase):
                     },
                 },
             )
-            qae_circuit_path.write_text("qae circuit\n", encoding="utf-8")
+            qae_circuit_path.write_text(
+                "QGE QAE abstract circuit v0\n"
+                "logical_qubits: 19\n",
+                encoding="utf-8",
+            )
             trace_path.write_bytes(b"trace")
             frame_path.write_bytes(b"png")
             publication_pack.write_json(
@@ -700,6 +705,31 @@ class PublicationPackTests(unittest.TestCase):
                 moonlab_submission_packet["candidate_jobs"][0]
                 ["submission_status"],
                 "ready_for_hardware_submission_metadata")
+            submission_bundle = (
+                moonlab_submission_bundle.build_submission_bundle(
+                    moonlab_submission_packet,
+                    packet_path=moonlab_submission_packet_path,
+                )
+            )
+            self.assertEqual(
+                submission_bundle["schema"],
+                "qge.moonlab_submission_bundle.v0")
+            self.assertEqual(
+                submission_bundle["status"],
+                "blocked_transpilation_required")
+            self.assertEqual(
+                submission_bundle["transpilation_required_count"], 1)
+            self.assertEqual(
+                submission_bundle[
+                    "ready_for_control_plane_submission_count"],
+                0)
+            self.assertFalse(
+                submission_bundle[
+                    "hardware_submission_directly_executable"])
+            self.assertEqual(
+                submission_bundle["candidate_jobs"][0]
+                ["qae_circuit_check"]["format"],
+                "qge_abstract_qae_circuit_v0")
             moonlab_verify_stdout = io.StringIO()
             with contextlib.redirect_stdout(moonlab_verify_stdout):
                 self.assertEqual(
@@ -794,6 +824,17 @@ class PublicationPackTests(unittest.TestCase):
                     "moonlab_submission_packet": {
                         "path": "resource/qge_moonlab_submission_packet.json"
                     },
+                    "moonlab_submission_bundle": {
+                        "path": "resource/qge_moonlab_submission_bundle.json"
+                    },
+                    "moonlab_submission_bundle_markdown": {
+                        "path": "resource/qge_moonlab_submission_bundle.md"
+                    },
+                    "moonlab_submission_bundle_icc_evidence": {
+                        "path": (
+                            "resource/"
+                            "qge_moonlab_submission_bundle_icc_evidence.json")
+                    },
                     "moonlab_hardware_record_template": {
                         "path": (
                             "resource/"
@@ -871,6 +912,15 @@ class PublicationPackTests(unittest.TestCase):
                     "ready_candidate_count": 1,
                     "blocked_candidate_count": 0,
                     "submitted_candidate_count": 0,
+                },
+                "moonlab_submission_bundle_summary": {
+                    "schema": "qge.moonlab_submission_bundle.v0",
+                    "status": "blocked_transpilation_required",
+                    "hardware_candidate_job_count": 1,
+                    "ready_for_control_plane_submission_count": 0,
+                    "transpilation_required_count": 1,
+                    "missing_artifact_candidate_count": 0,
+                    "hardware_submission_directly_executable": False,
                 },
                 "moonlab_hardware_record_template_summary": {
                     "schema": "qge.moonlab_hardware_record_template.v0",
@@ -1029,6 +1079,31 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(
             icc["moonlab_submission_submitted_candidate_count"], 0)
         self.assertEqual(
+            icc["moonlab_submission_bundle_file"],
+            "resource/qge_moonlab_submission_bundle.json")
+        self.assertEqual(
+            icc["moonlab_submission_bundle_markdown_file"],
+            "resource/qge_moonlab_submission_bundle.md")
+        self.assertEqual(
+            icc["moonlab_submission_bundle_icc_evidence_file"],
+            "resource/qge_moonlab_submission_bundle_icc_evidence.json")
+        self.assertEqual(
+            icc["moonlab_submission_bundle_schema"],
+            "qge.moonlab_submission_bundle.v0")
+        self.assertEqual(
+            icc["moonlab_submission_bundle_status"],
+            "blocked_transpilation_required")
+        self.assertEqual(
+            icc[
+                "moonlab_submission_ready_for_control_plane_submission_count"],
+            0)
+        self.assertEqual(
+            icc["moonlab_submission_transpilation_required_count"], 1)
+        self.assertEqual(
+            icc["moonlab_submission_missing_artifact_candidate_count"], 0)
+        self.assertFalse(
+            icc["moonlab_hardware_submission_directly_executable"])
+        self.assertEqual(
             icc["moonlab_hardware_record_template_file"],
             "resource/qge_moonlab_hardware_record_template.json")
         self.assertEqual(
@@ -1093,6 +1168,113 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(
             icc["breadth_runtime_backend_probe_resolved_run_count"], 4)
         self.assertEqual(icc["status"], "success")
+
+    def test_moonlab_submission_bundle_classifies_circuit_payloads(self) -> None:
+        job_id = "qge.light_transport_qae_benchmark.mlae.v0"
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            abstract_circuit = tmpdir / "qae_circuit.abstract.txt"
+            abstract_circuit.write_text(
+                "QGE QAE abstract circuit v0\nlogical_qubits: 19\n",
+                encoding="utf-8",
+            )
+            moonlab_circuit = tmpdir / "qae_circuit.moonlab.txt"
+            moonlab_circuit.write_text(
+                "# moonlab-circuit v1\nNUM_QUBITS 2\nH 0\n",
+                encoding="utf-8",
+            )
+
+            def packet_for(path: Path) -> dict:
+                return {
+                    "schema": "qge.moonlab_submission_packet.v0",
+                    "candidate_jobs": [
+                        {
+                            "job_id": job_id,
+                            "domain": "light_transport_qae_benchmark",
+                            "kind": "moonlab_qae_kernel",
+                            "submission_status": (
+                                "ready_for_hardware_submission_metadata"),
+                            "hardware_submission_status": "not_submitted",
+                            "candidate_digest": "candidate-digest",
+                            "resource": {"shots": 384},
+                            "required_artifacts": {
+                                "qae_circuit": str(path),
+                            },
+                            "artifact_evidence": [
+                                {
+                                    "name": "qae_circuit",
+                                    "exists": True,
+                                    "sha256": (
+                                        moonlab_submission_bundle.sha256_file(
+                                            path)),
+                                },
+                            ],
+                        },
+                    ],
+                }
+
+            abstract_bundle = moonlab_submission_bundle.build_submission_bundle(
+                packet_for(abstract_circuit))
+            self.assertEqual(
+                abstract_bundle["status"],
+                "blocked_transpilation_required")
+            self.assertEqual(
+                abstract_bundle["transpilation_required_count"], 1)
+            self.assertFalse(
+                abstract_bundle["hardware_submission_directly_executable"])
+
+            ready_bundle = moonlab_submission_bundle.build_submission_bundle(
+                packet_for(moonlab_circuit))
+            self.assertEqual(
+                ready_bundle["status"],
+                "ready_for_control_plane_submission")
+            self.assertEqual(
+                ready_bundle["ready_for_control_plane_submission_count"], 1)
+            self.assertTrue(
+                ready_bundle["hardware_submission_directly_executable"])
+            self.assertEqual(
+                ready_bundle["candidate_jobs"][0]
+                ["qae_circuit_check"]["logical_qubits_declared"],
+                2)
+
+            packet_path = tmpdir / "qge_moonlab_submission_packet.json"
+            out_path = tmpdir / "qge_moonlab_submission_bundle.json"
+            markdown_path = tmpdir / "qge_moonlab_submission_bundle.md"
+            icc_path = (
+                tmpdir / "qge_moonlab_submission_bundle_icc_evidence.json")
+            publication_pack.write_json(packet_path, packet_for(abstract_circuit))
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(
+                    moonlab_submission_bundle.main([
+                        str(packet_path),
+                        "--out",
+                        str(out_path),
+                        "--markdown",
+                        str(markdown_path),
+                        "--icc-json",
+                        str(icc_path),
+                    ]),
+                    0,
+                )
+            self.assertIn(
+                "QGE_MOONLAB_SUBMISSION_BUNDLE",
+                stdout.getvalue(),
+            )
+            cli_bundle = publication_pack.load_json(out_path)
+            cli_icc = publication_pack.load_json(icc_path)
+            self.assertEqual(
+                cli_bundle["status"],
+                "blocked_transpilation_required")
+            self.assertIn(
+                "blocked_transpilation_required",
+                markdown_path.read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                cli_icc["runtime_backend"],
+                "qge_moonlab_submission_bundle")
+            self.assertFalse(
+                cli_icc["hardware_submission_directly_executable"])
 
     def test_moonlab_hardware_ingest_records_bounded_result(self) -> None:
         job_id = "qge.light_transport_qae_benchmark.mlae.v0"

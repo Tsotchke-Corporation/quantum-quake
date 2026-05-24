@@ -98,7 +98,7 @@ Current artifact status:
   `scaling_summary.json`, `qae_curve.csv`, `qae_circuit.txt`, and
   `qge_advantage_icc_evidence.json`.
 - The publication pack at
-  `diagnostics/publication_pack/20260524-024129/` bundles the benchmark,
+  `diagnostics/publication_pack/20260524-033901/` bundles the benchmark,
   oracle, trace, stream, vanilla, vanilla ICC evidence sidecar, claims, source
   artifacts, `resource/qge_resource_envelope.json`,
   `resource/qge_full_game_map_coverage.json`,
@@ -110,6 +110,7 @@ Current artifact status:
   `resource/qge_moonlab_job_results.json`,
   `resource/qge_moonlab_replay_plan.json`,
   `resource/qge_moonlab_submission_packet.json`,
+  `resource/qge_moonlab_submission_bundle.json`,
   `resource/qge_moonlab_hardware_record_template.json`,
   `resource/qge_moonlab_deployment_gate.json`, and the nine-map breadth
   evidence sidecar with per-target native backend proof maps. The map coverage
@@ -121,8 +122,12 @@ Current artifact status:
   agent stream
   also carries macOS AppKit/SDL launcher probes,
   including intentional
-  `-nolauncher` skips for UI-only launcher controls. A real hardware return
-  should start from the generated hardware record template and be merged with
+  `-nolauncher` skips for UI-only launcher controls. The submission bundle
+  currently marks the QAE hardware candidate `blocked_transpilation_required`
+  because the circuit artifact is abstract QGE QAE text, not a
+  `# moonlab-circuit v1` control-plane payload. A real hardware return should
+  start only after that payload exists, then use the generated hardware record
+  template and be merged with
   `tools/qge_moonlab_hardware_ingest.py`, which records a bounded hardware
   comparison while keeping hardware advantage and whole-game hardware claims
   false.

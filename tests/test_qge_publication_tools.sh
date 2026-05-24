@@ -340,6 +340,9 @@ assert manifest["artifacts"]["resource"]["moonlab_job_specs"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_job_results"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_replay_plan"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_submission_packet"]["exists"] is True
+assert manifest["artifacts"]["resource"]["moonlab_submission_bundle"]["exists"] is True
+assert manifest["artifacts"]["resource"]["moonlab_submission_bundle_markdown"]["exists"] is True
+assert manifest["artifacts"]["resource"]["moonlab_submission_bundle_icc_evidence"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_hardware_record_template"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_full_game_plan"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_full_game_plan_markdown"]["exists"] is True
@@ -366,6 +369,11 @@ assert manifest["advantage_summary"]["moonlab_job_results_summary"]["hardware_su
 assert manifest["advantage_summary"]["moonlab_replay_plan_summary"]["schema"] == "qge.moonlab_replay_plan.v0"
 assert manifest["advantage_summary"]["moonlab_submission_packet_summary"]["schema"] == "qge.moonlab_submission_packet.v0"
 assert manifest["advantage_summary"]["moonlab_submission_packet_summary"]["ready_candidate_count"] == 1
+assert manifest["advantage_summary"]["moonlab_submission_bundle_summary"]["schema"] == "qge.moonlab_submission_bundle.v0"
+assert manifest["advantage_summary"]["moonlab_submission_bundle_summary"]["status"] == "blocked_transpilation_required"
+assert manifest["advantage_summary"]["moonlab_submission_bundle_summary"]["ready_for_control_plane_submission_count"] == 0
+assert manifest["advantage_summary"]["moonlab_submission_bundle_summary"]["transpilation_required_count"] == 1
+assert manifest["advantage_summary"]["moonlab_submission_bundle_summary"]["hardware_submission_directly_executable"] is False
 assert manifest["advantage_summary"]["moonlab_hardware_record_template_summary"]["schema"] == "qge.moonlab_hardware_record_template.v0"
 assert manifest["advantage_summary"]["moonlab_hardware_record_template_summary"]["record_schema"] == "qge.moonlab_hardware_record.v0"
 assert manifest["advantage_summary"]["moonlab_full_game_plan_summary"]["schema"] == "qge.moonlab_full_game_deployment_plan.v0"
@@ -407,6 +415,14 @@ assert icc["moonlab_replay_plan_schema"] == "qge.moonlab_replay_plan.v0"
 assert icc["moonlab_submission_packet_file"].endswith("resource/qge_moonlab_submission_packet.json")
 assert icc["moonlab_submission_packet_schema"] == "qge.moonlab_submission_packet.v0"
 assert icc["moonlab_submission_ready_candidate_count"] == 1
+assert icc["moonlab_submission_bundle_file"].endswith("resource/qge_moonlab_submission_bundle.json")
+assert icc["moonlab_submission_bundle_markdown_file"].endswith("resource/qge_moonlab_submission_bundle.md")
+assert icc["moonlab_submission_bundle_icc_evidence_file"].endswith("resource/qge_moonlab_submission_bundle_icc_evidence.json")
+assert icc["moonlab_submission_bundle_schema"] == "qge.moonlab_submission_bundle.v0"
+assert icc["moonlab_submission_bundle_status"] == "blocked_transpilation_required"
+assert icc["moonlab_submission_ready_for_control_plane_submission_count"] == 0
+assert icc["moonlab_submission_transpilation_required_count"] == 1
+assert icc["moonlab_hardware_submission_directly_executable"] is False
 assert icc["moonlab_hardware_record_template_file"].endswith("resource/qge_moonlab_hardware_record_template.json")
 assert icc["moonlab_hardware_record_template_schema"] == "qge.moonlab_hardware_record_template.v0"
 assert icc["moonlab_hardware_record_schema"] == "qge.moonlab_hardware_record.v0"
@@ -468,6 +484,35 @@ assert submission["schema"] == "qge.moonlab_submission_packet.v0"
 assert submission["hardware_candidate_job_count"] == 1
 assert submission["ready_candidate_count"] == 1
 assert submission["candidate_jobs"][0]["submission_status"] == "ready_for_hardware_submission_metadata"
+PY
+
+python3 "$repo_root/tools/qge_moonlab_submission_bundle.py" \
+  "$pack_dir/resource/qge_moonlab_submission_packet.json" \
+  --out "$tmpdir/qge_moonlab_submission_bundle.json" \
+  --markdown "$tmpdir/qge_moonlab_submission_bundle.md" \
+  --icc-json "$tmpdir/qge_moonlab_submission_bundle_icc_evidence.json" \
+  > "$tmpdir/moonlab_submission_bundle.stdout"
+grep -F 'QGE_MOONLAB_SUBMISSION_BUNDLE' "$tmpdir/moonlab_submission_bundle.stdout" >/dev/null
+grep -F 'QGE_MOONLAB_SUBMISSION_BUNDLE_MARKDOWN' "$tmpdir/moonlab_submission_bundle.stdout" >/dev/null
+grep -F 'QGE_MOONLAB_SUBMISSION_BUNDLE_ICC_EVIDENCE' "$tmpdir/moonlab_submission_bundle.stdout" >/dev/null
+python3 - "$tmpdir/qge_moonlab_submission_bundle.json" "$tmpdir/qge_moonlab_submission_bundle_icc_evidence.json" "$pack_dir/publication_manifest.json" <<'PY'
+import json
+import sys
+
+bundle = json.load(open(sys.argv[1], encoding="utf-8"))
+icc = json.load(open(sys.argv[2], encoding="utf-8"))
+manifest = json.load(open(sys.argv[3], encoding="utf-8"))
+summary = manifest["advantage_summary"]["moonlab_submission_bundle_summary"]
+assert bundle["schema"] == "qge.moonlab_submission_bundle.v0"
+assert bundle["status"] == summary["status"]
+assert bundle["status"] == "blocked_transpilation_required"
+assert bundle["ready_for_control_plane_submission_count"] == 0
+assert bundle["transpilation_required_count"] == 1
+assert bundle["hardware_submission_directly_executable"] is False
+assert bundle["candidate_jobs"][0]["qae_circuit_check"]["format"] == "qge_abstract_qae_circuit_v0"
+assert icc["runtime_backend"] == "qge_moonlab_submission_bundle"
+assert icc["submission_bundle_status"] == bundle["status"]
+assert icc["hardware_submission_directly_executable"] is False
 PY
 
 python3 "$repo_root/tools/qge_moonlab_hardware_ingest.py" \

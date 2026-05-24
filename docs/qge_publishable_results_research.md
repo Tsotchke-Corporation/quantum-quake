@@ -155,7 +155,7 @@ Do claim, once proven:
 Minimum publishable artifact package:
 
 Current strongest publication bundle:
-`diagnostics/publication_pack/20260524-024129`. It packages a ready e1m1
+`diagnostics/publication_pack/20260524-033901`. It packages a ready e1m1
 QGE/vanilla capture, vanilla ICC evidence sidecar, agent stream, oracle scene,
 claims evidence, finite-shot QAE benchmark artifacts,
 `resource/qge_resource_envelope.json`,
@@ -168,6 +168,7 @@ claims evidence, finite-shot QAE benchmark artifacts,
 `resource/qge_moonlab_job_results.json`,
 `resource/qge_moonlab_replay_plan.json`,
 `resource/qge_moonlab_submission_packet.json`,
+`resource/qge_moonlab_submission_bundle.json`,
 `resource/qge_moonlab_hardware_record_template.json`,
 `resource/qge_moonlab_deployment_gate.json`, and the nine-map breadth sidecar from
 `diagnostics/breadth_evidence/20260523-152522`. The full-game map coverage
@@ -189,11 +190,17 @@ regenerate the same result evidence from the job specs and emits
 `--plan-out`, the same tool compares regenerated results against the packed
 expected artifact and writes a standalone replay contract; with
 `--submission-out`, it also writes the deterministic hardware-candidate
-handoff packet. The publication pack also includes a generated hardware record
-template so the returned Moonlab record has a deterministic schema and
-candidate digest before ingestion. The QAE benchmark remains unsubmitted until
-Moonlab hardware backend IDs, shot schedules, and readout metadata are recorded
-separately. The post-submission return path is
+handoff packet. `tools/qge_moonlab_submission_bundle.py` adds the control-plane
+readiness check: the circuit artifact must be `# moonlab-circuit v1` with a
+`NUM_QUBITS` declaration before direct Moonlab submission is allowed. In the
+current pack the QAE artifact is still `qge_abstract_qae_circuit_v0`, so the
+submission bundle status is `blocked_transpilation_required` and
+`hardware_submission_directly_executable` is false. The publication pack also
+includes a generated hardware record template so the returned Moonlab record
+has a deterministic schema and candidate digest before ingestion. The QAE
+benchmark remains unsubmitted until the control-plane circuit, Moonlab hardware
+backend IDs, shot schedules, and readout metadata are recorded separately. The
+post-submission return path is
 `tools/qge_moonlab_hardware_ingest.py`, which requires a
 `qge.moonlab_hardware_record.v0`, rejects advantage/full-game/dense state
 overclaim flags, and emits updated job results plus a bounded hardware
@@ -230,7 +237,7 @@ and marks UI-only `-nolauncher` paths as intentional skips.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for
-     `diagnostics/publication_pack/20260524-024129` inventories local loose/Pak
+     `diagnostics/publication_pack/20260524-033901` inventories local loose/Pak
      BSP assets before queuing. With the current `assets/id1/pak0.pak`, it
      reports zero locally queueable missing maps and 23 missing registered maps
      as asset-unavailable; those maps require additional registered BSP assets
@@ -254,7 +261,7 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      count of matrix runs where all required native boundaries resolved to the
      native sparse DWT render bridge.
    - The current publication bundle carries those breadth counters directly:
-     `diagnostics/publication_pack/20260524-024129` reports
+     `diagnostics/publication_pack/20260524-033901` reports
      `breadth_map_count=9`, `breadth_total_native_bridge_count=945`, and
      `breadth_total_runtime_backend_probe_event_count=36`, with
      `breadth_runtime_backend_probe_resolved_run_count=9`, plus
@@ -296,7 +303,7 @@ qge_vanilla_runtime_complete -> produce_ready_vanilla_capture_matrix
 ```
 
 That blocker is now cleared for the current self-contained publication pack:
-`diagnostics/publication_pack/20260524-024129` carries
+`diagnostics/publication_pack/20260524-033901` carries
 `qge_vanilla_capture_matrix_complete`, the vanilla ICC sidecar, native backend
 proofs, the agent stream, the benchmark bundle, and the nine-map breadth
 sidecar. It also carries `resource/qge_resource_envelope.json`, which records
@@ -320,12 +327,16 @@ and hardware-candidate benchmark jobs, and
 replay evidence, plus `resource/qge_moonlab_replay_plan.json` for the
 per-job replay/validation contract and
 `resource/qge_moonlab_submission_packet.json` for the hardware-candidate
-handoff contract, and `resource/qge_moonlab_hardware_record_template.json` for
-the exact no-claim hardware-return object. Regenerate the submission packet
+handoff contract,
+`resource/qge_moonlab_submission_bundle.json` for the control-plane readiness
+verdict, and `resource/qge_moonlab_hardware_record_template.json` for the
+exact no-claim hardware-return object. Regenerate the submission packet
 independently with
 `tools/qge_moonlab_job_runner.py` when validating or re-submitting the selected
 Moonlab jobs outside publication-pack assembly:
 `python3 tools/qge_moonlab_job_runner.py <pack>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json --submission-out /tmp/qge_moonlab_submission_packet.verify.json`.
+Regenerate the control-plane readiness bundle with:
+`python3 tools/qge_moonlab_submission_bundle.py <pack>/resource/qge_moonlab_submission_packet.json --out /tmp/qge_moonlab_submission_bundle.json --markdown /tmp/qge_moonlab_submission_bundle.md --icc-json /tmp/qge_moonlab_submission_bundle_icc_evidence.json`.
 Regenerate the hardware-return template from the submission packet with:
 `python3 tools/qge_moonlab_hardware_ingest.py <pack>/resource/qge_moonlab_submission_packet.json --template-out /tmp/qge_moonlab_hardware_record.template.json`.
 Regenerate the full-game Moonlab deployment ledger with:
@@ -345,7 +356,7 @@ The next hard work is therefore:
    Quake install or PAKs, run the generated copy script only for assets the
    user is licensed to install locally, verify them with
    `tools/qge_asset_inventory.py`, then start from
-   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-024129`
+   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-033901`
    so the 23 registered asset-unavailable maps become explicit capture jobs
    rather than weakening the authority gate.
 2. Submit the QAE hardware-candidate job through Moonlab hardware when
