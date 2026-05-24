@@ -663,10 +663,11 @@ Known current visual state:
   discovery with `--discover-root` or `--discover-common`, making the 23
   missing-map asset blocker operational without checking game payloads into the
   repo. Publication packs now carry the intake ledger and safe install script
-  as first-class resource artifacts.
+  as first-class resource artifacts; that script verifies copied SHA-256s and
+  emits the post-install full-game capture queue command for the same pack.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
-  publication pack is `diagnostics/publication_pack/20260524-asset-intake-ledger`, with
+  publication pack is `diagnostics/publication_pack/20260524-asset-postinstall-queue`, with
   `qge_publication_artifact_pack_complete`, the e1m1 ready vanilla/QGE capture,
   vanilla ICC evidence sidecar, agent stream, oracle/claims exports, QAE
   benchmark artifacts, `resource/qge_resource_envelope.json`,

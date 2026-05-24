@@ -586,12 +586,61 @@ def build_copy_plan(
     return plan
 
 
+def build_post_install_verification(
+    current_root: Path,
+    *,
+    publication_pack_dir: Path | None = None,
+) -> dict[str, Any]:
+    inventory_json = Path("/tmp/qge_asset_inventory.after_intake.json")
+    inventory_markdown = Path("/tmp/qge_asset_inventory.after_intake.md")
+    commands: list[dict[str, Any]] = [
+        {
+            "kind": "asset_inventory",
+            "shell_command": (
+                "python3 tools/qge_asset_inventory.py "
+                f"--asset-root {shell_quote(current_root)} "
+                f"--json {shell_quote(inventory_json)} "
+                f"--markdown {shell_quote(inventory_markdown)}"
+            ),
+            "json": str(inventory_json),
+            "markdown": str(inventory_markdown),
+        },
+    ]
+    if publication_pack_dir is not None:
+        queue_json = Path("/tmp/qge_full_game_capture_queue.after_intake.json")
+        queue_script = Path("/tmp/run_missing_maps.after_intake.sh")
+        queue_markdown = Path("/tmp/qge_full_game_capture_queue.after_intake.md")
+        commands.append({
+            "kind": "capture_queue",
+            "shell_command": (
+                "python3 tools/qge_full_game_capture_queue.py "
+                f"{shell_quote(publication_pack_dir)} "
+                f"--asset-root {shell_quote(current_root)} "
+                f"--out {shell_quote(queue_json)} "
+                f"--script-out {shell_quote(queue_script)} "
+                f"--markdown {shell_quote(queue_markdown)}"
+            ),
+            "json": str(queue_json),
+            "script": str(queue_script),
+            "markdown": str(queue_markdown),
+        })
+    return {
+        "publication_pack": (
+            str(publication_pack_dir) if publication_pack_dir is not None
+            else None
+        ),
+        "command_count": len(commands),
+        "commands": commands,
+    }
+
+
 def build_intake(
     current_root: Path,
     candidates: Sequence[Path],
     *,
     map_set: str = qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
     discovery: dict[str, Any] | None = None,
+    publication_pack_dir: Path | None = None,
 ) -> dict[str, Any]:
     current_inventory = qge_asset_inventory.build_inventory(
         current_root,
@@ -617,6 +666,10 @@ def build_intake(
         if map_name in candidate_sources
     }
     copy_plan = build_copy_plan(chosen_sources, current_root, current_inventory)
+    post_install_verification = build_post_install_verification(
+        current_root,
+        publication_pack_dir=publication_pack_dir,
+    )
     newly_available_maps = [
         map_name for map_name in missing_maps
         if map_name in chosen_sources
@@ -656,6 +709,9 @@ def build_intake(
         "invalid_candidate_sources": invalid_sources,
         "copy_plan": copy_plan,
         "copy_plan_count": len(copy_plan),
+        "post_install_verification": post_install_verification,
+        "post_install_verification_command_count": (
+            post_install_verification["command_count"]),
         "missing_map_count_after_plan": len(missing_after_plan),
         "missing_maps_after_plan": missing_after_plan,
         "claim_posture": {
@@ -690,10 +746,38 @@ def script_lines(intake: dict[str, Any]) -> list[str]:
         f"repo_root={shell_quote(REPO_ROOT)}",
         'cd "$repo_root"',
         "",
+        "verify_sha256() {",
+        "  local path=\"$1\"",
+        "  local expected=\"$2\"",
+        "  [[ -n \"$expected\" ]] || return 0",
+        "  python3 - \"$path\" \"$expected\" <<'PY'",
+        "import hashlib",
+        "import pathlib",
+        "import sys",
+        "path = pathlib.Path(sys.argv[1])",
+        "expected = sys.argv[2].lower()",
+        "actual = hashlib.sha256(path.read_bytes()).hexdigest()",
+        "if actual != expected:",
+        "    raise SystemExit(f\"sha256 mismatch for {path}: {actual} != {expected}\")",
+        "PY",
+        "}",
+        "",
+        "copy_registered_asset() {",
+        "  local source=\"$1\"",
+        "  local destination=\"$2\"",
+        "  local expected_sha=\"$3\"",
+        "  mkdir -p \"$(dirname \"$destination\")\"",
+        "  if [[ -e \"$destination\" ]]; then",
+        "    echo \"QGE_REGISTERED_ASSET_DESTINATION_EXISTS $destination\"",
+        "    verify_sha256 \"$destination\" \"$expected_sha\"",
+        "    return 0",
+        "  fi",
+        "  cp -n \"$source\" \"$destination\"",
+        "  verify_sha256 \"$destination\" \"$expected_sha\"",
+        "}",
+        "",
         "echo QGE_REGISTERED_ASSET_INTAKE_LICENSE_CHECK",
         "echo 'Only run this script for registered Quake assets you may install locally.'",
-        "",
-        f"mkdir -p {shell_quote(Path(intake['current_asset_root']) / 'maps')}",
         "",
     ]
     for entry in plan:
@@ -702,15 +786,22 @@ def script_lines(intake: dict[str, Any]) -> list[str]:
                 f"# skipped {entry.get('kind')} {entry.get('source')}: {entry.get('status')}"
             )
             continue
-        lines.append(str(entry["command"]))
-    lines.extend([
-        "",
-        "python3 tools/qge_asset_inventory.py \\",
-        f"  --asset-root {shell_quote(intake['current_asset_root'])} \\",
-        "  --json /tmp/qge_asset_inventory.after_intake.json \\",
-        "  --markdown /tmp/qge_asset_inventory.after_intake.md",
-        "",
-    ])
+        lines.append(
+            "copy_registered_asset "
+            f"{shell_quote(entry.get('source', ''))} "
+            f"{shell_quote(entry.get('destination', ''))} "
+            f"{shell_quote(entry.get('source_sha256') or '')}"
+        )
+    post_install = dict_or_empty(intake.get("post_install_verification"))
+    for command in list_or_empty(post_install.get("commands")):
+        if not isinstance(command, dict):
+            continue
+        lines.extend([
+            "",
+            f"echo QGE_REGISTERED_ASSET_POST_INSTALL {command.get('kind')}",
+            str(command.get("shell_command")),
+        ])
+    lines.append("")
     return lines
 
 
@@ -765,6 +856,24 @@ def markdown_report(intake: dict[str, Any]) -> str:
         lines.append("| none | blocked |  |  |  |")
     lines.extend([
         "",
+        "## Post-Install Verification",
+        "",
+        "| Kind | Command |",
+        "| --- | --- |",
+    ])
+    post_install = dict_or_empty(intake.get("post_install_verification"))
+    wrote_command = False
+    for command in list_or_empty(post_install.get("commands")):
+        if not isinstance(command, dict):
+            continue
+        wrote_command = True
+        lines.append(
+            f"| {command.get('kind')} | `{command.get('shell_command')}` |"
+        )
+    if not wrote_command:
+        lines.append("| none |  |")
+    lines.extend([
+        "",
         "## Remaining Missing Maps",
         "",
         ", ".join(intake.get("missing_maps_after_plan", [])) or "none",
@@ -797,6 +906,13 @@ def build_icc_evidence(
         "invalid_candidate_source_count": intake.get(
             "invalid_candidate_source_count"),
         "copy_plan_count": intake.get("copy_plan_count"),
+        "post_install_verification_command_count": intake.get(
+            "post_install_verification_command_count"),
+        "post_install_capture_queue_command_present": any(
+            isinstance(command, dict) and command.get("kind") == "capture_queue"
+            for command in list_or_empty(dict_or_empty(
+                intake.get("post_install_verification")).get("commands"))
+        ),
         "asset_intake_copies_game_data": False,
         "registered_asset_payload_bundled": False,
         "whole_game_moonlab_deployment_claimed": False,
@@ -820,6 +936,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
                         default=False,
                         help="Scan bounded common Quake install locations")
     parser.add_argument("--discover-max-depth", type=int, default=5)
+    parser.add_argument("--publication-pack", type=Path,
+                        help="Optional publication pack used to generate a post-install capture queue command")
     parser.add_argument("--map-set",
                         default=qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET)
     parser.add_argument("--json", type=Path, required=True)
@@ -857,6 +975,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             candidates,
             map_set=args.map_set,
             discovery=discovery,
+            publication_pack_dir=args.publication_pack,
         )
         write_json(args.json, intake)
         if args.markdown:
@@ -866,6 +985,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.script_out.parent.mkdir(parents=True, exist_ok=True)
             args.script_out.write_text("\n".join(script_lines(intake)),
                                        encoding="utf-8")
+            args.script_out.chmod(args.script_out.stat().st_mode | 0o111)
         if args.icc_json:
             write_json(args.icc_json, build_icc_evidence(
                 intake,

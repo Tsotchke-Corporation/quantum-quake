@@ -2826,6 +2826,7 @@ class BreadthEvidenceTests(unittest.TestCase):
             intake = registered_asset_intake.build_intake(
                 current_root,
                 [candidate_root],
+                publication_pack_dir=tmpdir / "publication-pack",
             )
             self.assertEqual(
                 intake["schema"], "qge.registered_asset_intake.v0")
@@ -2848,14 +2849,24 @@ class BreadthEvidenceTests(unittest.TestCase):
                 pak_plan["maps_unblocked"], ["e2m1", "e2m2"])
             self.assertTrue(
                 pak_plan["destination"].endswith("current-id1/pak1.pak"))
+            self.assertEqual(
+                intake["post_install_verification_command_count"], 2)
+            self.assertTrue(any(
+                command["kind"] == "capture_queue"
+                for command in
+                intake["post_install_verification"]["commands"]
+            ))
             loose_plan = next(
                 item for item in intake["copy_plan"]
                 if item["kind"] == "copy_loose_bsp")
             self.assertEqual(loose_plan["maps_unblocked"], ["e3m2"])
             script = "\n".join(registered_asset_intake.script_lines(intake))
             self.assertIn("QGE_REGISTERED_ASSET_INTAKE_LICENSE_CHECK", script)
+            self.assertIn("verify_sha256", script)
+            self.assertIn("copy_registered_asset", script)
             self.assertIn("cp -n", script)
             self.assertIn("qge_asset_inventory.py", script)
+            self.assertIn("qge_full_game_capture_queue.py", script)
             icc = registered_asset_intake.build_icc_evidence(
                 intake,
                 out_path=Path("qge_registered_asset_intake.json"),
@@ -2863,10 +2874,13 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(
                 icc["runtime_backend"], "qge_registered_asset_intake")
             self.assertFalse(icc["asset_intake_copies_game_data"])
-            self.assertIn(
-                "partial_candidate_assets_found",
-                registered_asset_intake.markdown_report(intake),
-            )
+            self.assertEqual(
+                icc["post_install_verification_command_count"], 2)
+            self.assertTrue(icc["post_install_capture_queue_command_present"])
+            markdown = registered_asset_intake.markdown_report(intake)
+            self.assertIn("partial_candidate_assets_found", markdown)
+            self.assertIn("Post-Install Verification", markdown)
+            self.assertIn("qge_full_game_capture_queue.py", markdown)
 
             out_path = tmpdir / "qge_registered_asset_intake.json"
             markdown_path = tmpdir / "qge_registered_asset_intake.md"
@@ -2880,6 +2894,8 @@ class BreadthEvidenceTests(unittest.TestCase):
                         str(current_root),
                         "--candidate",
                         str(candidate_root),
+                        "--publication-pack",
+                        str(tmpdir / "publication-pack"),
                         "--json",
                         str(out_path),
                         "--markdown",
@@ -2895,6 +2911,7 @@ class BreadthEvidenceTests(unittest.TestCase):
                 "QGE_REGISTERED_ASSET_INTAKE", stdout.getvalue())
             cli_intake = publication_pack.load_json(out_path)
             self.assertEqual(cli_intake["candidate_new_map_count"], 3)
+            self.assertTrue(script_path.stat().st_mode & 0o111)
             cli_icc = publication_pack.load_json(icc_path)
             self.assertEqual(
                 cli_icc["completion_reason"],

@@ -385,6 +385,8 @@ assert manifest["advantage_summary"]["registered_asset_intake_summary"]["schema"
 assert manifest["advantage_summary"]["registered_asset_intake_summary"]["status"] == "blocked_no_candidate_assets"
 assert manifest["advantage_summary"]["registered_asset_intake_summary"]["candidate_new_map_count"] == 0
 assert manifest["advantage_summary"]["registered_asset_intake_summary"]["missing_map_count_after_plan"] == 32
+assert manifest["advantage_summary"]["registered_asset_intake_summary"]["post_install_verification_command_count"] == 2
+assert manifest["advantage_summary"]["registered_asset_intake_summary"]["post_install_capture_queue_command_present"] is True
 assert manifest["advantage_summary"]["registered_asset_intake_summary"]["asset_intake_copies_game_data"] is False
 assert manifest["advantage_summary"]["native_backend_boundary_summary"]["status"] == "pass"
 assert manifest["advantage_summary"]["native_backend_boundary_summary"]["passed_target_count"] == 3
@@ -478,6 +480,8 @@ assert icc["registered_asset_intake_schema"] == "qge.registered_asset_intake.v0"
 assert icc["registered_asset_intake_status"] == "blocked_no_candidate_assets"
 assert icc["registered_asset_intake_candidate_new_map_count"] == 0
 assert icc["registered_asset_intake_missing_map_count_after_plan"] == 32
+assert icc["registered_asset_intake_post_install_verification_command_count"] == 2
+assert icc["registered_asset_intake_post_install_capture_queue_command_present"] is True
 assert icc["asset_intake_copies_game_data"] is False
 assert icc["native_backend_boundary_file"].endswith("resource/qge_native_backend_boundary.json")
 assert icc["native_backend_boundary_status"] == "pass"

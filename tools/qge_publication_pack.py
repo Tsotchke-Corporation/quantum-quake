@@ -1299,6 +1299,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
         ),
         discovery=registered_asset_discovery,
+        publication_pack_dir=args.outdir,
     )
     registered_asset_intake_path = (
         args.outdir / "resource" / "qge_registered_asset_intake.json"
@@ -1319,6 +1320,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             registered_asset_intake)),
         encoding="utf-8",
     )
+    registered_asset_intake_script_path.chmod(
+        registered_asset_intake_script_path.stat().st_mode | 0o111)
     registered_asset_intake_icc = (
         qge_registered_asset_intake.build_icc_evidence(
             registered_asset_intake,
@@ -1941,6 +1944,16 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                     "missing_map_count_after_plan"),
                 "copy_plan_count": registered_asset_intake.get(
                     "copy_plan_count"),
+                "post_install_verification_command_count": (
+                    registered_asset_intake.get(
+                        "post_install_verification_command_count")),
+                "post_install_capture_queue_command_present": any(
+                    isinstance(command, dict) and
+                    command.get("kind") == "capture_queue"
+                    for command in list_or_empty(dict_or_empty(
+                        registered_asset_intake.get(
+                            "post_install_verification")).get("commands"))
+                ),
                 "discovered_candidate_count": registered_asset_intake.get(
                     "discovered_candidate_count", 0),
                 "asset_intake_copies_game_data": (
@@ -2345,6 +2358,12 @@ def build_icc_evidence(manifest: dict[str, Any],
                 "missing_map_count_after_plan")),
         "registered_asset_intake_copy_plan_count": (
             registered_asset_intake_summary.get("copy_plan_count")),
+        "registered_asset_intake_post_install_verification_command_count": (
+            registered_asset_intake_summary.get(
+                "post_install_verification_command_count")),
+        "registered_asset_intake_post_install_capture_queue_command_present": (
+            registered_asset_intake_summary.get(
+                "post_install_capture_queue_command_present")),
         "registered_asset_intake_discovered_candidate_count": (
             registered_asset_intake_summary.get("discovered_candidate_count")),
         "asset_intake_copies_game_data": (
