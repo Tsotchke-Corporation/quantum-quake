@@ -30,6 +30,7 @@ import qge_moonlab_full_game_plan as moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest as moonlab_hardware_ingest  # noqa: E402
 import qge_moonlab_job_runner as moonlab_job_runner  # noqa: E402
 import qge_moonlab_oracle_transpile as moonlab_oracle_transpile  # noqa: E402
+import qge_moonlab_qae_grover_plan as moonlab_grover_plan  # noqa: E402
 import qge_moonlab_qae_observation_transpile as moonlab_observation_transpile  # noqa: E402
 import qge_moonlab_qae_transpile as moonlab_qae_transpile  # noqa: E402
 import qge_moonlab_submission_bundle as moonlab_submission_bundle  # noqa: E402
@@ -440,6 +441,60 @@ class AdvantageBenchmarkTests(unittest.TestCase):
                 observation_icc[
                     "candidate_state_preparation_transpiled"])
 
+            grover_plan_path = (
+                outdir / "qae_moonlab_grover_schedule_plan.json")
+            grover_plan_md = (
+                outdir / "qae_moonlab_grover_schedule_plan.md")
+            grover_plan_icc_path = (
+                outdir / "qae_moonlab_grover_schedule_plan_icc.json")
+            grover_plan = moonlab_grover_plan.build_schedule_plan(
+                metrics,
+                oracle_scene,
+                metrics_path=metrics_path,
+                oracle_scene_path=Path("oracle_scene.json"),
+            )
+            moonlab_grover_plan.write_json(grover_plan_path, grover_plan)
+            grover_plan_md.write_text(
+                moonlab_grover_plan.markdown_report(grover_plan),
+                encoding="utf-8",
+            )
+            moonlab_grover_plan.write_json(
+                grover_plan_icc_path,
+                moonlab_grover_plan.build_icc_evidence(
+                    grover_plan,
+                    out_path=grover_plan_path,
+                ),
+            )
+            self.assertEqual(
+                grover_plan["schema"],
+                "qge.moonlab_qae_grover_schedule_plan.v0")
+            self.assertEqual(
+                grover_plan["semantic_scope"],
+                "bernoulli_lift_qae_grover_schedule_control_plane_plan")
+            self.assertIn(
+                grover_plan["status"],
+                {
+                    "qae_grover_schedule_ready_for_control_plane_submission",
+                    "qae_grover_schedule_blocked_control_plane_body_limit",
+                })
+            self.assertGreater(
+                grover_plan["block_resources"]["a"]["gate_count"], 0)
+            self.assertGreaterEqual(
+                grover_plan["moonlab_control_plane"]
+                ["ready_observation_count"],
+                1)
+            self.assertFalse(
+                grover_plan["claim_posture"]
+                ["hardware_result_claimed"])
+            self.assertIn(
+                "Grover Schedule Plan",
+                grover_plan_md.read_text(encoding="utf-8"))
+            grover_plan_icc = publication_pack.load_json(
+                grover_plan_icc_path)
+            self.assertEqual(
+                grover_plan_icc["runtime_backend"],
+                "qge_moonlab_qae_grover_plan")
+
 
 class PublicationPackTests(unittest.TestCase):
     def test_graphics_sidecar_supplies_publication_performance(self) -> None:
@@ -672,6 +727,8 @@ class PublicationPackTests(unittest.TestCase):
                 jobs_tmp / "qae_moonlab_observation_zero.json")
             qae_observation_circuit_path = (
                 jobs_tmp / "qae_moonlab_observation_zero.moonlab")
+            qae_grover_plan_path = (
+                jobs_tmp / "qae_moonlab_grover_schedule_plan.json")
             moonlab_circuit_path = jobs_tmp / "observation_000.moonlab"
             trace_path = jobs_tmp / "qge_trace.bin"
             frame_path = jobs_tmp / "frame_001.png"
@@ -792,6 +849,34 @@ class PublicationPackTests(unittest.TestCase):
                     },
                 },
             )
+            publication_pack.write_json(
+                qae_grover_plan_path,
+                {
+                    "schema": "qge.moonlab_qae_grover_schedule_plan.v0",
+                    "status": (
+                        "qae_grover_schedule_blocked_"
+                        "control_plane_body_limit"),
+                    "semantic_scope": (
+                        "bernoulli_lift_qae_grover_schedule_"
+                        "control_plane_plan"),
+                    "moonlab_control_plane": {
+                        "body_limit_bytes": 4194304,
+                        "ready_observation_count": 1,
+                        "blocked_observation_count": 1,
+                        "first_blocked_power": 1,
+                    },
+                    "resource_estimate": {
+                        "logical_qubits": 4,
+                        "observation_count": 2,
+                        "power_zero_body_bytes": 128,
+                    },
+                    "claim_posture": {
+                        "full_mlae_schedule_transpiled": False,
+                        "full_qae_oracle_transpiled": False,
+                        "hardware_result_claimed": False,
+                    },
+                },
+            )
             trace_path.write_bytes(b"trace")
             frame_path.write_bytes(b"png")
             publication_pack.write_json(
@@ -856,6 +941,8 @@ class PublicationPackTests(unittest.TestCase):
                         qae_oracle_kernel_path),
                     "moonlab_qae_observation_zero": str(
                         qae_observation_path),
+                    "moonlab_qae_grover_schedule_plan": str(
+                        qae_grover_plan_path),
                     "trace": str(trace_path),
                     "frame": str(frame_path),
                     "vanilla_matrix": str(vanilla_matrix_path),
@@ -884,6 +971,10 @@ class PublicationPackTests(unittest.TestCase):
             self.assertEqual(
                 moonlab_job_specs["jobs"][1]["hardware_submission_status"],
                 "not_submitted")
+            self.assertEqual(
+                moonlab_job_specs["jobs"][1]["required_artifacts"]
+                ["moonlab_qae_grover_schedule_plan"],
+                str(qae_grover_plan_path))
             self.assertEqual(
                 moonlab_job_results["schema"], "qge.moonlab_job_results.v0")
             self.assertEqual(
@@ -1135,6 +1226,21 @@ class PublicationPackTests(unittest.TestCase):
                             "advantage/"
                             "qae_moonlab_observation_zero_icc_evidence.json"),
                     },
+                    "qae_moonlab_grover_schedule_plan": {
+                        "path": (
+                            "advantage/"
+                            "qae_moonlab_grover_schedule_plan.json"),
+                    },
+                    "qae_moonlab_grover_schedule_plan_markdown": {
+                        "path": (
+                            "advantage/"
+                            "qae_moonlab_grover_schedule_plan.md"),
+                    },
+                    "qae_moonlab_grover_schedule_plan_icc_evidence": {
+                        "path": (
+                            "advantage/"
+                            "qae_moonlab_grover_schedule_plan_icc_evidence.json"),
+                    },
                     "scaling_summary": {"path": "scaling_summary.json"},
                 },
                 "resource": {
@@ -1282,6 +1388,28 @@ class PublicationPackTests(unittest.TestCase):
                     "control_plane_executable": True,
                     "candidate_state_preparation_transpiled": True,
                     "power_zero_observation_transpiled": True,
+                    "full_qae_oracle_transpiled": False,
+                },
+                "moonlab_qae_grover_schedule_plan_summary": {
+                    "schema": "qge.moonlab_qae_grover_schedule_plan.v0",
+                    "status": (
+                        "qae_grover_schedule_blocked_"
+                        "control_plane_body_limit"),
+                    "semantic_scope": (
+                        "bernoulli_lift_qae_grover_schedule_"
+                        "control_plane_plan"),
+                    "resource_estimate": {
+                        "logical_qubits": 32,
+                        "observation_count": 4,
+                        "ready_observation_count": 1,
+                        "blocked_observation_count": 3,
+                        "first_blocked_power": 1,
+                        "power_zero_body_bytes": 3173321,
+                    },
+                    "ready_observation_count": 1,
+                    "blocked_observation_count": 3,
+                    "first_blocked_power": 1,
+                    "grover_schedule_transpiled": False,
                     "full_qae_oracle_transpiled": False,
                 },
                 "moonlab_job_specs_summary": {
@@ -1537,6 +1665,35 @@ class PublicationPackTests(unittest.TestCase):
         self.assertFalse(
             icc[
                 "moonlab_qae_observation_zero_full_qae_oracle_transpiled"])
+        self.assertEqual(
+            icc["moonlab_qae_grover_schedule_plan_file"],
+            "advantage/qae_moonlab_grover_schedule_plan.json")
+        self.assertEqual(
+            icc["moonlab_qae_grover_schedule_plan_markdown_file"],
+            "advantage/qae_moonlab_grover_schedule_plan.md")
+        self.assertEqual(
+            icc["moonlab_qae_grover_schedule_plan_icc_evidence_file"],
+            "advantage/qae_moonlab_grover_schedule_plan_icc_evidence.json")
+        self.assertEqual(
+            icc["moonlab_qae_grover_schedule_plan_schema"],
+            "qge.moonlab_qae_grover_schedule_plan.v0")
+        self.assertEqual(
+            icc["moonlab_qae_grover_schedule_plan_status"],
+            "qae_grover_schedule_blocked_control_plane_body_limit")
+        self.assertEqual(
+            icc["moonlab_qae_grover_schedule_plan_semantic_scope"],
+            "bernoulli_lift_qae_grover_schedule_control_plane_plan")
+        self.assertEqual(
+            icc["moonlab_qae_grover_schedule_ready_observation_count"], 1)
+        self.assertEqual(
+            icc["moonlab_qae_grover_schedule_blocked_observation_count"], 3)
+        self.assertEqual(
+            icc["moonlab_qae_grover_schedule_first_blocked_power"], 1)
+        self.assertFalse(
+            icc["moonlab_qae_grover_schedule_transpiled"])
+        self.assertFalse(
+            icc[
+                "moonlab_qae_grover_schedule_full_qae_oracle_transpiled"])
         self.assertEqual(
             icc["moonlab_job_specs_file"],
             "resource/qge_moonlab_job_specs.json")

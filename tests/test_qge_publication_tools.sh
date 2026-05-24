@@ -341,6 +341,9 @@ assert manifest["artifacts"]["advantage"]["qae_moonlab_observation_zero"]["exist
 assert manifest["artifacts"]["advantage"]["qae_moonlab_observation_zero_circuit"]["exists"] is True
 assert manifest["artifacts"]["advantage"]["qae_moonlab_observation_zero_markdown"]["exists"] is True
 assert manifest["artifacts"]["advantage"]["qae_moonlab_observation_zero_icc_evidence"]["exists"] is True
+assert manifest["artifacts"]["advantage"]["qae_moonlab_grover_schedule_plan"]["exists"] is True
+assert manifest["artifacts"]["advantage"]["qae_moonlab_grover_schedule_plan_markdown"]["exists"] is True
+assert manifest["artifacts"]["advantage"]["qae_moonlab_grover_schedule_plan_icc_evidence"]["exists"] is True
 assert manifest["artifacts"]["resource"]["envelope"]["exists"] is True
 assert manifest["artifacts"]["resource"]["full_game_map_coverage"]["exists"] is True
 assert manifest["artifacts"]["resource"]["asset_inventory"]["exists"] is True
@@ -393,6 +396,21 @@ assert manifest["advantage_summary"]["moonlab_qae_observation_zero_summary"]["co
 assert manifest["advantage_summary"]["moonlab_qae_observation_zero_summary"]["candidate_state_preparation_transpiled"] is True
 assert manifest["advantage_summary"]["moonlab_qae_observation_zero_summary"]["power_zero_observation_transpiled"] is True
 assert manifest["advantage_summary"]["moonlab_qae_observation_zero_summary"]["full_qae_oracle_transpiled"] is False
+grover_summary = manifest["advantage_summary"]["moonlab_qae_grover_schedule_plan_summary"]
+assert grover_summary["schema"] == "qge.moonlab_qae_grover_schedule_plan.v0"
+assert grover_summary["status"] in {
+    "qae_grover_schedule_ready_for_control_plane_submission",
+    "qae_grover_schedule_blocked_control_plane_body_limit",
+}
+assert grover_summary["semantic_scope"] == "bernoulli_lift_qae_grover_schedule_control_plane_plan"
+assert grover_summary["ready_observation_count"] >= 1
+assert grover_summary["blocked_observation_count"] >= 0
+if grover_summary["blocked_observation_count"] > 0:
+    assert grover_summary["first_blocked_power"] == 1
+    assert grover_summary["grover_schedule_transpiled"] is False
+else:
+    assert grover_summary["first_blocked_power"] is None
+    assert grover_summary["grover_schedule_transpiled"] is True
 assert manifest["advantage_summary"]["moonlab_job_specs_summary"]["hardware_candidate_job_count"] == 1
 assert manifest["advantage_summary"]["moonlab_job_results_summary"]["completed_simulator_job_count"] >= 2
 assert manifest["advantage_summary"]["moonlab_job_results_summary"]["hardware_submitted_job_count"] == 0
@@ -473,6 +491,25 @@ assert icc["moonlab_qae_observation_zero_control_plane_executable"] is True
 assert icc["moonlab_qae_candidate_state_preparation_transpiled"] is True
 assert icc["moonlab_qae_power_zero_observation_transpiled"] is True
 assert icc["moonlab_qae_observation_zero_full_qae_oracle_transpiled"] is False
+assert icc["moonlab_qae_grover_schedule_plan_file"].endswith("advantage/qae_moonlab_grover_schedule_plan.json")
+assert icc["moonlab_qae_grover_schedule_plan_markdown_file"].endswith("advantage/qae_moonlab_grover_schedule_plan.md")
+assert icc["moonlab_qae_grover_schedule_plan_icc_evidence_file"].endswith("advantage/qae_moonlab_grover_schedule_plan_icc_evidence.json")
+assert icc["moonlab_qae_grover_schedule_plan_schema"] == "qge.moonlab_qae_grover_schedule_plan.v0"
+assert icc["moonlab_qae_grover_schedule_plan_status"] in {
+    "qae_grover_schedule_ready_for_control_plane_submission",
+    "qae_grover_schedule_blocked_control_plane_body_limit",
+}
+assert icc["moonlab_qae_grover_schedule_plan_semantic_scope"] == "bernoulli_lift_qae_grover_schedule_control_plane_plan"
+assert icc["moonlab_qae_grover_schedule_ready_observation_count"] >= 1
+assert icc["moonlab_qae_grover_schedule_blocked_observation_count"] >= 0
+if icc["moonlab_qae_grover_schedule_blocked_observation_count"] > 0:
+    assert icc["moonlab_qae_grover_schedule_first_blocked_power"] == 1
+    assert icc["moonlab_qae_grover_schedule_transpiled"] is False
+    assert icc["moonlab_qae_grover_schedule_full_qae_oracle_transpiled"] is False
+else:
+    assert icc["moonlab_qae_grover_schedule_first_blocked_power"] is None
+    assert icc["moonlab_qae_grover_schedule_transpiled"] is True
+    assert icc["moonlab_qae_grover_schedule_full_qae_oracle_transpiled"] is True
 assert icc["moonlab_job_specs_file"].endswith("resource/qge_moonlab_job_specs.json")
 assert icc["moonlab_job_results_file"].endswith("resource/qge_moonlab_job_results.json")
 assert icc["moonlab_replay_plan_file"].endswith("resource/qge_moonlab_replay_plan.json")
@@ -609,6 +646,49 @@ assert icc["runtime_backend"] == "qge_moonlab_qae_observation_transpile"
 assert icc["candidate_state_preparation_transpiled"] is True
 assert icc["power_zero_observation_transpiled"] is True
 assert icc["full_qae_oracle_transpiled"] is False
+PY
+
+python3 "$repo_root/tools/qge_moonlab_qae_grover_plan.py" \
+  --metrics "$pack_dir/advantage/advantage_metrics.json" \
+  --oracle-scene "$pack_dir/oracle/oracle_scene.json" \
+  --out "$tmpdir/qae_moonlab_grover_schedule_plan.json" \
+  --markdown "$tmpdir/qae_moonlab_grover_schedule_plan.md" \
+  --icc-json "$tmpdir/qae_moonlab_grover_schedule_plan_icc_evidence.json" \
+  > "$tmpdir/moonlab_grover_plan.stdout"
+grep -F 'QGE_MOONLAB_QAE_GROVER_PLAN' "$tmpdir/moonlab_grover_plan.stdout" >/dev/null
+grep -F 'QGE_MOONLAB_QAE_GROVER_PLAN_MARKDOWN' "$tmpdir/moonlab_grover_plan.stdout" >/dev/null
+grep -F 'QGE_MOONLAB_QAE_GROVER_PLAN_ICC_EVIDENCE' "$tmpdir/moonlab_grover_plan.stdout" >/dev/null
+python3 - "$tmpdir/qae_moonlab_grover_schedule_plan.json" "$tmpdir/qae_moonlab_grover_schedule_plan_icc_evidence.json" <<'PY'
+import json
+import sys
+
+plan = json.load(open(sys.argv[1], encoding="utf-8"))
+icc = json.load(open(sys.argv[2], encoding="utf-8"))
+assert plan["schema"] == "qge.moonlab_qae_grover_schedule_plan.v0"
+assert plan["status"] in {
+    "qae_grover_schedule_ready_for_control_plane_submission",
+    "qae_grover_schedule_blocked_control_plane_body_limit",
+}
+assert plan["semantic_scope"] == "bernoulli_lift_qae_grover_schedule_control_plane_plan"
+assert plan["moonlab_control_plane"]["ready_observation_count"] >= 1
+assert plan["moonlab_control_plane"]["blocked_observation_count"] >= 0
+assert plan["observations"][0]["control_plane_executable"] is True
+if plan["moonlab_control_plane"]["blocked_observation_count"] > 0:
+    assert plan["moonlab_control_plane"]["first_blocked_power"] == 1
+    assert plan["observations"][1]["control_plane_executable"] is False
+    assert plan["claim_posture"]["full_mlae_schedule_transpiled"] is False
+else:
+    assert plan["moonlab_control_plane"]["first_blocked_power"] is None
+    assert plan["claim_posture"]["full_mlae_schedule_transpiled"] is True
+assert plan["claim_posture"]["power_zero_observation_transpiled"] is True
+assert icc["runtime_backend"] == "qge_moonlab_qae_grover_plan"
+assert icc["blocked_observation_count"] >= 0
+if icc["blocked_observation_count"] > 0:
+    assert icc["first_blocked_power"] == 1
+    assert icc["full_qae_oracle_transpiled"] is False
+else:
+    assert icc["first_blocked_power"] is None
+    assert icc["full_qae_oracle_transpiled"] is True
 PY
 
 python3 "$repo_root/tools/qge_moonlab_job_runner.py" \

@@ -63,7 +63,7 @@ Important known limitations:
 
 - The full-port ICC target is `qge_vanilla_quake_conformance`. The current
   strongest self-contained evidence pack is
-  `diagnostics/publication_pack/20260524-140254`, where ICC reports the strict
+  `diagnostics/publication_pack/20260524-150018`, where ICC reports the strict
   vanilla/QGE runtime ownership matrix and `qge_vanilla_runtime_complete`
   ready. The pack includes `resource/qge_resource_envelope.json`, which scopes
   Moonlab simulator/native-backend deployment,
@@ -97,7 +97,9 @@ Important known limitations:
   `advantage/qae_moonlab_observation_zero.moonlab`, a 32-qubit, 191,018-gate
   Moonlab power-zero QAE observation circuit with exact 234-candidate state
   preparation, uniform threshold preparation, and inline `Q_f` under the same
-  body limit, and
+  body limit,
+  `advantage/qae_moonlab_grover_schedule_plan.json`, which proves the selected
+  nonzero Grover powers currently exceed that 4 MB body cap, and
   `resource/qge_moonlab_submission_bundle.json` with the stricter
   control-plane readiness verdict, plus
   `resource/qge_moonlab_hardware_record_template.json` with the exact
@@ -110,8 +112,9 @@ Important known limitations:
   bundle is `qae_observation_zero_ready_grover_schedule_required` because
   the readout-equivalent Moonlab payload, reversible `Q_f` kernel, and
   power-zero observation with non-power-of-two candidate state preparation are
-  executable, while Grover diffusion and full MLAE circuit assembly remain
-  pending. After a real
+  executable, while the exact Grover schedule plan shows `grover_power=1`
+  expands to 9,539,857 bytes and therefore full MLAE circuit assembly remains
+  blocked by the current control-plane limit. After a real
   Moonlab hardware run, use
   `tools/qge_moonlab_hardware_ingest.py` to validate the returned backend ID,
   shot schedule, readout metadata, and candidate digest before updating
@@ -121,7 +124,7 @@ Important known limitations:
   covered, 23 registered BSP assets are still missing, and the whole-game
   Moonlab deployment claim is not allowed yet. This is a captured workload
   proof, not a claim that every Quake domain is visually or hardware complete. Use
-  `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-140254`
+  `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-150018`
   to generate the remaining harness queue and breadth rebuild script; the queue
   inventories loose/Pak BSP assets, skips missing local BSPs unless
   `--include-unavailable-assets` is set, and currently reports zero locally

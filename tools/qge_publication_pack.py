@@ -34,6 +34,7 @@ import qge_moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest  # noqa: E402
 import qge_moonlab_job_runner  # noqa: E402
 import qge_moonlab_oracle_transpile  # noqa: E402
+import qge_moonlab_qae_grover_plan  # noqa: E402
 import qge_moonlab_qae_observation_transpile  # noqa: E402
 import qge_moonlab_qae_transpile  # noqa: E402
 import qge_moonlab_submission_bundle  # noqa: E402
@@ -649,6 +650,8 @@ def build_moonlab_job_specs(
                     "moonlab_qae_oracle_kernel"),
                 "moonlab_qae_observation_zero": artifact_paths.get(
                     "moonlab_qae_observation_zero"),
+                "moonlab_qae_grover_schedule_plan": artifact_paths.get(
+                    "moonlab_qae_grover_schedule_plan"),
             },
             "fallback_policy": (
                 "simulator result is publishable; hardware result requires backend id, "
@@ -886,6 +889,12 @@ def build_advantage_artifacts(oracle_scene_path: Path,
         outdir / "qae_moonlab_observation_zero.md")
     moonlab_observation_icc_path = (
         outdir / "qae_moonlab_observation_zero_icc_evidence.json")
+    moonlab_grover_plan_path = (
+        outdir / "qae_moonlab_grover_schedule_plan.json")
+    moonlab_grover_plan_markdown_path = (
+        outdir / "qae_moonlab_grover_schedule_plan.md")
+    moonlab_grover_plan_icc_path = (
+        outdir / "qae_moonlab_grover_schedule_plan_icc_evidence.json")
     scaling_path = outdir / "scaling_summary.json"
     scaling_csv_path = outdir / "scaling_summary.csv"
     icc_path = outdir / "qge_advantage_icc_evidence.json"
@@ -955,6 +964,24 @@ def build_advantage_artifacts(oracle_scene_path: Path,
             out_path=moonlab_observation_path,
         ),
     )
+    moonlab_grover_plan = qge_moonlab_qae_grover_plan.build_schedule_plan(
+        metrics,
+        oracle_scene,
+        metrics_path=metrics_path,
+        oracle_scene_path=oracle_scene_path,
+    )
+    write_json(moonlab_grover_plan_path, moonlab_grover_plan)
+    moonlab_grover_plan_markdown_path.write_text(
+        qge_moonlab_qae_grover_plan.markdown_report(moonlab_grover_plan),
+        encoding="utf-8",
+    )
+    write_json(
+        moonlab_grover_plan_icc_path,
+        qge_moonlab_qae_grover_plan.build_icc_evidence(
+            moonlab_grover_plan,
+            out_path=moonlab_grover_plan_path,
+        ),
+    )
     qge_advantage_benchmark.write_json(
         icc_path,
         qge_advantage_benchmark.build_icc_evidence(
@@ -987,6 +1014,13 @@ def build_advantage_artifacts(oracle_scene_path: Path,
         "qae_moonlab_observation_zero_icc_evidence": file_info(
             moonlab_observation_icc_path),
         "qae_moonlab_observation_zero_data": moonlab_observation,
+        "qae_moonlab_grover_schedule_plan": file_info(
+            moonlab_grover_plan_path),
+        "qae_moonlab_grover_schedule_plan_markdown": file_info(
+            moonlab_grover_plan_markdown_path),
+        "qae_moonlab_grover_schedule_plan_icc_evidence": file_info(
+            moonlab_grover_plan_icc_path),
+        "qae_moonlab_grover_schedule_plan_data": moonlab_grover_plan,
         "scaling_summary": file_info(scaling_path),
         "scaling_summary_csv": file_info(scaling_csv_path),
         "icc_evidence": file_info(icc_path),
@@ -1245,6 +1279,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 advantage["qae_moonlab_oracle_kernel"]["path"]),
             "moonlab_qae_observation_zero": (
                 advantage["qae_moonlab_observation_zero"]["path"]),
+            "moonlab_qae_grover_schedule_plan": (
+                advantage["qae_moonlab_grover_schedule_plan"]["path"]),
             "trace": capture_artifacts["trace"]["packed"]["path"],
             "frame": capture_artifacts["frame"]["packed"]["path"],
             "vanilla_matrix": vanilla_artifacts["matrix"]["packed"]["path"],
@@ -1490,6 +1526,14 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                     advantage["qae_moonlab_observation_zero_markdown"]),
                 "qae_moonlab_observation_zero_icc_evidence": (
                     advantage["qae_moonlab_observation_zero_icc_evidence"]),
+                "qae_moonlab_grover_schedule_plan": (
+                    advantage["qae_moonlab_grover_schedule_plan"]),
+                "qae_moonlab_grover_schedule_plan_markdown": (
+                    advantage[
+                        "qae_moonlab_grover_schedule_plan_markdown"]),
+                "qae_moonlab_grover_schedule_plan_icc_evidence": (
+                    advantage[
+                        "qae_moonlab_grover_schedule_plan_icc_evidence"]),
                 "scaling_summary": advantage["scaling_summary"],
                 "scaling_summary_csv": advantage["scaling_summary_csv"],
                 "icc_evidence": advantage["icc_evidence"],
@@ -1725,6 +1769,40 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                         "claim_posture", {}).get(
                             "full_qae_oracle_transpiled")),
             },
+            "moonlab_qae_grover_schedule_plan_summary": {
+                "schema": (
+                    advantage["qae_moonlab_grover_schedule_plan_data"].get(
+                        "schema")),
+                "status": (
+                    advantage["qae_moonlab_grover_schedule_plan_data"].get(
+                        "status")),
+                "semantic_scope": (
+                    advantage["qae_moonlab_grover_schedule_plan_data"].get(
+                        "semantic_scope")),
+                "resource_estimate": (
+                    advantage["qae_moonlab_grover_schedule_plan_data"].get(
+                        "resource_estimate")),
+                "ready_observation_count": (
+                    advantage["qae_moonlab_grover_schedule_plan_data"].get(
+                        "moonlab_control_plane", {}).get(
+                            "ready_observation_count")),
+                "blocked_observation_count": (
+                    advantage["qae_moonlab_grover_schedule_plan_data"].get(
+                        "moonlab_control_plane", {}).get(
+                            "blocked_observation_count")),
+                "first_blocked_power": (
+                    advantage["qae_moonlab_grover_schedule_plan_data"].get(
+                        "moonlab_control_plane", {}).get(
+                            "first_blocked_power")),
+                "grover_schedule_transpiled": (
+                    advantage["qae_moonlab_grover_schedule_plan_data"].get(
+                        "claim_posture", {}).get(
+                            "full_mlae_schedule_transpiled")),
+                "full_qae_oracle_transpiled": (
+                    advantage["qae_moonlab_grover_schedule_plan_data"].get(
+                        "claim_posture", {}).get(
+                            "full_qae_oracle_transpiled")),
+            },
             "resource_envelope_summary": resource_envelope.get("posture"),
             "full_game_map_coverage_summary": {
                 "status": full_game_map_coverage.get("status"),
@@ -1925,6 +2003,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_moonlab_qae_transpile.py --metrics <pack_dir>/advantage/advantage_metrics.json --abstract-circuit <pack_dir>/advantage/qae_circuit.txt --out /tmp/qae_moonlab_payload.json --circuit-dir /tmp/moonlab_qae_circuits --markdown /tmp/qae_moonlab_payload.md --icc-json /tmp/qae_moonlab_payload_icc_evidence.json",
             "tools/qge_moonlab_oracle_transpile.py --metrics <pack_dir>/advantage/advantage_metrics.json --oracle-scene <pack_dir>/oracle/oracle_scene.json --out /tmp/qae_moonlab_oracle_kernel.json --circuit /tmp/qae_moonlab_oracle_kernel.moonlab --markdown /tmp/qae_moonlab_oracle_kernel.md --icc-json /tmp/qae_moonlab_oracle_kernel_icc_evidence.json",
             "tools/qge_moonlab_qae_observation_transpile.py --metrics <pack_dir>/advantage/advantage_metrics.json --oracle-scene <pack_dir>/oracle/oracle_scene.json --out /tmp/qae_moonlab_observation_zero.json --circuit /tmp/qae_moonlab_observation_zero.moonlab --markdown /tmp/qae_moonlab_observation_zero.md --icc-json /tmp/qae_moonlab_observation_zero_icc_evidence.json",
+            "tools/qge_moonlab_qae_grover_plan.py --metrics <pack_dir>/advantage/advantage_metrics.json --oracle-scene <pack_dir>/oracle/oracle_scene.json --out /tmp/qae_moonlab_grover_schedule_plan.json --markdown /tmp/qae_moonlab_grover_schedule_plan.md --icc-json /tmp/qae_moonlab_grover_schedule_plan_icc_evidence.json",
             "tools/qge_vanilla_capture_matrix.py <graphics_capture_dir>",
             "tools/qge_breadth_evidence.py --matrix <graphics_capture_dir> --min-maps N",
             "tools/qge_publication_pack.py --capture-dir <trace_capture_dir> --vanilla-matrix <graphics_capture_dir>/vanilla_capture_matrix.json --graphics-capture-dir <graphics_capture_dir> --breadth-evidence <breadth_dir>",
@@ -1953,6 +2032,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("moonlab_qae_oracle_kernel_summary"))
     qae_observation_summary = dict_or_empty(
         advantage_summary.get("moonlab_qae_observation_zero_summary"))
+    qae_grover_plan_summary = dict_or_empty(
+        advantage_summary.get("moonlab_qae_grover_schedule_plan_summary"))
     job_specs_summary = dict_or_empty(
         advantage_summary.get("moonlab_job_specs_summary"))
     job_results_summary = dict_or_empty(
@@ -2061,6 +2142,32 @@ def build_icc_evidence(manifest: dict[str, Any],
                 "power_zero_observation_transpiled")),
         "moonlab_qae_observation_zero_full_qae_oracle_transpiled": (
             qae_observation_summary.get("full_qae_oracle_transpiled")),
+        "moonlab_qae_grover_schedule_plan_file": (
+            artifacts["advantage"].get(
+                "qae_moonlab_grover_schedule_plan", {}).get("path")),
+        "moonlab_qae_grover_schedule_plan_markdown_file": (
+            artifacts["advantage"].get(
+                "qae_moonlab_grover_schedule_plan_markdown", {}).get("path")),
+        "moonlab_qae_grover_schedule_plan_icc_evidence_file": (
+            artifacts["advantage"].get(
+                "qae_moonlab_grover_schedule_plan_icc_evidence", {}).get(
+                    "path")),
+        "moonlab_qae_grover_schedule_plan_schema": (
+            qae_grover_plan_summary.get("schema")),
+        "moonlab_qae_grover_schedule_plan_status": (
+            qae_grover_plan_summary.get("status")),
+        "moonlab_qae_grover_schedule_plan_semantic_scope": (
+            qae_grover_plan_summary.get("semantic_scope")),
+        "moonlab_qae_grover_schedule_ready_observation_count": (
+            qae_grover_plan_summary.get("ready_observation_count")),
+        "moonlab_qae_grover_schedule_blocked_observation_count": (
+            qae_grover_plan_summary.get("blocked_observation_count")),
+        "moonlab_qae_grover_schedule_first_blocked_power": (
+            qae_grover_plan_summary.get("first_blocked_power")),
+        "moonlab_qae_grover_schedule_transpiled": (
+            qae_grover_plan_summary.get("grover_schedule_transpiled")),
+        "moonlab_qae_grover_schedule_full_qae_oracle_transpiled": (
+            qae_grover_plan_summary.get("full_qae_oracle_transpiled")),
         "scaling_summary_file": artifacts["advantage"]["scaling_summary"]["path"],
         "resource_envelope_file": artifacts.get("resource", {}).get(
             "envelope", {}).get("path"),

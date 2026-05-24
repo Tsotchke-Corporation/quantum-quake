@@ -98,7 +98,7 @@ Current artifact status:
   `scaling_summary.json`, `qae_curve.csv`, `qae_circuit.txt`, and
   `qge_advantage_icc_evidence.json`.
 - The publication pack at
-  `diagnostics/publication_pack/20260524-140254/` bundles the benchmark,
+  `diagnostics/publication_pack/20260524-150018/` bundles the benchmark,
   oracle, trace, stream, vanilla, vanilla ICC evidence sidecar, claims, source
   artifacts, `resource/qge_resource_envelope.json`,
   `resource/qge_full_game_map_coverage.json`,
@@ -130,14 +130,17 @@ Current artifact status:
   supported-gate `Q_f` predicate kernel for the Bernoulli-lift oracle. The
   pack also includes `advantage/qae_moonlab_observation_zero.moonlab`, a
   32-qubit, 191,018-gate power-zero observation circuit with exact
-  non-power-of-two candidate state preparation and inline `Q_f`. The
+  non-power-of-two candidate state preparation and inline `Q_f`, plus
+  `advantage/qae_moonlab_grover_schedule_plan.json`, which records that the
+  selected nonzero Grover powers exceed the current 4 MB Moonlab control-plane
+  body cap. The
   submission bundle status is
   `qae_observation_zero_ready_grover_schedule_required`: the readout payload,
   `Q_f` kernel, and power-zero observation circuit are executable Moonlab
-  control-plane text, but Grover diffusion and full MLAE circuit assembly are
-  not yet transpiled. A real full-QAE hardware return should start only after
-  those remaining pieces exist, then use the generated hardware record template
-  and be merged with
+  control-plane text, but full MLAE circuit assembly is blocked by the
+  measured nonzero-power body sizes. A real full-QAE hardware return should
+  start only after those remaining pieces exist, then use the generated
+  hardware record template and be merged with
   `tools/qge_moonlab_hardware_ingest.py`, which records a bounded hardware
   comparison while keeping hardware advantage and whole-game hardware claims
   false.
