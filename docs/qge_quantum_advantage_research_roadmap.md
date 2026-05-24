@@ -98,7 +98,7 @@ Current artifact status:
   `scaling_summary.json`, `qae_curve.csv`, `qae_circuit.txt`, and
   `qge_advantage_icc_evidence.json`.
 - The publication pack at
-  `diagnostics/publication_pack/20260524-124933/` bundles the benchmark,
+  `diagnostics/publication_pack/20260524-132843/` bundles the benchmark,
   oracle, trace, stream, vanilla, vanilla ICC evidence sidecar, claims, source
   artifacts, `resource/qge_resource_envelope.json`,
   `resource/qge_full_game_map_coverage.json`,
@@ -125,12 +125,16 @@ Current artifact status:
   `-nolauncher` skips for UI-only launcher controls. The pack now includes
   `advantage/qae_moonlab_payload.json` and four
   `advantage/moonlab_qae_circuits/*.moonlab` circuits for the MLAE
-  observation/readout schedule. The submission bundle status is
-  `calibration_payload_ready_oracle_transpilation_required`: the readout
-  payload is executable Moonlab control-plane text, but the full reversible
-  `Q_f`/Grover oracle is not yet transpiled. A real full-QAE hardware return
-  should start only after that payload exists, then use the generated hardware
-  record template and be merged with
+  observation/readout schedule, plus
+  `advantage/qae_moonlab_oracle_kernel.moonlab`, a 32-qubit, 189,041-gate
+  supported-gate `Q_f` predicate kernel for the Bernoulli-lift oracle. The
+  submission bundle status is
+  `qf_oracle_kernel_ready_qae_transpilation_required`: the readout payload and
+  `Q_f` kernel are executable Moonlab control-plane text, but candidate state
+  preparation, Grover diffusion, and full MLAE circuit assembly are not yet
+  transpiled. A real full-QAE hardware return should start only after those
+  remaining pieces exist, then use the generated hardware record template and
+  be merged with
   `tools/qge_moonlab_hardware_ingest.py`, which records a bounded hardware
   comparison while keeping hardware advantage and whole-game hardware claims
   false.

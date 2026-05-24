@@ -29,6 +29,7 @@ import qge_moonlab_deployment_gate as moonlab_deployment_gate  # noqa: E402
 import qge_moonlab_full_game_plan as moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest as moonlab_hardware_ingest  # noqa: E402
 import qge_moonlab_job_runner as moonlab_job_runner  # noqa: E402
+import qge_moonlab_oracle_transpile as moonlab_oracle_transpile  # noqa: E402
 import qge_moonlab_qae_transpile as moonlab_qae_transpile  # noqa: E402
 import qge_moonlab_submission_bundle as moonlab_submission_bundle  # noqa: E402
 import qge_noesis_summary as noesis_summary  # noqa: E402
@@ -318,6 +319,60 @@ class AdvantageBenchmarkTests(unittest.TestCase):
                 payload_icc["runtime_backend"],
                 "qge_moonlab_qae_transpile")
 
+            oracle_kernel_path = outdir / "qae_moonlab_oracle_kernel.json"
+            oracle_kernel_circuit = (
+                outdir / "qae_moonlab_oracle_kernel.moonlab")
+            oracle_kernel_md = outdir / "qae_moonlab_oracle_kernel.md"
+            oracle_kernel_icc_path = (
+                outdir / "qae_moonlab_oracle_kernel_icc.json")
+            oracle_kernel = moonlab_oracle_transpile.build_kernel(
+                metrics,
+                oracle_scene,
+                metrics_path=metrics_path,
+                oracle_scene_path=Path("oracle_scene.json"),
+                circuit_path=oracle_kernel_circuit,
+            )
+            moonlab_oracle_transpile.write_json(
+                oracle_kernel_path, oracle_kernel)
+            oracle_kernel_md.write_text(
+                moonlab_oracle_transpile.markdown_report(oracle_kernel),
+                encoding="utf-8",
+            )
+            moonlab_oracle_transpile.write_json(
+                oracle_kernel_icc_path,
+                moonlab_oracle_transpile.build_icc_evidence(
+                    oracle_kernel,
+                    out_path=oracle_kernel_path,
+                ),
+            )
+            self.assertEqual(
+                oracle_kernel["schema"],
+                "qge.moonlab_qae_oracle_kernel.v0")
+            self.assertEqual(
+                oracle_kernel["status"],
+                "qf_oracle_kernel_ready_qae_transpilation_required")
+            self.assertTrue(
+                oracle_kernel["claim_posture"]
+                ["qf_oracle_kernel_transpiled"])
+            self.assertFalse(
+                oracle_kernel["claim_posture"]
+                ["full_qae_oracle_transpiled"])
+            self.assertTrue(
+                oracle_kernel["moonlab_control_plane"]
+                ["control_plane_executable"])
+            self.assertLess(
+                oracle_kernel["moonlab_control_plane"]["body_bytes"],
+                moonlab_oracle_transpile.MOONLAB_CONTROL_MAX_BODY_BYTES)
+            self.assertIn(
+                "# moonlab-circuit v1",
+                oracle_kernel_circuit.read_text(encoding="utf-8")[:128],
+            )
+            oracle_kernel_icc = publication_pack.load_json(
+                oracle_kernel_icc_path)
+            self.assertEqual(
+                oracle_kernel_icc["runtime_backend"],
+                "qge_moonlab_oracle_transpile")
+
 
 class PublicationPackTests(unittest.TestCase):
     def test_graphics_sidecar_supplies_publication_performance(self) -> None:
@@ -542,6 +597,10 @@ class PublicationPackTests(unittest.TestCase):
             advantage_metrics_path = jobs_tmp / "advantage_metrics.json"
             qae_circuit_path = jobs_tmp / "qae_circuit.txt"
             qae_moonlab_payload_path = jobs_tmp / "qae_moonlab_payload.json"
+            qae_oracle_kernel_path = (
+                jobs_tmp / "qae_moonlab_oracle_kernel.json")
+            qae_oracle_kernel_circuit_path = (
+                jobs_tmp / "qae_moonlab_oracle_kernel.moonlab")
             moonlab_circuit_path = jobs_tmp / "observation_000.moonlab"
             trace_path = jobs_tmp / "qge_trace.bin"
             frame_path = jobs_tmp / "frame_001.png"
@@ -576,6 +635,10 @@ class PublicationPackTests(unittest.TestCase):
                 "# moonlab-circuit v1\nNUM_QUBITS 1\nRY 0 1.5707963267948966\n",
                 encoding="utf-8",
             )
+            qae_oracle_kernel_circuit_path.write_text(
+                "# moonlab-circuit v1\nNUM_QUBITS 4\nX 0\nCNOT 1 0\n",
+                encoding="utf-8",
+            )
             publication_pack.write_json(
                 qae_moonlab_payload_path,
                 {
@@ -597,6 +660,31 @@ class PublicationPackTests(unittest.TestCase):
                         },
                     ],
                     "claim_posture": {
+                        "full_qae_oracle_transpiled": False,
+                    },
+                },
+            )
+            publication_pack.write_json(
+                qae_oracle_kernel_path,
+                {
+                    "schema": "qge.moonlab_qae_oracle_kernel.v0",
+                    "status": (
+                        "qf_oracle_kernel_ready_"
+                        "qae_transpilation_required"),
+                    "semantic_scope": "bernoulli_lift_qf_oracle_kernel",
+                    "moonlab_circuit_file": str(
+                        qae_oracle_kernel_circuit_path),
+                    "moonlab_control_plane": {
+                        "control_plane_executable": True,
+                        "body_bytes": (
+                            qae_oracle_kernel_circuit_path.stat().st_size),
+                    },
+                    "resource_estimate": {
+                        "logical_qubits": 4,
+                        "gate_count": 2,
+                    },
+                    "claim_posture": {
+                        "qf_oracle_kernel_transpiled": True,
                         "full_qae_oracle_transpiled": False,
                     },
                 },
@@ -661,6 +749,8 @@ class PublicationPackTests(unittest.TestCase):
                     "advantage_metrics": str(advantage_metrics_path),
                     "qae_circuit": str(qae_circuit_path),
                     "moonlab_qae_payload": str(qae_moonlab_payload_path),
+                    "moonlab_qae_oracle_kernel": str(
+                        qae_oracle_kernel_path),
                     "trace": str(trace_path),
                     "frame": str(frame_path),
                     "vanilla_matrix": str(vanilla_matrix_path),
@@ -794,7 +884,7 @@ class PublicationPackTests(unittest.TestCase):
                 "qge.moonlab_submission_bundle.v0")
             self.assertEqual(
                 submission_bundle["status"],
-                "calibration_payload_ready_oracle_transpilation_required")
+                "qf_oracle_kernel_ready_qae_transpilation_required")
             self.assertEqual(
                 submission_bundle["transpilation_required_count"], 1)
             self.assertEqual(
@@ -803,12 +893,16 @@ class PublicationPackTests(unittest.TestCase):
                 0)
             self.assertEqual(
                 submission_bundle["calibration_payload_ready_count"], 1)
+            self.assertEqual(
+                submission_bundle["oracle_kernel_ready_count"], 1)
             self.assertFalse(
                 submission_bundle[
                     "hardware_submission_directly_executable"])
             self.assertTrue(
                 submission_bundle[
                     "control_plane_payload_directly_executable"])
+            self.assertTrue(
+                submission_bundle["oracle_kernel_directly_executable"])
             self.assertEqual(
                 submission_bundle["candidate_jobs"][0]
                 ["qae_circuit_check"]["format"],
@@ -817,6 +911,10 @@ class PublicationPackTests(unittest.TestCase):
                 submission_bundle["candidate_jobs"][0]
                 ["moonlab_qae_payload_check"]["semantic_scope"],
                 "mlae_observation_distribution_payload")
+            self.assertEqual(
+                submission_bundle["candidate_jobs"][0]
+                ["moonlab_qae_oracle_kernel_check"]["semantic_scope"],
+                "bernoulli_lift_qf_oracle_kernel")
             moonlab_verify_stdout = io.StringIO()
             with contextlib.redirect_stdout(moonlab_verify_stdout):
                 self.assertEqual(
@@ -887,6 +985,22 @@ class PublicationPackTests(unittest.TestCase):
                             "qae_moonlab_payload_icc_evidence.json")
                     },
                     "qae_moonlab_circuits": {"file_count": 4},
+                    "qae_moonlab_oracle_kernel": {
+                        "path": "advantage/qae_moonlab_oracle_kernel.json",
+                    },
+                    "qae_moonlab_oracle_kernel_circuit": {
+                        "path": (
+                            "advantage/"
+                            "qae_moonlab_oracle_kernel.moonlab"),
+                    },
+                    "qae_moonlab_oracle_kernel_markdown": {
+                        "path": "advantage/qae_moonlab_oracle_kernel.md",
+                    },
+                    "qae_moonlab_oracle_kernel_icc_evidence": {
+                        "path": (
+                            "advantage/"
+                            "qae_moonlab_oracle_kernel_icc_evidence.json"),
+                    },
                     "scaling_summary": {"path": "scaling_summary.json"},
                 },
                 "resource": {
@@ -1000,6 +1114,21 @@ class PublicationPackTests(unittest.TestCase):
                     },
                     "full_qae_oracle_transpiled": False,
                 },
+                "moonlab_qae_oracle_kernel_summary": {
+                    "schema": "qge.moonlab_qae_oracle_kernel.v0",
+                    "status": (
+                        "qf_oracle_kernel_ready_"
+                        "qae_transpilation_required"),
+                    "semantic_scope": "bernoulli_lift_qf_oracle_kernel",
+                    "resource_estimate": {
+                        "logical_qubits": 32,
+                        "gate_count": 189041,
+                        "body_bytes": 3141392,
+                    },
+                    "control_plane_executable": True,
+                    "qf_oracle_kernel_transpiled": True,
+                    "full_qae_oracle_transpiled": False,
+                },
                 "moonlab_job_specs_summary": {
                     "selected_job_count": 4,
                     "hardware_candidate_job_count": 1,
@@ -1028,15 +1157,17 @@ class PublicationPackTests(unittest.TestCase):
                 "moonlab_submission_bundle_summary": {
                     "schema": "qge.moonlab_submission_bundle.v0",
                     "status": (
-                        "calibration_payload_ready_"
-                        "oracle_transpilation_required"),
+                        "qf_oracle_kernel_ready_"
+                        "qae_transpilation_required"),
                     "hardware_candidate_job_count": 1,
                     "ready_for_control_plane_submission_count": 0,
                     "calibration_payload_ready_count": 1,
+                    "oracle_kernel_ready_count": 1,
                     "transpilation_required_count": 1,
                     "missing_artifact_candidate_count": 0,
                     "hardware_submission_directly_executable": False,
                     "control_plane_payload_directly_executable": True,
+                    "oracle_kernel_directly_executable": True,
                 },
                 "moonlab_hardware_record_template_summary": {
                     "schema": "qge.moonlab_hardware_record_template.v0",
@@ -1192,6 +1323,34 @@ class PublicationPackTests(unittest.TestCase):
         self.assertFalse(
             icc["moonlab_qae_payload_full_qae_oracle_transpiled"])
         self.assertEqual(
+            icc["moonlab_qae_oracle_kernel_file"],
+            "advantage/qae_moonlab_oracle_kernel.json")
+        self.assertEqual(
+            icc["moonlab_qae_oracle_kernel_circuit_file"],
+            "advantage/qae_moonlab_oracle_kernel.moonlab")
+        self.assertEqual(
+            icc["moonlab_qae_oracle_kernel_markdown_file"],
+            "advantage/qae_moonlab_oracle_kernel.md")
+        self.assertEqual(
+            icc["moonlab_qae_oracle_kernel_icc_evidence_file"],
+            "advantage/qae_moonlab_oracle_kernel_icc_evidence.json")
+        self.assertEqual(
+            icc["moonlab_qae_oracle_kernel_schema"],
+            "qge.moonlab_qae_oracle_kernel.v0")
+        self.assertEqual(
+            icc["moonlab_qae_oracle_kernel_status"],
+            "qf_oracle_kernel_ready_qae_transpilation_required")
+        self.assertEqual(
+            icc["moonlab_qae_oracle_kernel_semantic_scope"],
+            "bernoulli_lift_qf_oracle_kernel")
+        self.assertTrue(
+            icc["moonlab_qae_oracle_kernel_control_plane_executable"])
+        self.assertTrue(
+            icc["moonlab_qae_qf_oracle_kernel_transpiled"])
+        self.assertFalse(
+            icc[
+                "moonlab_qae_oracle_kernel_full_qae_oracle_transpiled"])
+        self.assertEqual(
             icc["moonlab_job_specs_file"],
             "resource/qge_moonlab_job_specs.json")
         self.assertEqual(
@@ -1229,13 +1388,15 @@ class PublicationPackTests(unittest.TestCase):
             "qge.moonlab_submission_bundle.v0")
         self.assertEqual(
             icc["moonlab_submission_bundle_status"],
-            "calibration_payload_ready_oracle_transpilation_required")
+            "qf_oracle_kernel_ready_qae_transpilation_required")
         self.assertEqual(
             icc[
                 "moonlab_submission_ready_for_control_plane_submission_count"],
             0)
         self.assertEqual(
             icc["moonlab_submission_calibration_payload_ready_count"], 1)
+        self.assertEqual(
+            icc["moonlab_submission_oracle_kernel_ready_count"], 1)
         self.assertEqual(
             icc["moonlab_submission_transpilation_required_count"], 1)
         self.assertEqual(
@@ -1244,6 +1405,8 @@ class PublicationPackTests(unittest.TestCase):
             icc["moonlab_hardware_submission_directly_executable"])
         self.assertTrue(
             icc["moonlab_control_plane_payload_directly_executable"])
+        self.assertTrue(
+            icc["moonlab_oracle_kernel_directly_executable"])
         self.assertEqual(
             icc["moonlab_hardware_record_template_file"],
             "resource/qge_moonlab_hardware_record_template.json")

@@ -33,6 +33,7 @@ import qge_moonlab_deployment_gate  # noqa: E402
 import qge_moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest  # noqa: E402
 import qge_moonlab_job_runner  # noqa: E402
+import qge_moonlab_oracle_transpile  # noqa: E402
 import qge_moonlab_qae_transpile  # noqa: E402
 import qge_moonlab_submission_bundle  # noqa: E402
 import qge_oracle_export  # noqa: E402
@@ -643,6 +644,8 @@ def build_moonlab_job_specs(
                 "qae_circuit": artifact_paths.get("qae_circuit"),
                 "moonlab_qae_payload": artifact_paths.get(
                     "moonlab_qae_payload"),
+                "moonlab_qae_oracle_kernel": artifact_paths.get(
+                    "moonlab_qae_oracle_kernel"),
             },
             "fallback_policy": (
                 "simulator result is publishable; hardware result requires backend id, "
@@ -866,6 +869,13 @@ def build_advantage_artifacts(oracle_scene_path: Path,
     moonlab_payload_markdown_path = outdir / "qae_moonlab_payload.md"
     moonlab_payload_icc_path = outdir / "qae_moonlab_payload_icc_evidence.json"
     moonlab_circuit_dir = outdir / "moonlab_qae_circuits"
+    moonlab_oracle_kernel_path = outdir / "qae_moonlab_oracle_kernel.json"
+    moonlab_oracle_kernel_circuit_path = (
+        outdir / "qae_moonlab_oracle_kernel.moonlab")
+    moonlab_oracle_kernel_markdown_path = (
+        outdir / "qae_moonlab_oracle_kernel.md")
+    moonlab_oracle_kernel_icc_path = (
+        outdir / "qae_moonlab_oracle_kernel_icc_evidence.json")
     scaling_path = outdir / "scaling_summary.json"
     scaling_csv_path = outdir / "scaling_summary.csv"
     icc_path = outdir / "qge_advantage_icc_evidence.json"
@@ -893,6 +903,26 @@ def build_advantage_artifacts(oracle_scene_path: Path,
             out_path=moonlab_payload_path,
         ),
     )
+    moonlab_oracle_kernel = qge_moonlab_oracle_transpile.build_kernel(
+        metrics,
+        oracle_scene,
+        metrics_path=metrics_path,
+        oracle_scene_path=oracle_scene_path,
+        circuit_path=moonlab_oracle_kernel_circuit_path,
+    )
+    write_json(moonlab_oracle_kernel_path, moonlab_oracle_kernel)
+    moonlab_oracle_kernel_markdown_path.write_text(
+        qge_moonlab_oracle_transpile.markdown_report(
+            moonlab_oracle_kernel),
+        encoding="utf-8",
+    )
+    write_json(
+        moonlab_oracle_kernel_icc_path,
+        qge_moonlab_oracle_transpile.build_icc_evidence(
+            moonlab_oracle_kernel,
+            out_path=moonlab_oracle_kernel_path,
+        ),
+    )
     qge_advantage_benchmark.write_json(
         icc_path,
         qge_advantage_benchmark.build_icc_evidence(
@@ -909,6 +939,14 @@ def build_advantage_artifacts(oracle_scene_path: Path,
             moonlab_payload_icc_path),
         "qae_moonlab_circuits": directory_info(moonlab_circuit_dir),
         "qae_moonlab_payload_data": moonlab_payload,
+        "qae_moonlab_oracle_kernel": file_info(moonlab_oracle_kernel_path),
+        "qae_moonlab_oracle_kernel_circuit": file_info(
+            moonlab_oracle_kernel_circuit_path),
+        "qae_moonlab_oracle_kernel_markdown": file_info(
+            moonlab_oracle_kernel_markdown_path),
+        "qae_moonlab_oracle_kernel_icc_evidence": file_info(
+            moonlab_oracle_kernel_icc_path),
+        "qae_moonlab_oracle_kernel_data": moonlab_oracle_kernel,
         "scaling_summary": file_info(scaling_path),
         "scaling_summary_csv": file_info(scaling_csv_path),
         "icc_evidence": file_info(icc_path),
@@ -1163,6 +1201,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "advantage_metrics": advantage["metrics"]["path"],
             "qae_circuit": advantage["qae_circuit"]["path"],
             "moonlab_qae_payload": advantage["qae_moonlab_payload"]["path"],
+            "moonlab_qae_oracle_kernel": (
+                advantage["qae_moonlab_oracle_kernel"]["path"]),
             "trace": capture_artifacts["trace"]["packed"]["path"],
             "frame": capture_artifacts["frame"]["packed"]["path"],
             "vanilla_matrix": vanilla_artifacts["matrix"]["packed"]["path"],
@@ -1392,6 +1432,14 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "qae_moonlab_payload_icc_evidence": (
                     advantage["qae_moonlab_payload_icc_evidence"]),
                 "qae_moonlab_circuits": advantage["qae_moonlab_circuits"],
+                "qae_moonlab_oracle_kernel": (
+                    advantage["qae_moonlab_oracle_kernel"]),
+                "qae_moonlab_oracle_kernel_circuit": (
+                    advantage["qae_moonlab_oracle_kernel_circuit"]),
+                "qae_moonlab_oracle_kernel_markdown": (
+                    advantage["qae_moonlab_oracle_kernel_markdown"]),
+                "qae_moonlab_oracle_kernel_icc_evidence": (
+                    advantage["qae_moonlab_oracle_kernel_icc_evidence"]),
                 "scaling_summary": advantage["scaling_summary"],
                 "scaling_summary_csv": advantage["scaling_summary_csv"],
                 "icc_evidence": advantage["icc_evidence"],
@@ -1568,6 +1616,32 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                         "claim_posture", {}).get(
                             "full_qae_oracle_transpiled")),
             },
+            "moonlab_qae_oracle_kernel_summary": {
+                "schema": (
+                    advantage["qae_moonlab_oracle_kernel_data"].get(
+                        "schema")),
+                "status": (
+                    advantage["qae_moonlab_oracle_kernel_data"].get(
+                        "status")),
+                "semantic_scope": (
+                    advantage["qae_moonlab_oracle_kernel_data"].get(
+                        "semantic_scope")),
+                "resource_estimate": (
+                    advantage["qae_moonlab_oracle_kernel_data"].get(
+                        "resource_estimate")),
+                "control_plane_executable": (
+                    advantage["qae_moonlab_oracle_kernel_data"].get(
+                        "moonlab_control_plane", {}).get(
+                            "control_plane_executable")),
+                "qf_oracle_kernel_transpiled": (
+                    advantage["qae_moonlab_oracle_kernel_data"].get(
+                        "claim_posture", {}).get(
+                            "qf_oracle_kernel_transpiled")),
+                "full_qae_oracle_transpiled": (
+                    advantage["qae_moonlab_oracle_kernel_data"].get(
+                        "claim_posture", {}).get(
+                            "full_qae_oracle_transpiled")),
+            },
             "resource_envelope_summary": resource_envelope.get("posture"),
             "full_game_map_coverage_summary": {
                 "status": full_game_map_coverage.get("status"),
@@ -1666,6 +1740,9 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "calibration_payload_ready_count": (
                     moonlab_submission_bundle.get(
                         "calibration_payload_ready_count")),
+                "oracle_kernel_ready_count": (
+                    moonlab_submission_bundle.get(
+                        "oracle_kernel_ready_count")),
                 "transpilation_required_count": (
                     moonlab_submission_bundle.get(
                         "transpilation_required_count")),
@@ -1678,6 +1755,9 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "control_plane_payload_directly_executable": (
                     moonlab_submission_bundle.get(
                         "control_plane_payload_directly_executable")),
+                "oracle_kernel_directly_executable": (
+                    moonlab_submission_bundle.get(
+                        "oracle_kernel_directly_executable")),
             },
             "moonlab_hardware_record_template_summary": {
                 "schema": moonlab_hardware_record_template.get("schema"),
@@ -1754,6 +1834,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_oracle_export.py <capture_dir>",
             "tools/qge_advantage_benchmark.py <oracle_scene.json> --outdir <outdir>",
             "tools/qge_moonlab_qae_transpile.py --metrics <pack_dir>/advantage/advantage_metrics.json --abstract-circuit <pack_dir>/advantage/qae_circuit.txt --out /tmp/qae_moonlab_payload.json --circuit-dir /tmp/moonlab_qae_circuits --markdown /tmp/qae_moonlab_payload.md --icc-json /tmp/qae_moonlab_payload_icc_evidence.json",
+            "tools/qge_moonlab_oracle_transpile.py --metrics <pack_dir>/advantage/advantage_metrics.json --oracle-scene <pack_dir>/oracle/oracle_scene.json --out /tmp/qae_moonlab_oracle_kernel.json --circuit /tmp/qae_moonlab_oracle_kernel.moonlab --markdown /tmp/qae_moonlab_oracle_kernel.md --icc-json /tmp/qae_moonlab_oracle_kernel_icc_evidence.json",
             "tools/qge_vanilla_capture_matrix.py <graphics_capture_dir>",
             "tools/qge_breadth_evidence.py --matrix <graphics_capture_dir> --min-maps N",
             "tools/qge_publication_pack.py --capture-dir <trace_capture_dir> --vanilla-matrix <graphics_capture_dir>/vanilla_capture_matrix.json --graphics-capture-dir <graphics_capture_dir> --breadth-evidence <breadth_dir>",
@@ -1778,6 +1859,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary = {}
     qae_payload_summary = dict_or_empty(
         advantage_summary.get("moonlab_qae_payload_summary"))
+    qae_oracle_kernel_summary = dict_or_empty(
+        advantage_summary.get("moonlab_qae_oracle_kernel_summary"))
     job_specs_summary = dict_or_empty(
         advantage_summary.get("moonlab_job_specs_summary"))
     job_results_summary = dict_or_empty(
@@ -1834,6 +1917,30 @@ def build_icc_evidence(manifest: dict[str, Any],
             qae_payload_summary.get("semantic_scope")),
         "moonlab_qae_payload_full_qae_oracle_transpiled": (
             qae_payload_summary.get("full_qae_oracle_transpiled")),
+        "moonlab_qae_oracle_kernel_file": (
+            artifacts["advantage"].get(
+                "qae_moonlab_oracle_kernel", {}).get("path")),
+        "moonlab_qae_oracle_kernel_circuit_file": (
+            artifacts["advantage"].get(
+                "qae_moonlab_oracle_kernel_circuit", {}).get("path")),
+        "moonlab_qae_oracle_kernel_markdown_file": (
+            artifacts["advantage"].get(
+                "qae_moonlab_oracle_kernel_markdown", {}).get("path")),
+        "moonlab_qae_oracle_kernel_icc_evidence_file": (
+            artifacts["advantage"].get(
+                "qae_moonlab_oracle_kernel_icc_evidence", {}).get("path")),
+        "moonlab_qae_oracle_kernel_schema": (
+            qae_oracle_kernel_summary.get("schema")),
+        "moonlab_qae_oracle_kernel_status": (
+            qae_oracle_kernel_summary.get("status")),
+        "moonlab_qae_oracle_kernel_semantic_scope": (
+            qae_oracle_kernel_summary.get("semantic_scope")),
+        "moonlab_qae_oracle_kernel_control_plane_executable": (
+            qae_oracle_kernel_summary.get("control_plane_executable")),
+        "moonlab_qae_qf_oracle_kernel_transpiled": (
+            qae_oracle_kernel_summary.get("qf_oracle_kernel_transpiled")),
+        "moonlab_qae_oracle_kernel_full_qae_oracle_transpiled": (
+            qae_oracle_kernel_summary.get("full_qae_oracle_transpiled")),
         "scaling_summary_file": artifacts["advantage"]["scaling_summary"]["path"],
         "resource_envelope_file": artifacts.get("resource", {}).get(
             "envelope", {}).get("path"),
@@ -1946,6 +2053,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         "moonlab_submission_calibration_payload_ready_count": (
             submission_bundle_summary.get(
                 "calibration_payload_ready_count")),
+        "moonlab_submission_oracle_kernel_ready_count": (
+            submission_bundle_summary.get("oracle_kernel_ready_count")),
         "moonlab_submission_transpilation_required_count": (
             submission_bundle_summary.get("transpilation_required_count")),
         "moonlab_submission_missing_artifact_candidate_count": (
@@ -1957,6 +2066,9 @@ def build_icc_evidence(manifest: dict[str, Any],
         "moonlab_control_plane_payload_directly_executable": (
             submission_bundle_summary.get(
                 "control_plane_payload_directly_executable")),
+        "moonlab_oracle_kernel_directly_executable": (
+            submission_bundle_summary.get(
+                "oracle_kernel_directly_executable")),
         "moonlab_hardware_record_template_schema": (
             hardware_record_template_summary.get("schema")),
         "moonlab_hardware_record_schema": (

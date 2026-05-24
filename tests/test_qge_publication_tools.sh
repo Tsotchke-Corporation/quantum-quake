@@ -333,6 +333,10 @@ assert manifest["artifacts"]["advantage"]["qae_moonlab_payload_markdown"]["exist
 assert manifest["artifacts"]["advantage"]["qae_moonlab_payload_icc_evidence"]["exists"] is True
 assert manifest["artifacts"]["advantage"]["qae_moonlab_circuits"]["exists"] is True
 assert manifest["artifacts"]["advantage"]["qae_moonlab_circuits"]["file_count"] > 0
+assert manifest["artifacts"]["advantage"]["qae_moonlab_oracle_kernel"]["exists"] is True
+assert manifest["artifacts"]["advantage"]["qae_moonlab_oracle_kernel_circuit"]["exists"] is True
+assert manifest["artifacts"]["advantage"]["qae_moonlab_oracle_kernel_markdown"]["exists"] is True
+assert manifest["artifacts"]["advantage"]["qae_moonlab_oracle_kernel_icc_evidence"]["exists"] is True
 assert manifest["artifacts"]["resource"]["envelope"]["exists"] is True
 assert manifest["artifacts"]["resource"]["full_game_map_coverage"]["exists"] is True
 assert manifest["artifacts"]["resource"]["asset_inventory"]["exists"] is True
@@ -372,6 +376,12 @@ assert manifest["advantage_summary"]["moonlab_qae_payload_summary"]["schema"] ==
 assert manifest["advantage_summary"]["moonlab_qae_payload_summary"]["status"] == "calibration_payload_ready_oracle_transpilation_required"
 assert manifest["advantage_summary"]["moonlab_qae_payload_summary"]["semantic_scope"] == "mlae_observation_distribution_payload"
 assert manifest["advantage_summary"]["moonlab_qae_payload_summary"]["full_qae_oracle_transpiled"] is False
+assert manifest["advantage_summary"]["moonlab_qae_oracle_kernel_summary"]["schema"] == "qge.moonlab_qae_oracle_kernel.v0"
+assert manifest["advantage_summary"]["moonlab_qae_oracle_kernel_summary"]["status"] == "qf_oracle_kernel_ready_qae_transpilation_required"
+assert manifest["advantage_summary"]["moonlab_qae_oracle_kernel_summary"]["semantic_scope"] == "bernoulli_lift_qf_oracle_kernel"
+assert manifest["advantage_summary"]["moonlab_qae_oracle_kernel_summary"]["control_plane_executable"] is True
+assert manifest["advantage_summary"]["moonlab_qae_oracle_kernel_summary"]["qf_oracle_kernel_transpiled"] is True
+assert manifest["advantage_summary"]["moonlab_qae_oracle_kernel_summary"]["full_qae_oracle_transpiled"] is False
 assert manifest["advantage_summary"]["moonlab_job_specs_summary"]["hardware_candidate_job_count"] == 1
 assert manifest["advantage_summary"]["moonlab_job_results_summary"]["completed_simulator_job_count"] >= 2
 assert manifest["advantage_summary"]["moonlab_job_results_summary"]["hardware_submitted_job_count"] == 0
@@ -379,12 +389,14 @@ assert manifest["advantage_summary"]["moonlab_replay_plan_summary"]["schema"] ==
 assert manifest["advantage_summary"]["moonlab_submission_packet_summary"]["schema"] == "qge.moonlab_submission_packet.v0"
 assert manifest["advantage_summary"]["moonlab_submission_packet_summary"]["ready_candidate_count"] == 1
 assert manifest["advantage_summary"]["moonlab_submission_bundle_summary"]["schema"] == "qge.moonlab_submission_bundle.v0"
-assert manifest["advantage_summary"]["moonlab_submission_bundle_summary"]["status"] == "calibration_payload_ready_oracle_transpilation_required"
+assert manifest["advantage_summary"]["moonlab_submission_bundle_summary"]["status"] == "qf_oracle_kernel_ready_qae_transpilation_required"
 assert manifest["advantage_summary"]["moonlab_submission_bundle_summary"]["ready_for_control_plane_submission_count"] == 0
 assert manifest["advantage_summary"]["moonlab_submission_bundle_summary"]["calibration_payload_ready_count"] == 1
+assert manifest["advantage_summary"]["moonlab_submission_bundle_summary"]["oracle_kernel_ready_count"] == 1
 assert manifest["advantage_summary"]["moonlab_submission_bundle_summary"]["transpilation_required_count"] == 1
 assert manifest["advantage_summary"]["moonlab_submission_bundle_summary"]["hardware_submission_directly_executable"] is False
 assert manifest["advantage_summary"]["moonlab_submission_bundle_summary"]["control_plane_payload_directly_executable"] is True
+assert manifest["advantage_summary"]["moonlab_submission_bundle_summary"]["oracle_kernel_directly_executable"] is True
 assert manifest["advantage_summary"]["moonlab_hardware_record_template_summary"]["schema"] == "qge.moonlab_hardware_record_template.v0"
 assert manifest["advantage_summary"]["moonlab_hardware_record_template_summary"]["record_schema"] == "qge.moonlab_hardware_record.v0"
 assert manifest["advantage_summary"]["moonlab_full_game_plan_summary"]["schema"] == "qge.moonlab_full_game_deployment_plan.v0"
@@ -427,6 +439,16 @@ assert icc["moonlab_qae_payload_schema"] == "qge.moonlab_qae_payload.v0"
 assert icc["moonlab_qae_payload_status"] == "calibration_payload_ready_oracle_transpilation_required"
 assert icc["moonlab_qae_payload_semantic_scope"] == "mlae_observation_distribution_payload"
 assert icc["moonlab_qae_payload_full_qae_oracle_transpiled"] is False
+assert icc["moonlab_qae_oracle_kernel_file"].endswith("advantage/qae_moonlab_oracle_kernel.json")
+assert icc["moonlab_qae_oracle_kernel_circuit_file"].endswith("advantage/qae_moonlab_oracle_kernel.moonlab")
+assert icc["moonlab_qae_oracle_kernel_markdown_file"].endswith("advantage/qae_moonlab_oracle_kernel.md")
+assert icc["moonlab_qae_oracle_kernel_icc_evidence_file"].endswith("advantage/qae_moonlab_oracle_kernel_icc_evidence.json")
+assert icc["moonlab_qae_oracle_kernel_schema"] == "qge.moonlab_qae_oracle_kernel.v0"
+assert icc["moonlab_qae_oracle_kernel_status"] == "qf_oracle_kernel_ready_qae_transpilation_required"
+assert icc["moonlab_qae_oracle_kernel_semantic_scope"] == "bernoulli_lift_qf_oracle_kernel"
+assert icc["moonlab_qae_oracle_kernel_control_plane_executable"] is True
+assert icc["moonlab_qae_qf_oracle_kernel_transpiled"] is True
+assert icc["moonlab_qae_oracle_kernel_full_qae_oracle_transpiled"] is False
 assert icc["moonlab_job_specs_file"].endswith("resource/qge_moonlab_job_specs.json")
 assert icc["moonlab_job_results_file"].endswith("resource/qge_moonlab_job_results.json")
 assert icc["moonlab_replay_plan_file"].endswith("resource/qge_moonlab_replay_plan.json")
@@ -438,12 +460,14 @@ assert icc["moonlab_submission_bundle_file"].endswith("resource/qge_moonlab_subm
 assert icc["moonlab_submission_bundle_markdown_file"].endswith("resource/qge_moonlab_submission_bundle.md")
 assert icc["moonlab_submission_bundle_icc_evidence_file"].endswith("resource/qge_moonlab_submission_bundle_icc_evidence.json")
 assert icc["moonlab_submission_bundle_schema"] == "qge.moonlab_submission_bundle.v0"
-assert icc["moonlab_submission_bundle_status"] == "calibration_payload_ready_oracle_transpilation_required"
+assert icc["moonlab_submission_bundle_status"] == "qf_oracle_kernel_ready_qae_transpilation_required"
 assert icc["moonlab_submission_ready_for_control_plane_submission_count"] == 0
 assert icc["moonlab_submission_calibration_payload_ready_count"] == 1
+assert icc["moonlab_submission_oracle_kernel_ready_count"] == 1
 assert icc["moonlab_submission_transpilation_required_count"] == 1
 assert icc["moonlab_hardware_submission_directly_executable"] is False
 assert icc["moonlab_control_plane_payload_directly_executable"] is True
+assert icc["moonlab_oracle_kernel_directly_executable"] is True
 assert icc["moonlab_hardware_record_template_file"].endswith("resource/qge_moonlab_hardware_record_template.json")
 assert icc["moonlab_hardware_record_template_schema"] == "qge.moonlab_hardware_record_template.v0"
 assert icc["moonlab_hardware_record_schema"] == "qge.moonlab_hardware_record.v0"
@@ -495,6 +519,36 @@ assert payload["semantic_scope"] == "mlae_observation_distribution_payload"
 assert payload["payload_resource_estimate"]["circuit_count"] > 0
 assert payload["claim_posture"]["full_qae_oracle_transpiled"] is False
 assert icc["runtime_backend"] == "qge_moonlab_qae_transpile"
+assert icc["full_qae_oracle_transpiled"] is False
+PY
+
+python3 "$repo_root/tools/qge_moonlab_oracle_transpile.py" \
+  --metrics "$pack_dir/advantage/advantage_metrics.json" \
+  --oracle-scene "$pack_dir/oracle/oracle_scene.json" \
+  --out "$tmpdir/qae_moonlab_oracle_kernel.json" \
+  --circuit "$tmpdir/qae_moonlab_oracle_kernel.moonlab" \
+  --markdown "$tmpdir/qae_moonlab_oracle_kernel.md" \
+  --icc-json "$tmpdir/qae_moonlab_oracle_kernel_icc_evidence.json" \
+  > "$tmpdir/moonlab_oracle_transpile.stdout"
+grep -F 'QGE_MOONLAB_QAE_ORACLE_KERNEL' "$tmpdir/moonlab_oracle_transpile.stdout" >/dev/null
+grep -F 'QGE_MOONLAB_QAE_ORACLE_CIRCUIT' "$tmpdir/moonlab_oracle_transpile.stdout" >/dev/null
+grep -F 'QGE_MOONLAB_QAE_ORACLE_KERNEL_ICC_EVIDENCE' "$tmpdir/moonlab_oracle_transpile.stdout" >/dev/null
+python3 - "$tmpdir/qae_moonlab_oracle_kernel.json" "$tmpdir/qae_moonlab_oracle_kernel_icc_evidence.json" <<'PY'
+import json
+import sys
+
+kernel = json.load(open(sys.argv[1], encoding="utf-8"))
+icc = json.load(open(sys.argv[2], encoding="utf-8"))
+assert kernel["schema"] == "qge.moonlab_qae_oracle_kernel.v0"
+assert kernel["status"] == "qf_oracle_kernel_ready_qae_transpilation_required"
+assert kernel["semantic_scope"] == "bernoulli_lift_qf_oracle_kernel"
+assert kernel["moonlab_control_plane"]["control_plane_executable"] is True
+assert kernel["resource_estimate"]["logical_qubits"] <= 32
+assert kernel["resource_estimate"]["gate_count"] > 1000
+assert kernel["claim_posture"]["qf_oracle_kernel_transpiled"] is True
+assert kernel["claim_posture"]["full_qae_oracle_transpiled"] is False
+assert icc["runtime_backend"] == "qge_moonlab_oracle_transpile"
+assert icc["qf_oracle_kernel_transpiled"] is True
 assert icc["full_qae_oracle_transpiled"] is False
 PY
 
@@ -552,18 +606,22 @@ manifest = json.load(open(sys.argv[3], encoding="utf-8"))
 summary = manifest["advantage_summary"]["moonlab_submission_bundle_summary"]
 assert bundle["schema"] == "qge.moonlab_submission_bundle.v0"
 assert bundle["status"] == summary["status"]
-assert bundle["status"] == "calibration_payload_ready_oracle_transpilation_required"
+assert bundle["status"] == "qf_oracle_kernel_ready_qae_transpilation_required"
 assert bundle["ready_for_control_plane_submission_count"] == 0
 assert bundle["calibration_payload_ready_count"] == 1
+assert bundle["oracle_kernel_ready_count"] == 1
 assert bundle["transpilation_required_count"] == 1
 assert bundle["hardware_submission_directly_executable"] is False
 assert bundle["control_plane_payload_directly_executable"] is True
+assert bundle["oracle_kernel_directly_executable"] is True
 assert bundle["candidate_jobs"][0]["qae_circuit_check"]["format"] == "qge_abstract_qae_circuit_v0"
 assert bundle["candidate_jobs"][0]["moonlab_qae_payload_check"]["semantic_scope"] == "mlae_observation_distribution_payload"
+assert bundle["candidate_jobs"][0]["moonlab_qae_oracle_kernel_check"]["semantic_scope"] == "bernoulli_lift_qf_oracle_kernel"
 assert icc["runtime_backend"] == "qge_moonlab_submission_bundle"
 assert icc["submission_bundle_status"] == bundle["status"]
 assert icc["hardware_submission_directly_executable"] is False
 assert icc["control_plane_payload_directly_executable"] is True
+assert icc["oracle_kernel_directly_executable"] is True
 PY
 
 python3 "$repo_root/tools/qge_moonlab_hardware_ingest.py" \

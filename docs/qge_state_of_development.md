@@ -665,7 +665,7 @@ Known current visual state:
   repo.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
-  publication pack is `diagnostics/publication_pack/20260524-124933`, with
+  publication pack is `diagnostics/publication_pack/20260524-132843`, with
   `qge_publication_artifact_pack_complete`, the e1m1 ready vanilla/QGE capture,
   vanilla ICC evidence sidecar, agent stream, oracle/claims exports, QAE
   benchmark artifacts, `resource/qge_resource_envelope.json`,
@@ -700,11 +700,14 @@ Known current visual state:
   hardware-candidate submission packet. `tools/qge_moonlab_qae_transpile.py`
   now emits `advantage/qae_moonlab_payload.json` plus four
   `# moonlab-circuit v1` observation circuits for the MLAE readout schedule.
-  `tools/qge_moonlab_submission_bundle.py` verifies that payload while keeping
-  the current QAE candidate at
-  `calibration_payload_ready_oracle_transpilation_required`: the readout
-  payload is executable, but the full reversible `Q_f`/Grover oracle is still
-  abstract QGE QAE text. `tools/qge_moonlab_hardware_ingest.py`
+  `tools/qge_moonlab_oracle_transpile.py` now emits
+  `advantage/qae_moonlab_oracle_kernel.moonlab`, a 32-qubit, 189,041-gate
+  supported-gate reversible `Q_f` predicate kernel for the captured
+  Bernoulli-lift oracle. `tools/qge_moonlab_submission_bundle.py` verifies
+  those payloads while keeping the current QAE candidate at
+  `qf_oracle_kernel_ready_qae_transpilation_required`: readout and `Q_f` are
+  executable, but candidate state preparation, Grover diffusion, and full MLAE
+  circuit assembly are still pending. `tools/qge_moonlab_hardware_ingest.py`
   is the guarded return path for a real Moonlab hardware record: it can generate
   the no-claim hardware record template from the submission packet, then
   requires backend ID, shot schedule, readout metadata, and matching candidate
