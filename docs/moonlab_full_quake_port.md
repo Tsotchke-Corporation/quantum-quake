@@ -51,7 +51,7 @@ when all of these are true:
 
 The full-port acceptance target is the ICC completion oracle
 `qge_vanilla_quake_conformance`. As of
-`diagnostics/publication_pack/20260524-033901`, ICC reports
+`diagnostics/publication_pack/20260524-124933`, ICC reports
 `qge_vanilla_runtime_complete` ready for the bundled e1m1 QGE/vanilla capture
 matrix. That evidence proves the ownership counters for the captured workload;
 it does not by itself close renderer fidelity, all-map breadth, or whole-game
@@ -88,12 +88,17 @@ job remains an unsubmitted hardware candidate.
 hardware-candidate handoff contract: artifact hashes, required backend ID, shot
 schedule, readout metadata, and the result file that must be updated after a
 real submission.
+`advantage/qae_moonlab_payload.json` and
+`advantage/moonlab_qae_circuits/*.moonlab` record the directly executable
+Moonlab control-plane payload currently available: four one-qubit `RY`
+circuits for the MLAE observation/readout distribution, 384 total shots.
 `resource/qge_moonlab_submission_bundle.json` records the stricter Moonlab
 control-plane readiness verdict. It checks whether the candidate circuit
-artifact is directly executable `# moonlab-circuit v1` text with `NUM_QUBITS`;
-today's QAE benchmark is still abstract QGE QAE text, so the bundle status is
-`blocked_transpilation_required` and direct hardware submission is not allowed
-from that artifact alone.
+artifact is directly executable `# moonlab-circuit v1` text with `NUM_QUBITS`.
+The current bundle is `calibration_payload_ready_oracle_transpilation_required`:
+the readout payload is executable, but the full reversible `Q_f`/Grover oracle
+is still abstract QGE QAE text, so a full QAE hardware submission is not
+claimed from that artifact alone.
 `resource/qge_moonlab_hardware_record_template.json` is generated from that
 packet and provides the exact `qge.moonlab_hardware_record.v0` object Moonlab
 must fill before any hardware result is ingested.
@@ -268,7 +273,7 @@ A complete port is credible when these are true:
 
 1. Expand the ready matrix beyond the current 9/32 partial full-game map
    coverage ledger. Re-run the missing-map queue with
-   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-033901`
+   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-124933`
    after installing registered BSP assets. With the current `assets/id1/pak0.pak`,
    the queue has zero locally runnable missing maps and 23 registered maps
    require additional registered BSP assets before capture. Use

@@ -63,7 +63,7 @@ Important known limitations:
 
 - The full-port ICC target is `qge_vanilla_quake_conformance`. The current
   strongest self-contained evidence pack is
-  `diagnostics/publication_pack/20260524-033901`, where ICC reports the strict
+  `diagnostics/publication_pack/20260524-124933`, where ICC reports the strict
   vanilla/QGE runtime ownership matrix and `qge_vanilla_runtime_complete`
   ready. The pack includes `resource/qge_resource_envelope.json`, which scopes
   Moonlab simulator/native-backend deployment,
@@ -88,6 +88,9 @@ Important known limitations:
   replay/validation contract and
   `resource/qge_moonlab_submission_packet.json` with the deterministic
   hardware-candidate handoff contract,
+  `advantage/qae_moonlab_payload.json` plus four
+  `advantage/moonlab_qae_circuits/*.moonlab` control-plane circuits for the
+  MLAE observation/readout schedule, and
   `resource/qge_moonlab_submission_bundle.json` with the stricter
   control-plane readiness verdict, plus
   `resource/qge_moonlab_hardware_record_template.json` with the exact
@@ -97,8 +100,9 @@ Important known limitations:
   the packed expected results, and emit both a replay plan and submission
   packet. `tools/qge_moonlab_submission_bundle.py` then verifies whether the
   candidate circuit artifact is actually `# moonlab-circuit v1`; the current
-  QAE candidate is intentionally marked `blocked_transpilation_required`
-  because its circuit artifact is still abstract QGE QAE text. After a real
+  bundle is `calibration_payload_ready_oracle_transpilation_required` because
+  the new readout-equivalent Moonlab payload is executable, while the full
+  reversible `Q_f`/Grover oracle remains abstract QGE QAE text. After a real
   Moonlab hardware run, use
   `tools/qge_moonlab_hardware_ingest.py` to validate the returned backend ID,
   shot schedule, readout metadata, and candidate digest before updating
@@ -108,7 +112,7 @@ Important known limitations:
   covered, 23 registered BSP assets are still missing, and the whole-game
   Moonlab deployment claim is not allowed yet. This is a captured workload
   proof, not a claim that every Quake domain is visually or hardware complete. Use
-  `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-033901`
+  `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-124933`
   to generate the remaining harness queue and breadth rebuild script; the queue
   inventories loose/Pak BSP assets, skips missing local BSPs unless
   `--include-unavailable-assets` is set, and currently reports zero locally

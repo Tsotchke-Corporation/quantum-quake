@@ -147,6 +147,76 @@ def classify_qae_circuit(path: Path | None) -> dict[str, Any]:
     return check
 
 
+def classify_moonlab_qae_payload(path: Path | None) -> dict[str, Any]:
+    info = file_info(path)
+    check: dict[str, Any] = {
+        "artifact": info,
+        "schema": None,
+        "status": "missing",
+        "semantic_scope": None,
+        "control_plane_payload_directly_executable": False,
+        "full_qae_oracle_transpiled": False,
+        "circuit_count": 0,
+        "total_shots": 0,
+        "blockers": ["moonlab_qae_payload artifact is missing"],
+    }
+    if path is None or not path.is_file():
+        return check
+
+    try:
+        payload = load_json(path)
+    except (OSError, ValueError) as exc:
+        check.update({
+            "status": "blocked_invalid_payload",
+            "blockers": [f"moonlab_qae_payload could not be read: {exc}"],
+        })
+        return check
+
+    resource = dict_or_empty(payload.get("payload_resource_estimate"))
+    claim_posture = dict_or_empty(payload.get("claim_posture"))
+    circuits = [
+        item for item in list_or_empty(payload.get("observation_circuits"))
+        if isinstance(item, dict)
+    ]
+    blockers = []
+    if payload.get("schema") != "qge.moonlab_qae_payload.v0":
+        blockers.append("moonlab_qae_payload schema is not qge.moonlab_qae_payload.v0")
+    if not circuits:
+        blockers.append("moonlab_qae_payload contains no observation circuits")
+    circuit_checks = []
+    for item in circuits:
+        raw_path = item.get("moonlab_circuit_file")
+        circuit_path = Path(raw_path) if isinstance(raw_path, str) and raw_path else None
+        circuit_check = classify_qae_circuit(circuit_path)
+        circuit_checks.append({
+            "observation_index": item.get("observation_index"),
+            "moonlab_circuit_file": str(circuit_path)
+            if circuit_path is not None else None,
+            "status": circuit_check.get("status"),
+            "format": circuit_check.get("format"),
+            "blockers": circuit_check.get("blockers"),
+        })
+        if circuit_check.get("status") != "ready_for_control_plane_submission":
+            blockers.append(
+                "observation circuit is not moonlab-circuit v1: "
+                f"{raw_path}"
+            )
+    executable = not blockers
+    check.update({
+        "schema": payload.get("schema"),
+        "status": payload.get("status"),
+        "semantic_scope": payload.get("semantic_scope"),
+        "control_plane_payload_directly_executable": executable,
+        "full_qae_oracle_transpiled": bool(
+            claim_posture.get("full_qae_oracle_transpiled")),
+        "circuit_count": resource.get("circuit_count"),
+        "total_shots": resource.get("total_shots"),
+        "circuit_checks": circuit_checks,
+        "blockers": blockers,
+    })
+    return check
+
+
 def artifact_checks(job: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
     required = dict_or_empty(job.get("required_artifacts"))
     evidence_by_name = {
@@ -208,13 +278,30 @@ def build_candidate_bundle(job: dict[str, Any]) -> dict[str, Any]:
         required.get("qae_circuit")
         else None
     )
+    payload_path = (
+        Path(required["moonlab_qae_payload"])
+        if isinstance(required.get("moonlab_qae_payload"), str) and
+        required.get("moonlab_qae_payload")
+        else None
+    )
     artifacts, missing = artifact_checks(job)
     qae_check = classify_qae_circuit(qae_path)
+    payload_check = classify_moonlab_qae_payload(payload_path)
     blockers = list(missing)
     blockers.extend(qae_check.get("blockers", []))
+    payload_blockers = list_or_empty(payload_check.get("blockers"))
+    if payload_path is not None:
+        blockers.extend(payload_blockers)
     direct = bool(qae_check.get("moonlab_control_plane_executable")) and not missing
+    payload_direct = bool(
+        payload_check.get("control_plane_payload_directly_executable")) and (
+            "moonlab_qae_payload" not in missing)
     if missing:
         status = "blocked_missing_required_artifact"
+    elif payload_direct and qae_check.get("status") == (
+        "blocked_transpilation_required"
+    ):
+        status = "calibration_payload_ready_oracle_transpilation_required"
     else:
         status = str(qae_check.get("status"))
     return {
@@ -231,8 +318,12 @@ def build_candidate_bundle(job: dict[str, Any]) -> dict[str, Any]:
         "artifact_checks": artifacts,
         "missing_required_artifacts": missing,
         "qae_circuit_check": qae_check,
+        "moonlab_qae_payload_check": payload_check,
         "moonlab_control_plane_request": control_plane_request_contract(job),
         "blockers": blockers,
+        "control_plane_payload_directly_executable": payload_direct,
+        "full_qae_oracle_transpiled": bool(
+            payload_check.get("full_qae_oracle_transpiled")),
         "claim_posture": {
             "hardware_result_claimed": False,
             "hardware_quantum_advantage_claimed": False,
@@ -256,6 +347,9 @@ def overall_status(
         return "blocked_missing_required_artifact"
     if any(status == "blocked_transpilation_required" for status in statuses):
         return "blocked_transpilation_required"
+    if any(status == "calibration_payload_ready_oracle_transpilation_required"
+           for status in statuses):
+        return "calibration_payload_ready_oracle_transpilation_required"
     if all(status == "ready_for_control_plane_submission"
            for status in statuses):
         return "ready_for_control_plane_submission"
@@ -287,6 +381,15 @@ def build_submission_bundle(
         if candidate.get("control_plane_submission_status") ==
         "blocked_missing_required_artifact"
     )
+    calibration_ready = sum(
+        1 for candidate in candidates
+        if candidate.get("control_plane_submission_status") ==
+        "calibration_payload_ready_oracle_transpilation_required"
+    )
+    payload_direct = bool(candidates) and all(
+        bool(candidate.get("control_plane_payload_directly_executable"))
+        for candidate in candidates
+    )
     direct = bool(candidates) and all(
         bool(candidate.get("hardware_submission_directly_executable"))
         for candidate in candidates
@@ -298,9 +401,11 @@ def build_submission_bundle(
         "status": overall_status(candidates),
         "hardware_candidate_job_count": len(candidates),
         "ready_for_control_plane_submission_count": ready,
+        "calibration_payload_ready_count": calibration_ready,
         "transpilation_required_count": transpilation_required,
         "missing_artifact_candidate_count": missing,
         "hardware_submission_directly_executable": direct,
+        "control_plane_payload_directly_executable": payload_direct,
         "moonlab_control_plane_requirements": {
             "payload_header": MOONLAB_CIRCUIT_HEADER,
             "required_payload_fields": ["NUM_QUBITS"],
@@ -318,6 +423,7 @@ def build_submission_bundle(
         "limits": [
             "A Moonlab hardware candidate is not directly executable until its circuit artifact is moonlab-circuit v1.",
             "Abstract QGE QAE circuit text requires a transpilation step before control-plane submission.",
+            "Readout-equivalent Moonlab payloads can validate shot plumbing without proving the full QAE oracle is transpiled.",
             "This bundle records submission readiness, not a hardware result.",
         ],
     }
@@ -329,21 +435,23 @@ def markdown_report(bundle: dict[str, Any]) -> str:
         "",
         f"Status: `{bundle['status']}`",
         "",
-        "| Jobs | Ready | Transpilation Required | Missing Artifacts | Directly Executable |",
-        "| ---: | ---: | ---: | ---: | --- |",
+        "| Jobs | Ready | Calibration Ready | Transpilation Required | Missing Artifacts | Directly Executable |",
+        "| ---: | ---: | ---: | ---: | ---: | --- |",
         (
             f"| {bundle['hardware_candidate_job_count']} | "
             f"{bundle['ready_for_control_plane_submission_count']} | "
+            f"{bundle['calibration_payload_ready_count']} | "
             f"{bundle['transpilation_required_count']} | "
             f"{bundle['missing_artifact_candidate_count']} | "
-            f"{bundle['hardware_submission_directly_executable']} |"
+            f"{bundle['control_plane_payload_directly_executable']} |"
         ),
         "",
-        "| Job | Control-Plane Status | Circuit Format | Qubits | Blockers |",
-        "| --- | --- | --- | ---: | --- |",
+        "| Job | Control-Plane Status | Circuit Format | Payload Scope | Qubits | Blockers |",
+        "| --- | --- | --- | --- | ---: | --- |",
     ]
     for job in bundle["candidate_jobs"]:
         qae_check = dict_or_empty(job.get("qae_circuit_check"))
+        payload_check = dict_or_empty(job.get("moonlab_qae_payload_check"))
         blockers = job.get("blockers", [])
         if isinstance(blockers, list):
             blocker_text = "; ".join(str(item) for item in blockers) or "none"
@@ -353,6 +461,7 @@ def markdown_report(bundle: dict[str, Any]) -> str:
             f"| {job.get('job_id')} | "
             f"{job.get('control_plane_submission_status')} | "
             f"{qae_check.get('format')} | "
+            f"{payload_check.get('semantic_scope')} | "
             f"{qae_check.get('logical_qubits_declared')} | "
             f"{blocker_text} |"
         )
@@ -380,12 +489,16 @@ def build_icc_evidence(
             "hardware_candidate_job_count"),
         "ready_for_control_plane_submission_count": bundle.get(
             "ready_for_control_plane_submission_count"),
+        "calibration_payload_ready_count": bundle.get(
+            "calibration_payload_ready_count"),
         "transpilation_required_count": bundle.get(
             "transpilation_required_count"),
         "missing_artifact_candidate_count": bundle.get(
             "missing_artifact_candidate_count"),
         "hardware_submission_directly_executable": bundle.get(
             "hardware_submission_directly_executable"),
+        "control_plane_payload_directly_executable": bundle.get(
+            "control_plane_payload_directly_executable"),
         "hardware_quantum_advantage_claimed": False,
         "whole_game_hardware_execution_claimed": False,
         "dense_70000_qubit_state_claimed": False,

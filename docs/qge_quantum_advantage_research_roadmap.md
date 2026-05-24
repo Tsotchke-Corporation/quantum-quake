@@ -98,7 +98,7 @@ Current artifact status:
   `scaling_summary.json`, `qae_curve.csv`, `qae_circuit.txt`, and
   `qge_advantage_icc_evidence.json`.
 - The publication pack at
-  `diagnostics/publication_pack/20260524-033901/` bundles the benchmark,
+  `diagnostics/publication_pack/20260524-124933/` bundles the benchmark,
   oracle, trace, stream, vanilla, vanilla ICC evidence sidecar, claims, source
   artifacts, `resource/qge_resource_envelope.json`,
   `resource/qge_full_game_map_coverage.json`,
@@ -122,12 +122,15 @@ Current artifact status:
   agent stream
   also carries macOS AppKit/SDL launcher probes,
   including intentional
-  `-nolauncher` skips for UI-only launcher controls. The submission bundle
-  currently marks the QAE hardware candidate `blocked_transpilation_required`
-  because the circuit artifact is abstract QGE QAE text, not a
-  `# moonlab-circuit v1` control-plane payload. A real hardware return should
-  start only after that payload exists, then use the generated hardware record
-  template and be merged with
+  `-nolauncher` skips for UI-only launcher controls. The pack now includes
+  `advantage/qae_moonlab_payload.json` and four
+  `advantage/moonlab_qae_circuits/*.moonlab` circuits for the MLAE
+  observation/readout schedule. The submission bundle status is
+  `calibration_payload_ready_oracle_transpilation_required`: the readout
+  payload is executable Moonlab control-plane text, but the full reversible
+  `Q_f`/Grover oracle is not yet transpiled. A real full-QAE hardware return
+  should start only after that payload exists, then use the generated hardware
+  record template and be merged with
   `tools/qge_moonlab_hardware_ingest.py`, which records a bounded hardware
   comparison while keeping hardware advantage and whole-game hardware claims
   false.
