@@ -1640,6 +1640,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_vanilla_capture_matrix.py <graphics_capture_dir>",
             "tools/qge_breadth_evidence.py --matrix <graphics_capture_dir> --min-maps N",
             "tools/qge_publication_pack.py --capture-dir <trace_capture_dir> --vanilla-matrix <graphics_capture_dir>/vanilla_capture_matrix.json --graphics-capture-dir <graphics_capture_dir> --breadth-evidence <breadth_dir>",
+            "tools/qge_registered_asset_intake.py --current-root <asset_root> --candidate <quake_install_or_pak> --json /tmp/qge_registered_asset_intake.json --markdown /tmp/qge_registered_asset_intake.md --script-out /tmp/install_registered_assets.sh --icc-json /tmp/qge_registered_asset_intake_icc_evidence.json",
             "tools/qge_asset_requirements.py --asset-root <asset_root> --json /tmp/qge_asset_requirements.json --markdown /tmp/qge_asset_requirements.md --icc-json /tmp/qge_asset_requirements_icc_evidence.json",
             "tools/qge_moonlab_job_runner.py <pack_dir>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack_dir>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json --submission-out /tmp/qge_moonlab_submission_packet.verify.json",
             "tools/qge_moonlab_hardware_ingest.py <pack_dir>/resource/qge_moonlab_submission_packet.json --template-out /tmp/qge_moonlab_hardware_record.template.json",

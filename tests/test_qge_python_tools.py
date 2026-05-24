@@ -33,6 +33,7 @@ import qge_noesis_summary as noesis_summary  # noqa: E402
 import qge_oracle_export as oracle_export  # noqa: E402
 import qge_perf_summary as perf_summary  # noqa: E402
 import qge_publication_pack as publication_pack  # noqa: E402
+import qge_registered_asset_intake as registered_asset_intake  # noqa: E402
 import qge_trace_summary as trace_summary  # noqa: E402
 import qge_vanilla_capture_matrix as vanilla_matrix  # noqa: E402
 import qge_world_frame_metrics as world_frame_metrics  # noqa: E402
@@ -1868,6 +1869,107 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual([job["map"] for job in queue["jobs"]], ["e1m5"])
             self.assertIn("e1m3", queue["asset_unavailable_missing_maps"])
             self.assertIn("e1m4", queue["asset_unavailable_missing_maps"])
+
+    def test_registered_asset_intake_builds_safe_copy_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            current_root = tmpdir / "current-id1"
+            candidate_root = tmpdir / "registered-id1"
+            current_root.mkdir()
+            candidate_root.mkdir()
+            candidate_maps = candidate_root / "MAPS"
+            candidate_maps.mkdir()
+            write_pak(current_root / "pak0.pak", [
+                "maps/start.bsp",
+                "maps/e1m1.bsp",
+            ])
+            write_pak(
+                candidate_root / "PAK1.PAK",
+                [
+                    "maps/e2m1.bsp",
+                    "maps/e2m2.bsp",
+                    "maps/e3m1.bsp",
+                ],
+                payloads={"maps/e3m1.bsp": b"not-a-valid-bsp"},
+            )
+            (candidate_maps / "e3m2.bsp").write_bytes(minimal_bsp_bytes())
+
+            intake = registered_asset_intake.build_intake(
+                current_root,
+                [candidate_root],
+            )
+            self.assertEqual(
+                intake["schema"], "qge.registered_asset_intake.v0")
+            self.assertEqual(
+                intake["status"], "partial_candidate_assets_found")
+            self.assertEqual(intake["current_available_map_count"], 2)
+            self.assertEqual(intake["candidate_new_map_count"], 3)
+            self.assertEqual(
+                intake["missing_map_count_after_plan"],
+                intake["current_missing_map_count"] - 3,
+            )
+            self.assertIn("e2m1", intake["candidate_new_maps"])
+            self.assertIn("e3m2", intake["candidate_new_maps"])
+            self.assertEqual(intake["invalid_candidate_source_count"], 1)
+            pak_plan = next(
+                item for item in intake["copy_plan"]
+                if item["kind"] == "copy_pak")
+            self.assertEqual(pak_plan["status"], "planned")
+            self.assertEqual(
+                pak_plan["maps_unblocked"], ["e2m1", "e2m2"])
+            self.assertTrue(
+                pak_plan["destination"].endswith("current-id1/pak1.pak"))
+            loose_plan = next(
+                item for item in intake["copy_plan"]
+                if item["kind"] == "copy_loose_bsp")
+            self.assertEqual(loose_plan["maps_unblocked"], ["e3m2"])
+            script = "\n".join(registered_asset_intake.script_lines(intake))
+            self.assertIn("QGE_REGISTERED_ASSET_INTAKE_LICENSE_CHECK", script)
+            self.assertIn("cp -n", script)
+            self.assertIn("qge_asset_inventory.py", script)
+            icc = registered_asset_intake.build_icc_evidence(
+                intake,
+                out_path=Path("qge_registered_asset_intake.json"),
+            )
+            self.assertEqual(
+                icc["runtime_backend"], "qge_registered_asset_intake")
+            self.assertFalse(icc["asset_intake_copies_game_data"])
+            self.assertIn(
+                "partial_candidate_assets_found",
+                registered_asset_intake.markdown_report(intake),
+            )
+
+            out_path = tmpdir / "qge_registered_asset_intake.json"
+            markdown_path = tmpdir / "qge_registered_asset_intake.md"
+            script_path = tmpdir / "install_registered_assets.sh"
+            icc_path = tmpdir / "qge_registered_asset_intake_icc.json"
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(
+                    registered_asset_intake.main([
+                        "--current-root",
+                        str(current_root),
+                        "--candidate",
+                        str(candidate_root),
+                        "--json",
+                        str(out_path),
+                        "--markdown",
+                        str(markdown_path),
+                        "--script-out",
+                        str(script_path),
+                        "--icc-json",
+                        str(icc_path),
+                    ]),
+                    0,
+                )
+            self.assertIn(
+                "QGE_REGISTERED_ASSET_INTAKE", stdout.getvalue())
+            cli_intake = publication_pack.load_json(out_path)
+            self.assertEqual(cli_intake["candidate_new_map_count"], 3)
+            cli_icc = publication_pack.load_json(icc_path)
+            self.assertEqual(
+                cli_icc["completion_reason"],
+                "qge_registered_asset_intake_plan_recorded")
 
     def write_matrix(self,
                      directory: Path,

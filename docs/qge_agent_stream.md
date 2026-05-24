@@ -456,7 +456,11 @@ required.
 `qge.asset_inventory.v0` JSON/Markdown audit with PAK SHA-256 hashes, loose BSP
 hashes, BSP validation status, available canonical maps, invalid BSP entries,
 and missing registered maps, so asset blockers can be checked before running
-the queue.
+the queue. `tools/qge_registered_asset_intake.py --candidate <path>` scans
+external Quake install roots, PAK files, or loose BSPs, validates BSP29 payloads,
+and writes `qge.registered_asset_intake.v0` plus an optional copy script so
+registered assets can be installed locally without bundling copyrighted data in
+the repo.
 
 `tools/qge_noesis_summary.py` reads the stream manifest, Noesis action trace,
 translated command buffer, runtime log, `noesis/gameplay_outcomes.ndjson`,

@@ -656,9 +656,13 @@ Known current visual state:
   placeholder BSPs that fail the Quake BSP29 header/lump gate; the current local
   inventory has one valid `pak0.pak`, 9/32 canonical maps available, 23 missing,
   zero invalid BSP entries, and no whole-game Moonlab coverage claim.
+  `tools/qge_registered_asset_intake.py` now scans external registered Quake
+  install roots, PAKs, or loose BSPs and emits `qge.registered_asset_intake.v0`
+  plus an optional non-destructive copy script. That makes the 23 missing-map
+  asset blocker operational without checking game payloads into the repo.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
-  publication pack is `diagnostics/publication_pack/20260523-220349`, with
+  publication pack is `diagnostics/publication_pack/20260523-224321`, with
   `qge_publication_artifact_pack_complete`, the e1m1 ready vanilla/QGE capture,
   vanilla ICC evidence sidecar, agent stream, oracle/claims exports, QAE
   benchmark artifacts, `resource/qge_resource_envelope.json`,
