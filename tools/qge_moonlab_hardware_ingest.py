@@ -11,6 +11,7 @@ import argparse
 import copy
 import hashlib
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Any, Sequence
@@ -61,6 +62,52 @@ def require_nonempty_string(data: dict[str, Any], key: str) -> str:
     value = data.get(key)
     if not isinstance(value, str) or not value:
         raise ValueError(f"hardware record is missing {key}")
+    return value
+
+
+def require_nested_nonempty_string(
+    data: dict[str, Any],
+    key: str,
+    label: str,
+) -> str:
+    value = data.get(key)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"hardware record {label}.{key} is required")
+    return value
+
+
+def require_positive_int(data: dict[str, Any], key: str, label: str) -> int:
+    value = data.get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError(
+            f"hardware record {label}.{key} must be a positive integer")
+    return value
+
+
+def require_finite_number(
+    data: dict[str, Any],
+    key: str,
+    label: str,
+) -> float:
+    value = data.get(key)
+    if (
+        isinstance(value, bool) or
+        not isinstance(value, (int, float)) or
+        not math.isfinite(float(value))
+    ):
+        raise ValueError(f"hardware record {label}.{key} must be finite")
+    return float(value)
+
+
+def require_nonnegative_finite_number(
+    data: dict[str, Any],
+    key: str,
+    label: str,
+) -> float:
+    value = require_finite_number(data, key, label)
+    if value < 0.0:
+        raise ValueError(
+            f"hardware record {label}.{key} must be non-negative")
     return value
 
 
@@ -172,10 +219,32 @@ def build_hardware_record_template(
         "resource": resource,
         "record": record,
         "limits": [
-            "Fill the record object with real Moonlab backend output before ingestion.",
-            "Do not set hardware quantum advantage, whole-game hardware execution, or dense-state claim flags to true.",
-            "This template covers one bounded hardware-candidate job, not the full game.",
+            "Fill the record object with real Moonlab backend output before "
+            "ingestion.",
+            "Do not set hardware quantum advantage, whole-game hardware "
+            "execution, or dense-state claim flags to true.",
+            "This template covers one bounded hardware-candidate job, not "
+            "the full game.",
         ],
+        "validation_contract": {
+            "backend_id": "non-empty Moonlab hardware backend id",
+            "run_id": "non-empty Moonlab hardware run id",
+            "shot_schedule": {
+                "shots": "positive integer matching the candidate resource",
+                "batches": "positive integer",
+                "schedule_id": "non-empty schedule identifier",
+            },
+            "readout_metadata": {
+                "shots_completed": "positive integer matching scheduled shots",
+                "readout_format": "non-empty readout format",
+                "mitigation": "non-empty mitigation label, use 'none' if none",
+            },
+            "observations": {
+                "mean_value": "finite numeric result",
+                "shots": "positive integer matching completed shots",
+                "readout_error": "finite non-negative numeric uncertainty",
+            },
+        },
     }
 
 
@@ -213,6 +282,9 @@ def validate_hardware_record(
         raise ValueError("hardware record backend_kind must be moonlab_hardware")
     if hardware_record.get("status") != "completed":
         raise ValueError("hardware record status must be completed")
+    require_nonempty_string(hardware_record, "run_id")
+    require_nonempty_string(hardware_record, "submitted_utc")
+    require_nonempty_string(hardware_record, "completed_utc")
 
     candidate = candidate_jobs_by_id(submission_packet).get(job_id)
     if candidate is None:
@@ -236,14 +308,61 @@ def validate_hardware_record(
     if candidate_digest != candidate.get("candidate_digest"):
         raise ValueError("hardware record candidate_digest does not match packet")
 
-    if not dict_or_empty(hardware_record.get("shot_schedule")):
+    shot_schedule = dict_or_empty(hardware_record.get("shot_schedule"))
+    if not shot_schedule:
         raise ValueError("hardware record is missing shot_schedule")
-    if not dict_or_empty(hardware_record.get("readout_metadata")):
+    readout_metadata = dict_or_empty(hardware_record.get("readout_metadata"))
+    if not readout_metadata:
         raise ValueError("hardware record is missing readout_metadata")
-    if not dict_or_empty(hardware_record.get("observations")):
+    observations = dict_or_empty(hardware_record.get("observations"))
+    if not observations:
         raise ValueError("hardware record is missing observations")
-    if not backend_id:
-        raise ValueError("hardware record backend_id is empty")
+
+    scheduled_shots = require_positive_int(
+        shot_schedule, "shots", "shot_schedule")
+    require_positive_int(shot_schedule, "batches", "shot_schedule")
+    require_nested_nonempty_string(
+        shot_schedule, "schedule_id", "shot_schedule")
+
+    resource = dict_or_empty(candidate.get("resource"))
+    expected_shots = resource.get("shots")
+    if (
+        isinstance(expected_shots, int) and
+        not isinstance(expected_shots, bool) and
+        expected_shots > 0 and
+        scheduled_shots != expected_shots
+    ):
+        raise ValueError(
+            "hardware record shot_schedule.shots does not match candidate "
+            "resource shots")
+
+    shots_completed = require_positive_int(
+        readout_metadata, "shots_completed", "readout_metadata")
+    if shots_completed != scheduled_shots:
+        raise ValueError(
+            "hardware record readout_metadata.shots_completed does not match "
+            "scheduled shots")
+    require_nested_nonempty_string(
+        readout_metadata, "readout_format", "readout_metadata")
+    require_nested_nonempty_string(
+        readout_metadata, "mitigation", "readout_metadata")
+
+    observation_shots = require_positive_int(
+        observations, "shots", "observations")
+    if observation_shots != shots_completed:
+        raise ValueError(
+            "hardware record observations.shots does not match completed "
+            "shots")
+    if "mean_value" in observations:
+        require_finite_number(observations, "mean_value", "observations")
+    elif "observed_value" in observations:
+        require_finite_number(observations, "observed_value", "observations")
+    else:
+        raise ValueError(
+            "hardware record observations.mean_value or observed_value is "
+            "required")
+    require_nonnegative_finite_number(
+        observations, "readout_error", "observations")
     return candidate, result_job
 
 

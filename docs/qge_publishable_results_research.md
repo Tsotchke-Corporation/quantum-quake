@@ -228,15 +228,16 @@ current pack the bundle status is `ready_for_control_plane_submission`, with
 `grover_schedule_directly_executable=true`, and
 `hardware_submission_directly_executable=true`. The publication pack also
 includes a generated hardware record template so the returned Moonlab record
-has a deterministic schema and candidate digest before ingestion. The QAE
-benchmark remains unsubmitted as a full oracle job until Grover diffusion,
-full MLAE circuit assembly, Moonlab
+has a deterministic schema, validation contract, and candidate digest before
+ingestion. The QAE benchmark remains unsubmitted as a full oracle job until
+Grover diffusion, full MLAE circuit assembly, Moonlab
 hardware backend IDs, shot schedules, and readout metadata are recorded
 separately. The post-submission return path is
 `tools/qge_moonlab_hardware_ingest.py`, which requires a
 `qge.moonlab_hardware_record.v0`, rejects advantage/full-game/dense state
-overclaim flags, and emits updated job results plus a bounded hardware
-comparison artifact. The
+overclaim flags, rejects placeholder shot/readout payloads, requires matching
+scheduled/completed/observed shot counts plus finite numeric observations, and
+emits updated job results plus a bounded hardware comparison artifact. The
 bundled agent stream also records host-side macOS AppKit/SDL launcher probes
 and marks UI-only `-nolauncher` paths as intentional skips.
 

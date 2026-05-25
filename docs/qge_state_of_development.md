@@ -725,7 +725,8 @@ Known current visual state:
   `tools/qge_moonlab_hardware_ingest.py`
   is the guarded return path for a real Moonlab hardware record: it can generate
   the no-claim hardware record template from the submission packet, then
-  requires backend ID, shot schedule, readout metadata, and matching candidate
+  requires backend ID, run ID, schedule ID, matching scheduled/completed/observed
+  shot counts, readout metadata, finite observations, and matching candidate
   digest before writing a bounded hardware comparison. The resource artifacts
   explicitly avoid whole-game hardware execution, hardware advantage, and
   dense-state claims. The bundled agent stream includes host launcher probes for

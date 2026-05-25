@@ -123,7 +123,8 @@ Important known limitations:
   After a real
   Moonlab hardware run, use
   `tools/qge_moonlab_hardware_ingest.py` to validate the returned backend ID,
-  shot schedule, readout metadata, and candidate digest before updating
+  run ID, schedule ID, matching shot counts, readout metadata, finite
+  observations, and candidate digest before updating
   `qge_moonlab_job_results.json`. The pack explicitly does not claim whole-game
   hardware execution, hardware quantum advantage, or a dense 70,000-qubit
   state. The deployment gate is currently `blocked`: 9/32 canonical maps are

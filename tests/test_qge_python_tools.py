@@ -2153,10 +2153,12 @@ class PublicationPackTests(unittest.TestCase):
             "shot_schedule": {
                 "shots": 384,
                 "batches": 3,
+                "schedule_id": "qge-mlae-384-v1",
             },
             "readout_metadata": {
                 "shots_completed": 384,
                 "readout_format": "expectation_value",
+                "mitigation": "none",
             },
             "observations": {
                 "mean_value": 0.503,
@@ -2201,12 +2203,33 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(template["record"]["schema"],
                          "qge.moonlab_hardware_record.v0")
         self.assertEqual(template["record"]["shot_schedule"]["shots"], 384)
+        self.assertEqual(
+            template["validation_contract"]["shot_schedule"]["schedule_id"],
+            "non-empty schedule identifier")
         self.assertFalse(
             template["record"]["whole_game_hardware_execution_claimed"])
 
         bad_record = dict(record)
         bad_record["hardware_quantum_advantage_claimed"] = True
         with self.assertRaises(ValueError):
+            moonlab_hardware_ingest.ingest_hardware_record(
+                packet, results, bad_record)
+
+        bad_record = json.loads(json.dumps(record))
+        bad_record["readout_metadata"]["shots_completed"] = 383
+        with self.assertRaisesRegex(ValueError, "shots_completed"):
+            moonlab_hardware_ingest.ingest_hardware_record(
+                packet, results, bad_record)
+
+        bad_record = json.loads(json.dumps(record))
+        bad_record["observations"]["mean_value"] = float("nan")
+        with self.assertRaisesRegex(ValueError, "mean_value"):
+            moonlab_hardware_ingest.ingest_hardware_record(
+                packet, results, bad_record)
+
+        bad_record = json.loads(json.dumps(record))
+        bad_record["shot_schedule"]["schedule_id"] = ""
+        with self.assertRaisesRegex(ValueError, "schedule_id"):
             moonlab_hardware_ingest.ingest_hardware_record(
                 packet, results, bad_record)
 
