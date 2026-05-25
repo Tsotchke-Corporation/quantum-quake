@@ -278,6 +278,9 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      inventory is one `pak0.pak`, 9/32 canonical maps available, 23 missing,
      zero invalid BSP entries, and no whole-game Moonlab coverage claim.
    - Use `tools/qge_registered_asset_intake.py --current-root assets/id1 --candidate <quake_install_or_pak> --discover-common --json /tmp/qge_registered_asset_intake.json --markdown /tmp/qge_registered_asset_intake.md --script-out /tmp/install_registered_assets.sh --icc-json /tmp/qge_registered_asset_intake_icc_evidence.json`
+   - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
+     and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
+     scanning bounded candidate directories.
      to validate external registered asset candidates and produce a
      non-destructive copy plan. The intake artifact records
      `qge.registered_asset_intake.v0`, candidate-new maps, invalid candidate

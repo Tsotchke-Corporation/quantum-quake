@@ -100,6 +100,7 @@ def asset_remediation_from_intake(
         if command.get("kind") == "capture_queue"
     ]
     capture_queue = capture_queue_commands[0] if capture_queue_commands else {}
+    discovery_meta = dict_or_empty(data.get("discovery_metadata"))
     return {
         "registered_asset_intake_status": data.get("status"),
         "registered_asset_intake_file": (
@@ -118,6 +119,12 @@ def asset_remediation_from_intake(
         "copy_plan_count": data.get("copy_plan_count"),
         "discovered_candidate_count": data.get(
             "discovered_candidate_count", 0),
+        "discovery_roots_scanned_count": discovery_meta.get(
+            "roots_scanned_count", 0),
+        "steam_library_root_count": discovery_meta.get(
+            "steam_library_root_count", 0),
+        "steam_quake_path_count": discovery_meta.get(
+            "steam_quake_path_count", 0),
         "post_install_verification_command_count": data.get(
             "post_install_verification_command_count",
             post_install.get("command_count"),
@@ -323,6 +330,12 @@ def gate_summary(
             "candidate_new_map_count"),
         "registered_asset_intake_discovered_candidate_count": remediation.get(
             "discovered_candidate_count"),
+        "registered_asset_intake_discovery_roots_scanned_count": (
+            remediation.get("discovery_roots_scanned_count")),
+        "registered_asset_intake_steam_library_root_count": remediation.get(
+            "steam_library_root_count"),
+        "registered_asset_intake_steam_quake_path_count": remediation.get(
+            "steam_quake_path_count"),
         "post_install_verification_command_count": remediation.get(
             "post_install_verification_command_count"),
         "post_install_capture_queue_command_present": remediation.get(
@@ -744,6 +757,12 @@ def build_icc_evidence(
             "registered_asset_intake_candidate_new_map_count"),
         "registered_asset_intake_discovered_candidate_count": summary.get(
             "registered_asset_intake_discovered_candidate_count"),
+        "registered_asset_intake_discovery_roots_scanned_count": summary.get(
+            "registered_asset_intake_discovery_roots_scanned_count"),
+        "registered_asset_intake_steam_library_root_count": summary.get(
+            "registered_asset_intake_steam_library_root_count"),
+        "registered_asset_intake_steam_quake_path_count": summary.get(
+            "registered_asset_intake_steam_quake_path_count"),
         "post_install_verification_command_count": summary.get(
             "post_install_verification_command_count"),
         "post_install_capture_queue_command_present": summary.get(
@@ -841,6 +860,14 @@ def markdown_report(gate: dict[str, Any]) -> str:
             (
                 "| install script | "
                 f"`{remediation.get('registered_asset_install_script') or ''}` |"
+            ),
+            (
+                "| discovery roots scanned | "
+                f"`{remediation.get('discovery_roots_scanned_count', 0)}` |"
+            ),
+            (
+                "| Steam Quake candidate paths | "
+                f"`{remediation.get('steam_quake_path_count', 0)}` |"
             ),
             (
                 "| post-install queue | "

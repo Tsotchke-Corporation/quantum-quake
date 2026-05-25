@@ -139,7 +139,9 @@ Important known limitations:
   scans external registered asset candidates, validates their BSP payloads,
   and emits a non-destructive copy plan/script for the missing maps without
   bundling game data or changing the no-claim posture. Use `--discover-root`
-  or `--discover-common` when the exact registered install path is not known.
+  or `--discover-common` when the exact registered install path is not known;
+  common discovery includes Steam library manifests, derived Quake install
+  roots, and GOG/Heroic-style local roots.
   Publication packs now include the same `qge_registered_asset_intake.json`,
   Markdown, ICC evidence, and safe install script so the asset blocker is part
   of the reproducible bundle. The generated install script verifies SHA-256

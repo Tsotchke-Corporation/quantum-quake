@@ -463,7 +463,9 @@ external Quake install roots, PAK files, or loose BSPs, validates BSP29 payloads
 and writes `qge.registered_asset_intake.v0` plus an optional copy script so
 registered assets can be installed locally without bundling copyrighted data in
 the repo. `--discover-root` and `--discover-common` add bounded local discovery
-for candidate installs when the exact registered asset path is unknown. The
+for candidate installs when the exact registered asset path is unknown;
+`--discover-common` also derives Steam Quake roots from `libraryfolders.vdf`
+and `appmanifest_2310.acf`, plus GOG/Heroic-style local roots. The
 publication pack records this intake ledger, Markdown, ICC evidence, and safe
 install script under `resource/` even when no candidate assets are found. The
 script verifies copied asset SHA-256 values and then emits the matching

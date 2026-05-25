@@ -2463,6 +2463,11 @@ class PublicationPackTests(unittest.TestCase):
                     "missing_map_count_after_plan": 30,
                     "copy_plan_count": 0,
                     "discovered_candidate_count": 1,
+                    "discovery_metadata": {
+                        "roots_scanned_count": 4,
+                        "steam_library_root_count": 1,
+                        "steam_quake_path_count": 3,
+                    },
                     "post_install_verification_command_count": 2,
                     "post_install_verification": {
                         "command_count": 2,
@@ -2537,6 +2542,16 @@ class PublicationPackTests(unittest.TestCase):
         self.assertIn(
             "qge_full_game_capture_queue.py",
             blocked_gate["summary"]["post_install_capture_queue_command"],
+        )
+        self.assertEqual(
+            blocked_gate["summary"][
+                "registered_asset_intake_discovery_roots_scanned_count"],
+            4,
+        )
+        self.assertEqual(
+            blocked_gate["summary"][
+                "registered_asset_intake_steam_quake_path_count"],
+            3,
         )
         self.assertTrue(any(
             "install_registered_assets.sh" in action
@@ -2663,6 +2678,11 @@ class PublicationPackTests(unittest.TestCase):
                     "missing_map_count_after_plan": 30,
                     "copy_plan_count": 0,
                     "discovered_candidate_count": 1,
+                    "discovery_metadata": {
+                        "roots_scanned_count": 4,
+                        "steam_library_root_count": 1,
+                        "steam_quake_path_count": 3,
+                    },
                     "post_install_verification_command_count": 2,
                     "post_install_verification": {
                         "command_count": 2,
@@ -2780,6 +2800,15 @@ class PublicationPackTests(unittest.TestCase):
             )
             self.assertTrue(
                 cli_icc["post_install_capture_queue_command_present"])
+            self.assertEqual(
+                cli_icc[
+                    "registered_asset_intake_discovery_roots_scanned_count"],
+                4,
+            )
+            self.assertEqual(
+                cli_icc["registered_asset_intake_steam_quake_path_count"],
+                3,
+            )
 
 
 class BreadthEvidenceTests(unittest.TestCase):
@@ -3090,6 +3119,8 @@ class BreadthEvidenceTests(unittest.TestCase):
                 discovery=discovery,
             )
             self.assertEqual(intake["discovered_candidate_count"], 1)
+            self.assertEqual(
+                intake["discovery_metadata"]["roots_scanned_count"], 1)
             self.assertEqual(intake["candidate_new_map_count"], 2)
             self.assertIn(
                 "Candidate paths found: 1",
@@ -3097,6 +3128,7 @@ class BreadthEvidenceTests(unittest.TestCase):
             )
             icc = registered_asset_intake.build_icc_evidence(intake)
             self.assertEqual(icc["discovered_candidate_count"], 1)
+            self.assertEqual(icc["discovery_roots_scanned_count"], 1)
 
             out_path = tmpdir / "intake.json"
             stdout = io.StringIO()
@@ -3142,6 +3174,93 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(
                 empty_intake["status"], "blocked_no_candidate_assets")
             self.assertEqual(empty_intake["discovered_candidate_count"], 0)
+
+    def test_registered_asset_intake_derives_steam_quake_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            current_root = tmpdir / "current-id1"
+            steam_root = tmpdir / "Steam"
+            external_root = tmpdir / "ExternalSteamLibrary"
+            libraryfolders = steam_root / "steamapps" / "libraryfolders.vdf"
+            manifest = external_root / "steamapps" / "appmanifest_2310.acf"
+            candidate_root = (
+                external_root / "steamapps" / "common" /
+                "Quake Enhanced" / "rerelease" / "id1"
+            )
+            current_root.mkdir()
+            libraryfolders.parent.mkdir(parents=True)
+            manifest.parent.mkdir(parents=True)
+            candidate_root.mkdir(parents=True)
+
+            def vdf_path(path: Path) -> str:
+                return str(path).replace("\\", "\\\\")
+
+            libraryfolders.write_text(
+                '"libraryfolders"\n'
+                "{\n"
+                '    "0"\n'
+                "    {\n"
+                f'        "path" "{vdf_path(steam_root)}"\n'
+                "    }\n"
+                '    "1"\n'
+                "    {\n"
+                f'        "path" "{vdf_path(external_root)}"\n'
+                "    }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            manifest.write_text(
+                '"AppState"\n'
+                "{\n"
+                '    "appid" "2310"\n'
+                '    "installdir" "Quake Enhanced"\n'
+                "}\n",
+                encoding="utf-8",
+            )
+            write_pak(current_root / "pak0.pak", [
+                "maps/start.bsp",
+                "maps/e1m1.bsp",
+            ])
+            write_pak(candidate_root / "PAK1.PAK", [
+                "maps/e2m1.bsp",
+                "maps/e2m2.bsp",
+            ])
+
+            original_libraryfolders = (
+                registered_asset_intake.STEAM_LIBRARYFOLDERS)
+            try:
+                registered_asset_intake.STEAM_LIBRARYFOLDERS = [
+                    libraryfolders]
+                steam_paths = (
+                    registered_asset_intake.steam_quake_discovery_paths())
+                self.assertIn(candidate_root, steam_paths)
+
+                discovery = registered_asset_intake.discover_candidate_paths(
+                    steam_paths,
+                    max_depth=0,
+                )
+                self.assertEqual(discovery["found_candidate_count"], 1)
+                intake = registered_asset_intake.build_intake(
+                    current_root,
+                    [Path(discovery["found_candidates"][0]["path"])],
+                    discovery=discovery,
+                )
+            finally:
+                registered_asset_intake.STEAM_LIBRARYFOLDERS = (
+                    original_libraryfolders)
+
+            self.assertEqual(intake["candidate_new_map_count"], 2)
+            metadata = intake["discovery_metadata"]
+            self.assertEqual(metadata["steam_library_root_count"], 2)
+            self.assertGreaterEqual(metadata["steam_quake_path_count"], 6)
+            self.assertEqual(
+                metadata["roots_scanned_count"], len(steam_paths))
+            markdown = registered_asset_intake.markdown_report(intake)
+            self.assertIn("Steam library roots", markdown)
+            self.assertIn("Steam Quake candidate paths", markdown)
+            icc = registered_asset_intake.build_icc_evidence(intake)
+            self.assertEqual(icc["steam_library_root_count"], 2)
+            self.assertGreaterEqual(icc["steam_quake_path_count"], 6)
 
     def write_matrix(self,
                      directory: Path,

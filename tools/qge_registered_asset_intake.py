@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shlex
 import sys
 from collections import deque
@@ -28,11 +29,19 @@ import qge_asset_inventory  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
 import qge_full_game_capture_queue  # noqa: E402
 
+STEAM_QUAKE_APP_ID = "2310"
+STEAM_LIBRARYFOLDERS = [
+    Path("~/Library/Application Support/Steam/steamapps/libraryfolders.vdf"),
+    Path("~/.steam/steam/steamapps/libraryfolders.vdf"),
+    Path("~/.local/share/Steam/steamapps/libraryfolders.vdf"),
+]
 COMMON_DISCOVERY_PATHS = [
     Path("~/Library/Application Support/Steam/steamapps/common/Quake"),
     Path("~/Library/Application Support/Steam/steamapps/common/Quake/id1"),
     Path("~/Library/Application Support/Steam/steamapps/common/Quake/rerelease/id1"),
     Path("~/Library/Application Support/GOG.com"),
+    Path("~/GOG Games/Quake"),
+    Path("~/Library/Application Support/Heroic"),
     Path("~/Games/Quake"),
     Path("~/Desktop/Quake"),
     Path("~/Documents/Quake"),
@@ -57,6 +66,10 @@ def dict_or_empty(value: Any) -> dict[str, Any]:
 
 def shell_quote(path: Path | str) -> str:
     return shlex.quote(str(path))
+
+
+def vdf_value(value: str) -> str:
+    return value.replace("\\\\", "\\")
 
 
 def safe_iterdir(path: Path) -> list[Path]:
@@ -113,8 +126,112 @@ def env_candidate_paths() -> list[Path]:
     return paths
 
 
+def vdf_pairs(path: Path) -> dict[str, list[str]]:
+    try:
+        text = path.expanduser().read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return {}
+    pairs: dict[str, list[str]] = {}
+    for key, value in re.findall(r'"([^"]+)"\s+"([^"]*)"', text):
+        pairs.setdefault(key.casefold(), []).append(vdf_value(value))
+    return pairs
+
+
+def unique_paths(paths: Sequence[Path]) -> list[Path]:
+    result: list[Path] = []
+    seen: set[str] = set()
+    for raw_path in paths:
+        path = raw_path.expanduser()
+        key = str(path)
+        try:
+            key = str(path.resolve())
+        except OSError:
+            pass
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(path)
+    return result
+
+
+def steam_library_roots(
+    libraryfolders_files: Sequence[Path] | None = None,
+) -> list[Path]:
+    roots: list[Path] = []
+    for raw_file in libraryfolders_files or STEAM_LIBRARYFOLDERS:
+        library_file = raw_file.expanduser()
+        if library_file.is_file():
+            roots.append(library_file.parent.parent)
+        for value in vdf_pairs(library_file).get("path", []):
+            if value:
+                roots.append(Path(value))
+    return unique_paths(roots)
+
+
+def steamapps_dir(library_root: Path) -> Path:
+    if library_root.name.casefold() == "steamapps":
+        return library_root
+    return library_root / "steamapps"
+
+
+def steam_quake_install_dirs(library_root: Path) -> list[str]:
+    install_dirs = ["Quake"]
+    manifest = (
+        steamapps_dir(library_root) /
+        f"appmanifest_{STEAM_QUAKE_APP_ID}.acf"
+    )
+    for value in vdf_pairs(manifest).get("installdir", []):
+        if value and value not in install_dirs:
+            install_dirs.append(value)
+    return install_dirs
+
+
+def steam_quake_discovery_paths(
+    libraryfolders_files: Sequence[Path] | None = None,
+) -> list[Path]:
+    paths: list[Path] = []
+    for library_root in steam_library_roots(libraryfolders_files):
+        common = steamapps_dir(library_root) / "common"
+        for install_dir in steam_quake_install_dirs(library_root):
+            root = common / install_dir
+            paths.extend([
+                root,
+                root / "id1",
+                root / "rerelease" / "id1",
+            ])
+    return unique_paths(paths)
+
+
 def common_discovery_roots() -> list[Path]:
-    return env_candidate_paths() + COMMON_DISCOVERY_PATHS
+    return unique_paths(
+        env_candidate_paths() +
+        COMMON_DISCOVERY_PATHS +
+        steam_quake_discovery_paths()
+    )
+
+
+def common_discovery_roots_summary(
+    libraryfolders_files: Sequence[Path] | None = None,
+) -> dict[str, Any]:
+    steam_roots = steam_library_roots(libraryfolders_files)
+    steam_paths = steam_quake_discovery_paths(libraryfolders_files)
+    return {
+        "env_candidate_count": len(env_candidate_paths()),
+        "static_common_path_count": len(COMMON_DISCOVERY_PATHS),
+        "steam_library_root_count": len(steam_roots),
+        "steam_library_roots": [str(path) for path in steam_roots],
+        "steam_quake_path_count": len(steam_paths),
+        "steam_quake_paths": [str(path) for path in steam_paths],
+    }
+
+
+def discovery_metadata(discovery: dict[str, Any] | None) -> dict[str, Any]:
+    metadata = common_discovery_roots_summary()
+    if discovery is not None:
+        metadata["roots_scanned_count"] = len(discovery.get("roots", []))
+        metadata["found_candidate_count"] = discovery.get(
+            "found_candidate_count")
+    return metadata
 
 
 def discovery_candidate_reason(path: Path) -> str | None:
@@ -699,6 +816,7 @@ def build_intake(
         "current_missing_maps": missing_maps,
         "candidate_inputs": [str(path) for path in candidates],
         "candidate_reports": candidate_reports,
+        "discovered_candidate_count": 0,
         "candidate_valid_map_count": len([
             name for name in candidate_sources if name in target_set
         ]),
@@ -731,6 +849,7 @@ def build_intake(
         intake["discovery"] = discovery
         intake["discovered_candidate_count"] = discovery.get(
             "found_candidate_count", 0)
+        intake["discovery_metadata"] = discovery_metadata(discovery)
     return intake
 
 
@@ -826,6 +945,7 @@ def markdown_report(intake: dict[str, Any]) -> str:
         "",
     ]
     discovery = dict_or_empty(intake.get("discovery"))
+    discovery_meta = dict_or_empty(intake.get("discovery_metadata"))
     if discovery:
         lines.extend([
             "## Discovery",
@@ -834,6 +954,28 @@ def markdown_report(intake: dict[str, Any]) -> str:
             f"Candidate paths found: {discovery.get('found_candidate_count')}",
             "",
         ])
+        if discovery_meta:
+            lines.extend([
+                "| Common Discovery Signal | Count |",
+                "| --- | ---: |",
+                (
+                    "| Env candidate paths | "
+                    f"{discovery_meta.get('env_candidate_count', 0)} |"
+                ),
+                (
+                    "| Static common paths | "
+                    f"{discovery_meta.get('static_common_path_count', 0)} |"
+                ),
+                (
+                    "| Steam library roots | "
+                    f"{discovery_meta.get('steam_library_root_count', 0)} |"
+                ),
+                (
+                    "| Steam Quake candidate paths | "
+                    f"{discovery_meta.get('steam_quake_path_count', 0)} |"
+                ),
+                "",
+            ])
     lines.extend([
         "## Candidate New Maps",
         "",
@@ -887,6 +1029,7 @@ def build_icc_evidence(
     *,
     out_path: Path | None = None,
 ) -> dict[str, Any]:
+    discovery_meta = dict_or_empty(intake.get("discovery_metadata"))
     return {
         "schema": "qge.icc_evidence.v0",
         "runtime_backend": "qge_registered_asset_intake",
@@ -901,6 +1044,16 @@ def build_icc_evidence(
         "candidate_new_map_count": intake.get("candidate_new_map_count"),
         "discovered_candidate_count": intake.get(
             "discovered_candidate_count", 0),
+        "discovery_roots_scanned_count": discovery_meta.get(
+            "roots_scanned_count", 0),
+        "discovery_metadata": discovery_meta,
+        "env_candidate_count": discovery_meta.get("env_candidate_count", 0),
+        "static_common_path_count": discovery_meta.get(
+            "static_common_path_count", 0),
+        "steam_library_root_count": discovery_meta.get(
+            "steam_library_root_count", 0),
+        "steam_quake_path_count": discovery_meta.get(
+            "steam_quake_path_count", 0),
         "missing_map_count_after_plan": intake.get(
             "missing_map_count_after_plan"),
         "invalid_candidate_source_count": intake.get(
