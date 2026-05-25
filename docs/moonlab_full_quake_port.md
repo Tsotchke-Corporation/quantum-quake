@@ -127,8 +127,10 @@ from their source JSON ledgers before they are treated as current. Moonlab
 control-plane payload evidence is treated as current. Generated advantage files
 (`qae_curve.csv`, `qae_circuit.txt`, and scaling summaries) are regenerated
 from `advantage_metrics.json` before the pack treats them as current. The
-agent-stream ICC JSONL is rebuilt from the packed agent manifest before stream
-status evidence is accepted. The remaining 23 maps are still asset unavailable.
+packed agent-stream manifest is checked against packed frame, log, input,
+trace-summary, performance, audio-byte, and Noesis files before stream status
+evidence is accepted. The agent-stream ICC JSONL is rebuilt from that packed
+agent manifest. The remaining 23 maps are still asset unavailable.
 `resource/qge_moonlab_deployment_gate.json` is the fail-closed claim gate for
 the sentence "the entire game runs in Moonlab." It is currently `blocked`
 because coverage is 9/32, the remaining 23 registered BSP assets are

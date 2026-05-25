@@ -23,6 +23,7 @@ if str(TOOLS_DIR) not in sys.path:
 import qge_advantage_benchmark as advantage  # noqa: E402
 import qge_advantage_generated_file_audit as advantage_generated_file_audit  # noqa: E402
 import qge_agent_stream_icc_audit as agent_stream_icc_audit  # noqa: E402
+import qge_agent_stream_manifest_audit as agent_stream_manifest_audit  # noqa: E402
 import qge_asset_inventory as asset_inventory  # noqa: E402
 import qge_asset_requirements as asset_requirements  # noqa: E402
 import qge_breadth_evidence as breadth_evidence  # noqa: E402
@@ -1098,6 +1099,147 @@ class PublicationPackTests(unittest.TestCase):
                 item.get("name") == "agent_stream_frames_captured" and
                 "value" in item.get("fields", [])
                 for item in stale_audit["entry_mismatches"]
+            ))
+            self.assertTrue(any(
+                item.get("flag") == "hardware_quantum_advantage_claimed"
+                for item in stale_audit["overclaim_flags"]
+            ))
+
+    def test_agent_stream_manifest_audit_detects_stale_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            source_stream = tmpdir / "source" / "agent_stream"
+            source_capture = tmpdir / "source" / "quake_stream"
+            packed_stream = tmpdir / "pack" / "agent_stream"
+            packed_stream.mkdir(parents=True)
+
+            def source_path(relative: str) -> str:
+                return str(source_stream / relative)
+
+            def write_packed(relative: str, text: str = "") -> None:
+                path = packed_stream / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(text, encoding="utf-8")
+
+            for relative in (
+                "events.ndjson",
+                "logs/quantum_quake.log",
+                "logs/open.log",
+                "input/noesis_actions.txt",
+                "input/noesis_commands.cfg",
+                "qge_agent_stream_icc_evidence.jsonl",
+                "trace/qge_trace_summary.json",
+                "trace/qge_trace_summary.err",
+                "performance/qge_perf_summary.json",
+                "performance/qge_perf_icc_evidence.json",
+                "noesis/gameplay_outcomes.ndjson",
+            ):
+                write_packed(relative, "{}\n")
+            write_packed("audio/bytes.txt", "0\n")
+            write_packed("video/frame_count.txt", "3\n")
+            write_packed(
+                "video/latest_frame.txt",
+                source_path("video/frames/frame_003.png") + "\n",
+            )
+            for index in range(1, 4):
+                write_packed(f"video/frames/frame_{index:03d}.png", "png")
+
+            manifest = {
+                "schema": "qge.agent_stream.v0",
+                "status": "complete",
+                "stream_dir": str(source_stream),
+                "capture_dir": str(source_capture),
+                "frames_requested": 3,
+                "frames_captured": 3,
+                "trace_requested": 1,
+                "icc_evidence": source_path(
+                    "qge_agent_stream_icc_evidence.jsonl"),
+                "run": {
+                    "status": "ok",
+                    "success": 1,
+                    "startup_issue": "",
+                    "process_status": 0,
+                    "timed_out": 0,
+                },
+                "logs": {
+                    "runtime_log": source_path("logs/quantum_quake.log"),
+                    "open_log": source_path("logs/open.log"),
+                    "events": source_path("events.ndjson"),
+                },
+                "input": {
+                    "action_trace_file": source_path(
+                        "input/noesis_actions.txt"),
+                    "command_trace_file": source_path(
+                        "input/noesis_commands.cfg"),
+                },
+                "video": {
+                    "frames_dir": source_path("video/frames"),
+                    "frame_count_file": source_path("video/frame_count.txt"),
+                    "latest_frame_file": source_path(
+                        "video/latest_frame.txt"),
+                },
+                "audio": {
+                    "bytes": 0,
+                    "bytes_file": source_path("audio/bytes.txt"),
+                    "raw_file": source_path("audio/quake_mix_s16le.raw"),
+                    "metadata_file": source_path(
+                        "audio/quake_mix_s16le.json"),
+                },
+                "performance": {
+                    "status": "complete",
+                    "summary_file": source_path(
+                        "performance/qge_perf_summary.json"),
+                    "icc_evidence_file": source_path(
+                        "performance/qge_perf_icc_evidence.json"),
+                },
+                "trace_summary": {
+                    "status": "complete",
+                    "agent_file": source_path("trace/qge_trace_summary.json"),
+                },
+                "noesis": {
+                    "status": "not_requested",
+                    "summary_file": source_path(
+                        "noesis/qge_noesis_summary.json"),
+                    "icc_evidence_file": source_path(
+                        "noesis/qge_noesis_icc_evidence.json"),
+                    "gameplay_outcomes_file": source_path(
+                        "noesis/gameplay_outcomes.ndjson"),
+                },
+            }
+            write_packed(
+                "manifest.json",
+                json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+            )
+
+            audit = (
+                agent_stream_manifest_audit.audit_agent_stream_manifest(
+                    manifest,
+                    packed_stream,
+                )
+            )
+            self.assertTrue(audit["passed"])
+            self.assertEqual(audit["mismatch_count"], 0)
+            self.assertEqual(audit["missing_file_count"], 0)
+
+            stale_manifest = json.loads(json.dumps(manifest))
+            stale_manifest["hardware_quantum_advantage_claimed"] = True
+            write_packed("video/frame_count.txt", "2\n")
+            (packed_stream /
+             "performance/qge_perf_icc_evidence.json").unlink()
+            stale_audit = (
+                agent_stream_manifest_audit.audit_agent_stream_manifest(
+                    stale_manifest,
+                    packed_stream,
+                )
+            )
+            self.assertFalse(stale_audit["passed"])
+            self.assertTrue(any(
+                item.get("name") == "agent_performance_icc_evidence_file"
+                for item in stale_audit["missing_files"]
+            ))
+            self.assertTrue(any(
+                item.get("name") == "video_frame_count_file_value"
+                for item in stale_audit["value_mismatches"]
             ))
             self.assertTrue(any(
                 item.get("flag") == "hardware_quantum_advantage_claimed"

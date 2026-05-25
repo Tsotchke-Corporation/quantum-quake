@@ -756,9 +756,11 @@ Known current visual state:
   circuit body files are hashed against their JSON records before
   control-plane payload evidence is accepted. Generated advantage files
   (`qae_curve.csv`, `qae_circuit.txt`, and scaling summaries) are regenerated
-  from `advantage_metrics.json` before they are treated as current. The
-  agent-stream ICC JSONL is rebuilt from the packed agent manifest before
-  stream status evidence is accepted.
+  from `advantage_metrics.json` before they are treated as current. The packed
+  agent-stream manifest is checked against packed frame, log, input,
+  trace-summary, performance, audio-byte, and Noesis files before stream status
+  evidence is accepted. The agent-stream ICC JSONL is rebuilt from that packed
+  agent manifest.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims
