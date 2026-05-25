@@ -347,7 +347,8 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      status evidence is accepted. The agent-stream ICC JSONL must regenerate
      from that packed agent manifest. The packed trace summary must regenerate
      from `capture/qge_trace.bin` before trace-derived runtime evidence is
-     accepted.
+     accepted. Packed breadth evidence must regenerate from the recorded source
+     matrix ledgers before all-map coverage counters are accepted.
    - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
      and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
      scanning bounded candidate directories. The intake artifact records

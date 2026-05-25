@@ -27,6 +27,7 @@ import qge_agent_stream_manifest_audit as agent_stream_manifest_audit  # noqa: E
 import qge_asset_inventory as asset_inventory  # noqa: E402
 import qge_asset_requirements as asset_requirements  # noqa: E402
 import qge_breadth_evidence as breadth_evidence  # noqa: E402
+import qge_breadth_evidence_audit as breadth_evidence_audit  # noqa: E402
 import qge_full_game_capture_queue as full_game_capture_queue  # noqa: E402
 import qge_image_metrics as image_metrics  # noqa: E402
 import qge_moonlab_advantage_icc_audit as moonlab_advantage_icc_audit  # noqa: E402
@@ -7641,6 +7642,46 @@ class BreadthEvidenceTests(unittest.TestCase):
                 icc["route_contract_authority_ready_run_count"], 2)
             self.assertEqual(
                 icc["route_contract_authority_blocker_count"], 0)
+
+    def test_breadth_evidence_audit_detects_stale_aggregate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            matrix_a = self.write_matrix(tmpdir / "run_a", map_name="e1m1")
+            matrix_b = self.write_matrix(tmpdir / "run_b", map_name="e1m2")
+            args = SimpleNamespace(
+                inputs=[],
+                matrix=[matrix_a, matrix_b],
+                publication_pack=[],
+                min_runs=2,
+                min_maps=2,
+            )
+            manifest = breadth_evidence.build_manifest(args)
+
+            audit = breadth_evidence_audit.breadth_evidence_audit(
+                manifest,
+                required=True,
+            )
+            self.assertTrue(audit["passed"])
+            self.assertEqual(audit["matrix_source_count"], 2)
+            self.assertEqual(audit["field_mismatches"], [])
+            self.assertEqual(audit["ignored_fields"], ["created_utc"])
+
+            stale = json.loads(json.dumps(manifest))
+            stale["aggregate"]["total_cpu_idwt_count"] = 7
+            stale["hardware_quantum_advantage_claimed"] = True
+            stale_audit = breadth_evidence_audit.breadth_evidence_audit(
+                stale,
+                required=True,
+            )
+            self.assertFalse(stale_audit["passed"])
+            self.assertIn(
+                "aggregate.total_cpu_idwt_count",
+                stale_audit["field_mismatches"],
+            )
+            self.assertTrue(any(
+                flag.get("flag") == "hardware_quantum_advantage_claimed"
+                for flag in stale_audit["overclaim_flags"]
+            ))
 
     def test_breadth_evidence_blocks_fallback_matrix(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
