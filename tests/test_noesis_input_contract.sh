@@ -174,6 +174,8 @@ grep -q 'registered_asset_handoff_consistent' "$repo_root/tools/qge_moonlab_depl
 grep -q 'registered_asset_handoff_status_counts' "$repo_root/tools/qge_moonlab_deployment_gate.py"
 grep -q 'moonlab_coverage_ledger_consistent' "$repo_root/tools/qge_moonlab_deployment_gate.py"
 grep -q 'moonlab_coverage_ledger_mismatches' "$repo_root/tools/qge_moonlab_deployment_gate.py"
+grep -q 'moonlab_selected_job_result_ledger_consistent' "$repo_root/tools/qge_moonlab_deployment_gate.py"
+grep -q 'moonlab_selected_job_missing_result_ids' "$repo_root/tools/qge_moonlab_deployment_gate.py"
 grep -q 'qge.full_game_capture_queue.v0' "$repo_root/tools/qge_full_game_capture_queue.py"
 grep -q 'QGE_FULL_GAME_CAPTURE_QUEUE' "$repo_root/tools/qge_full_game_capture_queue.py"
 grep -q 'run_missing_maps.sh' "$repo_root/tools/qge_full_game_capture_queue.py"

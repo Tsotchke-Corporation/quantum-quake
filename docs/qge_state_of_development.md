@@ -713,8 +713,9 @@ Known current visual state:
   The deployment gate now audits that handoff for presence and consistency with
   the intake remediation ledger, and separately audits the Moonlab
   `full_game_map_coverage` job result against current coverage, inventory, and
-  asset-requirements artifacts before allowing a simulator/native full-game
-  claim.
+  asset-requirements artifacts. It also compares every selected Moonlab job
+  spec with the job-result ledger, so aggregate success counts are not enough
+  unless each selected job has a matching completed simulator result row.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims

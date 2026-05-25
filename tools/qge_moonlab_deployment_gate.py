@@ -31,6 +31,12 @@ import qge_registered_asset_intake  # noqa: E402
 
 PASS = "pass"
 BLOCKED = "blocked"
+NON_SUBMITTED_HARDWARE_STATUSES = {
+    None,
+    "not_submitted",
+    "not_a_quantum_hardware_job",
+    "not_applicable_full_frame_hardware_execution_not_claimed",
+}
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -456,6 +462,175 @@ def backend_completed(job: dict[str, Any], backend_kind: str) -> bool:
     )
 
 
+def job_id(job: dict[str, Any]) -> str | None:
+    value = job.get("job_id")
+    return value if isinstance(value, str) and value else None
+
+
+def duplicate_strings(values: Sequence[str]) -> list[str]:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return sorted(value for value, count in counts.items() if count > 1)
+
+
+def hardware_submission_recorded(status: Any) -> bool:
+    if status is None:
+        return False
+    if isinstance(status, str):
+        return status not in NON_SUBMITTED_HARDWARE_STATUSES
+    return True
+
+
+def result_job_blocked(job: dict[str, Any]) -> bool:
+    status = job.get("result_status")
+    return (
+        bool(list_or_empty(job.get("missing_required_artifacts"))) or
+        (isinstance(status, str) and status.startswith("blocked"))
+    )
+
+
+def selected_job_result_ledger_audit(
+    job_specs: dict[str, Any],
+    job_results: dict[str, Any],
+) -> dict[str, Any]:
+    spec_jobs = [
+        item for item in list_or_empty(job_specs.get("jobs"))
+        if isinstance(item, dict)
+    ]
+    result_jobs = [
+        item for item in list_or_empty(job_results.get("jobs"))
+        if isinstance(item, dict)
+    ]
+    spec_ids = [item for item in (job_id(job) for job in spec_jobs) if item]
+    result_ids = [
+        item for item in (job_id(job) for job in result_jobs) if item
+    ]
+    duplicate_spec_ids = duplicate_strings(spec_ids)
+    duplicate_result_ids = duplicate_strings(result_ids)
+    missing_result_ids = sorted(set(spec_ids) - set(result_ids))
+    unexpected_result_ids = sorted(set(result_ids) - set(spec_ids))
+    invalid_spec_job_count = len(spec_jobs) - len(spec_ids)
+    invalid_result_job_count = len(result_jobs) - len(result_ids)
+
+    completed_simulator_ids = [
+        item for item in (
+            job_id(job) for job in result_jobs
+            if backend_completed(job, "moonlab_simulator")
+        )
+        if item
+    ]
+    non_completed_simulator_ids = [
+        item for item in result_ids
+        if item not in set(completed_simulator_ids)
+    ]
+    missing_artifact_ids = [
+        item for item in (
+            job_id(job) for job in result_jobs
+            if list_or_empty(job.get("missing_required_artifacts"))
+        )
+        if item
+    ]
+    blocked_result_ids = [
+        item for item in (
+            job_id(job) for job in result_jobs
+            if result_job_blocked(job)
+        )
+        if item
+    ]
+
+    spec_selected_count = int_or_none(job_specs.get("selected_job_count"))
+    result_selected_count = int_or_none(job_results.get("selected_job_count"))
+    reported_completed_simulator = int_or_none(
+        job_results.get("completed_simulator_job_count"))
+    reported_blocked = int_or_none(job_results.get("blocked_job_count"))
+    reported_hardware_candidate = int_or_none(
+        job_results.get("hardware_candidate_job_count"))
+    reported_hardware_submitted = int_or_none(
+        job_results.get("hardware_submitted_job_count"))
+
+    spec_hardware_candidate_count = sum(
+        1 for job in spec_jobs if job.get("hardware_candidate") is True
+    )
+    result_hardware_candidate_count = sum(
+        1 for job in result_jobs if job.get("hardware_candidate") is True
+    )
+    spec_hardware_submitted_count = sum(
+        1 for job in spec_jobs
+        if hardware_submission_recorded(job.get("hardware_submission_status"))
+    )
+    result_hardware_submitted_count = sum(
+        1 for job in result_jobs
+        if hardware_submission_recorded(job.get("hardware_submission_status"))
+    )
+
+    count_mismatches = []
+    if spec_selected_count != len(spec_jobs):
+        count_mismatches.append("spec_selected_job_count")
+    if result_selected_count != len(result_jobs):
+        count_mismatches.append("result_selected_job_count")
+    if result_selected_count != len(spec_jobs):
+        count_mismatches.append("result_selected_matches_specs")
+    if reported_completed_simulator != len(completed_simulator_ids):
+        count_mismatches.append("completed_simulator_job_count")
+    if reported_blocked != len(blocked_result_ids):
+        count_mismatches.append("blocked_job_count")
+    if reported_hardware_candidate != spec_hardware_candidate_count:
+        count_mismatches.append("hardware_candidate_job_count")
+    if result_hardware_candidate_count != spec_hardware_candidate_count:
+        count_mismatches.append("result_hardware_candidate_count")
+    if reported_hardware_submitted != spec_hardware_submitted_count:
+        count_mismatches.append("hardware_submitted_job_count")
+    if result_hardware_submitted_count != spec_hardware_submitted_count:
+        count_mismatches.append("result_hardware_submitted_count")
+
+    mismatch_count = (
+        len(count_mismatches) +
+        len(missing_result_ids) +
+        len(unexpected_result_ids) +
+        len(duplicate_spec_ids) +
+        len(duplicate_result_ids) +
+        invalid_spec_job_count +
+        invalid_result_job_count +
+        len(non_completed_simulator_ids) +
+        len(blocked_result_ids)
+    )
+    recorded = (
+        job_specs.get("schema") == "qge.moonlab_job_specs.v0" and
+        job_results.get("schema") == "qge.moonlab_job_results.v0" and
+        bool(spec_jobs) and
+        bool(result_jobs)
+    )
+    return {
+        "recorded": recorded,
+        "spec_job_count": len(spec_jobs),
+        "result_job_count": len(result_jobs),
+        "spec_selected_job_count": spec_selected_count,
+        "result_selected_job_count": result_selected_count,
+        "completed_simulator_job_count": reported_completed_simulator,
+        "actual_completed_simulator_job_count": len(completed_simulator_ids),
+        "blocked_job_count": reported_blocked,
+        "actual_blocked_job_count": len(blocked_result_ids),
+        "hardware_candidate_job_count": reported_hardware_candidate,
+        "actual_hardware_candidate_job_count": spec_hardware_candidate_count,
+        "hardware_submitted_job_count": reported_hardware_submitted,
+        "actual_hardware_submitted_job_count": spec_hardware_submitted_count,
+        "invalid_spec_job_count": invalid_spec_job_count,
+        "invalid_result_job_count": invalid_result_job_count,
+        "duplicate_spec_job_ids": duplicate_spec_ids,
+        "duplicate_result_job_ids": duplicate_result_ids,
+        "missing_result_job_ids": missing_result_ids,
+        "unexpected_result_job_ids": unexpected_result_ids,
+        "missing_required_artifact_job_ids": sorted(set(missing_artifact_ids)),
+        "blocked_result_job_ids": sorted(set(blocked_result_ids)),
+        "non_completed_simulator_job_ids": sorted(
+            set(non_completed_simulator_ids)),
+        "count_mismatches": count_mismatches,
+        "mismatch_count": mismatch_count,
+        "passed": recorded and mismatch_count == 0,
+    }
+
+
 def coverage_ledger_mismatches(
     observations: dict[str, Any],
     coverage: dict[str, Any],
@@ -609,6 +784,10 @@ def gate_summary(
         requirements,
         job_results,
     )
+    selected_job_ledger = selected_job_result_ledger_audit(
+        job_specs,
+        job_results,
+    )
     return {
         "map_set": coverage.get("map_set") or inventory.get("map_set"),
         "coverage_status": coverage.get("status"),
@@ -689,6 +868,44 @@ def gate_summary(
             coverage_ledger.get("observed_asset_requirement_status")),
         "moonlab_coverage_ledger_observed_asset_requirements_satisfied": (
             coverage_ledger.get("observed_asset_requirements_satisfied")),
+        "moonlab_selected_job_result_ledger_recorded": (
+            selected_job_ledger.get("recorded")),
+        "moonlab_selected_job_result_ledger_mismatch_count": (
+            selected_job_ledger.get("mismatch_count")),
+        "moonlab_selected_job_result_ledger_count_mismatches": (
+            selected_job_ledger.get("count_mismatches")),
+        "moonlab_selected_job_spec_job_count": selected_job_ledger.get(
+            "spec_job_count"),
+        "moonlab_selected_job_result_job_count": selected_job_ledger.get(
+            "result_job_count"),
+        "moonlab_selected_job_missing_result_count": len(
+            list_or_empty(selected_job_ledger.get("missing_result_job_ids"))),
+        "moonlab_selected_job_missing_result_ids": (
+            selected_job_ledger.get("missing_result_job_ids")),
+        "moonlab_selected_job_unexpected_result_count": len(
+            list_or_empty(
+                selected_job_ledger.get("unexpected_result_job_ids"))),
+        "moonlab_selected_job_unexpected_result_ids": (
+            selected_job_ledger.get("unexpected_result_job_ids")),
+        "moonlab_selected_job_duplicate_spec_ids": (
+            selected_job_ledger.get("duplicate_spec_job_ids")),
+        "moonlab_selected_job_duplicate_result_ids": (
+            selected_job_ledger.get("duplicate_result_job_ids")),
+        "moonlab_selected_job_invalid_spec_job_count": (
+            selected_job_ledger.get("invalid_spec_job_count")),
+        "moonlab_selected_job_invalid_result_job_count": (
+            selected_job_ledger.get("invalid_result_job_count")),
+        "moonlab_selected_job_non_completed_simulator_count": len(
+            list_or_empty(
+                selected_job_ledger.get("non_completed_simulator_job_ids"))),
+        "moonlab_selected_job_non_completed_simulator_ids": (
+            selected_job_ledger.get("non_completed_simulator_job_ids")),
+        "moonlab_selected_job_missing_required_artifact_count": len(
+            list_or_empty(
+                selected_job_ledger.get(
+                    "missing_required_artifact_job_ids"))),
+        "moonlab_selected_job_missing_required_artifact_ids": (
+            selected_job_ledger.get("missing_required_artifact_job_ids")),
         "selected_job_count": job_specs.get("selected_job_count"),
         "result_selected_job_count": job_results.get("selected_job_count"),
         "completed_simulator_job_count": job_results.get(
@@ -853,6 +1070,10 @@ def build_criteria(
         coverage,
         inventory,
         requirements,
+        job_results,
+    )
+    selected_job_ledger_audit = selected_job_result_ledger_audit(
+        job_specs,
         job_results,
     )
 
@@ -1021,6 +1242,49 @@ def build_criteria(
             ),
         ),
         criterion(
+            "moonlab_selected_job_result_ledger_consistent",
+            bool_true(selected_job_ledger_audit.get("passed")),
+            {
+                "moonlab_selected_job_result_ledger_recorded": (
+                    selected_job_ledger_audit.get("recorded")),
+                "moonlab_selected_job_result_ledger_mismatch_count": (
+                    selected_job_ledger_audit.get("mismatch_count")),
+                "moonlab_selected_job_result_ledger_count_mismatches": (
+                    selected_job_ledger_audit.get("count_mismatches")),
+                "moonlab_selected_job_spec_job_count": (
+                    selected_job_ledger_audit.get("spec_job_count")),
+                "moonlab_selected_job_result_job_count": (
+                    selected_job_ledger_audit.get("result_job_count")),
+                "moonlab_selected_job_missing_result_ids": (
+                    selected_job_ledger_audit.get("missing_result_job_ids")),
+                "moonlab_selected_job_unexpected_result_ids": (
+                    selected_job_ledger_audit.get(
+                        "unexpected_result_job_ids")),
+                "moonlab_selected_job_duplicate_spec_ids": (
+                    selected_job_ledger_audit.get(
+                        "duplicate_spec_job_ids")),
+                "moonlab_selected_job_duplicate_result_ids": (
+                    selected_job_ledger_audit.get(
+                        "duplicate_result_job_ids")),
+                "moonlab_selected_job_invalid_spec_job_count": (
+                    selected_job_ledger_audit.get(
+                        "invalid_spec_job_count")),
+                "moonlab_selected_job_invalid_result_job_count": (
+                    selected_job_ledger_audit.get(
+                        "invalid_result_job_count")),
+                "moonlab_selected_job_non_completed_simulator_ids": (
+                    selected_job_ledger_audit.get(
+                        "non_completed_simulator_job_ids")),
+                "moonlab_selected_job_missing_required_artifact_ids": (
+                    selected_job_ledger_audit.get(
+                        "missing_required_artifact_job_ids")),
+            },
+            (
+                "selected Moonlab job result ledger is missing, stale, or "
+                "inconsistent with job specs"
+            ),
+        ),
+        criterion(
             "full_game_deployment_plan_complete",
             plan_passed,
             {
@@ -1119,6 +1383,12 @@ def next_actions_for_blockers(
             "Regenerate qge_moonlab_job_results.json from the current pack so "
             "the full_game_map_coverage Moonlab replay observations match "
             "coverage, inventory, and asset requirements."
+        )
+    if "moonlab_selected_job_result_ledger_consistent" in failed_ids:
+        actions.append(
+            "Regenerate qge_moonlab_job_results.json from "
+            "qge_moonlab_job_specs.json so every selected Moonlab job has a "
+            "matching completed simulator result row and artifact evidence."
         )
     if "full_game_deployment_plan_complete" in failed_ids:
         if queue_command:
@@ -1416,6 +1686,40 @@ def build_icc_evidence(
         "moonlab_coverage_ledger_observed_asset_requirements_satisfied": (
             summary.get(
                 "moonlab_coverage_ledger_observed_asset_requirements_satisfied")),
+        "moonlab_selected_job_result_ledger_recorded": summary.get(
+            "moonlab_selected_job_result_ledger_recorded"),
+        "moonlab_selected_job_result_ledger_mismatch_count": summary.get(
+            "moonlab_selected_job_result_ledger_mismatch_count"),
+        "moonlab_selected_job_result_ledger_count_mismatches": summary.get(
+            "moonlab_selected_job_result_ledger_count_mismatches"),
+        "moonlab_selected_job_spec_job_count": summary.get(
+            "moonlab_selected_job_spec_job_count"),
+        "moonlab_selected_job_result_job_count": summary.get(
+            "moonlab_selected_job_result_job_count"),
+        "moonlab_selected_job_missing_result_count": summary.get(
+            "moonlab_selected_job_missing_result_count"),
+        "moonlab_selected_job_missing_result_ids": summary.get(
+            "moonlab_selected_job_missing_result_ids"),
+        "moonlab_selected_job_unexpected_result_count": summary.get(
+            "moonlab_selected_job_unexpected_result_count"),
+        "moonlab_selected_job_unexpected_result_ids": summary.get(
+            "moonlab_selected_job_unexpected_result_ids"),
+        "moonlab_selected_job_duplicate_spec_ids": summary.get(
+            "moonlab_selected_job_duplicate_spec_ids"),
+        "moonlab_selected_job_duplicate_result_ids": summary.get(
+            "moonlab_selected_job_duplicate_result_ids"),
+        "moonlab_selected_job_invalid_spec_job_count": summary.get(
+            "moonlab_selected_job_invalid_spec_job_count"),
+        "moonlab_selected_job_invalid_result_job_count": summary.get(
+            "moonlab_selected_job_invalid_result_job_count"),
+        "moonlab_selected_job_non_completed_simulator_count": summary.get(
+            "moonlab_selected_job_non_completed_simulator_count"),
+        "moonlab_selected_job_non_completed_simulator_ids": summary.get(
+            "moonlab_selected_job_non_completed_simulator_ids"),
+        "moonlab_selected_job_missing_required_artifact_count": summary.get(
+            "moonlab_selected_job_missing_required_artifact_count"),
+        "moonlab_selected_job_missing_required_artifact_ids": summary.get(
+            "moonlab_selected_job_missing_required_artifact_ids"),
         "full_game_route_contract_schema": summary.get(
             "route_contract_schema"),
         "full_game_route_contract_map_count": summary.get(
@@ -1508,6 +1812,17 @@ def markdown_report(gate: dict[str, Any]) -> str:
             "backend_completed="
             f"{summary.get('moonlab_coverage_ledger_simulator_backend_completed')} "
             f"mismatches={summary.get('moonlab_coverage_ledger_mismatch_count')}"
+        ),
+        (
+            "Moonlab selected job ledger: "
+            "recorded="
+            f"{summary.get('moonlab_selected_job_result_ledger_recorded')} "
+            f"specs={summary.get('moonlab_selected_job_spec_job_count')} "
+            f"results={summary.get('moonlab_selected_job_result_job_count')} "
+            "missing_results="
+            f"{summary.get('moonlab_selected_job_missing_result_count')} "
+            "mismatches="
+            f"{summary.get('moonlab_selected_job_result_ledger_mismatch_count')}"
         ),
         "",
         "| Criterion | Status | Blocker |",
