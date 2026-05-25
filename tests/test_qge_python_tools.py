@@ -40,6 +40,7 @@ import qge_noesis_summary as noesis_summary  # noqa: E402
 import qge_oracle_export as oracle_export  # noqa: E402
 import qge_perf_summary as perf_summary  # noqa: E402
 import qge_publication_pack as publication_pack  # noqa: E402
+import qge_resource_boundary_audit as resource_boundary_audit  # noqa: E402
 import qge_registered_asset_intake as registered_asset_intake  # noqa: E402
 import qge_trace_summary as trace_summary  # noqa: E402
 import qge_vanilla_capture_matrix as vanilla_matrix  # noqa: E402
@@ -3204,6 +3205,15 @@ class PublicationPackTests(unittest.TestCase):
                     "trial_count": 3,
                     "confidence_level": 0.95,
                 },
+                "resource_estimate": {
+                    "logical_qubits": 19,
+                    "candidate_index_bits": 8,
+                    "contribution_threshold_bits": 8,
+                    "controlled_oracle_calls": 1728,
+                    "one_qubit_gates": 34560,
+                    "two_qubit_gates": 27648,
+                    "circuit_depth": 1350,
+                },
             },
             "qae_moonlab_payload": {
                 "schema": "qge.moonlab_qae_payload.v0",
@@ -3304,6 +3314,120 @@ class PublicationPackTests(unittest.TestCase):
                 artifact_paths=advantage_artifact_paths,
             )
         )
+        native_probe_proofs = {
+            "qge_context_get_or_create_render_acceleration": {
+                "event_count": 2,
+                "backends": ["Metal"],
+                "paths": ["native_sparse_dwt_render_bridge"],
+                "results": ["created", "cached"],
+                "phases": ["create", "cache_hit"],
+                "native_bridge_evidence": True,
+                "active_evidence": True,
+                "latest_event": {
+                    "target": "qge_context_get_or_create_render_acceleration",
+                    "phase": "cache_hit",
+                    "backend": "Metal",
+                    "path": "native_sparse_dwt_render_bridge",
+                    "result": "cached",
+                },
+            },
+            "qge_dwt_render": {
+                "event_count": 1,
+                "backends": ["Metal"],
+                "paths": ["native_sparse_dwt_render_bridge"],
+                "results": ["native"],
+                "phases": ["idwt"],
+                "native_bridge_evidence": True,
+                "active_evidence": True,
+                "latest_event": {
+                    "target": "qge_dwt_render",
+                    "phase": "idwt",
+                    "backend": "Metal",
+                    "path": "native_sparse_dwt_render_bridge",
+                    "result": "native",
+                },
+            },
+            "qge_metal_init_common": {
+                "event_count": 1,
+                "backends": ["Metal"],
+                "paths": ["native_sparse_dwt_render_bridge"],
+                "results": ["active"],
+                "phases": ["create"],
+                "native_bridge_evidence": True,
+                "active_evidence": True,
+                "latest_event": {
+                    "target": "qge_metal_init_common",
+                    "phase": "create",
+                    "backend": "Metal",
+                    "path": "native_sparse_dwt_render_bridge",
+                    "result": "active",
+                },
+            },
+        }
+
+        def resource_boundary_sources_for(
+            coverage: dict[str, object],
+        ) -> dict[str, object]:
+            maps = list(coverage.get("covered_maps", []))
+            return {
+                "oracle_scene": {
+                    "cost_model": {"candidate_count": 234, "shots": 64},
+                    "sample_space": {
+                        "candidate_count": 234,
+                        "register_bits": 8,
+                    },
+                    "snapshot": {
+                        "render": {
+                            "shots": 64,
+                            "gates": 26,
+                            "idwt_path": (
+                                "native_sparse_dwt_render_bridge"),
+                            "idwt_backend": "native",
+                            "cpu_idwt": 0,
+                        },
+                    },
+                },
+                "advantage_metrics": advantage_artifacts[
+                    "advantage_metrics"],
+                "vanilla_matrix": {
+                    "conformance_summary": {
+                        "ready_for_complete_claim": True,
+                        "fallback_count": 0,
+                        "qge_surface_surrogates": 0,
+                    },
+                },
+                "performance_summary": {
+                    "status": "pass",
+                    "aggregate": {
+                        "required_runtime_backend_probe_targets": list(
+                            native_probe_proofs),
+                        "runtime_backend_probe_proofs": native_probe_proofs,
+                        "runtime_backend_probe_missing_targets": [],
+                        "runtime_backend_probe_native_targets": list(
+                            native_probe_proofs),
+                        "runtime_backend_probe_resolved": True,
+                    },
+                },
+                "breadth_evidence": {
+                    "status": "pass",
+                    "aggregate": {
+                        "breadth_ready_for_complete_claim": True,
+                        "map_count": len(maps),
+                        "maps": maps,
+                        "full_game_coverage": coverage,
+                        "total_fallback_count": 0,
+                        "total_surrogate_count": 0,
+                        "total_cpu_idwt_count": 0,
+                        "total_native_bridge_count": len(maps) * 105,
+                        "required_runtime_backend_probe_targets": list(
+                            native_probe_proofs),
+                        "runtime_backend_probe_missing_targets": [],
+                        "runtime_backend_probe_native_targets": list(
+                            native_probe_proofs),
+                        "runtime_backend_probe_resolved_run_count": len(maps),
+                    },
+                },
+            }
 
         partial_breadth = {
             "schema": "qge.breadth_evidence.v0",
@@ -3393,6 +3517,12 @@ class PublicationPackTests(unittest.TestCase):
             partial_requirements,
             partial_registered_asset_intake,
         )
+        partial_resource_boundary_sources = resource_boundary_sources_for(
+            partial_coverage)
+        partial_resource_boundary_ledgers = (
+            resource_boundary_audit.expected_resource_boundary_ledgers(
+                partial_resource_boundary_sources)
+        )
         partial_asset_remediation = (
             moonlab_deployment_gate.asset_remediation_from_intake(
                 partial_registered_asset_intake,
@@ -3422,6 +3552,12 @@ class PublicationPackTests(unittest.TestCase):
             advantage_artifacts=advantage_artifacts,
             advantage_icc_evidence=advantage_icc_evidence,
             advantage_icc_evidence_required=True,
+            resource_envelope=partial_resource_boundary_ledgers[
+                "resource_envelope"],
+            native_backend_boundary=partial_resource_boundary_ledgers[
+                "native_backend_boundary"],
+            resource_boundary_sources=partial_resource_boundary_sources,
+            resource_boundary_required=True,
             artifact_paths=advantage_artifact_paths,
             asset_remediation=partial_asset_remediation,
             source_path=Path("partial-pack"),
@@ -3451,6 +3587,8 @@ class PublicationPackTests(unittest.TestCase):
             "moonlab_hardware_result_ledger_consistent", blocker_ids)
         self.assertNotIn(
             "moonlab_advantage_icc_evidence_consistent", blocker_ids)
+        self.assertNotIn(
+            "resource_boundary_ledgers_consistent", blocker_ids)
         self.assertTrue(all(
             item["status"] == "blocked"
             for item in blocked_gate["blockers"]
@@ -3732,6 +3870,16 @@ class PublicationPackTests(unittest.TestCase):
                 "moonlab_advantage_icc_evidence_recorded_count"],
             5,
         )
+        self.assertTrue(
+            blocked_gate["summary"]["resource_boundary_recorded"])
+        self.assertEqual(
+            blocked_gate["summary"]["resource_boundary_mismatch_count"],
+            0,
+        )
+        self.assertEqual(
+            blocked_gate["summary"]["resource_boundary_recorded_count"],
+            2,
+        )
         self.assertIn(
             "qge_registered_asset_intake.py",
             blocked_gate["summary"]["registered_asset_discovery_command"],
@@ -3772,6 +3920,7 @@ class PublicationPackTests(unittest.TestCase):
         self.assertIn("Resource ICC sidecars", blocked_markdown)
         self.assertIn("Moonlab source ICC sidecars", blocked_markdown)
         self.assertIn("Moonlab advantage ICC sidecars", blocked_markdown)
+        self.assertIn("Resource boundary ledgers", blocked_markdown)
         self.assertIn(
             "Covered route authority: 2 / 2 (complete=True)",
             blocked_markdown,
@@ -3919,6 +4068,8 @@ class PublicationPackTests(unittest.TestCase):
             blocked_icc["moonlab_advantage_icc_evidence_mismatch_count"],
             0,
         )
+        self.assertTrue(blocked_icc["resource_boundary_recorded"])
+        self.assertEqual(blocked_icc["resource_boundary_mismatch_count"], 0)
         self.assertIn(
             "qge_registered_asset_intake.py",
             blocked_icc["registered_asset_discovery_command"],
@@ -4117,6 +4268,12 @@ class PublicationPackTests(unittest.TestCase):
             hardware_record_template=hardware_template,
         )
         complete_source_icc_evidence = source_icc_for(complete_plan)
+        complete_resource_boundary_sources = resource_boundary_sources_for(
+            complete_coverage)
+        complete_resource_boundary_ledgers = (
+            resource_boundary_audit.expected_resource_boundary_ledgers(
+                complete_resource_boundary_sources)
+        )
         ready_gate = moonlab_deployment_gate.build_gate(
             complete_coverage,
             complete_inventory,
@@ -4133,6 +4290,12 @@ class PublicationPackTests(unittest.TestCase):
             advantage_artifacts=advantage_artifacts,
             advantage_icc_evidence=advantage_icc_evidence,
             advantage_icc_evidence_required=True,
+            resource_envelope=complete_resource_boundary_ledgers[
+                "resource_envelope"],
+            native_backend_boundary=complete_resource_boundary_ledgers[
+                "native_backend_boundary"],
+            resource_boundary_sources=complete_resource_boundary_sources,
+            resource_boundary_required=True,
             artifact_paths=advantage_artifact_paths,
             source_path=Path("complete-pack"),
         )
@@ -4221,6 +4384,12 @@ class PublicationPackTests(unittest.TestCase):
                 "moonlab_advantage_icc_evidence_mismatch_count"],
             0,
         )
+        self.assertTrue(
+            ready_gate["summary"]["resource_boundary_recorded"])
+        self.assertEqual(
+            ready_gate["summary"]["resource_boundary_mismatch_count"],
+            0,
+        )
         icc = moonlab_deployment_gate.build_icc_evidence(
             ready_gate, out_path=Path("qge_moonlab_deployment_gate.json"))
         self.assertEqual(
@@ -4247,8 +4416,70 @@ class PublicationPackTests(unittest.TestCase):
             icc["moonlab_source_icc_evidence_mismatch_count"], 0)
         self.assertEqual(
             icc["moonlab_advantage_icc_evidence_mismatch_count"], 0)
+        self.assertEqual(icc["resource_boundary_mismatch_count"], 0)
         self.assertTrue(
             icc["whole_game_moonlab_deployment_claim_allowed"])
+
+        stale_boundary_envelope = json.loads(json.dumps(
+            complete_resource_boundary_ledgers["resource_envelope"]))
+        stale_boundary_envelope[
+            "posture"
+        ]["hardware_quantum_advantage_claimed"] = True
+        stale_native_boundary = json.loads(json.dumps(
+            complete_resource_boundary_ledgers["native_backend_boundary"]))
+        stale_native_boundary["targets"][0]["status"] = "blocked"
+        stale_boundary_gate = moonlab_deployment_gate.build_gate(
+            complete_coverage,
+            complete_inventory,
+            complete_requirements,
+            complete_plan,
+            job_specs,
+            complete_job_results,
+            submission_packet,
+            hardware_template,
+            submission_bundle=submission_bundle,
+            hardware_submission_scope=hardware_submission_scope,
+            advantage_artifacts=advantage_artifacts,
+            advantage_icc_evidence=advantage_icc_evidence,
+            advantage_icc_evidence_required=True,
+            resource_envelope=stale_boundary_envelope,
+            native_backend_boundary=stale_native_boundary,
+            resource_boundary_sources=complete_resource_boundary_sources,
+            resource_boundary_required=True,
+            source_path=Path("stale-boundary-pack"),
+        )
+        stale_boundary_blockers = {
+            item["id"] for item in stale_boundary_gate["blockers"]
+        }
+        self.assertIn(
+            "resource_boundary_ledgers_consistent",
+            stale_boundary_blockers,
+        )
+        stale_boundary_criterion = next(
+            item for item in stale_boundary_gate["criteria"]
+            if item["id"] == "resource_boundary_ledgers_consistent")
+        self.assertEqual(stale_boundary_criterion["status"], "blocked")
+        self.assertTrue(any(
+            item.get("ledger") == "resource_envelope" and
+            "posture.hardware_quantum_advantage_claimed" in
+            item.get("fields", [])
+            for item in stale_boundary_criterion[
+                "resource_boundary_mismatches"]
+        ))
+        self.assertTrue(any(
+            item.get("ledger") == "native_backend_boundary" and
+            "targets[0].status" in item.get("fields", [])
+            for item in stale_boundary_criterion[
+                "resource_boundary_mismatches"]
+        ))
+        self.assertTrue(any(
+            flag.get("flag") == "hardware_quantum_advantage_claimed"
+            for flag in stale_boundary_criterion[
+                "resource_boundary_overclaim_flags"]
+        ))
+        self.assertFalse(
+            stale_boundary_gate[
+                "whole_game_moonlab_deployment_claim_allowed"])
 
         nested_overclaim_plan = json.loads(json.dumps(complete_plan))
         nested_overclaim_plan["map_deployment_rows"][0]["evidence"] = [

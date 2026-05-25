@@ -40,6 +40,7 @@ import qge_moonlab_qae_transpile  # noqa: E402
 import qge_moonlab_submission_bundle  # noqa: E402
 import qge_oracle_export  # noqa: E402
 import qge_perf_summary  # noqa: E402
+import qge_resource_boundary_audit  # noqa: E402
 import qge_registered_asset_intake  # noqa: E402
 
 DEFAULT_SAMPLE_COUNTS = [16, 32, 64, 128]
@@ -424,155 +425,13 @@ def build_resource_envelope(
     performance: dict[str, Any],
     breadth: dict[str, Any],
 ) -> dict[str, Any]:
-    cost_model = dict_or_empty(oracle_scene.get("cost_model"))
-    sample_space = dict_or_empty(oracle_scene.get("sample_space"))
-    snapshot = dict_or_empty(oracle_scene.get("snapshot"))
-    render = dict_or_empty(snapshot.get("render"))
-    comparison = dict_or_empty(advantage_metrics.get("comparison"))
-    best_qae = dict_or_empty(comparison.get("best_qae"))
-    qae_resource = dict_or_empty(advantage_metrics.get("resource_estimate"))
-    native_targets = (
-        performance.get("runtime_backend_probe_native_targets")
-        or breadth.get("runtime_backend_probe_native_targets")
-        or []
+    return qge_resource_boundary_audit.build_resource_envelope(
+        oracle_scene,
+        advantage_metrics,
+        conformance,
+        performance,
+        breadth,
     )
-    missing_targets = (
-        performance.get("runtime_backend_probe_missing_targets")
-        or breadth.get("runtime_backend_probe_missing_targets")
-        or []
-    )
-    required_targets = (
-        performance.get("required_runtime_backend_probe_targets")
-        or breadth.get("required_runtime_backend_probe_targets")
-        or []
-    )
-
-    render_ready = (
-        bool(conformance.get("ready_for_complete_claim"))
-        and int_or_none(conformance.get("fallback_count")) == 0
-        and int_or_none(conformance.get("qge_surface_surrogates")) == 0
-        and int_or_none(render.get("cpu_idwt")) == 0
-    )
-    breadth_ready = bool(breadth.get("breadth_ready_for_complete_claim"))
-    full_game_coverage = full_game_coverage_from_summary(
-        breadth.get("full_game_coverage"),
-        breadth.get("maps") if isinstance(breadth.get("maps"), list) else [],
-    )
-    resource_envelope = {
-        "schema": "qge.resource_envelope.v0",
-        "posture": {
-            "whole_game_hardware_execution_claimed": False,
-            "hardware_quantum_advantage_claimed": False,
-            "dense_70000_qubit_state_claimed": False,
-            "moonlab_simulator_path_claimed": True,
-            "hardware_deployment_scope": (
-                "selected kernels only; full-game authority remains a "
-                "Moonlab/QGE simulator and native-backend integration claim"
-            ),
-        },
-        "domains": {
-            "render_primary_framebuffer": {
-                "status": (
-                    "captured_workload_ready" if render_ready
-                    else "evidence_only"
-                ),
-                "moonlab_representation": (
-                    "sparse_dwt_coefficients_plus_finite_shot_render_gate"
-                ),
-                "candidate_count": int_or_none(
-                    cost_model.get("candidate_count"))
-                or int_or_none(sample_space.get("candidate_count")),
-                "register_bits": int_or_none(sample_space.get("register_bits")),
-                "shots_per_frame": (
-                    int_or_none(render.get("shots"))
-                    or int_or_none(cost_model.get("shots"))
-                ),
-                "gate_count_per_frame": int_or_none(render.get("gates")),
-                "native_backend_path": render.get("idwt_path"),
-                "native_backend_result": render.get("idwt_backend"),
-                "fallback_count": int_or_none(conformance.get("fallback_count")),
-                "surrogate_count": int_or_none(
-                    conformance.get("qge_surface_surrogates")),
-                "cpu_idwt_count": int_or_none(render.get("cpu_idwt")),
-                "hardware_deployment": (
-                    "not a full-frame hardware claim; render evidence uses "
-                    "Moonlab/QGE sparse state and the native sparse-DWT bridge"
-                ),
-            },
-            "light_transport_qae_benchmark": {
-                "status": "simulator_benchmark",
-                "moonlab_representation": "finite_shot_mlae_oracle_model",
-                "logical_qubits": int_or_none(
-                    qae_resource.get("logical_qubits")),
-                "candidate_index_bits": int_or_none(
-                    qae_resource.get("candidate_index_bits")),
-                "contribution_threshold_bits": int_or_none(
-                    qae_resource.get("contribution_threshold_bits")),
-                "controlled_oracle_calls": int_or_none(
-                    qae_resource.get("controlled_oracle_calls")),
-                "one_qubit_gates": int_or_none(
-                    qae_resource.get("one_qubit_gates")),
-                "two_qubit_gates": int_or_none(
-                    qae_resource.get("two_qubit_gates")),
-                "circuit_depth": int_or_none(
-                    qae_resource.get("circuit_depth")),
-                "shots": int_or_none(best_qae.get("shots")),
-                "hardware_deployment": (
-                    "logical benchmark circuit shape only; no practical "
-                    "hardware speedup claim"
-                ),
-            },
-            "runtime_backend_probes": {
-                "status": (
-                    "resolved" if not missing_targets and native_targets
-                    else "incomplete"
-                ),
-                "required_targets": required_targets,
-                "native_targets": native_targets,
-                "missing_targets": missing_targets,
-                "performance_resolved": performance.get(
-                    "runtime_backend_probe_resolved"),
-                "breadth_resolved_run_count": breadth.get(
-                    "runtime_backend_probe_resolved_run_count"),
-            },
-            "breadth_capture_matrix": {
-                "status": (
-                    "ready" if breadth_ready else "evidence_only"
-                ),
-                "map_count": breadth.get("map_count"),
-                "maps": breadth.get("maps"),
-                "total_fallback_count": breadth.get("total_fallback_count"),
-                "total_surrogate_count": breadth.get("total_surrogate_count"),
-                "total_cpu_idwt_count": breadth.get("total_cpu_idwt_count"),
-                "total_native_bridge_count": breadth.get(
-                    "total_native_bridge_count"),
-            },
-            "full_game_map_coverage": {
-                "status": full_game_coverage.get("status"),
-                "map_set": full_game_coverage.get("map_set"),
-                "target_map_count": full_game_coverage.get(
-                    "target_map_count"),
-                "covered_map_count": full_game_coverage.get(
-                    "covered_map_count"),
-                "missing_map_count": full_game_coverage.get(
-                    "missing_map_count"),
-                "coverage_ratio": full_game_coverage.get("coverage_ratio"),
-                "covered_maps": full_game_coverage.get("covered_maps"),
-                "missing_maps": full_game_coverage.get("missing_maps"),
-                "hardware_deployment": (
-                    "not a hardware job; this is the explicit coverage ledger "
-                    "for canonical single-player map evidence"
-                ),
-            },
-        },
-        "limits": [
-            "No unrestricted dense all-game state is claimed.",
-            "Whole-game hardware execution is not claimed.",
-            "Renderer ownership and renderer visual fidelity are separate claims.",
-            "Classic Quake remains a host/reference oracle where not explicitly owned.",
-        ],
-    }
-    return resource_envelope
 
 
 def build_moonlab_job_specs(
@@ -1338,12 +1197,10 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "qge_registered_asset_intake_icc_evidence.json"
     )
     write_json(registered_asset_intake_icc_path, registered_asset_intake_icc)
-    native_backend_boundary = capture_perf_summary.get(
-        "runtime_backend_boundary")
-    if not isinstance(native_backend_boundary, dict):
-        native_backend_boundary = (
-            qge_perf_summary.runtime_backend_boundary_from_proofs({})
-        )
+    native_backend_boundary = (
+        qge_resource_boundary_audit.expected_native_backend_boundary(
+            capture_perf_summary)
+    )
     native_backend_boundary_path = (
         args.outdir / "resource" / "qge_native_backend_boundary.json"
     )
@@ -1598,6 +1455,20 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         },
         advantage_icc_evidence_required=True,
         resource_envelope=resource_envelope,
+        native_backend_boundary=native_backend_boundary,
+        resource_boundary_sources={
+            "oracle_scene": oracle["oracle_scene_data"],
+            "advantage_metrics": metrics,
+            "vanilla_matrix": vanilla,
+            "conformance_summary": conformance,
+            "performance_summary": load_json(perf_summary_path)
+            if perf_summary_path is not None and perf_summary_path.is_file()
+            else {},
+            "breadth_evidence": load_json(breadth_evidence)
+            if breadth_evidence is not None and breadth_evidence.is_file()
+            else {},
+        },
+        resource_boundary_required=True,
         asset_remediation=(
             qge_moonlab_deployment_gate.asset_remediation_from_intake(
                 registered_asset_intake,

@@ -734,6 +734,9 @@ Known current visual state:
   inventory, asset requirements, and registered-asset intake ledgers.
   Advantage/control-plane ICC sidecars are recomputed from the advantage metrics
   plus Moonlab payload, kernel, observation, and Grover schedule artifacts.
+  The resource envelope and native backend boundary ledgers are rebuilt from
+  the oracle, advantage, vanilla, performance, and breadth evidence before the
+  gate accepts their simulator/native posture.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims

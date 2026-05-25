@@ -319,7 +319,9 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      match the current asset inventory, asset requirements, and registered
      asset-intake ledgers. Advantage/control-plane ICC sidecars must match the
      current advantage metrics plus Moonlab payload, kernel, observation, and
-     Grover schedule artifacts.
+     Grover schedule artifacts. The resource envelope and native backend
+     boundary ledgers must match the current oracle, advantage, vanilla,
+     performance, and breadth evidence.
    - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
      and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
      scanning bounded candidate directories. The intake artifact records

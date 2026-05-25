@@ -34,6 +34,7 @@ import qge_moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_overclaim_audit  # noqa: E402
 import qge_moonlab_source_icc_audit  # noqa: E402
 import qge_moonlab_submission_packet_audit  # noqa: E402
+import qge_resource_boundary_audit  # noqa: E402
 import qge_resource_icc_audit  # noqa: E402
 import qge_registered_asset_intake  # noqa: E402
 
@@ -81,7 +82,10 @@ def artifact_manifest_path(
 ) -> str | None:
     artifacts = dict_or_empty(dict_or_empty(manifest.get("artifacts")).get(
         section))
-    path = dict_or_empty(artifacts.get(name)).get("path")
+    artifact = dict_or_empty(artifacts.get(name))
+    path = artifact.get("path")
+    if not isinstance(path, str) or not path:
+        path = dict_or_empty(artifact.get("packed")).get("path")
     return path if isinstance(path, str) and path else None
 
 
@@ -868,6 +872,10 @@ def gate_summary(
     advantage_artifacts: dict[str, Any] | None = None,
     advantage_icc_evidence: dict[str, Any] | None = None,
     advantage_icc_evidence_required: bool = False,
+    resource_envelope: dict[str, Any] | None = None,
+    native_backend_boundary: dict[str, Any] | None = None,
+    resource_boundary_sources: dict[str, Any] | None = None,
+    resource_boundary_required: bool = False,
 ) -> dict[str, Any]:
     remediation = dict_or_empty(asset_remediation)
     paths = dict_or_empty(artifact_paths)
@@ -946,6 +954,14 @@ def gate_summary(
         dict_or_empty(advantage_icc_evidence),
         artifact_paths=paths,
         required=advantage_icc_evidence_required,
+    )
+    resource_boundary_ledger = (
+        qge_resource_boundary_audit.resource_boundary_audit
+    )(
+        dict_or_empty(resource_boundary_sources),
+        resource_envelope=dict_or_empty(resource_envelope),
+        native_backend_boundary=dict_or_empty(native_backend_boundary),
+        required=resource_boundary_required,
     )
     return {
         "map_set": coverage.get("map_set") or inventory.get("map_set"),
@@ -1255,6 +1271,26 @@ def gate_summary(
             advantage_icc_ledger.get("sidecar_build_errors")),
         "moonlab_advantage_icc_evidence_overclaim_flags": (
             advantage_icc_ledger.get("overclaim_flags")),
+        "resource_boundary_required": (
+            resource_boundary_ledger.get("required")),
+        "resource_boundary_recorded": (
+            resource_boundary_ledger.get("recorded")),
+        "resource_boundary_expected_count": (
+            resource_boundary_ledger.get("expected_ledger_count")),
+        "resource_boundary_recorded_count": (
+            resource_boundary_ledger.get("recorded_ledger_count")),
+        "resource_boundary_mismatch_count": (
+            resource_boundary_ledger.get("mismatch_count")),
+        "resource_boundary_missing_ledgers": (
+            resource_boundary_ledger.get("missing_ledgers")),
+        "resource_boundary_schema_mismatches": (
+            resource_boundary_ledger.get("schema_mismatches")),
+        "resource_boundary_mismatches": (
+            resource_boundary_ledger.get("ledger_mismatches")),
+        "resource_boundary_build_errors": (
+            resource_boundary_ledger.get("ledger_build_errors")),
+        "resource_boundary_overclaim_flags": (
+            resource_boundary_ledger.get("overclaim_flags")),
         "selected_job_count": job_specs.get("selected_job_count"),
         "result_selected_job_count": job_results.get("selected_job_count"),
         "completed_simulator_job_count": job_results.get(
@@ -1347,6 +1383,9 @@ def build_criteria(
     advantage_artifacts: dict[str, Any] | None = None,
     advantage_icc_evidence: dict[str, Any] | None = None,
     advantage_icc_evidence_required: bool = False,
+    native_backend_boundary: dict[str, Any] | None = None,
+    resource_boundary_sources: dict[str, Any] | None = None,
+    resource_boundary_required: bool = False,
     asset_remediation: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     target_count = int_or_none(coverage.get("target_map_count"))
@@ -1503,6 +1542,14 @@ def build_criteria(
         dict_or_empty(advantage_icc_evidence),
         artifact_paths=paths,
         required=advantage_icc_evidence_required,
+    )
+    resource_boundary_ledger_audit = (
+        qge_resource_boundary_audit.resource_boundary_audit
+    )(
+        dict_or_empty(resource_boundary_sources),
+        resource_envelope=dict_or_empty(resource_envelope),
+        native_backend_boundary=dict_or_empty(native_backend_boundary),
+        required=resource_boundary_required,
     )
 
     selected_count = int_or_none(job_specs.get("selected_job_count"))
@@ -2010,6 +2057,41 @@ def build_criteria(
             ),
         ),
         criterion(
+            "resource_boundary_ledgers_consistent",
+            bool_true(resource_boundary_ledger_audit.get("passed")),
+            {
+                "resource_boundary_required": (
+                    resource_boundary_ledger_audit.get("required")),
+                "resource_boundary_recorded": (
+                    resource_boundary_ledger_audit.get("recorded")),
+                "resource_boundary_expected_count": (
+                    resource_boundary_ledger_audit.get(
+                        "expected_ledger_count")),
+                "resource_boundary_recorded_count": (
+                    resource_boundary_ledger_audit.get(
+                        "recorded_ledger_count")),
+                "resource_boundary_mismatch_count": (
+                    resource_boundary_ledger_audit.get("mismatch_count")),
+                "resource_boundary_missing_ledgers": (
+                    resource_boundary_ledger_audit.get("missing_ledgers")),
+                "resource_boundary_schema_mismatches": (
+                    resource_boundary_ledger_audit.get(
+                        "schema_mismatches")),
+                "resource_boundary_mismatches": (
+                    resource_boundary_ledger_audit.get(
+                        "ledger_mismatches")),
+                "resource_boundary_build_errors": (
+                    resource_boundary_ledger_audit.get(
+                        "ledger_build_errors")),
+                "resource_boundary_overclaim_flags": (
+                    resource_boundary_ledger_audit.get("overclaim_flags")),
+            },
+            (
+                "Resource envelope or native backend boundary ledgers are "
+                "missing, stale, or contain forbidden claim flags"
+            ),
+        ),
+        criterion(
             "full_game_deployment_plan_complete",
             plan_passed,
             {
@@ -2165,6 +2247,12 @@ def next_actions_for_blockers(
             "payload/kernel/observation/schedule ICC sidecars from the current "
             "advantage and control-plane artifacts."
         )
+    if "resource_boundary_ledgers_consistent" in failed_ids:
+        actions.append(
+            "Regenerate qge_resource_envelope.json and "
+            "qge_native_backend_boundary.json from the current oracle, "
+            "advantage, vanilla, performance, and breadth evidence."
+        )
     if "full_game_deployment_plan_complete" in failed_ids:
         if queue_command:
             actions.append(
@@ -2209,6 +2297,9 @@ def build_gate(
     advantage_icc_evidence: dict[str, Any] | None = None,
     advantage_icc_evidence_required: bool = False,
     resource_envelope: dict[str, Any] | None = None,
+    native_backend_boundary: dict[str, Any] | None = None,
+    resource_boundary_sources: dict[str, Any] | None = None,
+    resource_boundary_required: bool = False,
     asset_remediation: dict[str, Any] | None = None,
     source_path: Path | str | None = None,
 ) -> dict[str, Any]:
@@ -2233,6 +2324,9 @@ def build_gate(
         advantage_artifacts=advantage_artifacts,
         advantage_icc_evidence=advantage_icc_evidence,
         advantage_icc_evidence_required=advantage_icc_evidence_required,
+        native_backend_boundary=native_backend_boundary,
+        resource_boundary_sources=resource_boundary_sources,
+        resource_boundary_required=resource_boundary_required,
         asset_remediation=asset_remediation,
     )
     blockers = failed_criteria(criteria)
@@ -2282,6 +2376,10 @@ def build_gate(
             advantage_artifacts=advantage_artifacts,
             advantage_icc_evidence=advantage_icc_evidence,
             advantage_icc_evidence_required=advantage_icc_evidence_required,
+            resource_envelope=resource_envelope,
+            native_backend_boundary=native_backend_boundary,
+            resource_boundary_sources=resource_boundary_sources,
+            resource_boundary_required=resource_boundary_required,
         ),
         "next_actions": next_actions_for_blockers(
             blockers,
@@ -2518,6 +2616,46 @@ def build_gate_from_manifest(
     }
     resource_envelope = qge_moonlab_full_game_plan.load_resource_json(
         manifest, "envelope", manifest_path=manifest_path) or {}
+    native_backend_boundary = qge_moonlab_full_game_plan.load_resource_json(
+        manifest,
+        "native_backend_boundary",
+        manifest_path=manifest_path,
+    ) or {}
+    resource_boundary_sources = {
+        "oracle_scene": (
+            load_artifact_json(
+                manifest,
+                "oracle",
+                "oracle_scene",
+                manifest_path=manifest_path,
+            ) or {}
+        ),
+        "advantage_metrics": advantage_artifacts["advantage_metrics"],
+        "vanilla_matrix": (
+            load_artifact_json(
+                manifest,
+                "vanilla",
+                "matrix",
+                manifest_path=manifest_path,
+            ) or {}
+        ),
+        "performance_summary": (
+            load_artifact_json(
+                manifest,
+                "capture",
+                "performance_summary",
+                manifest_path=manifest_path,
+            ) or {}
+        ),
+        "breadth_evidence": (
+            load_artifact_json(
+                manifest,
+                "breadth",
+                "evidence",
+                manifest_path=manifest_path,
+            ) or {}
+        ),
+    }
     asset_remediation = asset_remediation_from_manifest(
         manifest,
         manifest_path=manifest_path,
@@ -2543,6 +2681,9 @@ def build_gate_from_manifest(
         advantage_icc_evidence=advantage_icc_evidence,
         advantage_icc_evidence_required=True,
         resource_envelope=resource_envelope,
+        native_backend_boundary=native_backend_boundary,
+        resource_boundary_sources=resource_boundary_sources,
+        resource_boundary_required=True,
         asset_remediation=asset_remediation,
         source_path=manifest_path,
     )
@@ -2908,6 +3049,26 @@ def build_icc_evidence(
             "moonlab_advantage_icc_evidence_build_errors"),
         "moonlab_advantage_icc_evidence_overclaim_flags": summary.get(
             "moonlab_advantage_icc_evidence_overclaim_flags"),
+        "resource_boundary_required": summary.get(
+            "resource_boundary_required"),
+        "resource_boundary_recorded": summary.get(
+            "resource_boundary_recorded"),
+        "resource_boundary_expected_count": summary.get(
+            "resource_boundary_expected_count"),
+        "resource_boundary_recorded_count": summary.get(
+            "resource_boundary_recorded_count"),
+        "resource_boundary_mismatch_count": summary.get(
+            "resource_boundary_mismatch_count"),
+        "resource_boundary_missing_ledgers": summary.get(
+            "resource_boundary_missing_ledgers"),
+        "resource_boundary_schema_mismatches": summary.get(
+            "resource_boundary_schema_mismatches"),
+        "resource_boundary_mismatches": summary.get(
+            "resource_boundary_mismatches"),
+        "resource_boundary_build_errors": summary.get(
+            "resource_boundary_build_errors"),
+        "resource_boundary_overclaim_flags": summary.get(
+            "resource_boundary_overclaim_flags"),
         "full_game_route_contract_schema": summary.get(
             "route_contract_schema"),
         "full_game_route_contract_map_count": summary.get(
@@ -3087,6 +3248,16 @@ def markdown_report(gate: dict[str, Any]) -> str:
             f"/ {summary.get('moonlab_advantage_icc_evidence_expected_count')} "
             "mismatches="
             f"{summary.get('moonlab_advantage_icc_evidence_mismatch_count')}"
+        ),
+        (
+            "Resource boundary ledgers: "
+            "recorded="
+            f"{summary.get('resource_boundary_recorded')} "
+            "ledgers="
+            f"{summary.get('resource_boundary_recorded_count')} "
+            f"/ {summary.get('resource_boundary_expected_count')} "
+            "mismatches="
+            f"{summary.get('resource_boundary_mismatch_count')}"
         ),
         "",
         "| Criterion | Status | Blocker |",

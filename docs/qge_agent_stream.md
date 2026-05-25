@@ -489,7 +489,10 @@ ledgers before accepting those sidecars, and recomputes the resource ICC
 sidecars from the asset inventory, asset requirements, and registered-asset
 intake ledgers. The advantage/control-plane ICC sidecars are recomputed from
 the advantage metrics and Moonlab payload, kernel, observation, and Grover
-schedule artifacts before the gate accepts them. The gate
+schedule artifacts before the gate accepts them. The resource envelope and
+native backend boundary ledgers are rebuilt from the oracle, advantage,
+vanilla, performance, and breadth evidence before the gate accepts their
+simulator/native posture. The gate
 reports resource blockers as `blocked` statuses, reserving generic failure
 events for crashed or invalid runtime evidence. Each
 contract records the episode/slot, route class, route profile, combat
