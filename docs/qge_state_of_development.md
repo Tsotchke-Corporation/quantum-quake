@@ -737,7 +737,9 @@ Known current visual state:
   The resource envelope and native backend boundary ledgers are rebuilt from
   the oracle, advantage, vanilla, performance, and breadth evidence before the
   gate accepts their simulator/native posture. The top-level publication ICC
-  sidecar is audited against `publication_manifest.json` after pack generation.
+  sidecar is audited against `publication_manifest.json` after pack generation,
+  and the copied vanilla, breadth, and performance ICC sidecars are audited
+  against their runtime source artifacts.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims

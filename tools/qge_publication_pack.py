@@ -2172,6 +2172,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_moonlab_hardware_ingest.py <pack_dir>/resource/qge_moonlab_submission_packet.json --template-out /tmp/qge_moonlab_hardware_record.template.json",
             "tools/qge_moonlab_full_game_plan.py <pack_dir> --out /tmp/qge_moonlab_full_game_plan.json --markdown /tmp/qge_moonlab_full_game_plan.md --icc-json /tmp/qge_moonlab_full_game_plan_icc_evidence.json",
             "tools/qge_moonlab_deployment_gate.py <pack_dir> --out /tmp/qge_moonlab_deployment_gate.json --markdown /tmp/qge_moonlab_deployment_gate.md --icc-json /tmp/qge_moonlab_deployment_gate_icc_evidence.json",
+            "tools/qge_runtime_icc_audit.py <pack_dir> --out /tmp/qge_runtime_icc_audit.json --fail-on-mismatch",
             "tools/qge_publication_icc_audit.py <pack_dir> --out /tmp/qge_publication_icc_audit.json --fail-on-mismatch",
         ],
     }

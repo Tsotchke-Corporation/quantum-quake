@@ -43,6 +43,7 @@ import qge_publication_icc_audit as publication_icc_audit  # noqa: E402
 import qge_publication_pack as publication_pack  # noqa: E402
 import qge_resource_boundary_audit as resource_boundary_audit  # noqa: E402
 import qge_registered_asset_intake as registered_asset_intake  # noqa: E402
+import qge_runtime_icc_audit as runtime_icc_audit  # noqa: E402
 import qge_trace_summary as trace_summary  # noqa: E402
 import qge_vanilla_capture_matrix as vanilla_matrix  # noqa: E402
 import qge_world_frame_metrics as world_frame_metrics  # noqa: E402
@@ -2313,6 +2314,206 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(
             icc["breadth_runtime_backend_probe_resolved_run_count"], 4)
         self.assertEqual(icc["status"], "success")
+
+    def test_runtime_icc_sidecar_audit_detects_stale_copies(self) -> None:
+        probe_targets = [
+            "qge_context_get_or_create_render_acceleration",
+            "qge_dwt_render",
+            "qge_metal_init_common",
+        ]
+        probe_proofs = {
+            target: {
+                "active_evidence": True,
+                "native_bridge_evidence": True,
+                "event_count": 1,
+                "backends": ["Metal"],
+                "paths": ["native_sparse_dwt_render_bridge"],
+                "results": ["active"],
+            }
+            for target in probe_targets
+        }
+        vanilla_matrix = {
+            "capture_dir": "diagnostics/quake_graphics/test",
+            "metrics_file": "diagnostics/quake_graphics/test/metrics.json",
+            "modes": [
+                {
+                    "mode": "classic",
+                    "frame": {
+                        "path": "diagnostics/quake_graphics/test/classic.png",
+                    },
+                },
+                {
+                    "mode": "quantum",
+                    "frame": {
+                        "path": "diagnostics/quake_graphics/test/quantum.png",
+                    },
+                },
+            ],
+            "conformance_summary": {
+                "ready_for_complete_claim": True,
+                "fallback_count": 0,
+                "qge_surface_surrogates": 0,
+                "qge_surface_culled": 0,
+                "classic3d_count": 0,
+                "classic2d_count": 1,
+                "viewmodel_encoded": 1,
+                "agent_stream_runs_success": True,
+                "classic_agent_run_status": "ok",
+                "qge_agent_run_status": "ok",
+                "performance_sidecars_success": True,
+                "qge_backend_gate_event_count": 3,
+                "qge_runtime_backend_probe_event_count": 3,
+                "qge_runtime_backend_probe_targets": probe_targets,
+                "qge_runtime_backend_probe_proofs": probe_proofs,
+                "qge_runtime_backend_probe_missing_targets": [],
+                "qge_runtime_backend_probe_native_targets": probe_targets,
+                "qge_runtime_backend_probe_resolved": True,
+                "runtime_evidence_ready": True,
+                "moonlab_authority_ready": True,
+                "moonlab_authority_blockers": [],
+                "qge_trace_summary_file": (
+                    "diagnostics/quake_graphics/test/qge_trace_summary.json"),
+            },
+        }
+        breadth_evidence = {
+            "aggregate": {
+                "breadth_ready_for_complete_claim": True,
+                "matrix_run_count": 1,
+                "publication_pack_count": 0,
+                "ready_matrix_run_count": 1,
+                "ready_publication_pack_count": 0,
+                "map_count": 1,
+                "maps": ["e1m1"],
+                "full_game_map_set": "quake_registered_single_player",
+                "full_game_map_coverage_status": "partial",
+                "full_game_map_target_count": 32,
+                "full_game_map_covered_count": 1,
+                "full_game_map_missing_count": 31,
+                "full_game_map_missing_maps": ["e1m2"],
+                "full_game_map_extra_maps": [],
+                "total_fallback_count": 0,
+                "total_surrogate_count": 0,
+                "total_cpu_idwt_count": 0,
+                "total_native_bridge_count": 10,
+                "total_backend_gate_event_count": 3,
+                "backend_gate_backends": ["Metal"],
+                "backend_gate_paths": ["native_sparse_dwt_render_bridge"],
+                "backend_gate_render_bridge_paths": [
+                    "native_sparse_dwt_render_bridge"],
+                "backend_gate_render_bridge_run_count": 1,
+                "total_runtime_backend_probe_event_count": 3,
+                "route_contract_authority_ready_run_count": 1,
+                "route_contract_authority_blocker_count": 0,
+                "route_contract_authority_blockers": [],
+                "runtime_backend_probe_targets": probe_targets,
+                "runtime_backend_probe_backends": ["Metal"],
+                "runtime_backend_probe_paths": [
+                    "native_sparse_dwt_render_bridge"],
+                "runtime_backend_probe_results": ["active"],
+                "runtime_backend_probe_run_count": 1,
+                "required_runtime_backend_probe_targets": probe_targets,
+                "runtime_backend_probe_proofs": probe_proofs,
+                "runtime_backend_probe_missing_targets": [],
+                "runtime_backend_probe_native_targets": probe_targets,
+                "runtime_backend_probe_resolved_run_count": 1,
+                "issue_count": 0,
+            },
+        }
+        runtime_boundary = {
+            "schema": "qge.native_backend_boundary.v0",
+            "status": "pass",
+            "required_target_count": 3,
+            "passed_target_count": 3,
+            "blocked_target_count": 0,
+            "targets": [
+                {"target": target, "status": "pass"}
+                for target in probe_targets
+            ],
+        }
+        performance_summary = {
+            "status": "pass",
+            "aggregate": {
+                "log_count": 1,
+                "missing_logs": [],
+                "engine_average_quantum_ms_max": None,
+                "render_time_ms_max": 22.0,
+                "native_idwt_sum": 10,
+                "idwt_fallback_sum": 0,
+                "cpu_idwt_sum": 0,
+                "idwt_backend_values": ["native"],
+                "backend_gate_event_count": 3,
+                "backend_gate_paths": ["native_sparse_dwt_render_bridge"],
+                "backend_gate_backends": ["Metal"],
+                "backend_gate_render_bridge_paths": [
+                    "native_sparse_dwt_render_bridge"],
+                "backend_gate_render_bridge_active": True,
+                "runtime_backend_probe_event_count": 3,
+                "runtime_backend_probe_targets": probe_targets,
+                "runtime_backend_probe_backends": ["Metal"],
+                "runtime_backend_probe_paths": [
+                    "native_sparse_dwt_render_bridge"],
+                "runtime_backend_probe_results": ["active"],
+                "required_runtime_backend_probe_targets": probe_targets,
+                "runtime_backend_probe_proofs": probe_proofs,
+                "runtime_backend_probe_missing_targets": [],
+                "runtime_backend_probe_native_targets": probe_targets,
+                "runtime_backend_probe_resolved": True,
+                "runtime_backend_boundary": runtime_boundary,
+                "max_average_ms": None,
+                "max_render_ms": 22.0,
+                "threshold_failures": [],
+                "metric_evidence_present": True,
+            },
+        }
+        source_artifacts = {
+            "vanilla_matrix": vanilla_matrix,
+            "breadth_evidence": breadth_evidence,
+            "performance_summary": performance_summary,
+        }
+        artifact_paths = {
+            "vanilla_matrix": "vanilla/vanilla_capture_matrix.json",
+            "vanilla_icc_evidence": "vanilla/qge_vanilla_icc_evidence.json",
+            "breadth_evidence": "breadth/breadth_evidence.json",
+            "breadth_icc_evidence": "breadth/qge_breadth_icc_evidence.json",
+            "performance_summary": "capture/qge_perf_summary.json",
+            "performance_icc_evidence": (
+                "capture/qge_perf_icc_evidence.json"),
+        }
+        sidecars = runtime_icc_audit.expected_runtime_icc_sidecars(
+            source_artifacts,
+            artifact_paths=artifact_paths,
+        )
+        clean_audit = runtime_icc_audit.runtime_icc_sidecar_audit(
+            source_artifacts,
+            sidecars,
+            artifact_paths=artifact_paths,
+            required=True,
+        )
+        self.assertTrue(clean_audit["passed"])
+        self.assertEqual(clean_audit["recorded_sidecar_count"], 3)
+        self.assertEqual(clean_audit["mismatch_count"], 0)
+
+        stale_sidecars = json.loads(json.dumps(sidecars))
+        stale_sidecars["performance_icc_evidence"]["native_idwt_sum"] = 0
+        stale_sidecars[
+            "vanilla_icc_evidence"
+        ]["hardware_quantum_advantage_claimed"] = True
+        stale_audit = runtime_icc_audit.runtime_icc_sidecar_audit(
+            source_artifacts,
+            stale_sidecars,
+            artifact_paths=artifact_paths,
+            required=True,
+        )
+        self.assertFalse(stale_audit["passed"])
+        self.assertTrue(any(
+            item.get("sidecar") == "performance_icc_evidence"
+            and "native_idwt_sum" in item.get("fields", [])
+            for item in stale_audit["sidecar_mismatches"]
+        ))
+        self.assertTrue(any(
+            flag.get("flag") == "hardware_quantum_advantage_claimed"
+            for flag in stale_audit["overclaim_flags"]
+        ))
 
     def test_moonlab_submission_bundle_classifies_circuit_payloads(self) -> None:
         job_id = "qge.light_transport_qae_benchmark.mlae.v0"

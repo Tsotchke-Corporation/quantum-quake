@@ -322,7 +322,9 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      Grover schedule artifacts. The resource envelope and native backend
      boundary ledgers must match the current oracle, advantage, vanilla,
      performance, and breadth evidence. The top-level publication ICC sidecar
-     must match `publication_manifest.json` after pack generation.
+     must match `publication_manifest.json` after pack generation, and the
+     copied vanilla, breadth, and performance ICC sidecars must match their
+     runtime source artifacts.
    - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
      and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
      scanning bounded candidate directories. The intake artifact records
