@@ -39,6 +39,7 @@ import qge_moonlab_qae_transpile as moonlab_qae_transpile  # noqa: E402
 import qge_moonlab_submission_bundle as moonlab_submission_bundle  # noqa: E402
 import qge_noesis_summary as noesis_summary  # noqa: E402
 import qge_manifest_file_audit as manifest_file_audit  # noqa: E402
+import qge_manifest_source_input_audit as manifest_source_input_audit  # noqa: E402
 import qge_manifest_summary_audit as manifest_summary_audit  # noqa: E402
 import qge_oracle_claims_audit as oracle_claims_audit  # noqa: E402
 import qge_oracle_icc_audit as oracle_icc_audit  # noqa: E402
@@ -1039,6 +1040,128 @@ class PublicationPackTests(unittest.TestCase):
             self.assertTrue(any(
                 item.get("source") == "artifacts.sample.directory" and
                 "file_count" in item.get("fields", [])
+                for item in stale_audit["mismatches"]
+            ))
+
+    def test_manifest_source_input_audit_detects_stale_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            capture = tmpdir / "capture"
+            graphics = tmpdir / "graphics"
+            agent = tmpdir / "agent_stream"
+            breadth = tmpdir / "breadth"
+            docs = tmpdir / "docs"
+            manifest = {
+                "source_inputs": {
+                    "capture_dir": str(capture),
+                    "graphics_capture_dir": str(graphics),
+                    "vanilla_matrix": str(graphics / "vanilla_matrix.json"),
+                    "vanilla_icc_evidence": str(
+                        graphics / "qge_vanilla_icc_evidence.json"),
+                    "publication_performance_summary": str(
+                        graphics / "quantum.qge_perf_summary.json"),
+                    "agent_stream_dir": str(agent),
+                    "breadth_evidence": str(breadth / "breadth_evidence.json"),
+                    "claims_ledger": str(docs / "qge_claims.json"),
+                },
+                "artifacts": {
+                    "capture": {
+                        "trace": {
+                            "source_path": str(capture / "qge_trace.bin"),
+                        },
+                        "frame": {
+                            "source_path": str(capture / "frame_001.png"),
+                        },
+                        "log": {
+                            "source_path": str(capture / "quantum_quake.log"),
+                        },
+                        "readme": {
+                            "source_path": str(capture / "README.txt"),
+                        },
+                        "performance_summary": {
+                            "source_path": str(
+                                graphics / "quantum.qge_perf_summary.json"),
+                        },
+                        "performance_icc_evidence": {
+                            "source_path": str(
+                                graphics / "quantum.qge_perf_icc_evidence.json"),
+                        },
+                    },
+                    "vanilla": {
+                        "matrix": {
+                            "source_path": str(
+                                graphics / "vanilla_matrix.json"),
+                        },
+                        "icc_evidence": {
+                            "source_path": str(
+                                graphics / "qge_vanilla_icc_evidence.json"),
+                        },
+                        "classic_frame": {
+                            "source_path": str(graphics / "classic.png"),
+                        },
+                        "qge_frame": {
+                            "source_path": str(graphics / "quantum.png"),
+                        },
+                    },
+                    "agent_stream": {
+                        "stream_directory": {
+                            "source_path": str(agent),
+                        },
+                        "manifest": {
+                            "source_path": str(agent / "manifest.json"),
+                        },
+                        "events": {
+                            "source_path": str(agent / "events.ndjson"),
+                        },
+                        "icc_evidence": {
+                            "source_path": str(
+                                agent / "qge_agent_stream_icc_evidence.jsonl"),
+                        },
+                    },
+                    "breadth": {
+                        "evidence": {
+                            "source_path": str(
+                                breadth / "breadth_evidence.json"),
+                        },
+                        "icc_evidence": {
+                            "source_path": str(
+                                breadth / "qge_breadth_icc_evidence.json"),
+                        },
+                    },
+                    "source_docs": {
+                        "claims_ledger": {
+                            "source_path": str(docs / "qge_claims.json"),
+                        },
+                    },
+                },
+            }
+
+            audit = manifest_source_input_audit.manifest_source_input_audit(
+                manifest)
+            self.assertTrue(audit["passed"])
+            self.assertEqual(audit["mismatch_count"], 0)
+            self.assertEqual(audit["check_count"], 17)
+
+            stale_manifest = json.loads(json.dumps(manifest))
+            stale_manifest["source_inputs"]["capture_dir"] = str(
+                tmpdir / "other_capture")
+            stale_manifest["source_inputs"]["vanilla_matrix"] = str(
+                graphics / "other_matrix.json")
+            stale_audit = (
+                manifest_source_input_audit.manifest_source_input_audit(
+                    stale_manifest)
+            )
+            self.assertFalse(stale_audit["passed"])
+            self.assertTrue(any(
+                item.get("source_input") == "capture_dir" and
+                item.get("artifact") == "capture.trace" and
+                item.get("relation") == "parent"
+                for item in stale_audit["mismatches"]
+            ))
+            self.assertTrue(any(
+                item.get("source_input") == "vanilla_matrix" and
+                item.get("artifact") == "vanilla.matrix" and
+                item.get("relation") == "exact"
                 for item in stale_audit["mismatches"]
             ))
 

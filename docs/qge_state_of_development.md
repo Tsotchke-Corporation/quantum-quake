@@ -746,7 +746,8 @@ Known current visual state:
   manifest's file and directory records are checked against current path
   existence, sizes, and SHA-256 digests, and its runtime/advantage summary
   mirrors are rebuilt from the recorded source inputs plus packed resource and
-  advantage artifacts.
+  advantage artifacts. The recorded source inputs are checked against copied
+  artifact `source_path` provenance.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims

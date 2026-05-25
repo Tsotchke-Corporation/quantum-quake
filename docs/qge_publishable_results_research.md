@@ -331,7 +331,8 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      manifest's file and directory records must match current path existence,
      sizes, and SHA-256 digests, and its runtime/advantage summary mirrors
      must rebuild from the recorded source inputs plus packed resource and
-     advantage artifacts.
+     advantage artifacts. The recorded source inputs must agree with copied
+     artifact `source_path` provenance.
    - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
      and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
      scanning bounded candidate directories. The intake artifact records
