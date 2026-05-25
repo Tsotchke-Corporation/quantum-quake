@@ -669,6 +669,12 @@ Known current visual state:
   full-game capture queue command for the same pack. The Moonlab deployment
   gate now repeats those remediation artifacts plus the manual-asset blocker
   reason in its summary, next actions, Markdown, and ICC evidence.
+- The post-install full-game capture queue now emits per-map route contracts for
+  all 32 canonical registered maps. Queued jobs record route class, episode/slot,
+  route profile, combat/special-route requirements, and authority domains, and
+  the generated script prints route profile/class markers before each harness
+  run. This keeps the post-asset capture path explicit instead of a generic
+  one-profile queue.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
   publication pack is `diagnostics/publication_pack/20260524-asset-gate-remediation`, with

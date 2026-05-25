@@ -449,11 +449,15 @@ available or turned into capture jobs. The generated script runs
 Noesis-fire authority-smoke profile by default, gives `start` the dedicated
 `start_hub_route_authority_smoke` route with `QGE_NOESIS_PLAN=start-hub-route`,
 orders combat maps before noncombat/endgame maps, marks `end` as
-`special_route_required`, and then rebuilds breadth evidence with the previous
-ready matrices plus the new capture directories. The `start` route is allowed
-to omit monster AI authority because the hub has no monster AI requirement, but
-it still uses rocket projectile authority so branch/writeback evidence remains
-required.
+`special_route_required`, and now attaches a route contract to every queued
+registered map. Each contract records the episode/slot, route class, route
+profile, combat requirement, special-route requirement, and authority domains
+that must survive the capture. The generated shell script echoes
+`QGE_FULL_GAME_CAPTURE_ROUTE_PROFILE` and `QGE_FULL_GAME_CAPTURE_ROUTE_CLASS`
+before each run, then rebuilds breadth evidence with the previous ready
+matrices plus the new capture directories. The `start` route is allowed to omit
+monster AI authority because the hub has no monster AI requirement, but it still
+uses rocket projectile authority so branch/writeback evidence remains required.
 `tools/qge_asset_inventory.py --asset-root assets/id1` emits the standalone
 `qge.asset_inventory.v0` JSON/Markdown audit with PAK SHA-256 hashes, loose BSP
 hashes, BSP validation status, available canonical maps, invalid BSP entries,

@@ -69,6 +69,10 @@ ledger for the entire registered map set: which maps already have strict
 simulator/native capture evidence, which maps would become capture jobs if
 assets existed locally, and which maps are blocked by unavailable registered
 BSP assets.
+The post-asset capture queue now has a route-contract ledger for all 32
+canonical registered maps, so queued jobs carry explicit route class,
+episode/slot, combat/special-route requirements, and authority-domain
+requirements instead of relying on one generic missing-map smoke profile.
 `resource/qge_moonlab_deployment_gate.json` is the fail-closed claim gate for
 the sentence "the entire game runs in Moonlab." It is currently `blocked`
 because coverage is 9/32, the remaining 23 registered BSP assets are

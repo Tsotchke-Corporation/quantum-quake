@@ -3972,11 +3972,27 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(queue["schema"], "qge.full_game_capture_queue.v0")
             self.assertEqual(queue["queue_job_count"], 2)
             self.assertTrue(queue["special_maps_last"])
+            self.assertTrue(queue["route_contracts_complete"])
+            self.assertEqual(queue["route_contract_map_count"], 32)
+            self.assertEqual(queue["missing_route_contract_maps"], [])
             self.assertEqual(queue["jobs"][0]["map"], "e1m3")
             self.assertEqual(queue["jobs"][1]["map"], "e1m4")
             self.assertEqual(
                 queue["jobs"][0]["route_profile"],
                 "noesis_authority_smoke",
+            )
+            self.assertEqual(
+                queue["jobs"][0]["route_contract"]["map_class"],
+                "registered_combat",
+            )
+            self.assertEqual(
+                queue["jobs"][0]["route_contract"]["episode"], "e1")
+            self.assertEqual(queue["jobs"][0]["route_contract"]["slot"], 3)
+            self.assertTrue(
+                queue["jobs"][0]["route_contract"]["combat_required"])
+            self.assertIn(
+                "ai_authority",
+                queue["jobs"][0]["route_contract"]["authority_domains"],
             )
             self.assertEqual(queue["covered_map_count_before"], 2)
             self.assertEqual(queue["covered_map_count_after_queue"], 4)
@@ -4023,12 +4039,21 @@ class BreadthEvidenceTests(unittest.TestCase):
             )
             script = "\n".join(full_game_capture_queue.script_lines(queue))
             self.assertIn("QGE_FULL_GAME_CAPTURE_QUEUE_MAP e1m3", script)
+            self.assertIn(
+                "QGE_FULL_GAME_CAPTURE_ROUTE_PROFILE noesis_authority_smoke",
+                script,
+            )
+            self.assertIn(
+                "QGE_FULL_GAME_CAPTURE_ROUTE_CLASS registered_combat",
+                script,
+            )
             self.assertIn("--min-runs 4", script)
             self.assertIn("--min-maps 4", script)
             self.assertIn(str(matrix_a), script)
             markdown = full_game_capture_queue.markdown_report(queue)
             self.assertIn("QGE Full Game Capture Queue", markdown)
             self.assertIn("noesis_authority_smoke", markdown)
+            self.assertIn("Route contracts: 32 (complete=True)", markdown)
             self.assertIn("Asset-unavailable missing maps", markdown)
 
             canonical_queue = full_game_capture_queue.build_queue(SimpleNamespace(
@@ -4047,8 +4072,29 @@ class BreadthEvidenceTests(unittest.TestCase):
                 canonical_queue["jobs"][0]["route_profile"],
                 "start_hub_route_authority_smoke",
             )
+            self.assertEqual(
+                canonical_queue["jobs"][0]["route_contract"]["map_class"],
+                "start_hub",
+            )
+            self.assertFalse(
+                canonical_queue["jobs"][0]["route_contract"]
+                ["combat_required"],
+            )
+            self.assertNotIn(
+                "ai_authority",
+                canonical_queue["jobs"][0]["route_contract"]
+                ["authority_domains"],
+            )
             self.assertEqual(canonical_queue["special_route_maps"], ["end"])
             self.assertEqual(canonical_queue["start_hub_route_maps"], ["start"])
+            self.assertTrue(
+                canonical_queue["route_contracts"]["end"]
+                ["special_route_required"],
+            )
+            self.assertEqual(
+                canonical_queue["route_contracts"]["end"]["map_class"],
+                "endgame_special",
+            )
             self.assertEqual(
                 canonical_queue["jobs"][0]["environment"]["QGE_NOESIS_PLAN"],
                 "start-hub-route",

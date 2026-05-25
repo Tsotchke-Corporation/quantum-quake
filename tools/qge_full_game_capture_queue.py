@@ -56,6 +56,13 @@ START_HUB_ROUTE_ENV = {
     "QGE_NOESIS_ASSIST": "0",
     "QGE_STREAM_FIRE_MIN_START_WAIT": "0",
 }
+BASE_AUTHORITY_DOMAINS = [
+    "render_quantum_workload",
+    "visibility_authority",
+    "projectile_authority",
+    "audio_source_authority",
+    "noesis_route_observation",
+]
 DEFAULT_ASSET_ROOT = REPO_ROOT / "assets" / "id1"
 QUAKE_BSP_VERSION = 29
 BSP_LUMP_COUNT = 15
@@ -326,6 +333,65 @@ def route_profile_for_map(map_name: str) -> str:
     return "noesis_authority_smoke"
 
 
+def map_episode_and_slot(map_name: str) -> tuple[str, int | None]:
+    if map_name in START_HUB_ROUTE_MAPS:
+        return "start_hub", 0
+    if map_name in SPECIAL_ROUTE_MAPS:
+        return "endgame", None
+    if (
+        len(map_name) == 4 and
+        map_name[0] == "e" and
+        map_name[2] == "m" and
+        map_name[1].isdigit() and
+        map_name[3].isdigit()
+    ):
+        return f"e{map_name[1]}", int(map_name[3])
+    return "unknown", None
+
+
+def route_contract_for_map(map_name: str) -> dict[str, Any]:
+    episode, slot = map_episode_and_slot(map_name)
+    start_hub_route = map_name in START_HUB_ROUTE_MAPS
+    special_route = map_name in SPECIAL_ROUTE_MAPS
+    combat_required = not start_hub_route and not special_route
+    if start_hub_route:
+        map_class = "start_hub"
+        route_goal = "start hub route with projectile authority smoke"
+    elif special_route:
+        map_class = "endgame_special"
+        route_goal = "special endgame route evidence required"
+    else:
+        map_class = "registered_combat"
+        route_goal = f"{episode} map {slot} route/combat authority smoke"
+    authority_domains = list(BASE_AUTHORITY_DOMAINS)
+    if combat_required:
+        authority_domains.append("ai_authority")
+    if special_route:
+        authority_domains.append("special_route_evidence")
+    return {
+        "map": map_name,
+        "episode": episode,
+        "slot": slot,
+        "map_class": map_class,
+        "route_profile": route_profile_for_map(map_name),
+        "route_goal": route_goal,
+        "combat_required": combat_required,
+        "route_progress_required": True,
+        "projectile_authority_required": True,
+        "audio_authority_required": True,
+        "special_route_required": special_route,
+        "start_hub_route": start_hub_route,
+        "authority_domains": authority_domains,
+    }
+
+
+def route_contracts_for_map_set(map_set: str) -> dict[str, dict[str, Any]]:
+    return {
+        map_name: route_contract_for_map(map_name)
+        for map_name in qge_breadth_evidence.map_targets_for_set(map_set)
+    }
+
+
 def selected_missing_maps(
     coverage: dict[str, Any],
     limit: int | None,
@@ -404,13 +470,28 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
     if args.limit is not None:
         queueable_missing_maps = queueable_missing_maps[:args.limit]
     existing_sources = existing_matrix_sources(data)
+    map_set = (
+        coverage.get("map_set") or
+        qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
+    )
+    route_contracts = route_contracts_for_map_set(str(map_set))
+    target_maps = qge_breadth_evidence.map_targets_for_set(str(map_set))
+    missing_route_contract_maps = sorted(set(
+        [name for name in target_maps if name not in route_contracts] +
+        [name for name in missing_maps if name not in route_contracts]
+    ))
     jobs = []
     for index, map_name in enumerate(queueable_missing_maps, start=1):
         env = queue_environment(args, map_name)
+        route_contract = route_contracts.get(
+            map_name,
+            route_contract_for_map(map_name),
+        )
         jobs.append({
             "index": index,
             "map": map_name,
-            "route_profile": route_profile_for_map(map_name),
+            "route_profile": route_contract["route_profile"],
+            "route_contract": route_contract,
             "status": "pending_capture",
             "environment": env,
             "command": ["bash", "tools/quake_graphics_harness.sh"],
@@ -433,6 +514,11 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
         "special_maps_last": special_maps_last,
         "special_route_maps": sorted(SPECIAL_ROUTE_MAPS),
         "start_hub_route_maps": sorted(START_HUB_ROUTE_MAPS),
+        "route_contract_schema": "qge.full_game_capture_route_contract.v0",
+        "route_contract_map_count": len(route_contracts),
+        "route_contracts_complete": not missing_route_contract_maps,
+        "missing_route_contract_maps": missing_route_contract_maps,
+        "route_contracts": route_contracts,
         "asset_root": str(asset_root),
         "asset_filter_enabled": not include_unavailable_assets,
         "asset_inventory_status": (
@@ -496,12 +582,23 @@ def script_lines(queue: dict[str, Any]) -> list[str]:
     ]
     for job in jobs:
         map_name = str(job.get("map"))
+        route_contract = dict_or_empty(job.get("route_contract"))
+        route_profile = str(job.get("route_profile") or "")
+        route_class = str(route_contract.get("map_class") or "")
         env = {
             key: str(value)
             for key, value in dict_or_empty(job.get("environment")).items()
         }
         lines.extend([
             f"echo QGE_FULL_GAME_CAPTURE_QUEUE_MAP {shlex.quote(map_name)}",
+            (
+                "echo QGE_FULL_GAME_CAPTURE_ROUTE_PROFILE "
+                f"{shlex.quote(route_profile)}"
+            ),
+            (
+                "echo QGE_FULL_GAME_CAPTURE_ROUTE_CLASS "
+                f"{shlex.quote(route_class)}"
+            ),
             "capture_output=\"$(",
             f"  {harness_command(env)}",
             ")\"",
@@ -568,16 +665,22 @@ def markdown_report(queue: dict[str, Any]) -> str:
             f"Asset-unavailable missing maps: "
             f"{queue.get('asset_unavailable_missing_count')}"
         ),
+        (
+            f"Route contracts: {queue.get('route_contract_map_count')} "
+            f"(complete={queue.get('route_contracts_complete')})"
+        ),
         "",
-        "| # | Map | Route Profile | Command |",
-        "| ---: | --- | --- | --- |",
+        "| # | Map | Route Profile | Route Class | Command |",
+        "| ---: | --- | --- | --- | --- |",
     ]
     for job in list_or_empty(queue.get("jobs")):
         if not isinstance(job, dict):
             continue
+        route_contract = dict_or_empty(job.get("route_contract"))
         lines.append(
             f"| {job.get('index')} | {job.get('map')} | "
             f"{job.get('route_profile')} | "
+            f"{route_contract.get('map_class')} | "
             f"`{job.get('shell_command')}` |"
         )
     lines.append("")

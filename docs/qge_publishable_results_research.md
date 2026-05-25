@@ -276,7 +276,10 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      reports zero locally queueable missing maps and 23 missing registered maps
      as asset-unavailable; those maps require additional registered BSP assets
      before capture. The queue now accepts assets only after the dependency-free
-     BSP29 header/lump validator confirms a real Quake BSP payload.
+     BSP29 header/lump validator confirms a real Quake BSP payload. It also
+     emits a route contract for every canonical registered map, so post-asset
+     jobs carry route class, episode/slot, combat/special-route requirements,
+     and authority domains before they run.
    - `tools/qge_asset_inventory.py --asset-root assets/id1` emits
      `qge.asset_inventory.v0` and `qge_registered_asset_inventory_complete`
      ICC evidence with PAK SHA-256 hashes, BSP validation status, invalid-BSP
