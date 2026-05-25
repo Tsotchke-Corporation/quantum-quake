@@ -2157,6 +2157,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         },
         "reproduce_commands": [
             "tools/qge_oracle_export.py <capture_dir>",
+            "tools/qge_oracle_icc_audit.py <pack_dir> --out /tmp/qge_oracle_icc_audit.json --fail-on-mismatch",
             "tools/qge_advantage_benchmark.py <oracle_scene.json> --outdir <outdir>",
             "tools/qge_moonlab_qae_transpile.py --metrics <pack_dir>/advantage/advantage_metrics.json --abstract-circuit <pack_dir>/advantage/qae_circuit.txt --out /tmp/qae_moonlab_payload.json --circuit-dir /tmp/moonlab_qae_circuits --markdown /tmp/qae_moonlab_payload.md --icc-json /tmp/qae_moonlab_payload_icc_evidence.json",
             "tools/qge_moonlab_oracle_transpile.py --metrics <pack_dir>/advantage/advantage_metrics.json --oracle-scene <pack_dir>/oracle/oracle_scene.json --out /tmp/qae_moonlab_oracle_kernel.json --circuit /tmp/qae_moonlab_oracle_kernel.moonlab --markdown /tmp/qae_moonlab_oracle_kernel.md --icc-json /tmp/qae_moonlab_oracle_kernel_icc_evidence.json",

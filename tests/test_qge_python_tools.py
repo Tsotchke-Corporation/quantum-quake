@@ -37,6 +37,7 @@ import qge_moonlab_qae_observation_transpile as moonlab_observation_transpile  #
 import qge_moonlab_qae_transpile as moonlab_qae_transpile  # noqa: E402
 import qge_moonlab_submission_bundle as moonlab_submission_bundle  # noqa: E402
 import qge_noesis_summary as noesis_summary  # noqa: E402
+import qge_oracle_icc_audit as oracle_icc_audit  # noqa: E402
 import qge_oracle_export as oracle_export  # noqa: E402
 import qge_perf_summary as perf_summary  # noqa: E402
 import qge_publication_icc_audit as publication_icc_audit  # noqa: E402
@@ -551,6 +552,38 @@ class OracleExportTests(unittest.TestCase):
         self.assertEqual(icc["candidate_count"], 8)
         self.assertIn("compiler.scene_oracle_ir", icc["supported_claim_ids"])
         self.assertIn("future.claim", icc["blocked_claim_ids"])
+        icc_audit = oracle_icc_audit.oracle_icc_evidence_audit(
+            oracle_scene,
+            claims,
+            icc,
+            artifact_paths={
+                "oracle_scene": "oracle_scene.json",
+                "claims_evidence": "claims_evidence.json",
+            },
+            required=True,
+        )
+        self.assertTrue(icc_audit["passed"])
+        self.assertEqual(icc_audit["mismatch_count"], 0)
+
+        stale_icc = json.loads(json.dumps(icc))
+        stale_icc["candidate_count"] = 0
+        stale_icc["hardware_quantum_advantage_claimed"] = True
+        stale_audit = oracle_icc_audit.oracle_icc_evidence_audit(
+            oracle_scene,
+            claims,
+            stale_icc,
+            artifact_paths={
+                "oracle_scene": "oracle_scene.json",
+                "claims_evidence": "claims_evidence.json",
+            },
+            required=True,
+        )
+        self.assertFalse(stale_audit["passed"])
+        self.assertIn("candidate_count", stale_audit["field_mismatches"])
+        self.assertTrue(any(
+            flag.get("flag") == "hardware_quantum_advantage_claimed"
+            for flag in stale_audit["overclaim_flags"]
+        ))
 
 
 class AdvantageBenchmarkTests(unittest.TestCase):

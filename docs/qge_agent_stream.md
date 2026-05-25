@@ -495,7 +495,8 @@ vanilla, performance, and breadth evidence before the gate accepts their
 simulator/native posture. The top-level publication ICC sidecar is audited
 against `publication_manifest.json` after the pack is written, and the copied
 vanilla, breadth, and performance ICC sidecars are audited against their
-runtime source artifacts. The gate
+runtime source artifacts. The scene-oracle ICC sidecar is likewise audited
+against the packed oracle and claims evidence. The gate
 reports resource blockers as `blocked` statuses, reserving generic failure
 events for crashed or invalid runtime evidence. Each
 contract records the episode/slot, route class, route profile, combat
