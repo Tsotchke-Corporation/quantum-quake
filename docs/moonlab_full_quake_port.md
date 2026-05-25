@@ -83,12 +83,14 @@ ledger while remediation evidence is present, if the plan's per-map rows do not
 match the current coverage, asset inventory, and canonical route contracts, and
 if the Moonlab
 `full_game_map_coverage` job result is stale against the current coverage,
-inventory, and asset-requirements artifacts. Selected Moonlab job results must
-also match the selected job specs row-by-row; aggregate completed-job counts
-alone cannot make the deployment gate ready, and each selected row must carry
-the required artifact evidence named by its job spec. The current covered set
-is 9/9 route-authority ready; the remaining 23 maps are still asset
-unavailable.
+inventory, and asset-requirements artifacts. The overclaim audit now scans the
+packed evidence recursively, so a nested hardware execution, hardware advantage,
+or dense-state claim flag blocks the gate even when top-level posture fields
+are false. Selected Moonlab job results must also match the selected job specs
+row-by-row; aggregate completed-job counts alone cannot make the deployment
+gate ready, and each selected row must carry the required artifact evidence
+named by its job spec. The current covered set is 9/9 route-authority ready; the
+remaining 23 maps are still asset unavailable.
 `resource/qge_moonlab_deployment_gate.json` is the fail-closed claim gate for
 the sentence "the entire game runs in Moonlab." It is currently `blocked`
 because coverage is 9/32, the remaining 23 registered BSP assets are

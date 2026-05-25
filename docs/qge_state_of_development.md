@@ -714,11 +714,12 @@ Known current visual state:
   the intake remediation ledger, audits the plan's per-map deployment rows
   against current coverage, asset inventory, and canonical route contracts, and
   separately audits the Moonlab `full_game_map_coverage` job result against
-  current coverage, inventory, and asset-requirements artifacts. It also
-  compares every selected Moonlab job spec with the job-result ledger, so
-  aggregate success counts are not enough unless each selected job has a
-  matching completed simulator result row and artifact evidence for its required
-  artifact names.
+  current coverage, inventory, and asset-requirements artifacts. It also scans
+  the packed Moonlab evidence recursively for nested hardware execution,
+  hardware advantage, or dense-state overclaim flags, and compares every
+  selected Moonlab job spec with the job-result ledger, so aggregate success
+  counts are not enough unless each selected job has a matching completed
+  simulator result row and artifact evidence for its required artifact names.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims

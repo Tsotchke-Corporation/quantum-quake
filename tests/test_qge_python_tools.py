@@ -3769,6 +3769,45 @@ class PublicationPackTests(unittest.TestCase):
         self.assertTrue(
             icc["whole_game_moonlab_deployment_claim_allowed"])
 
+        nested_overclaim_plan = json.loads(json.dumps(complete_plan))
+        nested_overclaim_plan["map_deployment_rows"][0]["evidence"] = [
+            {
+                "nested_posture": {
+                    "hardware_quantum_advantage_claimed": True,
+                },
+            },
+        ]
+        nested_overclaim_gate = moonlab_deployment_gate.build_gate(
+            complete_coverage,
+            complete_inventory,
+            complete_requirements,
+            nested_overclaim_plan,
+            job_specs,
+            complete_job_results,
+            submission_packet,
+            hardware_template,
+            source_path=Path("nested-overclaim-pack"),
+        )
+        nested_overclaim_blockers = {
+            item["id"] for item in nested_overclaim_gate["blockers"]
+        }
+        self.assertIn(
+            "no_forbidden_hardware_or_advantage_overclaim",
+            nested_overclaim_blockers,
+        )
+        nested_overclaim_criterion = next(
+            item for item in nested_overclaim_gate["criteria"]
+            if item["id"] == "no_forbidden_hardware_or_advantage_overclaim")
+        self.assertEqual(nested_overclaim_criterion["status"], "blocked")
+        self.assertTrue(any(
+            "moonlab_full_game_plan.map_deployment_rows[0].evidence[0]"
+            in flag["source"]
+            for flag in nested_overclaim_criterion["overclaim_flags"]
+        ))
+        self.assertFalse(
+            nested_overclaim_gate[
+                "whole_game_moonlab_deployment_claim_allowed"])
+
         coverage_only_job_results = dict(complete_job_results)
         coverage_only_job_results["jobs"] = [
             moonlab_coverage_ledger_result_job(

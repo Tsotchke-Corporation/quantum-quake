@@ -27,6 +27,7 @@ import qge_breadth_evidence  # noqa: E402
 import qge_full_game_route_contracts  # noqa: E402
 import qge_moonlab_full_game_plan_audit  # noqa: E402
 import qge_moonlab_full_game_plan  # noqa: E402
+import qge_moonlab_overclaim_audit  # noqa: E402
 import qge_registered_asset_intake  # noqa: E402
 
 
@@ -240,80 +241,6 @@ def failed_criteria(criteria: list[dict[str, Any]]) -> list[dict[str, Any]]:
         item for item in criteria
         if isinstance(item, dict) and item.get("status") != PASS
     ]
-
-
-def overclaim_flags_from_mapping(
-    prefix: str,
-    data: dict[str, Any],
-    keys: Sequence[str],
-) -> list[dict[str, Any]]:
-    flags = []
-    for key in keys:
-        if data.get(key) is True:
-            flags.append({"source": prefix, "flag": key, "value": True})
-    posture = dict_or_empty(data.get("claim_posture"))
-    for key in keys:
-        if posture.get(key) is True:
-            flags.append({
-                "source": f"{prefix}.claim_posture",
-                "flag": key,
-                "value": True,
-            })
-    posture = dict_or_empty(data.get("posture"))
-    for key in keys:
-        if posture.get(key) is True:
-            flags.append({
-                "source": f"{prefix}.posture",
-                "flag": key,
-                "value": True,
-            })
-    return flags
-
-
-def overclaim_flags(
-    *,
-    resource_envelope: dict[str, Any] | None = None,
-    asset_requirements: dict[str, Any] | None = None,
-    full_game_plan: dict[str, Any] | None = None,
-    job_specs: dict[str, Any] | None = None,
-    job_results: dict[str, Any] | None = None,
-    submission_packet: dict[str, Any] | None = None,
-    hardware_record_template: dict[str, Any] | None = None,
-) -> list[dict[str, Any]]:
-    forbidden = (
-        "whole_game_hardware_execution_claimed",
-        "hardware_quantum_advantage_claimed",
-        "dense_70000_qubit_state_claimed",
-    )
-    sources = (
-        ("resource_envelope", dict_or_empty(resource_envelope)),
-        ("asset_requirements", dict_or_empty(asset_requirements)),
-        ("moonlab_full_game_plan", dict_or_empty(full_game_plan)),
-        ("moonlab_job_specs", dict_or_empty(job_specs)),
-        ("moonlab_job_results", dict_or_empty(job_results)),
-        ("moonlab_submission_packet", dict_or_empty(submission_packet)),
-        ("moonlab_hardware_record_template", dict_or_empty(hardware_record_template)),
-        (
-            "moonlab_hardware_record_template.record",
-            dict_or_empty(dict_or_empty(hardware_record_template).get("record")),
-        ),
-    )
-    flags: list[dict[str, Any]] = []
-    for prefix, source in sources:
-        flags.extend(overclaim_flags_from_mapping(prefix, source, forbidden))
-    for index, job in enumerate(list_or_empty(dict_or_empty(job_results).get("jobs"))):
-        if isinstance(job, dict):
-            flags.extend(overclaim_flags_from_mapping(
-                f"moonlab_job_results.jobs[{index}]", job, forbidden))
-    for index, job in enumerate(list_or_empty(
-        dict_or_empty(submission_packet).get("candidate_jobs"))):
-        if isinstance(job, dict):
-            flags.extend(overclaim_flags_from_mapping(
-                f"moonlab_submission_packet.candidate_jobs[{index}]",
-                job,
-                forbidden,
-            ))
-    return flags
 
 
 def asset_handoff_status_counts(full_game_plan: dict[str, Any]) -> dict[str, int]:
@@ -1265,7 +1192,7 @@ def build_criteria(
         )
     )
 
-    overclaims = overclaim_flags(
+    overclaims = qge_moonlab_overclaim_audit.overclaim_flags(
         resource_envelope=resource_envelope,
         asset_requirements=requirements,
         full_game_plan=full_game_plan,
