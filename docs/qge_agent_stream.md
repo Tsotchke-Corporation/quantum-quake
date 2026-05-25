@@ -510,7 +510,8 @@ deployment-gate claim flags. The manifest reproduction command list is checked
 for core and postpack audit coverage plus unsafe shell fragments, and the
 registered-asset install script is rebuilt from the packed intake ledger. A
 single postpack audit runner executes the advertised verifier set before
-signoff. Packed Markdown
+signoff, and the top-level publication ICC sidecar records the
+reproduce/postpack audit verdict. Packed Markdown
 evidence reports are regenerated from their source JSON ledgers before they are
 treated as current, and Moonlab `.moonlab` circuit body files are hashed
 against their JSON records before control-plane payload evidence is accepted.

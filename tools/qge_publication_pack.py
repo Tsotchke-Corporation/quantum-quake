@@ -29,6 +29,7 @@ import qge_advantage_benchmark  # noqa: E402
 import qge_asset_inventory  # noqa: E402
 import qge_asset_requirements  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
+import qge_manifest_reproduce_audit  # noqa: E402
 import qge_moonlab_deployment_gate  # noqa: E402
 import qge_moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest  # noqa: E402
@@ -2241,6 +2242,10 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("asset_requirements_summary"))
     registered_asset_intake_summary = dict_or_empty(
         advantage_summary.get("registered_asset_intake_summary"))
+    reproduce_audit = qge_manifest_reproduce_audit.manifest_reproduce_audit(
+        manifest,
+        required=True,
+    )
     ready = bool(runtime.get("publication_ready_for_complete_claim"))
     return {
         "schema": "qge.icc_evidence.v0",
@@ -2252,6 +2257,23 @@ def build_icc_evidence(manifest: dict[str, Any],
         "publication_manifest_file": str(manifest_path),
         "publication_icc_evidence_file": str(icc_path),
         "publication_pack_dir": manifest["pack_dir"],
+        "manifest_reproduce_audit_passed": reproduce_audit.get("passed"),
+        "manifest_reproduce_command_count": (
+            reproduce_audit.get("command_count")),
+        "manifest_reproduce_required_command_count": (
+            reproduce_audit.get("required_command_count")),
+        "manifest_reproduce_postpack_command_count": (
+            reproduce_audit.get("postpack_command_count")),
+        "manifest_reproduce_mismatch_count": (
+            reproduce_audit.get("mismatch_count")),
+        "manifest_reproduce_missing_required_command_count": len(
+            reproduce_audit.get("missing_required_commands", [])),
+        "manifest_reproduce_missing_postpack_command_count": len(
+            reproduce_audit.get("missing_postpack_commands", [])),
+        "manifest_reproduce_missing_required_commands": (
+            reproduce_audit.get("missing_required_commands")),
+        "manifest_reproduce_missing_postpack_commands": (
+            reproduce_audit.get("missing_postpack_commands")),
         "oracle_scene_file": artifacts["oracle"]["oracle_scene"]["path"],
         "claims_evidence_file": artifacts["oracle"]["claims_evidence"]["path"],
         "advantage_metrics_file": artifacts["advantage"]["metrics"]["path"],

@@ -124,8 +124,9 @@ deployment-gate claim flags before it is treated as safe publication wording.
 The manifest reproduction command list is checked for core and postpack audit
 coverage plus unsafe shell fragments, and the registered-asset install script is
 rebuilt from the packed intake ledger. A single postpack audit runner executes
-the advertised verifier set before signoff. Packed Markdown evidence reports are
-regenerated from their source JSON ledgers before they are treated as current.
+the advertised verifier set before signoff, and the top-level publication ICC
+sidecar records the reproduce/postpack audit verdict. Packed Markdown evidence
+reports are regenerated from their source JSON ledgers before they are treated as current.
 Moonlab `.moonlab` circuit body files are hashed against their JSON records
 before control-plane payload evidence is treated as current. Generated advantage files
 (`qae_curve.csv`, `qae_circuit.txt`, and scaling summaries) are regenerated
