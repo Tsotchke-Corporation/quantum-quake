@@ -55,6 +55,7 @@ import qge_oracle_icc_audit as oracle_icc_audit  # noqa: E402
 import qge_oracle_export as oracle_export  # noqa: E402
 import qge_oracle_scene_audit as oracle_scene_audit  # noqa: E402
 import qge_perf_summary as perf_summary  # noqa: E402
+import qge_postpack_audit as postpack_audit  # noqa: E402
 import qge_publication_icc_audit as publication_icc_audit  # noqa: E402
 import qge_publication_pack as publication_pack  # noqa: E402
 import qge_resource_boundary_audit as resource_boundary_audit  # noqa: E402
@@ -1442,8 +1443,8 @@ class PublicationPackTests(unittest.TestCase):
         commands = [
             f"{prefix}<arg>"
             for prefix in (
-                manifest_reproduce_audit
-                .REQUIRED_REPRODUCE_COMMAND_PREFIXES)
+                manifest_reproduce_audit.REQUIRED_REPRODUCE_COMMAND_PREFIXES +
+                manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES)
         ]
         manifest = {
             "reproduce_commands": commands,
@@ -1454,13 +1455,18 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(audit["mismatch_count"], 0)
         self.assertEqual(
             audit["required_command_count"],
-            len(commands),
+            len(manifest_reproduce_audit.REQUIRED_REPRODUCE_COMMAND_PREFIXES),
+        )
+        self.assertEqual(
+            audit["postpack_command_count"],
+            len(manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES),
         )
 
         stale_manifest = json.loads(json.dumps(manifest))
         stale_manifest["reproduce_commands"] = [
             command for command in commands
             if not command.startswith("tools/qge_moonlab_deployment_gate.py ")
+            and not command.startswith("tools/qge_postpack_audit.py ")
         ]
         stale_manifest["reproduce_commands"].append(commands[0])
         stale_manifest["reproduce_commands"].append(commands[0])
@@ -1473,6 +1479,10 @@ class PublicationPackTests(unittest.TestCase):
             "tools/qge_moonlab_deployment_gate.py ",
             stale_audit["missing_required_commands"],
         )
+        self.assertIn(
+            "tools/qge_postpack_audit.py ",
+            stale_audit["missing_postpack_commands"],
+        )
         self.assertIn(commands[0], stale_audit["duplicate_commands"])
         self.assertTrue(any(
             item.get("command") == "rm -rf /tmp/qge" and
@@ -1480,6 +1490,50 @@ class PublicationPackTests(unittest.TestCase):
             for item in stale_audit["unsafe_commands"]
         ))
         self.assertTrue(stale_audit["malformed_commands"])
+
+    def test_postpack_audit_runner_summarizes_child_failures(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            pack_dir = tmpdir / "pack"
+            outdir = tmpdir / "audits"
+            pack_dir.mkdir()
+            calls = []
+
+            def fake_runner(command: list[str]) -> SimpleNamespace:
+                calls.append(command)
+                out_path = Path(command[command.index("--out") + 1])
+                passed = "pass_audit" in command[1]
+                out_path.write_text(
+                    json.dumps({
+                        "passed": passed,
+                        "mismatch_count": 0 if passed else 2,
+                    }, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                return SimpleNamespace(
+                    returncode=0 if passed else 1,
+                    stdout="",
+                    stderr="" if passed else "failed",
+                )
+
+            audit = postpack_audit.postpack_audit(
+                pack_dir,
+                outdir=outdir,
+                audit_tools=(
+                    "tools/pass_audit.py",
+                    "tools/fail_audit.py",
+                ),
+                runner=fake_runner,
+            )
+
+            self.assertFalse(audit["passed"])
+            self.assertEqual(audit["audit_count"], 2)
+            self.assertEqual(audit["passed_count"], 1)
+            self.assertEqual(audit["failed_count"], 1)
+            self.assertEqual(audit["failed_tools"], ["tools/fail_audit.py"])
+            self.assertEqual(len(calls), 2)
+            self.assertIn("--fail-on-mismatch", calls[0])
+            self.assertEqual(calls[0][2], str(pack_dir))
 
     def test_manifest_markdown_audit_detects_stale_report(
         self,

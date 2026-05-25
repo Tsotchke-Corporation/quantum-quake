@@ -594,6 +594,10 @@ assert any(
     "qge_publication_icc_audit.py" in command
     for command in manifest["reproduce_commands"]
 )
+assert any(
+    "qge_postpack_audit.py" in command
+    for command in manifest["reproduce_commands"]
+)
 PY
 
 python3 "$repo_root/tools/qge_publication_icc_audit.py" "$pack_dir" \

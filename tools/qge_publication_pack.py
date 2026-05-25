@@ -2192,6 +2192,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_manifest_claim_policy_audit.py <pack_dir> --out /tmp/qge_manifest_claim_policy_audit.json --fail-on-mismatch",
             "tools/qge_manifest_reproduce_audit.py <pack_dir> --out /tmp/qge_manifest_reproduce_audit.json --fail-on-mismatch",
             "tools/qge_manifest_markdown_audit.py <pack_dir> --out /tmp/qge_manifest_markdown_audit.json --fail-on-mismatch",
+            "tools/qge_postpack_audit.py <pack_dir> --outdir /tmp/qge_postpack_audits --out /tmp/qge_postpack_audit.json --fail-on-mismatch",
         ],
     }
 

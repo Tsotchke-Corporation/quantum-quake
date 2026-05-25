@@ -29,7 +29,7 @@ REQUIRED_REPRODUCE_COMMAND_PREFIXES = (
     "tools/qge_moonlab_full_game_plan.py ",
     "tools/qge_moonlab_deployment_gate.py ",
 )
-OPTIONAL_POSTPACK_REPRODUCE_COMMAND_PREFIXES = (
+POSTPACK_REPRODUCE_COMMAND_PREFIXES = (
     "tools/qge_oracle_scene_audit.py ",
     "tools/qge_oracle_claims_audit.py ",
     "tools/qge_oracle_icc_audit.py ",
@@ -50,7 +50,10 @@ OPTIONAL_POSTPACK_REPRODUCE_COMMAND_PREFIXES = (
     "tools/qge_manifest_claim_policy_audit.py ",
     "tools/qge_manifest_reproduce_audit.py ",
     "tools/qge_manifest_markdown_audit.py ",
+    "tools/qge_postpack_audit.py ",
 )
+OPTIONAL_POSTPACK_REPRODUCE_COMMAND_PREFIXES = (
+    POSTPACK_REPRODUCE_COMMAND_PREFIXES)
 FORBIDDEN_SHELL_FRAGMENTS = (";", "&&", "||", "|", "`", "$(")
 
 
@@ -127,7 +130,9 @@ def manifest_reproduce_audit(
             "recorded": False,
             "command_count": 0,
             "required_command_count": len(REQUIRED_REPRODUCE_COMMAND_PREFIXES),
+            "postpack_command_count": len(POSTPACK_REPRODUCE_COMMAND_PREFIXES),
             "missing_required_commands": [],
+            "missing_postpack_commands": [],
             "missing_optional_postpack_commands": [],
             "duplicate_commands": [],
             "unsafe_commands": [],
@@ -140,8 +145,8 @@ def manifest_reproduce_audit(
         prefix for prefix in REQUIRED_REPRODUCE_COMMAND_PREFIXES
         if not command_matches(string_commands, prefix)
     ]
-    missing_optional = [
-        prefix for prefix in OPTIONAL_POSTPACK_REPRODUCE_COMMAND_PREFIXES
+    missing_postpack = [
+        prefix for prefix in POSTPACK_REPRODUCE_COMMAND_PREFIXES
         if not command_matches(string_commands, prefix)
     ]
     duplicates = duplicate_commands(string_commands)
@@ -156,6 +161,7 @@ def manifest_reproduce_audit(
     ]
     mismatch_count = (
         len(missing_required) +
+        len(missing_postpack) +
         len(duplicates) +
         len(unsafe_commands) +
         len(malformed_commands)
@@ -166,10 +172,12 @@ def manifest_reproduce_audit(
         "recorded": recorded,
         "command_count": len(string_commands),
         "required_command_count": len(REQUIRED_REPRODUCE_COMMAND_PREFIXES),
+        "postpack_command_count": len(POSTPACK_REPRODUCE_COMMAND_PREFIXES),
         "optional_postpack_command_count": (
-            len(OPTIONAL_POSTPACK_REPRODUCE_COMMAND_PREFIXES)),
+            len(POSTPACK_REPRODUCE_COMMAND_PREFIXES)),
         "missing_required_commands": missing_required,
-        "missing_optional_postpack_commands": missing_optional,
+        "missing_postpack_commands": missing_postpack,
+        "missing_optional_postpack_commands": missing_postpack,
         "duplicate_commands": duplicates,
         "unsafe_commands": unsafe_commands,
         "malformed_commands": malformed_commands,

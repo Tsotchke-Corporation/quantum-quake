@@ -489,6 +489,8 @@ Regenerate the deployment claim gate with:
 `python3 tools/qge_moonlab_deployment_gate.py <pack> --out /tmp/qge_moonlab_deployment_gate.json --markdown /tmp/qge_moonlab_deployment_gate.md --icc-json /tmp/qge_moonlab_deployment_gate_icc_evidence.json`.
 Regenerate the asset requirements packet with:
 `python3 tools/qge_asset_requirements.py --asset-root assets/id1 --json /tmp/qge_asset_requirements.json --markdown /tmp/qge_asset_requirements.md --icc-json /tmp/qge_asset_requirements_icc_evidence.json`.
+Run the complete advertised postpack verifier set with:
+`python3 tools/qge_postpack_audit.py <pack> --outdir /tmp/qge_postpack_audits --out /tmp/qge_postpack_audit.json --fail-on-mismatch`.
 When Moonlab hardware returns a result, validate and merge it with:
 `python3 tools/qge_moonlab_hardware_ingest.py <pack>/resource/qge_moonlab_submission_packet.json --job-results <pack>/resource/qge_moonlab_job_results.json --hardware-record qge_moonlab_hardware_record.json --out qge_moonlab_job_results.hardware.json --comparison-out qge_moonlab_hardware_comparison.json --icc-out qge_moonlab_hardware_icc_evidence.json`.
 

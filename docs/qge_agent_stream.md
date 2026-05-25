@@ -507,8 +507,10 @@ recorded source inputs are checked against copied artifact `source_path`
 provenance, packed source-copy artifacts are byte-compared back to those
 sources, and the manifest claim posture is checked against the blocked
 deployment-gate claim flags. The manifest reproduction command list is checked
-for core command coverage and unsafe shell fragments, and the registered-asset
-install script is rebuilt from the packed intake ledger. Packed Markdown
+for core and postpack audit coverage plus unsafe shell fragments, and the
+registered-asset install script is rebuilt from the packed intake ledger. A
+single postpack audit runner executes the advertised verifier set before
+signoff. Packed Markdown
 evidence reports are regenerated from their source JSON ledgers before they are
 treated as current, and Moonlab `.moonlab` circuit body files are hashed
 against their JSON records before control-plane payload evidence is accepted.
