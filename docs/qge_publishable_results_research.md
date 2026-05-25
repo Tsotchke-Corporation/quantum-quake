@@ -341,6 +341,8 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      body files must match the size and SHA-256 recorded by their JSON ledgers.
      Generated advantage files (`qae_curve.csv`, `qae_circuit.txt`, and
      scaling summaries) must regenerate from `advantage_metrics.json`.
+     The agent-stream ICC JSONL must regenerate from the packed agent
+     manifest before stream status evidence is accepted.
    - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
      and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
      scanning bounded candidate directories. The intake artifact records

@@ -22,6 +22,7 @@ if str(TOOLS_DIR) not in sys.path:
 
 import qge_advantage_benchmark as advantage  # noqa: E402
 import qge_advantage_generated_file_audit as advantage_generated_file_audit  # noqa: E402
+import qge_agent_stream_icc_audit as agent_stream_icc_audit  # noqa: E402
 import qge_asset_inventory as asset_inventory  # noqa: E402
 import qge_asset_requirements as asset_requirements  # noqa: E402
 import qge_breadth_evidence as breadth_evidence  # noqa: E402
@@ -1001,6 +1002,107 @@ class PublicationPackTests(unittest.TestCase):
             perf = publication_pack.performance_summary(summary)
             self.assertFalse(publication_pack.explicit_performance_failure(perf))
             self.assertEqual(perf["render_time_ms_max"], 22.0)
+
+    def test_agent_stream_icc_audit_detects_stale_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            stream = tmpdir / "agent_stream"
+            capture = tmpdir / "quake_stream"
+            stream.mkdir()
+            capture.mkdir()
+            manifest = {
+                "stream_dir": str(stream),
+                "capture_dir": str(capture),
+                "frames_captured": 3,
+                "trace_requested": 1,
+                "trace": str(capture / "qge_trace.bin"),
+                "trace_status": "complete",
+                "trace_bytes": 1024,
+                "icc_evidence": str(
+                    stream / "qge_agent_stream_icc_evidence.jsonl"),
+                "run": {
+                    "startup_issue": "",
+                    "process_status": 0,
+                    "timed_out": 0,
+                },
+                "logs": {
+                    "events": str(stream / "events.ndjson"),
+                },
+                "trace_summary": {
+                    "status": "complete",
+                    "file": str(capture / "qge_trace_summary.json"),
+                    "runtime_evidence_ready": 0,
+                },
+                "performance": {
+                    "status": "complete",
+                    "summary_file": str(
+                        stream / "performance" / "qge_perf_summary.json"),
+                    "icc_evidence_file": str(
+                        stream / "performance" /
+                        "qge_perf_icc_evidence.json"),
+                },
+                "noesis": {
+                    "status": "not_requested",
+                    "summary_file": str(
+                        stream / "noesis" / "qge_noesis_summary.json"),
+                    "icc_evidence_file": str(
+                        stream / "noesis" / "qge_noesis_icc_evidence.json"),
+                    "gameplay_outcomes_file": str(
+                        stream / "noesis" / "gameplay_outcomes.ndjson"),
+                },
+                "input": {
+                    "action_trace_file": str(
+                        stream / "input" / "noesis_actions.txt"),
+                    "command_trace_file": str(
+                        stream / "input" / "noesis_commands.cfg"),
+                },
+                "video": {
+                    "frames_dir": str(stream / "video" / "frames"),
+                },
+                "audio": {
+                    "bytes": 0,
+                    "raw_file": str(stream / "audio" / "quake_mix_s16le.raw"),
+                    "metadata_file": str(
+                        stream / "audio" / "quake_mix_s16le.json"),
+                },
+            }
+            entries = (
+                agent_stream_icc_audit.expected_agent_stream_icc_entries(
+                    manifest)
+            )
+
+            audit = agent_stream_icc_audit.agent_stream_icc_audit(
+                manifest,
+                entries,
+            )
+            self.assertTrue(audit["passed"])
+            self.assertEqual(audit["expected_entry_count"], 28)
+            self.assertEqual(audit["mismatch_count"], 0)
+
+            stale_entries = json.loads(json.dumps(entries))
+            for item in stale_entries:
+                if item["name"] == "agent_stream_frames_captured":
+                    item["value"] = "0"
+            stale_entries.append({
+                "kind": "runtime_state",
+                "name": "hardware_quantum_advantage_claimed",
+                "value": "true",
+                "path": manifest["icc_evidence"],
+            })
+            stale_audit = agent_stream_icc_audit.agent_stream_icc_audit(
+                manifest,
+                stale_entries,
+            )
+            self.assertFalse(stale_audit["passed"])
+            self.assertTrue(any(
+                item.get("name") == "agent_stream_frames_captured" and
+                "value" in item.get("fields", [])
+                for item in stale_audit["entry_mismatches"]
+            ))
+            self.assertTrue(any(
+                item.get("flag") == "hardware_quantum_advantage_claimed"
+                for item in stale_audit["overclaim_flags"]
+            ))
 
     def test_manifest_file_record_audit_detects_stale_records(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -35,6 +35,7 @@ OPTIONAL_POSTPACK_REPRODUCE_COMMAND_PREFIXES = (
     "tools/qge_oracle_icc_audit.py ",
     "tools/qge_runtime_icc_audit.py ",
     "tools/qge_publication_icc_audit.py ",
+    "tools/qge_agent_stream_icc_audit.py ",
     "tools/qge_registered_asset_script_audit.py ",
     "tools/qge_moonlab_circuit_file_audit.py ",
     "tools/qge_advantage_generated_file_audit.py ",

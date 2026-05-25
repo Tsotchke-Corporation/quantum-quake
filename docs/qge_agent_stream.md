@@ -512,7 +512,8 @@ treated as current, and Moonlab `.moonlab` circuit body files are hashed
 against their JSON records before control-plane payload evidence is accepted.
 Generated advantage files (`qae_curve.csv`, `qae_circuit.txt`, and scaling
 summaries) are regenerated from `advantage_metrics.json` before the pack treats
-them as current.
+them as current. The agent-stream ICC JSONL is rebuilt from the packed agent
+manifest before stream status evidence is accepted.
 The gate reports resource blockers as `blocked` statuses, reserving generic
 failure events for crashed or invalid runtime evidence. Each
 contract records the episode/slot, route class, route profile, combat
