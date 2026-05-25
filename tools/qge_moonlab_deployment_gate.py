@@ -24,7 +24,7 @@ if str(SCRIPT_DIR) not in sys.path:
 import qge_asset_inventory  # noqa: E402
 import qge_asset_requirements  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
-import qge_full_game_capture_queue  # noqa: E402
+import qge_full_game_route_contracts  # noqa: E402
 import qge_moonlab_full_game_plan  # noqa: E402
 import qge_registered_asset_intake  # noqa: E402
 
@@ -332,6 +332,12 @@ def gate_summary(
             "route_contracts_complete"),
         "missing_route_contract_maps": full_game_plan.get(
             "missing_route_contract_maps"),
+        "covered_route_contract_authority_ready_count": full_game_plan.get(
+            "covered_route_contract_authority_ready_count"),
+        "covered_route_contract_authority_complete": full_game_plan.get(
+            "covered_route_contract_authority_complete"),
+        "covered_route_contract_authority_blocked_maps": full_game_plan.get(
+            "covered_route_contract_authority_blocked_maps"),
         "capture_required_map_count": full_game_plan.get(
             "capture_required_map_count"),
         "capture_required_maps": full_game_plan.get("capture_required_maps"),
@@ -460,17 +466,29 @@ def build_criteria(
         "missing_route_contract_maps"))
     route_contracts_passed = (
         full_game_plan.get("route_contract_schema") ==
-        qge_full_game_capture_queue.ROUTE_CONTRACT_SCHEMA and
+        qge_full_game_route_contracts.ROUTE_CONTRACT_SCHEMA and
         bool_true(full_game_plan.get("route_contracts_complete")) and
         expected_route_contract_count is not None and
         route_contract_count == expected_route_contract_count and
         not missing_route_contract_maps
+    )
+    covered_route_authority_blocked_maps = list_or_empty(
+        full_game_plan.get("covered_route_contract_authority_blocked_maps"))
+    route_authority_ready_count = int_or_none(full_game_plan.get(
+        "covered_route_contract_authority_ready_count"))
+    route_authority_passed = (
+        bool_true(full_game_plan.get(
+            "covered_route_contract_authority_complete")) and
+        covered_count is not None and
+        route_authority_ready_count == covered_count and
+        not covered_route_authority_blocked_maps
     )
     plan_passed = (
         full_game_plan.get("schema") ==
         "qge.moonlab_full_game_deployment_plan.v0" and
         full_game_plan.get("status") == "map_coverage_complete" and
         route_contracts_passed and
+        route_authority_passed and
         capture_required == 0 and
         asset_unavailable == 0
     )
@@ -570,6 +588,21 @@ def build_criteria(
             "full-game route contract ledger is missing or incomplete",
         ),
         criterion(
+            "covered_route_contract_authority_complete",
+            route_authority_passed,
+            {
+                "covered_map_count": covered_count,
+                "route_contract_authority_ready_count": (
+                    route_authority_ready_count),
+                "covered_route_contract_authority_complete": (
+                    full_game_plan.get(
+                        "covered_route_contract_authority_complete")),
+                "covered_route_contract_authority_blocked_maps": (
+                    covered_route_authority_blocked_maps),
+            },
+            "covered maps are missing route-contract authority evidence",
+        ),
+        criterion(
             "full_game_deployment_plan_complete",
             plan_passed,
             {
@@ -654,6 +687,10 @@ def next_actions_for_blockers(
     if "full_game_route_contracts_complete" in failed_ids:
         actions.append(
             "Regenerate qge_moonlab_full_game_plan.json so every canonical map has a full-game route contract before claiming Moonlab deployment readiness."
+        )
+    if "covered_route_contract_authority_complete" in failed_ids:
+        actions.append(
+            "Rebuild breadth evidence and the Moonlab full-game plan from route-contract-aware capture matrices so every covered map proves its required authority domains."
         )
     if "full_game_deployment_plan_complete" in failed_ids:
         if queue_command:
@@ -903,6 +940,12 @@ def build_icc_evidence(
             "route_contracts_complete"),
         "full_game_missing_route_contract_maps": summary.get(
             "missing_route_contract_maps"),
+        "covered_route_contract_authority_ready_count": summary.get(
+            "covered_route_contract_authority_ready_count"),
+        "covered_route_contract_authority_complete": summary.get(
+            "covered_route_contract_authority_complete"),
+        "covered_route_contract_authority_blocked_maps": summary.get(
+            "covered_route_contract_authority_blocked_maps"),
         "selected_job_count": summary.get("selected_job_count"),
         "completed_simulator_job_count": summary.get(
             "completed_simulator_job_count"),
@@ -959,6 +1002,12 @@ def markdown_report(gate: dict[str, Any]) -> str:
         (
             f"Route contracts: {summary.get('route_contract_map_count')} "
             f"(complete={summary.get('route_contracts_complete')})"
+        ),
+        (
+            "Covered route authority: "
+            f"{summary.get('covered_route_contract_authority_ready_count')} "
+            f"/ {summary.get('covered_map_count')} "
+            f"(complete={summary.get('covered_route_contract_authority_complete')})"
         ),
         "",
         "| Criterion | Status | Blocker |",

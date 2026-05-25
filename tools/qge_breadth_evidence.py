@@ -13,6 +13,11 @@ from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import qge_full_game_route_contracts  # noqa: E402
+
 REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS = [
     "qge_context_get_or_create_render_acceleration",
     "qge_dwt_render",
@@ -149,6 +154,11 @@ def domain_evidence(summary: dict[str, Any], name: str) -> dict[str, Any]:
     return evidence if isinstance(evidence, dict) else {}
 
 
+def moonlab_domain_readiness(summary: dict[str, Any]) -> dict[str, Any]:
+    domains = summary.get("moonlab_domain_readiness", {})
+    return domains if isinstance(domains, dict) else {}
+
+
 def map_name_for_matrix(matrix: dict[str, Any], matrix_path: Path) -> str | None:
     capture_dir = matrix.get("capture_dir")
     candidates = []
@@ -169,6 +179,14 @@ def build_matrix_run_summary(path: Path) -> dict[str, Any]:
     if not isinstance(summary, dict):
         raise ValueError(f"{matrix_path} is missing conformance_summary")
 
+    map_name = map_name_for_matrix(matrix, matrix_path)
+    domain_readiness = moonlab_domain_readiness(summary)
+    route_contract_authority = (
+        qge_full_game_route_contracts.route_contract_authority_audit(
+            canonical_map_name(map_name),
+            domain_readiness,
+        )
+    )
     primary = domain_evidence(summary, "qge_primary_framebuffer")
     render = domain_evidence(summary, "render_quantum_workload")
     fallback_count = as_int(summary.get("fallback_count"))
@@ -244,15 +262,22 @@ def build_matrix_run_summary(path: Path) -> dict[str, Any]:
         issues.append("runtime_backend_probe_missing")
     if not runtime_backend_probe_resolved:
         issues.append("runtime_backend_probe_unresolved")
+    if route_contract_authority.get("ready") is not True:
+        issues.append("route_contract_authority_not_ready")
 
     return {
         "kind": "vanilla_capture_matrix",
         "source_path": str(path),
         "matrix_file": str(matrix_path),
         "capture_dir": matrix.get("capture_dir"),
-        "map": map_name_for_matrix(matrix, matrix_path),
+        "map": map_name,
         "ready": not issues,
         "issues": issues,
+        "route_contract_authority": route_contract_authority,
+        "route_contract_authority_ready": (
+            route_contract_authority.get("ready") is True),
+        "route_contract_authority_blockers": (
+            route_contract_authority.get("blockers", [])),
         "ready_for_complete_claim": as_bool(
             summary.get("ready_for_complete_claim")),
         "moonlab_authority_ready": as_bool(
@@ -520,6 +545,19 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     total_runtime_backend_probe_event_count = sum(
         as_int(run.get("runtime_backend_probe_event_count"))
         for run in matrix_runs)
+    route_contract_authority_ready_run_count = sum(
+        1 for run in matrix_runs
+        if as_bool(run.get("route_contract_authority_ready"))
+    )
+    route_contract_authority_blockers = [
+        {
+            "map": run.get("map"),
+            "matrix_file": run.get("matrix_file"),
+            "blockers": run.get("route_contract_authority_blockers"),
+        }
+        for run in matrix_runs
+        if not as_bool(run.get("route_contract_authority_ready"))
+    ]
     runtime_backend_probe_targets = unique_sorted([
         target
         for run in matrix_runs
@@ -596,7 +634,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         backend_gate_render_bridge_run_count == len(matrix_runs) and
         total_runtime_backend_probe_event_count > 0 and
         runtime_backend_probe_run_count == len(matrix_runs) and
-        runtime_backend_probe_resolved_run_count == len(matrix_runs)
+        runtime_backend_probe_resolved_run_count == len(matrix_runs) and
+        route_contract_authority_ready_run_count == len(matrix_runs)
     )
 
     return {
@@ -645,6 +684,12 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 backend_gate_render_bridge_run_count),
             "total_runtime_backend_probe_event_count": (
                 total_runtime_backend_probe_event_count),
+            "route_contract_authority_ready_run_count": (
+                route_contract_authority_ready_run_count),
+            "route_contract_authority_blocker_count": len(
+                route_contract_authority_blockers),
+            "route_contract_authority_blockers": (
+                route_contract_authority_blockers),
             "runtime_backend_probe_targets": runtime_backend_probe_targets,
             "runtime_backend_probe_backends": runtime_backend_probe_backends,
             "runtime_backend_probe_paths": runtime_backend_probe_paths,
@@ -729,6 +774,12 @@ def build_icc_evidence(manifest: dict[str, Any],
             "backend_gate_render_bridge_run_count"),
         "total_runtime_backend_probe_event_count": aggregate.get(
             "total_runtime_backend_probe_event_count"),
+        "route_contract_authority_ready_run_count": aggregate.get(
+            "route_contract_authority_ready_run_count"),
+        "route_contract_authority_blocker_count": aggregate.get(
+            "route_contract_authority_blocker_count"),
+        "route_contract_authority_blockers": aggregate.get(
+            "route_contract_authority_blockers"),
         "runtime_backend_probe_targets": aggregate.get(
             "runtime_backend_probe_targets"),
         "runtime_backend_probe_backends": aggregate.get(

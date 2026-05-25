@@ -2525,6 +2525,22 @@ class PublicationPackTests(unittest.TestCase):
                     "cpu_idwt_count": 0,
                     "native_bridge_count": 105,
                     "runtime_backend_probe_resolved": True,
+                    "route_contract_authority_ready": True,
+                    "route_contract_authority_blockers": [],
+                },
+                {
+                    "map": "e1m1",
+                    "matrix_file": "e1m1/vanilla_capture_matrix.json",
+                    "ready": True,
+                    "ready_for_complete_claim": True,
+                    "moonlab_authority_ready": True,
+                    "fallback_count": 0,
+                    "surrogate_count": 0,
+                    "cpu_idwt_count": 0,
+                    "native_bridge_count": 105,
+                    "runtime_backend_probe_resolved": True,
+                    "route_contract_authority_ready": True,
+                    "route_contract_authority_blockers": [],
                 }
             ],
         }
@@ -2567,6 +2583,9 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(plan["route_contract_map_count"], 32)
         self.assertTrue(plan["route_contracts_complete"])
         self.assertEqual(plan["missing_route_contract_maps"], [])
+        self.assertTrue(plan["covered_route_contract_authority_complete"])
+        self.assertEqual(
+            plan["covered_route_contract_authority_ready_count"], 2)
         self.assertFalse(
             plan["claim_posture"]["whole_game_moonlab_deployment_claimed"])
         start = next(
@@ -2741,9 +2760,25 @@ class PublicationPackTests(unittest.TestCase):
                 "dense_70000_qubit_state_claimed": False,
             },
         }
+        partial_breadth = {
+            "schema": "qge.breadth_evidence.v0",
+            "matrix_runs": [
+                {
+                    "map": "start",
+                    "route_contract_authority_ready": True,
+                    "route_contract_authority_blockers": [],
+                },
+                {
+                    "map": "e1m1",
+                    "route_contract_authority_ready": True,
+                    "route_contract_authority_blockers": [],
+                },
+            ],
+        }
         partial_plan = moonlab_full_game_plan.build_plan(
             partial_coverage,
             partial_inventory,
+            breadth_evidence=partial_breadth,
             moonlab_job_results=job_results,
             submission_packet=submission_packet,
             hardware_record_template=hardware_template,
@@ -2831,10 +2866,16 @@ class PublicationPackTests(unittest.TestCase):
         self.assertIn("asset_requirements_satisfied", blocker_ids)
         self.assertIn("full_game_deployment_plan_complete", blocker_ids)
         self.assertNotIn("full_game_route_contracts_complete", blocker_ids)
+        self.assertNotIn(
+            "covered_route_contract_authority_complete", blocker_ids)
         route_criterion = next(
             item for item in blocked_gate["criteria"]
             if item["id"] == "full_game_route_contracts_complete")
         self.assertEqual(route_criterion["status"], "pass")
+        authority_criterion = next(
+            item for item in blocked_gate["criteria"]
+            if item["id"] == "covered_route_contract_authority_complete")
+        self.assertEqual(authority_criterion["status"], "pass")
         self.assertEqual(
             blocked_gate["asset_remediation"][
                 "registered_asset_install_script"],
@@ -2873,6 +2914,9 @@ class PublicationPackTests(unittest.TestCase):
             blocked_gate["summary"]["route_contract_map_count"], 32)
         self.assertTrue(
             blocked_gate["summary"][
+                "covered_route_contract_authority_complete"])
+        self.assertTrue(
+            blocked_gate["summary"][
                 "registered_asset_discovery_command_present"])
         self.assertIn(
             "qge_registered_asset_intake.py",
@@ -2901,6 +2945,10 @@ class PublicationPackTests(unittest.TestCase):
         self.assertIn("install_registered_assets.sh", blocked_markdown)
         self.assertIn("copy script mode", blocked_markdown)
         self.assertIn("Route contracts: 32 (complete=True)", blocked_markdown)
+        self.assertIn(
+            "Covered route authority: 2 / 2 (complete=True)",
+            blocked_markdown,
+        )
         self.assertIn("discovery refresh", blocked_markdown)
         blocked_icc = moonlab_deployment_gate.build_icc_evidence(
             blocked_gate,
@@ -2931,6 +2979,8 @@ class PublicationPackTests(unittest.TestCase):
             blocked_icc["full_game_route_contracts_complete"])
         self.assertEqual(
             blocked_icc["full_game_route_contract_map_count"], 32)
+        self.assertTrue(
+            blocked_icc["covered_route_contract_authority_complete"])
         self.assertIn(
             "qge_registered_asset_intake.py",
             blocked_icc["registered_asset_discovery_command"],
@@ -2966,9 +3016,21 @@ class PublicationPackTests(unittest.TestCase):
                 "dense_70000_qubit_state_claimed": False,
             },
         }
+        complete_breadth = {
+            "schema": "qge.breadth_evidence.v0",
+            "matrix_runs": [
+                {
+                    "map": name,
+                    "route_contract_authority_ready": True,
+                    "route_contract_authority_blockers": [],
+                }
+                for name in all_maps
+            ],
+        }
         complete_plan = moonlab_full_game_plan.build_plan(
             complete_coverage,
             complete_inventory,
+            breadth_evidence=complete_breadth,
             moonlab_job_results=job_results,
             submission_packet=submission_packet,
             hardware_record_template=hardware_template,
@@ -2994,6 +3056,9 @@ class PublicationPackTests(unittest.TestCase):
         self.assertFalse(ready_gate["hardware_quantum_advantage_claim_allowed"])
         self.assertEqual(ready_gate["failed_criterion_count"], 0)
         self.assertTrue(ready_gate["summary"]["route_contracts_complete"])
+        self.assertTrue(
+            ready_gate["summary"][
+                "covered_route_contract_authority_complete"])
         icc = moonlab_deployment_gate.build_icc_evidence(
             ready_gate, out_path=Path("qge_moonlab_deployment_gate.json"))
         self.assertEqual(
@@ -3828,6 +3893,39 @@ class BreadthEvidenceTests(unittest.TestCase):
                             "cpu_idwt_count": 0,
                         },
                     },
+                    "capture_artifacts": {
+                        "ready": ready,
+                        "evidence": {
+                            "agent_stream_runs_success": ready,
+                        },
+                    },
+                    "visibility_authority": {
+                        "ready": ready,
+                        "evidence": {
+                            "authority_gate_count": 3,
+                            "authority_apply_count": 3,
+                        },
+                    },
+                    "audio_authority": {
+                        "ready": ready,
+                        "evidence": {
+                            "source_spatial_count": 2,
+                        },
+                    },
+                    "projectile_live_authority": {
+                        "ready": ready,
+                        "evidence": {
+                            "authority_gate_count": 2,
+                            "active_projectiles": 1,
+                            "decision_or_measurement_count": 1,
+                        },
+                    },
+                    "ai_authority": {
+                        "ready": ready,
+                        "evidence": {
+                            "decision_count": 4,
+                        },
+                    },
                 },
             },
         })
@@ -3877,6 +3975,18 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(aggregate["matrix_run_count"], 2)
             self.assertEqual(aggregate["map_count"], 2)
             self.assertEqual(aggregate["maps"], ["e1m1", "e1m2"])
+            self.assertEqual(
+                aggregate["route_contract_authority_ready_run_count"], 2)
+            self.assertEqual(
+                aggregate["route_contract_authority_blocker_count"], 0)
+            self.assertTrue(
+                manifest["matrix_runs"][0][
+                    "route_contract_authority_ready"])
+            self.assertIn(
+                "ai_authority",
+                manifest["matrix_runs"][0]["route_contract_authority"]
+                ["required_authority_domains"],
+            )
             self.assertEqual(
                 manifest["full_game_coverage"]["schema"],
                 "qge.full_game_map_coverage.v0",
@@ -3936,6 +4046,10 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(icc["total_backend_gate_event_count"], 6)
             self.assertEqual(icc["total_runtime_backend_probe_event_count"], 6)
             self.assertEqual(icc["runtime_backend_probe_resolved_run_count"], 2)
+            self.assertEqual(
+                icc["route_contract_authority_ready_run_count"], 2)
+            self.assertEqual(
+                icc["route_contract_authority_blocker_count"], 0)
 
     def test_breadth_evidence_blocks_fallback_matrix(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

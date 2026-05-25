@@ -155,7 +155,7 @@ Do claim, once proven:
 Minimum publishable artifact package:
 
 Current strongest publication bundle:
-`diagnostics/publication_pack/20260525-route-contract-gate`. It packages a ready e1m1
+`diagnostics/publication_pack/20260525-route-authority-gate`. It packages a ready e1m1
 QGE/vanilla capture, vanilla ICC evidence sidecar, agent stream, oracle scene,
 claims evidence, finite-shot QAE benchmark artifacts,
 `resource/qge_resource_envelope.json`,
@@ -260,18 +260,19 @@ and marks UI-only `-nolauncher` paths as intentional skips.
    - For multi-map claims, run `tools/qge_breadth_evidence.py --min-maps N`
      so repeated captures of a single map cannot satisfy the breadth gate.
    - Current strongest local checkpoint:
-     `diagnostics/breadth_evidence/20260523-152522`, which aggregates nine
+     `diagnostics/breadth_evidence/20260525-route-authority`, which aggregates nine
      ready matrices across `start` and `e1m1` through `e1m8` with
      zero fallback, zero surrogate, zero CPU-IDWT, 945 native bridge events,
      27 backend-gate events, and 36 native backend runtime-probe events parsed
-     into every matrix run.
+     into every matrix run, plus 9/9 route-contract-authority-ready covered
+     maps and zero route-authority blockers.
    - It also emits `qge.full_game_map_coverage.v0`, currently 9/32 maps
      covered and 23 missing. A full-game map claim requires this status to be
      `complete`, not merely `qge_breadth_evidence_pack_complete`.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for
-     `diagnostics/publication_pack/20260525-route-contract-gate` inventories local loose/Pak
+     `diagnostics/publication_pack/20260525-route-authority-gate` inventories local loose/Pak
      BSP assets before queuing. With the current `assets/id1/pak0.pak`, it
      reports zero locally queueable missing maps and 23 missing registered maps
      as asset-unavailable; those maps require additional registered BSP assets
@@ -280,7 +281,9 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      emits a route contract for every canonical registered map, and the Moonlab
      deployment plan/gate require that complete ledger, so post-asset jobs carry
      route class, episode/slot, combat/special-route requirements, and authority
-     domains before they run.
+     domains before they run. Breadth evidence also audits every covered matrix
+     against those authority domains, and the deployment gate requires covered
+     route authority to stay complete.
    - `tools/qge_asset_inventory.py --asset-root assets/id1` emits
      `qge.asset_inventory.v0` and `qge_registered_asset_inventory_complete`
      ICC evidence with PAK SHA-256 hashes, BSP validation status, invalid-BSP
@@ -317,10 +320,11 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      count of matrix runs where all required native boundaries resolved to the
      native sparse DWT render bridge.
    - The current publication bundle carries those breadth counters directly:
-     `diagnostics/publication_pack/20260525-route-contract-gate` reports
+     `diagnostics/publication_pack/20260525-route-authority-gate` reports
      `breadth_map_count=9`, `breadth_total_native_bridge_count=945`, and
      `breadth_total_runtime_backend_probe_event_count=36`, with
-     `breadth_runtime_backend_probe_resolved_run_count=9`, plus
+     `breadth_runtime_backend_probe_resolved_run_count=9`,
+     `route_contract_authority_ready_run_count=9`, plus
      `full_game_map_coverage_status=partial`.
 
 3. Runtime traces
@@ -359,7 +363,7 @@ qge_vanilla_runtime_complete -> produce_ready_vanilla_capture_matrix
 ```
 
 That blocker is now cleared for the current self-contained publication pack:
-`diagnostics/publication_pack/20260525-route-contract-gate` carries
+`diagnostics/publication_pack/20260525-route-authority-gate` carries
 `qge_vanilla_capture_matrix_complete`, the vanilla ICC sidecar, native backend
 proofs, the agent stream, the benchmark bundle, and the nine-map breadth
 sidecar. It also carries `resource/qge_resource_envelope.json`, which records
@@ -437,7 +441,7 @@ The next hard work is therefore:
    Quake install or PAKs, run the generated copy script only for assets the
    user is licensed to install locally, verify them with
    `tools/qge_asset_inventory.py`, then start from
-   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260525-route-contract-gate`
+   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260525-route-authority-gate`
    so the 23 registered asset-unavailable maps become explicit capture jobs
    rather than weakening the authority gate.
 2. Submit the QAE hardware-candidate job through Moonlab hardware when

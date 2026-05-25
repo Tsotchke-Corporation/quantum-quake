@@ -18,6 +18,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import qge_breadth_evidence  # noqa: E402
+import qge_full_game_route_contracts  # noqa: E402
 
 DEFAULT_ENV = {
     "QGE_HARNESS_FRAMES": "4",
@@ -43,9 +44,9 @@ DEFAULT_ENV = {
     "QGE_RENDER_MATERIAL_GAIN": "0.18",
     "QGE_RENDER_EDGE_SAMPLES": "0",
 }
-SPECIAL_ROUTE_MAPS = {"end"}
-START_HUB_ROUTE_MAPS = {"start"}
-DEFERRED_ROUTE_MAPS = SPECIAL_ROUTE_MAPS | START_HUB_ROUTE_MAPS
+SPECIAL_ROUTE_MAPS = qge_full_game_route_contracts.SPECIAL_ROUTE_MAPS
+START_HUB_ROUTE_MAPS = qge_full_game_route_contracts.START_HUB_ROUTE_MAPS
+DEFERRED_ROUTE_MAPS = qge_full_game_route_contracts.DEFERRED_ROUTE_MAPS
 START_HUB_ROUTE_ENV = {
     "QGE_NOESIS_PLAN": "start-hub-route",
     "QGE_NOESIS_SCRIPTED": "1",
@@ -56,14 +57,8 @@ START_HUB_ROUTE_ENV = {
     "QGE_NOESIS_ASSIST": "0",
     "QGE_STREAM_FIRE_MIN_START_WAIT": "0",
 }
-BASE_AUTHORITY_DOMAINS = [
-    "render_quantum_workload",
-    "visibility_authority",
-    "projectile_authority",
-    "audio_source_authority",
-    "noesis_route_observation",
-]
-ROUTE_CONTRACT_SCHEMA = "qge.full_game_capture_route_contract.v0"
+BASE_AUTHORITY_DOMAINS = qge_full_game_route_contracts.BASE_AUTHORITY_DOMAINS
+ROUTE_CONTRACT_SCHEMA = qge_full_game_route_contracts.ROUTE_CONTRACT_SCHEMA
 DEFAULT_ASSET_ROOT = REPO_ROOT / "assets" / "id1"
 QUAKE_BSP_VERSION = 29
 BSP_LUMP_COUNT = 15
@@ -327,63 +322,15 @@ def queue_environment(args: argparse.Namespace, map_name: str) -> dict[str, str]
 
 
 def route_profile_for_map(map_name: str) -> str:
-    if map_name in START_HUB_ROUTE_MAPS:
-        return "start_hub_route_authority_smoke"
-    if map_name in SPECIAL_ROUTE_MAPS:
-        return "special_route_required"
-    return "noesis_authority_smoke"
+    return qge_full_game_route_contracts.route_profile_for_map(map_name)
 
 
 def map_episode_and_slot(map_name: str) -> tuple[str, int | None]:
-    if map_name in START_HUB_ROUTE_MAPS:
-        return "start_hub", 0
-    if map_name in SPECIAL_ROUTE_MAPS:
-        return "endgame", None
-    if (
-        len(map_name) == 4 and
-        map_name[0] == "e" and
-        map_name[2] == "m" and
-        map_name[1].isdigit() and
-        map_name[3].isdigit()
-    ):
-        return f"e{map_name[1]}", int(map_name[3])
-    return "unknown", None
+    return qge_full_game_route_contracts.map_episode_and_slot(map_name)
 
 
 def route_contract_for_map(map_name: str) -> dict[str, Any]:
-    episode, slot = map_episode_and_slot(map_name)
-    start_hub_route = map_name in START_HUB_ROUTE_MAPS
-    special_route = map_name in SPECIAL_ROUTE_MAPS
-    combat_required = not start_hub_route and not special_route
-    if start_hub_route:
-        map_class = "start_hub"
-        route_goal = "start hub route with projectile authority smoke"
-    elif special_route:
-        map_class = "endgame_special"
-        route_goal = "special endgame route evidence required"
-    else:
-        map_class = "registered_combat"
-        route_goal = f"{episode} map {slot} route/combat authority smoke"
-    authority_domains = list(BASE_AUTHORITY_DOMAINS)
-    if combat_required:
-        authority_domains.append("ai_authority")
-    if special_route:
-        authority_domains.append("special_route_evidence")
-    return {
-        "map": map_name,
-        "episode": episode,
-        "slot": slot,
-        "map_class": map_class,
-        "route_profile": route_profile_for_map(map_name),
-        "route_goal": route_goal,
-        "combat_required": combat_required,
-        "route_progress_required": True,
-        "projectile_authority_required": True,
-        "audio_authority_required": True,
-        "special_route_required": special_route,
-        "start_hub_route": start_hub_route,
-        "authority_domains": authority_domains,
-    }
+    return qge_full_game_route_contracts.route_contract_for_map(map_name)
 
 
 def route_contracts_for_map_set(map_set: str) -> dict[str, dict[str, Any]]:

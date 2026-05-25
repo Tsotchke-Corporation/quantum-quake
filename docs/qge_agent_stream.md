@@ -433,6 +433,11 @@ targets, plus per-target proof maps, missing/native target sets, and
 audited across every supplied run. It also emits
 `qge.full_game_map_coverage.v0`, a canonical registered single-player map
 ledger that stays `partial` until every target map has a ready QGE/Moonlab run.
+Each covered matrix is audited against its route contract's required authority
+domains, so the aggregate reports `route_contract_authority_ready_run_count`
+and blocks on `route_contract_authority_not_ready` if render, visibility,
+projectile, audio, route-observation, AI, or special-route evidence is missing
+for that map class.
 Use `--min-maps` when the artifact needs to prove breadth across distinct maps
 instead of repeated captures of one map.
 `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>` turns
@@ -452,9 +457,10 @@ orders combat maps before noncombat/endgame maps, marks `end` as
 `special_route_required`, and now attaches a route contract to every queued
 registered map. The Moonlab full-game deployment plan carries the same
 per-map contract ledger, and the deployment gate blocks if the ledger is
-missing or incomplete. Each contract records the episode/slot, route class,
-route profile, combat requirement, special-route requirement, and authority
-domains that must survive the capture. The generated shell script echoes
+missing or incomplete, or if a covered map lacks route-contract-authority-ready
+breadth evidence. Each contract records the episode/slot, route class, route
+profile, combat requirement, special-route requirement, and authority domains
+that must survive the capture. The generated shell script echoes
 `QGE_FULL_GAME_CAPTURE_ROUTE_PROFILE` and `QGE_FULL_GAME_CAPTURE_ROUTE_CLASS`
 before each run, then rebuilds breadth evidence with the previous ready
 matrices plus the new capture directories. The `start` route is allowed to omit

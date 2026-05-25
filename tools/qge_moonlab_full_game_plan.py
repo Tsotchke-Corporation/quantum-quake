@@ -23,7 +23,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import qge_asset_inventory  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
-import qge_full_game_capture_queue  # noqa: E402
+import qge_full_game_route_contracts  # noqa: E402
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -173,6 +173,11 @@ def map_evidence_summary(run: dict[str, Any]) -> dict[str, Any]:
             "runtime_backend_probe_resolved"),
         "runtime_backend_probe_missing_targets": run.get(
             "runtime_backend_probe_missing_targets"),
+        "route_contract_authority_ready": run.get(
+            "route_contract_authority_ready"),
+        "route_contract_authority_blockers": run.get(
+            "route_contract_authority_blockers"),
+        "route_contract_authority": run.get("route_contract_authority"),
     }
 
 
@@ -198,7 +203,7 @@ def map_status_rows(
     for map_name in target_maps:
         evidence = [map_evidence_summary(run)
                     for run in runs_by_map.get(map_name, [])]
-        route_contract = qge_full_game_capture_queue.route_contract_for_map(
+        route_contract = qge_full_game_route_contracts.route_contract_for_map(
             map_name)
         is_covered = map_name in covered
         has_asset = map_name in available
@@ -266,6 +271,18 @@ def build_deployment_requirements(
         route_contract_count == len(map_rows) and
         not missing_route_contracts
     )
+    covered_route_authority_blocked_maps = [
+        row["map"] for row in map_rows
+        if row.get("coverage_status") == "covered" and
+        not any(
+            dict_or_empty(evidence).get(
+                "route_contract_authority_ready") is True
+            for evidence in list_or_empty(row.get("evidence"))
+        )
+    ]
+    covered_route_authority_complete = (
+        not covered_route_authority_blocked_maps
+    )
     job_results = dict_or_empty(moonlab_job_results)
     packet = dict_or_empty(submission_packet)
     template = dict_or_empty(hardware_record_template)
@@ -294,10 +311,17 @@ def build_deployment_requirements(
             "id": "full_game_route_contracts",
             "status": "pass" if route_contracts_complete else "blocked",
             "route_contract_schema": (
-                qge_full_game_capture_queue.ROUTE_CONTRACT_SCHEMA),
+                qge_full_game_route_contracts.ROUTE_CONTRACT_SCHEMA),
             "route_contract_map_count": route_contract_count,
             "target_map_count": len(map_rows),
             "missing_route_contract_maps": missing_route_contracts,
+        },
+        {
+            "id": "covered_route_contract_authority",
+            "status": (
+                "pass" if covered_route_authority_complete else "blocked"
+            ),
+            "blocked_maps": covered_route_authority_blocked_maps,
         },
         {
             "id": "moonlab_selected_jobs_replayable",
@@ -367,6 +391,24 @@ def build_plan(
         len(route_contracts) == len(rows) and
         not missing_route_contract_maps
     )
+    covered_route_authority_blocked_maps = [
+        row["map"] for row in rows
+        if row.get("coverage_status") == "covered" and
+        not any(
+            dict_or_empty(evidence).get(
+                "route_contract_authority_ready") is True
+            for evidence in list_or_empty(row.get("evidence"))
+        )
+    ]
+    covered_route_authority_ready_count = (
+        len([
+            row for row in rows
+            if row.get("coverage_status") == "covered"
+        ]) - len(covered_route_authority_blocked_maps)
+    )
+    covered_route_authority_complete = (
+        not covered_route_authority_blocked_maps
+    )
     return {
         "schema": "qge.moonlab_full_game_deployment_plan.v0",
         "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -383,10 +425,16 @@ def build_plan(
         "asset_unavailable_map_count": len(asset_unavailable),
         "asset_unavailable_maps": asset_unavailable,
         "route_contract_schema": (
-            qge_full_game_capture_queue.ROUTE_CONTRACT_SCHEMA),
+            qge_full_game_route_contracts.ROUTE_CONTRACT_SCHEMA),
         "route_contract_map_count": len(route_contracts),
         "route_contracts_complete": route_contracts_complete,
         "missing_route_contract_maps": missing_route_contract_maps,
+        "covered_route_contract_authority_ready_count": (
+            covered_route_authority_ready_count),
+        "covered_route_contract_authority_complete": (
+            covered_route_authority_complete),
+        "covered_route_contract_authority_blocked_maps": (
+            covered_route_authority_blocked_maps),
         "route_contracts": route_contracts,
         "map_status": rows,
         "deployment_requirements": build_deployment_requirements(
@@ -475,6 +523,12 @@ def build_icc_evidence(
         "route_contracts_complete": plan.get("route_contracts_complete"),
         "missing_route_contract_maps": plan.get(
             "missing_route_contract_maps"),
+        "covered_route_contract_authority_ready_count": plan.get(
+            "covered_route_contract_authority_ready_count"),
+        "covered_route_contract_authority_complete": plan.get(
+            "covered_route_contract_authority_complete"),
+        "covered_route_contract_authority_blocked_maps": plan.get(
+            "covered_route_contract_authority_blocked_maps"),
         "whole_game_moonlab_deployment_claimed": False,
         "whole_game_hardware_execution_claimed": False,
         "hardware_quantum_advantage_claimed": False,
@@ -501,6 +555,12 @@ def markdown_report(plan: dict[str, Any]) -> str:
         (
             f"Route contracts: {plan.get('route_contract_map_count')} "
             f"(complete={plan.get('route_contracts_complete')})"
+        ),
+        (
+            "Covered route authority: "
+            f"{plan.get('covered_route_contract_authority_ready_count')} / "
+            f"{plan.get('covered_map_count')} "
+            f"(complete={plan.get('covered_route_contract_authority_complete')})"
         ),
         "",
         "| Map | Coverage | Asset | Route Class | Deployment Status | Next Action |",
