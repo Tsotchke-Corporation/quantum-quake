@@ -3492,6 +3492,9 @@ class BreadthEvidenceTests(unittest.TestCase):
                 str(candidate_root),
             )
             self.assertEqual(intake["candidate_new_map_count"], 3)
+            self.assertEqual(intake["copy_plan_unblocked_map_count"], 3)
+            self.assertEqual(intake["copy_plan_blocked_map_count"], 0)
+            self.assertEqual(intake["actionable_copy_plan_count"], 2)
             self.assertEqual(
                 intake["missing_map_count_after_plan"],
                 intake["current_missing_map_count"] - 3,
@@ -3551,6 +3554,8 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(
                 icc["post_install_verification_command_count"], 2)
             self.assertEqual(icc["candidate_scan_target_count"], 1)
+            self.assertEqual(icc["copy_plan_unblocked_map_count"], 3)
+            self.assertEqual(icc["copy_plan_blocked_map_count"], 0)
             self.assertTrue(icc["post_install_capture_queue_command_present"])
             self.assertTrue(icc["manual_registered_asset_required"])
             self.assertEqual(icc["copy_script_mode"], "partial_copy_plan")
@@ -3562,6 +3567,58 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertIn("Candidate Discovery Refresh", markdown)
             self.assertIn("Post-Install Verification", markdown)
             self.assertIn("qge_full_game_capture_queue.py", markdown)
+
+            blocked_current = tmpdir / "blocked-current-id1"
+            blocked_candidate = tmpdir / "blocked-candidate-id1"
+            blocked_maps = blocked_current / "maps"
+            blocked_candidate_maps = blocked_candidate / "maps"
+            blocked_maps.mkdir(parents=True)
+            blocked_candidate_maps.mkdir(parents=True)
+            write_pak(blocked_current / "pak0.pak", [
+                "maps/start.bsp",
+                "maps/e1m1.bsp",
+            ])
+            (blocked_maps / "e2m1.bsp").write_bytes(b"not-a-valid-bsp")
+            (blocked_candidate_maps / "e2m1.bsp").write_bytes(
+                minimal_bsp_bytes())
+
+            blocked_intake = registered_asset_intake.build_intake(
+                blocked_current,
+                [blocked_candidate],
+            )
+            self.assertEqual(
+                blocked_intake["status"], "blocked_candidate_copy_plan")
+            self.assertEqual(blocked_intake["candidate_new_maps"], ["e2m1"])
+            self.assertEqual(
+                blocked_intake["copy_plan_blocked_maps"], ["e2m1"])
+            self.assertEqual(
+                blocked_intake["copy_plan_unblocked_map_count"], 0)
+            self.assertEqual(blocked_intake["actionable_copy_plan_count"], 0)
+            self.assertIn("e2m1", blocked_intake["missing_maps_after_plan"])
+            self.assertEqual(
+                blocked_intake["missing_map_count_after_plan"],
+                blocked_intake["current_missing_map_count"],
+            )
+            self.assertEqual(
+                blocked_intake["registered_asset_blocker_reason"],
+                "candidate_copy_plan_blocked",
+            )
+            self.assertEqual(
+                blocked_intake["copy_script_mode"], "blocked_copy_plan")
+            blocked_script = "\n".join(
+                registered_asset_intake.script_lines(blocked_intake))
+            self.assertIn(
+                "QGE_REGISTERED_ASSET_BLOCKED_COPY_PLAN",
+                blocked_script,
+            )
+            blocked_icc = registered_asset_intake.build_icc_evidence(
+                blocked_intake)
+            self.assertEqual(
+                blocked_icc["copy_plan_blocked_maps"], ["e2m1"])
+            self.assertEqual(
+                blocked_icc["registered_asset_blocker_reason"],
+                "candidate_copy_plan_blocked",
+            )
 
             out_path = tmpdir / "qge_registered_asset_intake.json"
             markdown_path = tmpdir / "qge_registered_asset_intake.md"

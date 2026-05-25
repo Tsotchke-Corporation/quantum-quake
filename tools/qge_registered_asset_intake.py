@@ -820,13 +820,18 @@ def registered_asset_blocker_reason(
     *,
     missing_map_count_after_plan: int,
     copy_plan_count: int,
+    actionable_copy_plan_count: int | None = None,
 ) -> str | None:
     if missing_map_count_after_plan <= 0:
         return None
     if status == "blocked_no_candidate_assets" or copy_plan_count == 0:
         return "no_candidate_assets_found"
+    if status == "blocked_candidate_copy_plan":
+        return "candidate_copy_plan_blocked"
     if status == "partial_candidate_assets_found":
         return "partial_plan_remaining_registered_assets_missing"
+    if actionable_copy_plan_count is not None and actionable_copy_plan_count <= 0:
+        return "candidate_copy_plan_blocked"
     return "registered_assets_missing_after_plan"
 
 
@@ -834,14 +839,41 @@ def copy_script_mode(
     *,
     missing_map_count_after_plan: int,
     copy_plan_count: int,
+    actionable_copy_plan_count: int | None = None,
 ) -> str:
+    if actionable_copy_plan_count is None:
+        actionable_copy_plan_count = copy_plan_count
     if missing_map_count_after_plan > 0 and copy_plan_count == 0:
         return "no_op_blocked"
+    if missing_map_count_after_plan > 0 and actionable_copy_plan_count <= 0:
+        return "blocked_copy_plan"
     if missing_map_count_after_plan > 0:
         return "partial_copy_plan"
-    if copy_plan_count > 0:
+    if actionable_copy_plan_count > 0:
         return "complete_copy_plan"
     return "verification_only"
+
+
+def copy_plan_actionable_entries(copy_plan: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        entry for entry in copy_plan
+        if entry.get("status") in {"planned", "already_present"}
+    ]
+
+
+def copy_plan_maps(
+    copy_plan: Sequence[dict[str, Any]],
+    *,
+    statuses: set[str],
+) -> set[str]:
+    maps: set[str] = set()
+    for entry in copy_plan:
+        if entry.get("status") not in statuses:
+            continue
+        for map_name in list_or_empty(entry.get("maps_unblocked")):
+            if isinstance(map_name, str):
+                maps.add(map_name)
+    return maps
 
 
 def build_intake(
@@ -875,6 +907,11 @@ def build_intake(
         if map_name in candidate_sources
     }
     copy_plan = build_copy_plan(chosen_sources, current_root, current_inventory)
+    actionable_copy_plan = copy_plan_actionable_entries(copy_plan)
+    copy_plan_unblocked = copy_plan_maps(
+        copy_plan,
+        statuses={"planned", "already_present"},
+    )
     post_install_verification = build_post_install_verification(
         current_root,
         publication_pack_dir=publication_pack_dir,
@@ -887,27 +924,38 @@ def build_intake(
         map_name for map_name in missing_maps
         if map_name in chosen_sources
     ]
+    copy_plan_unblocked_maps = [
+        map_name for map_name in missing_maps
+        if map_name in copy_plan_unblocked
+    ]
+    copy_plan_blocked_maps = [
+        map_name for map_name in newly_available_maps
+        if map_name not in copy_plan_unblocked
+    ]
     candidate_extra_maps = sorted(
         map_name for map_name in candidate_sources
         if map_name not in target_set
     )
     missing_after_plan = [
         map_name for map_name in missing_maps
-        if map_name not in set(newly_available_maps)
+        if map_name not in set(copy_plan_unblocked_maps)
     ]
     status = (
         "complete_after_plan" if not missing_after_plan else
-        "partial_candidate_assets_found" if newly_available_maps else
+        "partial_candidate_assets_found" if copy_plan_unblocked_maps else
+        "blocked_candidate_copy_plan" if newly_available_maps else
         "blocked_no_candidate_assets"
     )
     blocker_reason = registered_asset_blocker_reason(
         status,
         missing_map_count_after_plan=len(missing_after_plan),
         copy_plan_count=len(copy_plan),
+        actionable_copy_plan_count=len(actionable_copy_plan),
     )
     script_mode = copy_script_mode(
         missing_map_count_after_plan=len(missing_after_plan),
         copy_plan_count=len(copy_plan),
+        actionable_copy_plan_count=len(actionable_copy_plan),
     )
     intake = {
         "schema": "qge.registered_asset_intake.v0",
@@ -941,6 +989,11 @@ def build_intake(
         "invalid_candidate_sources": invalid_sources,
         "copy_plan": copy_plan,
         "copy_plan_count": len(copy_plan),
+        "actionable_copy_plan_count": len(actionable_copy_plan),
+        "copy_plan_unblocked_map_count": len(copy_plan_unblocked_maps),
+        "copy_plan_unblocked_maps": copy_plan_unblocked_maps,
+        "copy_plan_blocked_map_count": len(copy_plan_blocked_maps),
+        "copy_plan_blocked_maps": copy_plan_blocked_maps,
         "candidate_discovery": candidate_discovery,
         "candidate_discovery_command": (
             candidate_discovery["shell_command"]),
@@ -961,7 +1014,10 @@ def build_intake(
             "missing_map_count_after_plan": len(missing_after_plan),
             "missing_maps_after_plan": missing_after_plan,
             "candidate_new_map_count": len(newly_available_maps),
+            "copy_plan_unblocked_map_count": len(copy_plan_unblocked_maps),
+            "copy_plan_blocked_map_count": len(copy_plan_blocked_maps),
             "copy_plan_count": len(copy_plan),
+            "actionable_copy_plan_count": len(actionable_copy_plan),
             "candidate_discovery_command": (
                 candidate_discovery["shell_command"]),
         },
@@ -997,16 +1053,20 @@ def script_lines(intake: dict[str, Any]) -> list[str]:
     ]
     mode = intake.get("copy_script_mode")
     if not isinstance(mode, str):
+        actionable_count = len(copy_plan_actionable_entries(plan))
         mode = copy_script_mode(
             missing_map_count_after_plan=len(missing_after_plan),
             copy_plan_count=len(plan),
+            actionable_copy_plan_count=actionable_count,
         )
     blocker_reason = intake.get("registered_asset_blocker_reason")
     if not isinstance(blocker_reason, str):
+        actionable_count = len(copy_plan_actionable_entries(plan))
         blocker_reason = registered_asset_blocker_reason(
             str(intake.get("status") or ""),
             missing_map_count_after_plan=len(missing_after_plan),
             copy_plan_count=len(plan),
+            actionable_copy_plan_count=actionable_count,
         )
     lines = [
         "#!/usr/bin/env bash",
@@ -1066,6 +1126,7 @@ def script_lines(intake: dict[str, Any]) -> list[str]:
                 "echo QGE_REGISTERED_ASSET_BLOCKER_REASON "
                 f"{shell_quote(blocker_reason)}"
             )
+        actionable_plan = copy_plan_actionable_entries(plan)
         if not plan:
             lines.extend([
                 "echo QGE_REGISTERED_ASSET_NO_CANDIDATES",
@@ -1073,6 +1134,15 @@ def script_lines(intake: dict[str, Any]) -> list[str]:
                     "echo 'No registered asset copy plan was generated; "
                     "place licensed registered Quake assets in a scanned "
                     "root and rerun qge_registered_asset_intake.py.'"
+                ),
+            ])
+        elif not actionable_plan:
+            lines.extend([
+                "echo QGE_REGISTERED_ASSET_BLOCKED_COPY_PLAN",
+                (
+                    "echo 'Registered asset candidates were found, but the "
+                    "copy plan has no actionable copy operations; inspect "
+                    "blocked copy-plan entries before rerunning.'"
                 ),
             ])
         else:
@@ -1175,8 +1245,13 @@ def markdown_report(intake: dict[str, Any]) -> str:
                 "placing licensed registered Quake assets in a scanned root."
                 if intake.get("no_candidate_asset_copy_plan")
                 else (
-                    "The copy plan is partial; remaining missing maps still "
-                    "require licensed registered assets."
+                    "Candidate assets were found, but the copy plan has no "
+                    "actionable operations; inspect blocked copy-plan entries."
+                    if intake.get("copy_script_mode") == "blocked_copy_plan"
+                    else (
+                        "The copy plan is partial; remaining missing maps still "
+                        "require licensed registered assets."
+                    )
                 )
             ),
             (
@@ -1289,6 +1364,13 @@ def build_icc_evidence(
         "copy_script_mode": intake.get("copy_script_mode"),
         "no_candidate_asset_copy_plan": bool(
             intake.get("no_candidate_asset_copy_plan")),
+        "actionable_copy_plan_count": intake.get("actionable_copy_plan_count"),
+        "copy_plan_unblocked_map_count": intake.get(
+            "copy_plan_unblocked_map_count"),
+        "copy_plan_unblocked_maps": intake.get("copy_plan_unblocked_maps"),
+        "copy_plan_blocked_map_count": intake.get(
+            "copy_plan_blocked_map_count"),
+        "copy_plan_blocked_maps": intake.get("copy_plan_blocked_maps"),
         "invalid_candidate_source_count": intake.get(
             "invalid_candidate_source_count"),
         "copy_plan_count": intake.get("copy_plan_count"),
