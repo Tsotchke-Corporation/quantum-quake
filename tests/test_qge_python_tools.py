@@ -2895,6 +2895,64 @@ class PublicationPackTests(unittest.TestCase):
                 },
             ],
         }
+        partial_registered_asset_intake = {
+            "schema": "qge.registered_asset_intake.v0",
+            "status": "blocked_no_candidate_assets",
+            "current_asset_root": "assets/id1",
+            "candidate_new_map_count": 0,
+            "missing_map_count_after_plan": 30,
+            "missing_maps_after_plan": partial_inventory["missing_maps"],
+            "manual_registered_asset_required": True,
+            "registered_asset_blocker_reason": (
+                "no_candidate_assets_found"),
+            "copy_script_mode": "no_op_blocked",
+            "no_candidate_asset_copy_plan": True,
+            "copy_plan_count": 0,
+            "actionable_copy_plan_count": 0,
+            "copy_plan_unblocked_map_count": 0,
+            "copy_plan_unblocked_maps": [],
+            "copy_plan_blocked_map_count": 0,
+            "copy_plan_blocked_maps": [],
+            "discovered_candidate_count": 1,
+            "discovery_metadata": {
+                "roots_scanned_count": 4,
+                "steam_library_root_count": 1,
+                "steam_quake_path_count": 3,
+            },
+            "post_install_verification_command_count": 2,
+            "post_install_verification": {
+                "command_count": 2,
+                "commands": [
+                    {
+                        "kind": "asset_inventory",
+                        "shell_command": (
+                            "python3 tools/qge_asset_inventory.py "
+                            "--asset-root assets/id1"
+                        ),
+                    },
+                    {
+                        "kind": "capture_queue",
+                        "shell_command": (
+                            "python3 tools/"
+                            "qge_full_game_capture_queue.py "
+                            "partial-pack --asset-root assets/id1"
+                        ),
+                        "json": (
+                            "/tmp/"
+                            "qge_full_game_capture_queue.after.json"
+                        ),
+                        "script": "/tmp/run_missing_maps.after.sh",
+                        "markdown": (
+                            "/tmp/"
+                            "qge_full_game_capture_queue.after.md"
+                        ),
+                    },
+                ],
+            },
+            "claim_posture": {
+                "asset_intake_copies_game_data": False,
+            },
+        }
         partial_plan = moonlab_full_game_plan.build_plan(
             partial_coverage,
             partial_inventory,
@@ -2902,60 +2960,11 @@ class PublicationPackTests(unittest.TestCase):
             moonlab_job_results=job_results,
             submission_packet=submission_packet,
             hardware_record_template=hardware_template,
+            registered_asset_intake=partial_registered_asset_intake,
         )
         partial_asset_remediation = (
             moonlab_deployment_gate.asset_remediation_from_intake(
-                {
-                    "status": "blocked_no_candidate_assets",
-                    "current_asset_root": "assets/id1",
-                    "candidate_new_map_count": 0,
-                    "missing_map_count_after_plan": 30,
-                    "manual_registered_asset_required": True,
-                    "registered_asset_blocker_reason": (
-                        "no_candidate_assets_found"),
-                    "copy_script_mode": "no_op_blocked",
-                    "no_candidate_asset_copy_plan": True,
-                    "copy_plan_count": 0,
-                    "discovered_candidate_count": 1,
-                    "discovery_metadata": {
-                        "roots_scanned_count": 4,
-                        "steam_library_root_count": 1,
-                        "steam_quake_path_count": 3,
-                    },
-                    "post_install_verification_command_count": 2,
-                    "post_install_verification": {
-                        "command_count": 2,
-                        "commands": [
-                            {
-                                "kind": "asset_inventory",
-                                "shell_command": (
-                                    "python3 tools/qge_asset_inventory.py "
-                                    "--asset-root assets/id1"
-                                ),
-                            },
-                            {
-                                "kind": "capture_queue",
-                                "shell_command": (
-                                    "python3 tools/"
-                                    "qge_full_game_capture_queue.py "
-                                    "partial-pack --asset-root assets/id1"
-                                ),
-                                "json": (
-                                    "/tmp/"
-                                    "qge_full_game_capture_queue.after.json"
-                                ),
-                                "script": "/tmp/run_missing_maps.after.sh",
-                                "markdown": (
-                                    "/tmp/"
-                                    "qge_full_game_capture_queue.after.md"
-                                ),
-                            },
-                        ],
-                    },
-                    "claim_posture": {
-                        "asset_intake_copies_game_data": False,
-                    },
-                },
+                partial_registered_asset_intake,
                 intake_path=Path("resource/qge_registered_asset_intake.json"),
                 markdown_path=Path("resource/qge_registered_asset_intake.md"),
                 script_path=Path("resource/install_registered_assets.sh"),
@@ -2988,6 +2997,8 @@ class PublicationPackTests(unittest.TestCase):
         self.assertNotIn("full_game_route_contracts_complete", blocker_ids)
         self.assertNotIn(
             "covered_route_contract_authority_complete", blocker_ids)
+        self.assertNotIn(
+            "registered_asset_handoff_consistent", blocker_ids)
         self.assertTrue(all(
             item["status"] == "blocked"
             for item in blocked_gate["blockers"]
@@ -3004,6 +3015,17 @@ class PublicationPackTests(unittest.TestCase):
             item for item in blocked_gate["criteria"]
             if item["id"] == "covered_route_contract_authority_complete")
         self.assertEqual(authority_criterion["status"], "pass")
+        handoff_criterion = next(
+            item for item in blocked_gate["criteria"]
+            if item["id"] == "registered_asset_handoff_consistent")
+        self.assertEqual(handoff_criterion["status"], "pass")
+        self.assertTrue(
+            handoff_criterion["registered_asset_handoff_recorded"])
+        self.assertEqual(
+            handoff_criterion[
+                "registered_asset_handoff_licensed_asset_required_count"],
+            30,
+        )
         self.assertEqual(
             blocked_gate["asset_remediation"][
                 "registered_asset_install_script"],
@@ -3037,6 +3059,27 @@ class PublicationPackTests(unittest.TestCase):
         self.assertTrue(
             blocked_gate["summary"][
                 "registered_asset_intake_no_candidate_asset_copy_plan"])
+        self.assertEqual(
+            blocked_gate["summary"][
+                "registered_asset_intake_actionable_copy_plan_count"],
+            0,
+        )
+        self.assertTrue(
+            blocked_gate["summary"]["registered_asset_handoff_present"])
+        self.assertEqual(
+            blocked_gate["summary"]["registered_asset_handoff_status"],
+            "blocked_no_candidate_assets",
+        )
+        self.assertEqual(
+            blocked_gate["summary"][
+                "registered_asset_handoff_licensed_asset_required_count"],
+            30,
+        )
+        self.assertEqual(
+            blocked_gate["summary"][
+                "registered_asset_handoff_not_recorded_count"],
+            0,
+        )
         self.assertTrue(blocked_gate["summary"]["route_contracts_complete"])
         self.assertEqual(
             blocked_gate["summary"]["route_contract_map_count"], 32)
@@ -3073,6 +3116,7 @@ class PublicationPackTests(unittest.TestCase):
         self.assertIn("install_registered_assets.sh", blocked_markdown)
         self.assertIn("copy script mode", blocked_markdown)
         self.assertIn("Route contracts: 32 (complete=True)", blocked_markdown)
+        self.assertIn("Registered asset handoff", blocked_markdown)
         self.assertIn(
             "Covered route authority: 2 / 2 (complete=True)",
             blocked_markdown,
@@ -3103,6 +3147,22 @@ class PublicationPackTests(unittest.TestCase):
         self.assertTrue(
             blocked_icc[
                 "registered_asset_intake_no_candidate_asset_copy_plan"])
+        self.assertEqual(
+            blocked_icc[
+                "registered_asset_intake_actionable_copy_plan_count"],
+            0,
+        )
+        self.assertTrue(
+            blocked_icc["registered_asset_handoff_present"])
+        self.assertEqual(
+            blocked_icc[
+                "registered_asset_handoff_licensed_asset_required_count"],
+            30,
+        )
+        self.assertEqual(
+            blocked_icc["registered_asset_handoff_not_recorded_count"],
+            0,
+        )
         self.assertTrue(
             blocked_icc["full_game_route_contracts_complete"])
         self.assertEqual(
@@ -3113,6 +3173,42 @@ class PublicationPackTests(unittest.TestCase):
             "qge_registered_asset_intake.py",
             blocked_icc["registered_asset_discovery_command"],
         )
+
+        stale_plan = moonlab_full_game_plan.build_plan(
+            partial_coverage,
+            partial_inventory,
+            breadth_evidence=partial_breadth,
+            moonlab_job_results=job_results,
+            submission_packet=submission_packet,
+            hardware_record_template=hardware_template,
+        )
+        stale_gate = moonlab_deployment_gate.build_gate(
+            partial_coverage,
+            partial_inventory,
+            partial_requirements,
+            stale_plan,
+            job_specs,
+            job_results,
+            submission_packet,
+            hardware_template,
+            asset_remediation=partial_asset_remediation,
+            source_path=Path("stale-pack"),
+        )
+        stale_blocker_ids = {
+            item["id"] for item in stale_gate["blockers"]
+        }
+        self.assertIn(
+            "registered_asset_handoff_consistent", stale_blocker_ids)
+        stale_handoff_criterion = next(
+            item for item in stale_gate["criteria"]
+            if item["id"] == "registered_asset_handoff_consistent")
+        self.assertEqual(stale_handoff_criterion["status"], "blocked")
+        self.assertFalse(
+            stale_handoff_criterion["registered_asset_handoff_recorded"])
+        self.assertTrue(any(
+            "asset_handoff_status" in action
+            for action in stale_gate["next_actions"]
+        ))
 
         all_maps = breadth_evidence.QUAKE_REGISTERED_SINGLE_PLAYER_MAPS
         complete_coverage = breadth_evidence.build_full_game_map_coverage(
@@ -3255,40 +3351,7 @@ class PublicationPackTests(unittest.TestCase):
             )
             publication_pack.write_json(
                 resource / "qge_registered_asset_intake.json",
-                {
-                    "schema": "qge.registered_asset_intake.v0",
-                    "status": "blocked_no_candidate_assets",
-                    "current_asset_root": "assets/id1",
-                    "candidate_new_map_count": 0,
-                    "missing_map_count_after_plan": 30,
-                    "manual_registered_asset_required": True,
-                    "registered_asset_blocker_reason": (
-                        "no_candidate_assets_found"),
-                    "copy_script_mode": "no_op_blocked",
-                    "no_candidate_asset_copy_plan": True,
-                    "copy_plan_count": 0,
-                    "discovered_candidate_count": 1,
-                    "discovery_metadata": {
-                        "roots_scanned_count": 4,
-                        "steam_library_root_count": 1,
-                        "steam_quake_path_count": 3,
-                    },
-                    "post_install_verification_command_count": 2,
-                    "post_install_verification": {
-                        "command_count": 2,
-                        "commands": [
-                            {
-                                "kind": "capture_queue",
-                                "shell_command": (
-                                    "python3 tools/"
-                                    "qge_full_game_capture_queue.py "
-                                    "partial-pack --asset-root assets/id1"
-                                ),
-                                "script": "/tmp/run_missing_maps.after.sh",
-                            },
-                        ],
-                    },
-                },
+                partial_registered_asset_intake,
             )
             manifest = {
                 "schema": "qge.publication_pack.v0",
@@ -3381,6 +3444,13 @@ class PublicationPackTests(unittest.TestCase):
             self.assertTrue(
                 cli_gate["summary"][
                     "post_install_capture_queue_command_present"])
+            self.assertTrue(
+                cli_gate["summary"]["registered_asset_handoff_present"])
+            self.assertEqual(
+                cli_gate["summary"][
+                    "registered_asset_handoff_licensed_asset_required_count"],
+                30,
+            )
             cli_icc = publication_pack.load_json(icc_path)
             self.assertEqual(
                 cli_icc["completion_reason"],
@@ -3393,6 +3463,12 @@ class PublicationPackTests(unittest.TestCase):
             )
             self.assertTrue(
                 cli_icc["post_install_capture_queue_command_present"])
+            self.assertTrue(cli_icc["registered_asset_handoff_present"])
+            self.assertEqual(
+                cli_icc[
+                    "registered_asset_handoff_licensed_asset_required_count"],
+                30,
+            )
             self.assertEqual(
                 cli_icc[
                     "registered_asset_intake_discovery_roots_scanned_count"],

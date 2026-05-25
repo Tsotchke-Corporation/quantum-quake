@@ -710,6 +710,9 @@ Known current visual state:
   It also joins the registered-asset intake handoff into each deployment row,
   so unavailable maps record whether they have an actionable copy plan, a
   blocked copy destination, or a remaining manual licensed-asset requirement.
+  The deployment gate now audits that handoff for presence and consistency with
+  the intake remediation ledger before allowing a simulator/native full-game
+  claim.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims

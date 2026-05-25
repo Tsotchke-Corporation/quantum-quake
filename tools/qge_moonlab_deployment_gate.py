@@ -55,6 +55,10 @@ def list_or_empty(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
+def string_list(value: Any) -> list[str]:
+    return [item for item in list_or_empty(value) if isinstance(item, str)]
+
+
 def int_or_none(value: Any) -> int | None:
     if isinstance(value, bool):
         return None
@@ -141,6 +145,15 @@ def asset_remediation_from_intake(
         "no_candidate_asset_copy_plan": data.get(
             "no_candidate_asset_copy_plan"),
         "copy_plan_count": data.get("copy_plan_count"),
+        "actionable_copy_plan_count": data.get(
+            "actionable_copy_plan_count"),
+        "copy_plan_unblocked_map_count": data.get(
+            "copy_plan_unblocked_map_count"),
+        "copy_plan_unblocked_maps": data.get(
+            "copy_plan_unblocked_maps"),
+        "copy_plan_blocked_map_count": data.get(
+            "copy_plan_blocked_map_count"),
+        "copy_plan_blocked_maps": data.get("copy_plan_blocked_maps"),
         "discovered_candidate_count": data.get(
             "discovered_candidate_count", 0),
         "discovery_roots_scanned_count": discovery_meta.get(
@@ -296,6 +309,134 @@ def overclaim_flags(
     return flags
 
 
+def asset_handoff_status_counts(full_game_plan: dict[str, Any]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in list_or_empty(full_game_plan.get("map_deployment_rows")):
+        if not isinstance(row, dict):
+            continue
+        status = row.get("asset_handoff_status")
+        if not isinstance(status, str) or not status:
+            status = "not_recorded"
+        counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
+def handoff_consistency_mismatches(
+    handoff: dict[str, Any],
+    remediation: dict[str, Any],
+) -> list[str]:
+    pairs = [
+        (
+            "registered_asset_intake_status",
+            "registered_asset_intake_status",
+            "registered_asset_intake_status",
+        ),
+        (
+            "registered_asset_blocker_reason",
+            "registered_asset_blocker_reason",
+            "registered_asset_blocker_reason",
+        ),
+        ("copy_script_mode", "copy_script_mode", "copy_script_mode"),
+        (
+            "missing_map_count_after_plan",
+            "missing_map_count_after_plan",
+            "missing_map_count_after_plan",
+        ),
+        (
+            "actionable_copy_plan_count",
+            "actionable_copy_plan_count",
+            "actionable_copy_plan_count",
+        ),
+        (
+            "copy_plan_unblocked_map_count",
+            "copy_plan_unblocked_map_count",
+            "copy_plan_unblocked_map_count",
+        ),
+        (
+            "copy_plan_blocked_map_count",
+            "copy_plan_blocked_map_count",
+            "copy_plan_blocked_map_count",
+        ),
+    ]
+    mismatches = []
+    for label, handoff_key, remediation_key in pairs:
+        remediation_value = remediation.get(remediation_key)
+        if remediation_value is None:
+            continue
+        if handoff.get(handoff_key) != remediation_value:
+            mismatches.append(label)
+    list_pairs = [
+        (
+            "missing_maps_after_plan",
+            "missing_maps_after_plan",
+            "missing_maps_after_plan",
+        ),
+        (
+            "copy_plan_unblocked_maps",
+            "copy_plan_unblocked_maps",
+            "copy_plan_unblocked_maps",
+        ),
+        (
+            "copy_plan_blocked_maps",
+            "copy_plan_blocked_maps",
+            "copy_plan_blocked_maps",
+        ),
+    ]
+    for label, handoff_key, remediation_key in list_pairs:
+        remediation_values = remediation.get(remediation_key)
+        if remediation_values is None:
+            continue
+        if string_list(handoff.get(handoff_key)) != string_list(
+            remediation_values
+        ):
+            mismatches.append(label)
+    return mismatches
+
+
+def registered_asset_handoff_audit(
+    full_game_plan: dict[str, Any],
+    remediation: dict[str, Any],
+    *,
+    asset_unavailable: int | None,
+) -> dict[str, Any]:
+    handoff = dict_or_empty(full_game_plan.get("registered_asset_handoff"))
+    remediation_present = bool(
+        remediation.get("registered_asset_intake_status") or
+        remediation.get("registered_asset_intake_file")
+    )
+    handoff_expected = (
+        remediation_present or
+        (asset_unavailable is not None and asset_unavailable > 0)
+    )
+    handoff_recorded = (
+        handoff.get("schema") == "qge.moonlab_registered_asset_handoff.v0" and
+        handoff.get("present") is True
+    )
+    mismatches = (
+        handoff_consistency_mismatches(handoff, remediation)
+        if handoff_recorded and remediation_present else
+        []
+    )
+    status_counts = asset_handoff_status_counts(full_game_plan)
+    return {
+        "expected": handoff_expected,
+        "recorded": handoff_recorded,
+        "mismatches": mismatches,
+        "passed": (
+            not handoff_expected or
+            (handoff_recorded and not mismatches)
+        ),
+        "status_counts": status_counts,
+        "not_recorded_count": status_counts.get("not_recorded", 0),
+        "licensed_asset_required_count": status_counts.get(
+            "licensed_asset_required", 0),
+        "copy_plan_unblocked_count": status_counts.get(
+            "copy_plan_unblocked", 0),
+        "copy_plan_blocked_count": status_counts.get(
+            "copy_plan_blocked", 0),
+    }
+
+
 def gate_summary(
     coverage: dict[str, Any],
     inventory: dict[str, Any],
@@ -307,6 +448,8 @@ def gate_summary(
     asset_remediation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     remediation = dict_or_empty(asset_remediation)
+    handoff = dict_or_empty(full_game_plan.get("registered_asset_handoff"))
+    handoff_counts = asset_handoff_status_counts(full_game_plan)
     return {
         "map_set": coverage.get("map_set") or inventory.get("map_set"),
         "coverage_status": coverage.get("status"),
@@ -344,6 +487,30 @@ def gate_summary(
         "asset_unavailable_map_count": full_game_plan.get(
             "asset_unavailable_map_count"),
         "asset_unavailable_maps": full_game_plan.get("asset_unavailable_maps"),
+        "registered_asset_handoff_present": handoff.get("present"),
+        "registered_asset_handoff_status": handoff.get(
+            "registered_asset_intake_status"),
+        "registered_asset_handoff_blocker_reason": handoff.get(
+            "registered_asset_blocker_reason"),
+        "registered_asset_handoff_copy_script_mode": handoff.get(
+            "copy_script_mode"),
+        "registered_asset_handoff_missing_map_count_after_plan": (
+            handoff.get("missing_map_count_after_plan")),
+        "registered_asset_handoff_actionable_copy_plan_count": (
+            handoff.get("actionable_copy_plan_count")),
+        "registered_asset_handoff_copy_plan_unblocked_map_count": (
+            handoff.get("copy_plan_unblocked_map_count")),
+        "registered_asset_handoff_copy_plan_blocked_map_count": (
+            handoff.get("copy_plan_blocked_map_count")),
+        "registered_asset_handoff_status_counts": handoff_counts,
+        "registered_asset_handoff_not_recorded_count": (
+            handoff_counts.get("not_recorded", 0)),
+        "registered_asset_handoff_licensed_asset_required_count": (
+            handoff_counts.get("licensed_asset_required", 0)),
+        "registered_asset_handoff_copy_plan_unblocked_count": (
+            handoff_counts.get("copy_plan_unblocked", 0)),
+        "registered_asset_handoff_copy_plan_blocked_count": (
+            handoff_counts.get("copy_plan_blocked", 0)),
         "selected_job_count": job_specs.get("selected_job_count"),
         "result_selected_job_count": job_results.get("selected_job_count"),
         "completed_simulator_job_count": job_results.get(
@@ -381,6 +548,12 @@ def gate_summary(
             remediation.get("no_candidate_asset_copy_plan")),
         "registered_asset_intake_copy_plan_count": remediation.get(
             "copy_plan_count"),
+        "registered_asset_intake_actionable_copy_plan_count": remediation.get(
+            "actionable_copy_plan_count"),
+        "registered_asset_intake_copy_plan_unblocked_map_count": (
+            remediation.get("copy_plan_unblocked_map_count")),
+        "registered_asset_intake_copy_plan_blocked_map_count": (
+            remediation.get("copy_plan_blocked_map_count")),
         "registered_asset_intake_candidate_new_map_count": remediation.get(
             "candidate_new_map_count"),
         "registered_asset_intake_discovered_candidate_count": remediation.get(
@@ -492,6 +665,12 @@ def build_criteria(
         capture_required == 0 and
         asset_unavailable == 0
     )
+    remediation = dict_or_empty(asset_remediation)
+    handoff_audit = registered_asset_handoff_audit(
+        full_game_plan,
+        remediation,
+        asset_unavailable=asset_unavailable,
+    )
 
     selected_count = int_or_none(job_specs.get("selected_job_count"))
     result_selected_count = int_or_none(job_results.get("selected_job_count"))
@@ -521,8 +700,6 @@ def build_criteria(
         submission_packet=submission_packet,
         hardware_record_template=hardware_record_template,
     )
-    remediation = dict_or_empty(asset_remediation)
-
     return [
         criterion(
             "full_game_map_coverage_complete",
@@ -601,6 +778,29 @@ def build_criteria(
                     covered_route_authority_blocked_maps),
             },
             "covered maps are missing route-contract authority evidence",
+        ),
+        criterion(
+            "registered_asset_handoff_consistent",
+            bool_true(handoff_audit.get("passed")),
+            {
+                "registered_asset_handoff_expected": handoff_audit.get(
+                    "expected"),
+                "registered_asset_handoff_recorded": handoff_audit.get(
+                    "recorded"),
+                "registered_asset_handoff_mismatches": handoff_audit.get(
+                    "mismatches"),
+                "registered_asset_handoff_not_recorded_count": (
+                    handoff_audit.get("not_recorded_count")),
+                "registered_asset_handoff_licensed_asset_required_count": (
+                    handoff_audit.get("licensed_asset_required_count")),
+                "registered_asset_handoff_copy_plan_unblocked_count": (
+                    handoff_audit.get("copy_plan_unblocked_count")),
+                "registered_asset_handoff_copy_plan_blocked_count": (
+                    handoff_audit.get("copy_plan_blocked_count")),
+                "registered_asset_handoff_status_counts": (
+                    handoff_audit.get("status_counts")),
+            },
+            "full-game plan is missing or inconsistent with registered asset intake handoff evidence",
         ),
         criterion(
             "full_game_deployment_plan_complete",
@@ -691,6 +891,10 @@ def next_actions_for_blockers(
     if "covered_route_contract_authority_complete" in failed_ids:
         actions.append(
             "Rebuild breadth evidence and the Moonlab full-game plan from route-contract-aware capture matrices so every covered map proves its required authority domains."
+        )
+    if "registered_asset_handoff_consistent" in failed_ids:
+        actions.append(
+            "Regenerate qge_moonlab_full_game_plan.json from the current registered-asset intake so per-map asset_handoff_status matches the copy-plan ledger."
         )
     if "full_game_deployment_plan_complete" in failed_ids:
         if queue_command:
@@ -904,6 +1108,12 @@ def build_icc_evidence(
             "registered_asset_intake_no_candidate_asset_copy_plan"),
         "registered_asset_intake_copy_plan_count": summary.get(
             "registered_asset_intake_copy_plan_count"),
+        "registered_asset_intake_actionable_copy_plan_count": summary.get(
+            "registered_asset_intake_actionable_copy_plan_count"),
+        "registered_asset_intake_copy_plan_unblocked_map_count": summary.get(
+            "registered_asset_intake_copy_plan_unblocked_map_count"),
+        "registered_asset_intake_copy_plan_blocked_map_count": summary.get(
+            "registered_asset_intake_copy_plan_blocked_map_count"),
         "registered_asset_intake_candidate_new_map_count": summary.get(
             "registered_asset_intake_candidate_new_map_count"),
         "registered_asset_intake_discovered_candidate_count": summary.get(
@@ -932,6 +1142,33 @@ def build_icc_evidence(
             "capture_required_map_count"),
         "asset_unavailable_map_count": summary.get(
             "asset_unavailable_map_count"),
+        "registered_asset_handoff_present": summary.get(
+            "registered_asset_handoff_present"),
+        "registered_asset_handoff_status": summary.get(
+            "registered_asset_handoff_status"),
+        "registered_asset_handoff_blocker_reason": summary.get(
+            "registered_asset_handoff_blocker_reason"),
+        "registered_asset_handoff_copy_script_mode": summary.get(
+            "registered_asset_handoff_copy_script_mode"),
+        "registered_asset_handoff_missing_map_count_after_plan": (
+            summary.get(
+                "registered_asset_handoff_missing_map_count_after_plan")),
+        "registered_asset_handoff_actionable_copy_plan_count": summary.get(
+            "registered_asset_handoff_actionable_copy_plan_count"),
+        "registered_asset_handoff_copy_plan_unblocked_map_count": summary.get(
+            "registered_asset_handoff_copy_plan_unblocked_map_count"),
+        "registered_asset_handoff_copy_plan_blocked_map_count": summary.get(
+            "registered_asset_handoff_copy_plan_blocked_map_count"),
+        "registered_asset_handoff_status_counts": summary.get(
+            "registered_asset_handoff_status_counts"),
+        "registered_asset_handoff_not_recorded_count": summary.get(
+            "registered_asset_handoff_not_recorded_count"),
+        "registered_asset_handoff_licensed_asset_required_count": summary.get(
+            "registered_asset_handoff_licensed_asset_required_count"),
+        "registered_asset_handoff_copy_plan_unblocked_count": summary.get(
+            "registered_asset_handoff_copy_plan_unblocked_count"),
+        "registered_asset_handoff_copy_plan_blocked_count": summary.get(
+            "registered_asset_handoff_copy_plan_blocked_count"),
         "full_game_route_contract_schema": summary.get(
             "route_contract_schema"),
         "full_game_route_contract_map_count": summary.get(
@@ -1008,6 +1245,14 @@ def markdown_report(gate: dict[str, Any]) -> str:
             f"{summary.get('covered_route_contract_authority_ready_count')} "
             f"/ {summary.get('covered_map_count')} "
             f"(complete={summary.get('covered_route_contract_authority_complete')})"
+        ),
+        (
+            "Registered asset handoff: "
+            f"present={summary.get('registered_asset_handoff_present')} "
+            f"not_recorded={summary.get('registered_asset_handoff_not_recorded_count')} "
+            f"licensed_required={summary.get('registered_asset_handoff_licensed_asset_required_count')} "
+            f"copy_unblocked={summary.get('registered_asset_handoff_copy_plan_unblocked_count')} "
+            f"copy_blocked={summary.get('registered_asset_handoff_copy_plan_blocked_count')}"
         ),
         "",
         "| Criterion | Status | Blocker |",

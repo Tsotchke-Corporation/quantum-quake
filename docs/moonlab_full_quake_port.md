@@ -77,9 +77,10 @@ the final claim gate carry explicit route class, episode/slot,
 combat/special-route requirements, and authority-domain requirements instead of
 relying on one generic missing-map smoke profile. The gate remains blocked if a
 future plan lacks that complete route-contract ledger, or if a covered map lacks
-route-contract authority evidence from breadth capture matrices. The current
-covered set is 9/9 route-authority ready; the remaining 23 maps are still asset
-unavailable.
+route-contract authority evidence from breadth capture matrices. It also blocks
+if the deployment plan omits or disagrees with the registered-asset handoff
+ledger while remediation evidence is present. The current covered set is 9/9
+route-authority ready; the remaining 23 maps are still asset unavailable.
 `resource/qge_moonlab_deployment_gate.json` is the fail-closed claim gate for
 the sentence "the entire game runs in Moonlab." It is currently `blocked`
 because coverage is 9/32, the remaining 23 registered BSP assets are

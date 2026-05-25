@@ -462,8 +462,9 @@ per-map contract ledger under `map_deployment_rows`. It now also carries the
 registered-asset handoff ledger from intake, including each missing map's
 `asset_handoff_status`, so copy-plan-ready maps, blocked copy destinations,
 and maps that still require manual licensed assets are not collapsed into one
-generic unavailable bucket. The deployment gate blocks if the route-contract
-ledger is missing or incomplete, or if a covered map lacks
+generic unavailable bucket. The deployment gate now audits that handoff with
+`registered_asset_handoff_consistent`, then blocks if the route-contract
+ledger is missing or incomplete, if the handoff is stale, or if a covered map lacks
 route-contract-authority-ready breadth evidence. The gate reports resource
 blockers as `blocked` statuses, reserving generic failure events for crashed or
 invalid runtime evidence. Each contract records the episode/slot, route class,
