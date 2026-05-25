@@ -259,6 +259,7 @@ grep -q 'markdown_content_mismatch' "$repo_root/tools/qge_manifest_markdown_audi
 grep -q 'qge_manifest_markdown_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'qge.postpack_audit.v0' "$repo_root/tools/qge_postpack_audit.py"
 grep -q 'POSTPACK_AUDIT_TOOLS' "$repo_root/tools/qge_postpack_audit.py"
+grep -q 'stale_output_removed' "$repo_root/tools/qge_postpack_audit.py"
 grep -q 'qge_postpack_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'qge.full_game_capture_queue.v0' "$repo_root/tools/qge_full_game_capture_queue.py"
 grep -q 'QGE_FULL_GAME_CAPTURE_QUEUE' "$repo_root/tools/qge_full_game_capture_queue.py"

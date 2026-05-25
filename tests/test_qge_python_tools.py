@@ -1535,6 +1535,44 @@ class PublicationPackTests(unittest.TestCase):
             self.assertIn("--fail-on-mismatch", calls[0])
             self.assertEqual(calls[0][2], str(pack_dir))
 
+    def test_postpack_audit_rejects_stale_child_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            pack_dir = tmpdir / "pack"
+            outdir = tmpdir / "audits"
+            pack_dir.mkdir()
+            outdir.mkdir()
+            stale_output = outdir / "stale_audit.json"
+            stale_output.write_text(
+                json.dumps({
+                    "passed": True,
+                    "mismatch_count": 0,
+                }, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            def no_write_runner(command: list[str]) -> SimpleNamespace:
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout="",
+                    stderr="",
+                )
+
+            audit = postpack_audit.postpack_audit(
+                pack_dir,
+                outdir=outdir,
+                audit_tools=("tools/stale_audit.py",),
+                runner=no_write_runner,
+            )
+
+            self.assertFalse(audit["passed"])
+            self.assertEqual(audit["failed_tools"], ["tools/stale_audit.py"])
+            self.assertTrue(audit["audits"][0]["stale_output_removed"])
+            self.assertEqual(
+                audit["audits"][0]["load_error"],
+                "audit_output_missing",
+            )
+
     def test_manifest_markdown_audit_detects_stale_report(
         self,
     ) -> None:

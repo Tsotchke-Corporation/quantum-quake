@@ -491,6 +491,8 @@ Regenerate the asset requirements packet with:
 `python3 tools/qge_asset_requirements.py --asset-root assets/id1 --json /tmp/qge_asset_requirements.json --markdown /tmp/qge_asset_requirements.md --icc-json /tmp/qge_asset_requirements_icc_evidence.json`.
 Run the complete advertised postpack verifier set with:
 `python3 tools/qge_postpack_audit.py <pack> --outdir /tmp/qge_postpack_audits --out /tmp/qge_postpack_audit.json --fail-on-mismatch`.
+The runner clears each child verifier output path before execution so stale
+passing JSON cannot satisfy the signoff.
 When Moonlab hardware returns a result, validate and merge it with:
 `python3 tools/qge_moonlab_hardware_ingest.py <pack>/resource/qge_moonlab_submission_packet.json --job-results <pack>/resource/qge_moonlab_job_results.json --hardware-record qge_moonlab_hardware_record.json --out qge_moonlab_job_results.hardware.json --comparison-out qge_moonlab_hardware_comparison.json --icc-out qge_moonlab_hardware_icc_evidence.json`.
 

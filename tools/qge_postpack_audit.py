@@ -58,11 +58,36 @@ def audit_command(tool: str, pack_dir: Path, out_path: Path) -> list[str]:
     ]
 
 
+def prepare_audit_output(out_path: Path) -> dict[str, Any]:
+    if not out_path.exists() and not out_path.is_symlink():
+        return {
+            "stale_output_removed": False,
+            "stale_output_error": None,
+        }
+    if not out_path.is_file() and not out_path.is_symlink():
+        return {
+            "stale_output_removed": False,
+            "stale_output_error": "audit_output_path_not_file",
+        }
+    try:
+        out_path.unlink()
+    except OSError as exc:
+        return {
+            "stale_output_removed": False,
+            "stale_output_error": str(exc),
+        }
+    return {
+        "stale_output_removed": True,
+        "stale_output_error": None,
+    }
+
+
 def summarize_result(
     tool: str,
     command: list[str],
     out_path: Path,
     completed: subprocess.CompletedProcess[str],
+    output_prep: dict[str, Any],
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     load_error = None
@@ -75,11 +100,18 @@ def summarize_result(
         load_error = "audit_output_missing"
 
     payload_passed = bool(dict_or_empty(payload).get("passed"))
-    passed = completed.returncode == 0 and load_error is None and payload_passed
+    passed = (
+        completed.returncode == 0 and
+        load_error is None and
+        output_prep.get("stale_output_error") is None and
+        payload_passed
+    )
     return {
         "tool": tool,
         "command": command,
         "out": str(out_path),
+        "stale_output_removed": output_prep.get("stale_output_removed"),
+        "stale_output_error": output_prep.get("stale_output_error"),
         "returncode": completed.returncode,
         "stdout": completed.stdout,
         "stderr": completed.stderr,
@@ -118,6 +150,7 @@ def postpack_audit(
     for tool in audit_tools:
         out_path = audit_output_path(outdir, tool)
         command = audit_command(tool, pack_dir, out_path)
+        output_prep = prepare_audit_output(out_path)
         try:
             completed = runner(command)
         except OSError as exc:
@@ -127,7 +160,13 @@ def postpack_audit(
                 stdout="",
                 stderr=str(exc),
             )
-        results.append(summarize_result(tool, command, out_path, completed))
+        results.append(summarize_result(
+            tool,
+            command,
+            out_path,
+            completed,
+            output_prep,
+        ))
 
     failed = [item for item in results if not item.get("passed")]
     passed = not failed and bool(results)
