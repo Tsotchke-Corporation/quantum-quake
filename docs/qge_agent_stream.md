@@ -480,7 +480,10 @@ missing, duplicated, or count-only, and audits
 `qge_moonlab_hardware_record_template.json` against the packet so the returned
 hardware record target cannot drift. The scoped hardware-submission artifact is
 then audited against the packet, submission bundle, and template so bounded
-hardware handoff readiness cannot drift from its source ledgers. The gate
+hardware handoff readiness cannot drift from its source ledgers. If returned
+Moonlab hardware backend rows appear in `qge_moonlab_job_results.json`, the
+gate audits them against the same bounded packet/scope before accepting the
+job-result ledger. The gate
 reports resource blockers as `blocked` statuses, reserving generic failure
 events for crashed or invalid runtime evidence. Each
 contract records the episode/slot, route class, route profile, combat

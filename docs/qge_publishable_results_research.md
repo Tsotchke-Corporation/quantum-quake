@@ -311,8 +311,9 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      selected job spec must have a matching completed simulator result row with
      the required artifact evidence, and the submission packet's hardware
      candidate rows plus the hardware record template and scoped submission
-     readiness artifact must match those specs/results, before the full-game
-     deployment gate can pass.
+     readiness artifact must match those specs/results. Any returned Moonlab
+     hardware backend result row must also match that bounded packet/scope
+     before the full-game deployment gate can pass.
    - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
      and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
      scanning bounded candidate directories. The intake artifact records

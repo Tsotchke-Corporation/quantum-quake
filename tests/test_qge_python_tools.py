@@ -28,6 +28,7 @@ import qge_image_metrics as image_metrics  # noqa: E402
 import qge_moonlab_deployment_gate as moonlab_deployment_gate  # noqa: E402
 import qge_moonlab_full_game_plan as moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest as moonlab_hardware_ingest  # noqa: E402
+import qge_moonlab_hardware_result_audit as moonlab_hardware_result_audit  # noqa: E402
 import qge_moonlab_job_runner as moonlab_job_runner  # noqa: E402
 import qge_moonlab_oracle_transpile as moonlab_oracle_transpile  # noqa: E402
 import qge_moonlab_qae_grover_plan as moonlab_grover_plan  # noqa: E402
@@ -2632,6 +2633,19 @@ class PublicationPackTests(unittest.TestCase):
         self.assertFalse(
             comparison["claim_posture"]
             ["hardware_quantum_advantage_claimed"])
+        result_audit = (
+            moonlab_hardware_result_audit.hardware_result_ledger_audit(
+                packet,
+                updated,
+                {
+                    "schema": "qge.moonlab_hardware_submission_scope.v0",
+                    "candidate_digests": {job_id: "candidate-digest"},
+                },
+            )
+        )
+        self.assertTrue(result_audit["passed"], result_audit)
+        self.assertEqual(result_audit["hardware_result_row_count"], 1)
+        self.assertEqual(result_audit["mismatch_count"], 0)
         template = moonlab_hardware_ingest.build_hardware_record_template(
             packet)
         self.assertEqual(
@@ -3253,6 +3267,8 @@ class PublicationPackTests(unittest.TestCase):
             "moonlab_coverage_ledger_consistent", blocker_ids)
         self.assertNotIn(
             "moonlab_selected_job_result_ledger_consistent", blocker_ids)
+        self.assertNotIn(
+            "moonlab_hardware_result_ledger_consistent", blocker_ids)
         self.assertTrue(all(
             item["status"] == "blocked"
             for item in blocked_gate["blockers"]
@@ -3486,6 +3502,18 @@ class PublicationPackTests(unittest.TestCase):
             blocked_gate["summary"][
                 "moonlab_hardware_submission_scope_expected_ready"],
         )
+        self.assertTrue(
+            blocked_gate["summary"][
+                "moonlab_hardware_result_ledger_recorded"])
+        self.assertEqual(
+            blocked_gate["summary"][
+                "moonlab_hardware_result_ledger_mismatch_count"],
+            0,
+        )
+        self.assertEqual(
+            blocked_gate["summary"]["moonlab_hardware_result_row_count"],
+            0,
+        )
         self.assertIn(
             "qge_registered_asset_intake.py",
             blocked_gate["summary"]["registered_asset_discovery_command"],
@@ -3521,6 +3549,8 @@ class PublicationPackTests(unittest.TestCase):
             "Moonlab hardware record template ledger", blocked_markdown)
         self.assertIn(
             "Moonlab hardware submission scope ledger", blocked_markdown)
+        self.assertIn(
+            "Moonlab hardware result ledger", blocked_markdown)
         self.assertIn(
             "Covered route authority: 2 / 2 (complete=True)",
             blocked_markdown,
@@ -3645,6 +3675,13 @@ class PublicationPackTests(unittest.TestCase):
             blocked_icc[
                 "moonlab_hardware_submission_scope_expected_ready"],
         )
+        self.assertTrue(
+            blocked_icc["moonlab_hardware_result_ledger_recorded"])
+        self.assertEqual(
+            blocked_icc["moonlab_hardware_result_ledger_mismatch_count"],
+            0,
+        )
+        self.assertEqual(blocked_icc["moonlab_hardware_result_row_count"], 0)
         self.assertIn(
             "qge_registered_asset_intake.py",
             blocked_icc["registered_asset_discovery_command"],
@@ -3867,6 +3904,14 @@ class PublicationPackTests(unittest.TestCase):
                 "moonlab_hardware_submission_scope_ledger_mismatch_count"],
             0,
         )
+        self.assertTrue(
+            ready_gate["summary"][
+                "moonlab_hardware_result_ledger_recorded"])
+        self.assertEqual(
+            ready_gate["summary"][
+                "moonlab_hardware_result_ledger_mismatch_count"],
+            0,
+        )
         icc = moonlab_deployment_gate.build_icc_evidence(
             ready_gate, out_path=Path("qge_moonlab_deployment_gate.json"))
         self.assertEqual(
@@ -3887,6 +3932,8 @@ class PublicationPackTests(unittest.TestCase):
                 "moonlab_hardware_submission_scope_ledger_mismatch_count"],
             0,
         )
+        self.assertEqual(
+            icc["moonlab_hardware_result_ledger_mismatch_count"], 0)
         self.assertTrue(
             icc["whole_game_moonlab_deployment_claim_allowed"])
 
@@ -4037,6 +4084,69 @@ class PublicationPackTests(unittest.TestCase):
         )
         self.assertFalse(
             stale_scope_gate[
+                "whole_game_moonlab_deployment_claim_allowed"])
+
+        stale_hardware_result_jobs = json.loads(
+            json.dumps(complete_job_results))
+        stale_hardware_result_job = next(
+            job for job in stale_hardware_result_jobs["jobs"]
+            if job.get("job_id") == "qge.light_transport_qae_benchmark.mlae.v0")
+        stale_hardware_result_job["backend_results"].append({
+            "backend_id": "moonlab-hardware/mock-qpu",
+            "backend_kind": "moonlab_hardware",
+            "status": "completed",
+            "run_id": "moonlab-hw-run-001",
+            "candidate_digest": "stale-digest",
+            "hardware_record_sha256": "a" * 64,
+            "submitted_utc": "2026-05-25T16:00:00Z",
+            "completed_utc": "2026-05-25T16:01:00Z",
+            "shot_schedule": {
+                "shots": 384,
+                "batches": 3,
+                "schedule_id": "qge-mlae-384-v1",
+            },
+            "readout_metadata": {
+                "shots_completed": 384,
+                "readout_format": "expectation_value",
+                "mitigation": "none",
+            },
+            "observations": {
+                "mean_value": 0.503,
+                "shots": 384,
+                "readout_error": 0.004,
+            },
+        })
+        stale_hardware_result_gate = moonlab_deployment_gate.build_gate(
+            complete_coverage,
+            complete_inventory,
+            complete_requirements,
+            complete_plan,
+            job_specs,
+            stale_hardware_result_jobs,
+            submission_packet,
+            hardware_template,
+            submission_bundle=submission_bundle,
+            hardware_submission_scope=hardware_submission_scope,
+            source_path=Path("stale-hardware-result-pack"),
+        )
+        stale_hardware_result_blockers = {
+            item["id"] for item in stale_hardware_result_gate["blockers"]
+        }
+        self.assertIn(
+            "moonlab_hardware_result_ledger_consistent",
+            stale_hardware_result_blockers,
+        )
+        stale_hardware_result_criterion = next(
+            item for item in stale_hardware_result_gate["criteria"]
+            if item["id"] == "moonlab_hardware_result_ledger_consistent")
+        self.assertEqual(stale_hardware_result_criterion["status"], "blocked")
+        self.assertIn(
+            "qge.light_transport_qae_benchmark.mlae.v0",
+            stale_hardware_result_criterion[
+                "moonlab_hardware_result_row_mismatch_job_ids"],
+        )
+        self.assertFalse(
+            stale_hardware_result_gate[
                 "whole_game_moonlab_deployment_claim_allowed"])
 
         coverage_only_job_results = dict(complete_job_results)

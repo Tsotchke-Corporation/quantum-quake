@@ -726,7 +726,9 @@ Known current visual state:
   eventual returned Moonlab record targets the same bounded candidate. The
   scoped hardware-submission readiness artifact is also checked against the
   packet, submission bundle, and template before it can support a bounded
-  handoff claim.
+  handoff claim. If a returned Moonlab hardware backend row appears in the job
+  results, the gate audits that row against the same bounded packet/scope
+  before accepting the ledger.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims
