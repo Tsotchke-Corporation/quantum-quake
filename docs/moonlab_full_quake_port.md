@@ -68,7 +68,9 @@ entries are already present and which entries are still missing.
 ledger for the entire registered map set: which maps already have strict
 simulator/native capture evidence, which maps would become capture jobs if
 assets existed locally, and which maps are blocked by unavailable registered
-BSP assets.
+BSP assets. It also carries `registered_asset_handoff` and per-map
+`asset_handoff_status`, so an unavailable map distinguishes a runnable copy
+plan from a blocked copy destination or a manual licensed-asset requirement.
 The post-asset capture queue and Moonlab full-game deployment plan now share a
 route-contract ledger for all 32 canonical registered maps, so queued jobs and
 the final claim gate carry explicit route class, episode/slot,

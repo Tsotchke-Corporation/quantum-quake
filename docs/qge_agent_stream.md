@@ -458,8 +458,12 @@ Noesis-fire authority-smoke profile by default, gives `start` the dedicated
 orders combat maps before noncombat/endgame maps, marks `end` as
 `special_route_required`, and now attaches a route contract to every queued
 registered map. The Moonlab full-game deployment plan carries the same
-per-map contract ledger under `map_deployment_rows`, and the deployment gate
-blocks if the ledger is missing or incomplete, or if a covered map lacks
+per-map contract ledger under `map_deployment_rows`. It now also carries the
+registered-asset handoff ledger from intake, including each missing map's
+`asset_handoff_status`, so copy-plan-ready maps, blocked copy destinations,
+and maps that still require manual licensed assets are not collapsed into one
+generic unavailable bucket. The deployment gate blocks if the route-contract
+ledger is missing or incomplete, or if a covered map lacks
 route-contract-authority-ready breadth evidence. The gate reports resource
 blockers as `blocked` statuses, reserving generic failure events for crashed or
 invalid runtime evidence. Each contract records the episode/slot, route class,

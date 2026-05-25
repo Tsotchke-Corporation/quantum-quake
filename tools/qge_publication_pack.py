@@ -1488,6 +1488,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         moonlab_job_results=moonlab_job_results,
         submission_packet=moonlab_submission_packet,
         hardware_record_template=moonlab_hardware_record_template,
+        registered_asset_intake=registered_asset_intake,
     )
     moonlab_full_game_plan_path = (
         args.outdir / "resource" / "qge_moonlab_full_game_plan.json"

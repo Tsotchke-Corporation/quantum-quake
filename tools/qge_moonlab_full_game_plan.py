@@ -48,6 +48,10 @@ def list_or_empty(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
+def string_list(value: Any) -> list[str]:
+    return [item for item in list_or_empty(value) if isinstance(item, str)]
+
+
 def resolve_publication_manifest(path: Path) -> Path:
     if path.is_dir():
         path = path / "publication_manifest.json"
@@ -181,10 +185,114 @@ def map_evidence_summary(run: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def post_install_command(
+    registered_asset_intake: dict[str, Any],
+    command_kind: str,
+) -> str | None:
+    verification = dict_or_empty(
+        registered_asset_intake.get("post_install_verification"))
+    for command in list_or_empty(verification.get("commands")):
+        if not isinstance(command, dict):
+            continue
+        if command.get("kind") == command_kind:
+            shell_command = command.get("shell_command")
+            if isinstance(shell_command, str) and shell_command:
+                return shell_command
+    return None
+
+
+def registered_asset_handoff_summary(
+    registered_asset_intake: dict[str, Any] | None,
+) -> dict[str, Any]:
+    intake = dict_or_empty(registered_asset_intake)
+    if not intake:
+        return {
+            "schema": "qge.moonlab_registered_asset_handoff.v0",
+            "present": False,
+            "registered_asset_intake_status": None,
+        }
+    discovery = dict_or_empty(intake.get("candidate_discovery"))
+    discovery_command = intake.get("candidate_discovery_command")
+    if not isinstance(discovery_command, str) or not discovery_command:
+        discovery_command = discovery.get("shell_command")
+    return {
+        "schema": "qge.moonlab_registered_asset_handoff.v0",
+        "present": True,
+        "registered_asset_intake_status": intake.get("status"),
+        "manual_registered_asset_required": bool(
+            intake.get("manual_registered_asset_required")),
+        "registered_asset_blocker_reason": intake.get(
+            "registered_asset_blocker_reason"),
+        "copy_script_mode": intake.get("copy_script_mode"),
+        "no_candidate_asset_copy_plan": bool(
+            intake.get("no_candidate_asset_copy_plan")),
+        "missing_map_count_after_plan": intake.get(
+            "missing_map_count_after_plan"),
+        "missing_maps_after_plan": string_list(
+            intake.get("missing_maps_after_plan")),
+        "actionable_copy_plan_count": intake.get(
+            "actionable_copy_plan_count"),
+        "copy_plan_unblocked_map_count": intake.get(
+            "copy_plan_unblocked_map_count"),
+        "copy_plan_unblocked_maps": string_list(
+            intake.get("copy_plan_unblocked_maps")),
+        "copy_plan_blocked_map_count": intake.get(
+            "copy_plan_blocked_map_count"),
+        "copy_plan_blocked_maps": string_list(
+            intake.get("copy_plan_blocked_maps")),
+        "registered_asset_discovery_command": discovery_command,
+        "post_install_asset_inventory_command": post_install_command(
+            intake, "asset_inventory"),
+        "post_install_capture_queue_command": post_install_command(
+            intake, "capture_queue"),
+    }
+
+
+def asset_handoff_status_for_map(
+    map_name: str,
+    *,
+    has_asset: bool,
+    handoff: dict[str, Any],
+) -> str:
+    if has_asset:
+        return "asset_present"
+    if not handoff.get("present"):
+        return "not_recorded"
+    if map_name in set(string_list(handoff.get("copy_plan_unblocked_maps"))):
+        return "copy_plan_unblocked"
+    if map_name in set(string_list(handoff.get("copy_plan_blocked_maps"))):
+        return "copy_plan_blocked"
+    if map_name in set(string_list(handoff.get("missing_maps_after_plan"))):
+        if handoff.get("no_candidate_asset_copy_plan") is True:
+            return "licensed_asset_required"
+        return "missing_after_copy_plan"
+    return "not_blocked"
+
+
+def next_action_for_map(
+    *,
+    is_covered: bool,
+    has_asset: bool,
+    asset_handoff_status: str,
+) -> str:
+    if is_covered:
+        return "keep_breadth_evidence"
+    if has_asset:
+        return "run_full_game_capture_queue_job"
+    if asset_handoff_status == "copy_plan_unblocked":
+        return "run_registered_asset_copy_plan"
+    if asset_handoff_status == "copy_plan_blocked":
+        return "resolve_blocked_registered_asset_copy_plan"
+    if asset_handoff_status == "licensed_asset_required":
+        return "provide_licensed_registered_asset"
+    return "install_registered_bsp_asset"
+
+
 def map_deployment_rows(
     coverage: dict[str, Any],
     inventory: dict[str, Any],
     breadth_evidence: dict[str, Any] | None,
+    registered_asset_intake: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     map_set = coverage.get("map_set") or inventory.get("map_set")
     if not isinstance(map_set, str) or not map_set:
@@ -199,6 +307,7 @@ def map_deployment_rows(
         if isinstance(item, str)
     }
     runs_by_map = breadth_runs_by_map(breadth_evidence)
+    handoff = registered_asset_handoff_summary(registered_asset_intake)
     rows = []
     for map_name in target_maps:
         evidence = [map_evidence_summary(run)
@@ -207,19 +316,27 @@ def map_deployment_rows(
             map_name)
         is_covered = map_name in covered
         has_asset = map_name in available
+        asset_handoff_status = asset_handoff_status_for_map(
+            map_name,
+            has_asset=has_asset,
+            handoff=handoff,
+        )
         if is_covered:
             deployment_status = "simulator_native_evidence_present"
-            next_action = "keep_breadth_evidence"
         elif has_asset:
             deployment_status = "capture_required"
-            next_action = "run_full_game_capture_queue_job"
         else:
             deployment_status = "blocked_asset_unavailable"
-            next_action = "install_registered_bsp_asset"
+        next_action = next_action_for_map(
+            is_covered=is_covered,
+            has_asset=has_asset,
+            asset_handoff_status=asset_handoff_status,
+        )
         rows.append({
             "map": map_name,
             "coverage_status": "covered" if is_covered else "missing",
             "asset_status": "available" if has_asset else "asset_unavailable",
+            "asset_handoff_status": asset_handoff_status,
             "route_profile": route_contract["route_profile"],
             "route_contract": route_contract,
             "deployment_status": deployment_status,
@@ -365,9 +482,16 @@ def build_plan(
     moonlab_job_results: dict[str, Any] | None = None,
     submission_packet: dict[str, Any] | None = None,
     hardware_record_template: dict[str, Any] | None = None,
+    registered_asset_intake: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    rows = map_deployment_rows(coverage, inventory, breadth_evidence)
+    rows = map_deployment_rows(
+        coverage,
+        inventory,
+        breadth_evidence,
+        registered_asset_intake,
+    )
     status = deployment_status(rows, coverage)
+    handoff = registered_asset_handoff_summary(registered_asset_intake)
     capture_required = [
         row["map"] for row in rows
         if row.get("deployment_status") == "capture_required"
@@ -424,6 +548,7 @@ def build_plan(
         "capture_required_maps": capture_required,
         "asset_unavailable_map_count": len(asset_unavailable),
         "asset_unavailable_maps": asset_unavailable,
+        "registered_asset_handoff": handoff,
         "route_contract_schema": (
             qge_full_game_route_contracts.ROUTE_CONTRACT_SCHEMA),
         "route_contract_map_count": len(route_contracts),
@@ -453,6 +578,11 @@ def build_plan(
             "dense_70000_qubit_state_claimed": False,
         },
         "next_actions": [
+            (
+                "Use registered_asset_handoff and per-map "
+                "asset_handoff_status before treating asset_unavailable_maps "
+                "as copyable."
+            ),
             "Install registered BSP assets for asset_unavailable_maps.",
             "Run strict capture queue jobs for every capture_required map.",
             "Rebuild breadth evidence and publication pack after each successful map batch.",
@@ -496,6 +626,8 @@ def build_plan_from_manifest(
             "moonlab_hardware_record_template",
             manifest_path=manifest_path,
         ),
+        registered_asset_intake=load_resource_json(
+            manifest, "registered_asset_intake", manifest_path=manifest_path),
     )
 
 
@@ -518,6 +650,28 @@ def build_icc_evidence(
         "asset_unavailable_map_count": plan.get(
             "asset_unavailable_map_count"),
         "capture_required_map_count": plan.get("capture_required_map_count"),
+        "registered_asset_handoff_present": dict_or_empty(
+            plan.get("registered_asset_handoff")).get("present"),
+        "registered_asset_handoff_status": dict_or_empty(
+            plan.get("registered_asset_handoff")).get(
+                "registered_asset_intake_status"),
+        "registered_asset_handoff_blocker_reason": dict_or_empty(
+            plan.get("registered_asset_handoff")).get(
+                "registered_asset_blocker_reason"),
+        "registered_asset_handoff_copy_script_mode": dict_or_empty(
+            plan.get("registered_asset_handoff")).get("copy_script_mode"),
+        "registered_asset_handoff_missing_map_count_after_plan": (
+            dict_or_empty(plan.get("registered_asset_handoff")).get(
+                "missing_map_count_after_plan")),
+        "registered_asset_handoff_actionable_copy_plan_count": (
+            dict_or_empty(plan.get("registered_asset_handoff")).get(
+                "actionable_copy_plan_count")),
+        "registered_asset_handoff_copy_plan_unblocked_map_count": (
+            dict_or_empty(plan.get("registered_asset_handoff")).get(
+                "copy_plan_unblocked_map_count")),
+        "registered_asset_handoff_copy_plan_blocked_map_count": (
+            dict_or_empty(plan.get("registered_asset_handoff")).get(
+                "copy_plan_blocked_map_count")),
         "route_contract_schema": plan.get("route_contract_schema"),
         "route_contract_map_count": plan.get("route_contract_map_count"),
         "route_contracts_complete": plan.get("route_contracts_complete"),
@@ -563,9 +717,25 @@ def markdown_report(plan: dict[str, Any]) -> str:
             f"(complete={plan.get('covered_route_contract_authority_complete')})"
         ),
         "",
-        "| Map | Coverage | Asset | Route Class | Deployment Status | Next Action |",
-        "| --- | --- | --- | --- | --- | --- |",
+        "## Registered Asset Handoff",
+        "",
     ]
+    handoff = dict_or_empty(plan.get("registered_asset_handoff"))
+    lines.extend([
+        f"Recorded: {handoff.get('present')}",
+        f"Intake status: {handoff.get('registered_asset_intake_status')}",
+        f"Blocker reason: {handoff.get('registered_asset_blocker_reason')}",
+        f"Copy script mode: {handoff.get('copy_script_mode')}",
+        (
+            "Copy plan maps: "
+            f"unblocked={handoff.get('copy_plan_unblocked_map_count')} "
+            f"blocked={handoff.get('copy_plan_blocked_map_count')} "
+            f"missing_after_plan={handoff.get('missing_map_count_after_plan')}"
+        ),
+        "",
+        "| Map | Coverage | Asset | Asset Handoff | Route Class | Deployment Status | Next Action |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ])
     for row in list_or_empty(plan.get("map_deployment_rows")):
         if not isinstance(row, dict):
             continue
@@ -573,6 +743,7 @@ def markdown_report(plan: dict[str, Any]) -> str:
         lines.append(
             f"| {row.get('map')} | {row.get('coverage_status')} | "
             f"{row.get('asset_status')} | "
+            f"{row.get('asset_handoff_status')} | "
             f"{route_contract.get('map_class') or ''} | "
             f"{row.get('deployment_status')} | "
             f"{row.get('next_action')} |"

@@ -707,6 +707,9 @@ Known current visual state:
   coverage and asset inventory into one deployment ledger; current status is
   `blocked_asset_unavailable`, with 9/32 maps covered, zero capture-required
   maps queueable with local assets, and 23 registered BSP assets unavailable.
+  It also joins the registered-asset intake handoff into each deployment row,
+  so unavailable maps record whether they have an actionable copy plan, a
+  blocked copy destination, or a remaining manual licensed-asset requirement.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims

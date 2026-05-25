@@ -296,7 +296,11 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      nested `id1` and `rerelease/id1` scan targets and record
      `candidate_scan_target_count` plus the exact target paths. The after-plan
      missing-map ledger is based on actionable copy-plan entries, with blocked
-     destinations reported separately as `copy_plan_blocked_maps`.
+     destinations reported separately as `copy_plan_blocked_maps`. The Moonlab
+     full-game deployment plan now imports that handoff and records per-map
+     `asset_handoff_status`, so the post-asset plan can tell copy-plan-ready
+     maps from blocked destinations and maps that still need manual licensed
+     assets.
    - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
      and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
      scanning bounded candidate directories. The intake artifact records

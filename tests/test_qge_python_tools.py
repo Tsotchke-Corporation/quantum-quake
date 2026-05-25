@@ -2561,6 +2561,45 @@ class PublicationPackTests(unittest.TestCase):
             "schema": "qge.moonlab_hardware_record_template.v0",
             "record_schema": "qge.moonlab_hardware_record.v0",
         }
+        missing_after_plan = [
+            name for name in inventory["missing_maps"]
+            if name != "e2m1"
+        ]
+        registered_asset_intake = {
+            "schema": "qge.registered_asset_intake.v0",
+            "status": "blocked_candidate_copy_plan",
+            "manual_registered_asset_required": True,
+            "registered_asset_blocker_reason": (
+                "candidate_copy_plan_blocked"),
+            "copy_script_mode": "blocked_copy_plan",
+            "no_candidate_asset_copy_plan": False,
+            "missing_map_count_after_plan": len(missing_after_plan),
+            "missing_maps_after_plan": missing_after_plan,
+            "actionable_copy_plan_count": 1,
+            "copy_plan_unblocked_map_count": 1,
+            "copy_plan_unblocked_maps": ["e2m1"],
+            "copy_plan_blocked_map_count": 1,
+            "copy_plan_blocked_maps": ["e2m2"],
+            "candidate_discovery_command": (
+                "python3 tools/qge_registered_asset_intake.py "
+                "--discover-common"),
+            "post_install_verification": {
+                "commands": [
+                    {
+                        "kind": "asset_inventory",
+                        "shell_command": (
+                            "python3 tools/qge_asset_inventory.py "
+                            "--asset-root assets/id1"),
+                    },
+                    {
+                        "kind": "capture_queue",
+                        "shell_command": (
+                            "python3 tools/qge_full_game_capture_queue.py "
+                            "pack --asset-root assets/id1"),
+                    },
+                ],
+            },
+        }
         plan = moonlab_full_game_plan.build_plan(
             coverage,
             inventory,
@@ -2569,6 +2608,7 @@ class PublicationPackTests(unittest.TestCase):
             moonlab_job_results=job_results,
             submission_packet=packet,
             hardware_record_template=template,
+            registered_asset_intake=registered_asset_intake,
         )
         self.assertEqual(
             plan["schema"], "qge.moonlab_full_game_deployment_plan.v0")
@@ -2586,6 +2626,22 @@ class PublicationPackTests(unittest.TestCase):
         self.assertTrue(plan["covered_route_contract_authority_complete"])
         self.assertEqual(
             plan["covered_route_contract_authority_ready_count"], 2)
+        self.assertTrue(plan["registered_asset_handoff"]["present"])
+        self.assertEqual(
+            plan["registered_asset_handoff"][
+                "registered_asset_intake_status"],
+            "blocked_candidate_copy_plan",
+        )
+        self.assertEqual(
+            plan["registered_asset_handoff"][
+                "copy_plan_unblocked_maps"],
+            ["e2m1"],
+        )
+        self.assertEqual(
+            plan["registered_asset_handoff"][
+                "copy_plan_blocked_maps"],
+            ["e2m2"],
+        )
         self.assertFalse(
             plan["claim_posture"]["whole_game_moonlab_deployment_claimed"])
         self.assertNotIn("map_status", plan)
@@ -2600,20 +2656,60 @@ class PublicationPackTests(unittest.TestCase):
             row for row in plan["map_deployment_rows"]
             if row["map"] == "e1m2")
         self.assertEqual(e1m2["deployment_status"], "capture_required")
+        self.assertEqual(e1m2["asset_handoff_status"], "asset_present")
         self.assertEqual(
             e1m2["route_contract"]["map_class"], "registered_combat")
         self.assertIn(
             "ai_authority", e1m2["route_contract"]["authority_domains"])
+        e2m1 = next(
+            row for row in plan["map_deployment_rows"]
+            if row["map"] == "e2m1")
+        self.assertEqual(
+            e2m1["deployment_status"], "blocked_asset_unavailable")
+        self.assertEqual(
+            e2m1["asset_handoff_status"], "copy_plan_unblocked")
+        self.assertEqual(
+            e2m1["next_action"], "run_registered_asset_copy_plan")
+        e2m2 = next(
+            row for row in plan["map_deployment_rows"]
+            if row["map"] == "e2m2")
+        self.assertEqual(
+            e2m2["asset_handoff_status"], "copy_plan_blocked")
+        self.assertEqual(
+            e2m2["next_action"],
+            "resolve_blocked_registered_asset_copy_plan",
+        )
+        e2m3 = next(
+            row for row in plan["map_deployment_rows"]
+            if row["map"] == "e2m3")
+        self.assertEqual(
+            e2m3["asset_handoff_status"], "missing_after_copy_plan")
         icc = moonlab_full_game_plan.build_icc_evidence(
             plan, out_path=Path("qge_moonlab_full_game_plan.json"))
         self.assertEqual(
             icc["runtime_backend"], "qge_moonlab_full_game_plan")
         self.assertEqual(icc["capture_required_map_count"], 1)
+        self.assertTrue(icc["registered_asset_handoff_present"])
+        self.assertEqual(
+            icc["registered_asset_handoff_status"],
+            "blocked_candidate_copy_plan",
+        )
+        self.assertEqual(
+            icc["registered_asset_handoff_copy_plan_unblocked_map_count"],
+            1,
+        )
+        self.assertEqual(
+            icc["registered_asset_handoff_copy_plan_blocked_map_count"],
+            1,
+        )
         self.assertTrue(icc["route_contracts_complete"])
         self.assertFalse(icc["whole_game_hardware_execution_claimed"])
         markdown = moonlab_full_game_plan.markdown_report(plan)
         self.assertIn("blocked_asset_unavailable", markdown)
         self.assertIn("Route contracts: 32 (complete=True)", markdown)
+        self.assertIn("Registered Asset Handoff", markdown)
+        self.assertIn("copy_plan_unblocked", markdown)
+        self.assertIn("copy_plan_blocked", markdown)
         self.assertIn("registered_combat", markdown)
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -2631,6 +2727,10 @@ class PublicationPackTests(unittest.TestCase):
             publication_pack.write_json(
                 resource / "qge_moonlab_hardware_record_template.json",
                 template,
+            )
+            publication_pack.write_json(
+                resource / "qge_registered_asset_intake.json",
+                registered_asset_intake,
             )
             publication_pack.write_json(
                 tmpdir / "breadth_evidence.json", breadth)
@@ -2662,6 +2762,11 @@ class PublicationPackTests(unittest.TestCase):
                                 resource /
                                 "qge_moonlab_hardware_record_template.json")
                         },
+                        "registered_asset_intake": {
+                            "path": str(
+                                resource /
+                                "qge_registered_asset_intake.json")
+                        },
                     }
                 },
             }
@@ -2691,9 +2796,20 @@ class PublicationPackTests(unittest.TestCase):
                 cli_plan["schema"],
                 "qge.moonlab_full_game_deployment_plan.v0")
             self.assertTrue(cli_plan["route_contracts_complete"])
+            self.assertTrue(
+                cli_plan["registered_asset_handoff"]["present"])
+            self.assertEqual(
+                cli_plan["registered_asset_handoff"][
+                    "copy_script_mode"],
+                "blocked_copy_plan",
+            )
             cli_icc = publication_pack.load_json(icc_path)
             self.assertEqual(
                 cli_icc["deployment_status"], "blocked_asset_unavailable")
+            self.assertEqual(
+                cli_icc["registered_asset_handoff_copy_script_mode"],
+                "blocked_copy_plan",
+            )
 
 
     def test_moonlab_deployment_gate_blocks_until_full_game_ready(self) -> None:
