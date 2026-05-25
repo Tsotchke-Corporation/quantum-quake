@@ -3113,15 +3113,10 @@ class PublicationPackTests(unittest.TestCase):
             job_specs,
             job_results,
         )
-        hardware_template = {
-            "schema": "qge.moonlab_hardware_record_template.v0",
-            "record_schema": "qge.moonlab_hardware_record.v0",
-            "record": {
-                "whole_game_hardware_execution_claimed": False,
-                "hardware_quantum_advantage_claimed": False,
-                "dense_70000_qubit_state_claimed": False,
-            },
-        }
+        hardware_template = (
+            moonlab_hardware_ingest.build_hardware_record_template(
+                submission_packet)
+        )
         partial_breadth = {
             "schema": "qge.breadth_evidence.v0",
             "matrix_runs": [
@@ -3455,6 +3450,17 @@ class PublicationPackTests(unittest.TestCase):
                 "moonlab_submission_packet_candidate_count"],
             1,
         )
+        self.assertTrue(
+            blocked_gate["summary"][
+                "moonlab_hardware_record_template_ledger_recorded"])
+        self.assertEqual(
+            blocked_gate["summary"][
+                "moonlab_hardware_record_template_ledger_mismatch_count"],
+            0,
+        )
+        self.assertTrue(
+            blocked_gate["summary"][
+                "moonlab_hardware_record_template_candidate_found"])
         self.assertIn(
             "qge_registered_asset_intake.py",
             blocked_gate["summary"]["registered_asset_discovery_command"],
@@ -3486,6 +3492,8 @@ class PublicationPackTests(unittest.TestCase):
         self.assertIn("Full-game plan ledger", blocked_markdown)
         self.assertIn("Moonlab coverage ledger", blocked_markdown)
         self.assertIn("Moonlab submission packet ledger", blocked_markdown)
+        self.assertIn(
+            "Moonlab hardware record template ledger", blocked_markdown)
         self.assertIn(
             "Covered route authority: 2 / 2 (complete=True)",
             blocked_markdown,
@@ -3585,6 +3593,17 @@ class PublicationPackTests(unittest.TestCase):
             blocked_icc["moonlab_submission_packet_candidate_count"],
             1,
         )
+        self.assertTrue(
+            blocked_icc[
+                "moonlab_hardware_record_template_ledger_recorded"])
+        self.assertEqual(
+            blocked_icc[
+                "moonlab_hardware_record_template_ledger_mismatch_count"],
+            0,
+        )
+        self.assertTrue(
+            blocked_icc[
+                "moonlab_hardware_record_template_candidate_found"])
         self.assertIn(
             "qge_registered_asset_intake.py",
             blocked_icc["registered_asset_discovery_command"],
@@ -3785,6 +3804,14 @@ class PublicationPackTests(unittest.TestCase):
                 "moonlab_submission_packet_ledger_mismatch_count"],
             0,
         )
+        self.assertTrue(
+            ready_gate["summary"][
+                "moonlab_hardware_record_template_ledger_recorded"])
+        self.assertEqual(
+            ready_gate["summary"][
+                "moonlab_hardware_record_template_ledger_mismatch_count"],
+            0,
+        )
         icc = moonlab_deployment_gate.build_icc_evidence(
             ready_gate, out_path=Path("qge_moonlab_deployment_gate.json"))
         self.assertEqual(
@@ -3795,6 +3822,11 @@ class PublicationPackTests(unittest.TestCase):
             icc["moonlab_full_game_plan_ledger_mismatch_count"], 0)
         self.assertEqual(
             icc["moonlab_submission_packet_ledger_mismatch_count"], 0)
+        self.assertEqual(
+            icc[
+                "moonlab_hardware_record_template_ledger_mismatch_count"],
+            0,
+        )
         self.assertTrue(
             icc["whole_game_moonlab_deployment_claim_allowed"])
 
@@ -3869,6 +3901,40 @@ class PublicationPackTests(unittest.TestCase):
         )
         self.assertFalse(
             stale_submission_gate[
+                "whole_game_moonlab_deployment_claim_allowed"])
+
+        stale_hardware_template = json.loads(json.dumps(hardware_template))
+        stale_hardware_template["candidate_digest"] = "stale-digest"
+        stale_hardware_template["record"]["candidate_digest"] = "stale-digest"
+        stale_template_gate = moonlab_deployment_gate.build_gate(
+            complete_coverage,
+            complete_inventory,
+            complete_requirements,
+            complete_plan,
+            job_specs,
+            complete_job_results,
+            submission_packet,
+            stale_hardware_template,
+            source_path=Path("stale-hardware-template-pack"),
+        )
+        stale_template_blockers = {
+            item["id"] for item in stale_template_gate["blockers"]
+        }
+        self.assertIn(
+            "moonlab_hardware_record_template_consistent",
+            stale_template_blockers,
+        )
+        stale_template_criterion = next(
+            item for item in stale_template_gate["criteria"]
+            if item["id"] == "moonlab_hardware_record_template_consistent")
+        self.assertEqual(stale_template_criterion["status"], "blocked")
+        self.assertGreater(
+            stale_template_criterion[
+                "moonlab_hardware_record_template_row_mismatch_count"],
+            0,
+        )
+        self.assertFalse(
+            stale_template_gate[
                 "whole_game_moonlab_deployment_claim_allowed"])
 
         coverage_only_job_results = dict(complete_job_results)

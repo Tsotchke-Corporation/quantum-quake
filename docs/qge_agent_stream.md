@@ -476,7 +476,9 @@ ledger to match `qge_moonlab_job_specs.json` row-by-row, so success counts
 cannot stand in for missing job result rows or missing required artifact
 evidence. It also audits `qge_moonlab_submission_packet.json` against those
 same specs/results, so the hardware handoff candidates cannot be stale,
-missing, duplicated, or count-only. The gate reports resource blockers as
+missing, duplicated, or count-only, and audits
+`qge_moonlab_hardware_record_template.json` against the packet so the returned
+hardware record target cannot drift. The gate reports resource blockers as
 `blocked` statuses, reserving generic failure events for crashed or invalid
 runtime evidence. Each
 contract records the episode/slot, route class, route profile, combat

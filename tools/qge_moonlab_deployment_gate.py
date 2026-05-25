@@ -25,6 +25,7 @@ import qge_asset_inventory  # noqa: E402
 import qge_asset_requirements  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
 import qge_full_game_route_contracts  # noqa: E402
+import qge_moonlab_hardware_template_audit  # noqa: E402
 import qge_moonlab_full_game_plan_audit  # noqa: E402
 import qge_moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_overclaim_audit  # noqa: E402
@@ -815,6 +816,7 @@ def gate_summary(
     job_specs: dict[str, Any],
     job_results: dict[str, Any],
     submission_packet: dict[str, Any],
+    hardware_record_template: dict[str, Any],
     asset_remediation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     remediation = dict_or_empty(asset_remediation)
@@ -841,6 +843,12 @@ def gate_summary(
         job_specs,
         job_results,
         submission_packet,
+    )
+    hardware_template_ledger = (
+        qge_moonlab_hardware_template_audit.hardware_record_template_audit
+    )(
+        submission_packet,
+        hardware_record_template,
     )
     return {
         "map_set": coverage.get("map_set") or inventory.get("map_set"),
@@ -1026,6 +1034,28 @@ def gate_summary(
             submission_packet_ledger.get("row_mismatch_job_ids")),
         "moonlab_submission_packet_row_mismatches": (
             submission_packet_ledger.get("row_mismatches")),
+        "moonlab_hardware_record_template_ledger_recorded": (
+            hardware_template_ledger.get("recorded")),
+        "moonlab_hardware_record_template_ledger_mismatch_count": (
+            hardware_template_ledger.get("mismatch_count")),
+        "moonlab_hardware_record_template_schema_mismatches": (
+            hardware_template_ledger.get("schema_mismatches")),
+        "moonlab_hardware_record_template_source_mismatches": (
+            hardware_template_ledger.get("source_mismatches")),
+        "moonlab_hardware_record_template_row_mismatch_count": (
+            hardware_template_ledger.get("row_mismatch_count")),
+        "moonlab_hardware_record_template_row_mismatches": (
+            hardware_template_ledger.get("row_mismatches")),
+        "moonlab_hardware_record_template_job_id": (
+            hardware_template_ledger.get("template_job_id")),
+        "moonlab_hardware_record_template_candidate_digest": (
+            hardware_template_ledger.get("template_candidate_digest")),
+        "moonlab_hardware_record_template_candidate_found": (
+            hardware_template_ledger.get("candidate_found")),
+        "moonlab_hardware_record_template_candidate_job_count": (
+            hardware_template_ledger.get("candidate_job_count")),
+        "moonlab_hardware_record_template_validation_contract_present": (
+            hardware_template_ledger.get("validation_contract_present")),
         "selected_job_count": job_specs.get("selected_job_count"),
         "result_selected_job_count": job_results.get("selected_job_count"),
         "completed_simulator_job_count": job_results.get(
@@ -1210,6 +1240,12 @@ def build_criteria(
         job_specs,
         job_results,
         dict_or_empty(submission_packet),
+    )
+    hardware_template_ledger_audit = (
+        qge_moonlab_hardware_template_audit.hardware_record_template_audit
+    )(
+        dict_or_empty(submission_packet),
+        dict_or_empty(hardware_record_template),
     )
 
     selected_count = int_or_none(job_specs.get("selected_job_count"))
@@ -1519,6 +1555,42 @@ def build_criteria(
             ),
         ),
         criterion(
+            "moonlab_hardware_record_template_consistent",
+            bool_true(hardware_template_ledger_audit.get("passed")),
+            {
+                "moonlab_hardware_record_template_ledger_recorded": (
+                    hardware_template_ledger_audit.get("recorded")),
+                "moonlab_hardware_record_template_ledger_mismatch_count": (
+                    hardware_template_ledger_audit.get("mismatch_count")),
+                "moonlab_hardware_record_template_schema_mismatches": (
+                    hardware_template_ledger_audit.get("schema_mismatches")),
+                "moonlab_hardware_record_template_source_mismatches": (
+                    hardware_template_ledger_audit.get("source_mismatches")),
+                "moonlab_hardware_record_template_row_mismatch_count": (
+                    hardware_template_ledger_audit.get(
+                        "row_mismatch_count")),
+                "moonlab_hardware_record_template_row_mismatches": (
+                    hardware_template_ledger_audit.get("row_mismatches")),
+                "moonlab_hardware_record_template_job_id": (
+                    hardware_template_ledger_audit.get("template_job_id")),
+                "moonlab_hardware_record_template_candidate_digest": (
+                    hardware_template_ledger_audit.get(
+                        "template_candidate_digest")),
+                "moonlab_hardware_record_template_candidate_found": (
+                    hardware_template_ledger_audit.get("candidate_found")),
+                "moonlab_hardware_record_template_candidate_job_count": (
+                    hardware_template_ledger_audit.get(
+                        "candidate_job_count")),
+                "moonlab_hardware_record_template_validation_contract_present": (
+                    hardware_template_ledger_audit.get(
+                        "validation_contract_present")),
+            },
+            (
+                "Moonlab hardware record template is missing, stale, or "
+                "inconsistent with the hardware submission packet"
+            ),
+        ),
+        criterion(
             "full_game_deployment_plan_complete",
             plan_passed,
             {
@@ -1634,6 +1706,12 @@ def next_actions_for_blockers(
             "qge_moonlab_job_specs.json and qge_moonlab_job_results.json so "
             "hardware candidate rows match selected simulator evidence."
         )
+    if "moonlab_hardware_record_template_consistent" in failed_ids:
+        actions.append(
+            "Regenerate qge_moonlab_hardware_record_template.json from the "
+            "current qge_moonlab_submission_packet.json so returned hardware "
+            "records update the correct bounded candidate."
+        )
     if "full_game_deployment_plan_complete" in failed_ids:
         if queue_command:
             actions.append(
@@ -1716,6 +1794,7 @@ def build_gate(
             job_specs,
             job_results,
             submission_packet,
+            hardware_record_template,
             asset_remediation,
         ),
         "next_actions": next_actions_for_blockers(
@@ -2031,6 +2110,29 @@ def build_icc_evidence(
             "moonlab_submission_packet_row_mismatch_job_ids"),
         "moonlab_submission_packet_row_mismatches": summary.get(
             "moonlab_submission_packet_row_mismatches"),
+        "moonlab_hardware_record_template_ledger_recorded": summary.get(
+            "moonlab_hardware_record_template_ledger_recorded"),
+        "moonlab_hardware_record_template_ledger_mismatch_count": summary.get(
+            "moonlab_hardware_record_template_ledger_mismatch_count"),
+        "moonlab_hardware_record_template_schema_mismatches": summary.get(
+            "moonlab_hardware_record_template_schema_mismatches"),
+        "moonlab_hardware_record_template_source_mismatches": summary.get(
+            "moonlab_hardware_record_template_source_mismatches"),
+        "moonlab_hardware_record_template_row_mismatch_count": summary.get(
+            "moonlab_hardware_record_template_row_mismatch_count"),
+        "moonlab_hardware_record_template_row_mismatches": summary.get(
+            "moonlab_hardware_record_template_row_mismatches"),
+        "moonlab_hardware_record_template_job_id": summary.get(
+            "moonlab_hardware_record_template_job_id"),
+        "moonlab_hardware_record_template_candidate_digest": summary.get(
+            "moonlab_hardware_record_template_candidate_digest"),
+        "moonlab_hardware_record_template_candidate_found": summary.get(
+            "moonlab_hardware_record_template_candidate_found"),
+        "moonlab_hardware_record_template_candidate_job_count": summary.get(
+            "moonlab_hardware_record_template_candidate_job_count"),
+        "moonlab_hardware_record_template_validation_contract_present": (
+            summary.get(
+                "moonlab_hardware_record_template_validation_contract_present")),
         "full_game_route_contract_schema": summary.get(
             "route_contract_schema"),
         "full_game_route_contract_map_count": summary.get(
@@ -2153,6 +2255,15 @@ def markdown_report(gate: dict[str, Any]) -> str:
             f"/ {summary.get('moonlab_submission_packet_spec_candidate_count')} "
             "mismatches="
             f"{summary.get('moonlab_submission_packet_ledger_mismatch_count')}"
+        ),
+        (
+            "Moonlab hardware record template ledger: "
+            "recorded="
+            f"{summary.get('moonlab_hardware_record_template_ledger_recorded')} "
+            "job="
+            f"{summary.get('moonlab_hardware_record_template_job_id')} "
+            "mismatches="
+            f"{summary.get('moonlab_hardware_record_template_ledger_mismatch_count')}"
         ),
         "",
         "| Criterion | Status | Blocker |",

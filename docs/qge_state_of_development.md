@@ -722,7 +722,8 @@ Known current visual state:
   simulator result row and artifact evidence for its required artifact names.
   It also audits the hardware submission packet against those same specs and
   results, so stale or count-only candidate handoff rows cannot satisfy the
-  gate.
+  gate, then checks the hardware record template against that packet so the
+  eventual returned Moonlab record targets the same bounded candidate.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims
