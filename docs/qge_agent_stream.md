@@ -504,7 +504,8 @@ directory records are checked against current path existence, sizes, and
 SHA-256 digests, and its runtime/advantage summary mirrors are rebuilt from
 the recorded source inputs plus packed resource and advantage artifacts. The
 recorded source inputs are checked against copied artifact `source_path`
-provenance, and the manifest claim posture is checked against the blocked
+provenance, packed source-copy artifacts are byte-compared back to those
+sources, and the manifest claim posture is checked against the blocked
 deployment-gate claim flags. The manifest reproduction command list is checked
 for core command coverage and unsafe shell fragments, and the registered-asset
 install script is rebuilt from the packed intake ledger. Packed Markdown

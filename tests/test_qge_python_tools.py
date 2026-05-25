@@ -47,6 +47,7 @@ import qge_manifest_file_audit as manifest_file_audit  # noqa: E402
 import qge_manifest_claim_policy_audit as manifest_claim_policy_audit  # noqa: E402
 import qge_manifest_markdown_audit as manifest_markdown_audit  # noqa: E402
 import qge_manifest_reproduce_audit as manifest_reproduce_audit  # noqa: E402
+import qge_manifest_source_copy_audit as manifest_source_copy_audit  # noqa: E402
 import qge_manifest_source_input_audit as manifest_source_input_audit  # noqa: E402
 import qge_manifest_summary_audit as manifest_summary_audit  # noqa: E402
 import qge_oracle_claims_audit as oracle_claims_audit  # noqa: E402
@@ -1294,6 +1295,89 @@ class PublicationPackTests(unittest.TestCase):
                 item.get("source") == "artifacts.sample.directory" and
                 "file_count" in item.get("fields", [])
                 for item in stale_audit["mismatches"]
+            ))
+
+    def test_manifest_source_copy_audit_detects_stale_copies(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            source = tmpdir / "source"
+            source.mkdir()
+            outdir = tmpdir / "pack"
+            source_file = source / "artifact.txt"
+            source_file.write_text("source artifact\n", encoding="utf-8")
+            source_dir = source / "bundle"
+            source_dir.mkdir()
+            nested = source_dir / "nested.txt"
+            nested.write_text("source nested\n", encoding="utf-8")
+            manifest = {
+                "artifacts": {
+                    "sample": {
+                        "file": publication_pack.pack_file(
+                            source_file,
+                            outdir,
+                            "artifact.txt",
+                        ),
+                        "directory": publication_pack.pack_directory(
+                            source_dir,
+                            outdir,
+                            "bundle",
+                        ),
+                    }
+                }
+            }
+
+            audit = manifest_source_copy_audit.manifest_source_copy_audit(
+                manifest,
+                required=True,
+            )
+            self.assertTrue(audit["passed"])
+            self.assertEqual(audit["source_copy_record_count"], 2)
+            self.assertEqual(audit["file_copy_record_count"], 1)
+            self.assertEqual(audit["directory_copy_record_count"], 1)
+
+            stale_manifest = json.loads(json.dumps(manifest))
+            packed_file = Path(
+                stale_manifest["artifacts"]["sample"]["file"][
+                    "packed"]["path"])
+            packed_file.write_text("stale packed artifact\n",
+                                   encoding="utf-8")
+            stale_manifest["artifacts"]["sample"]["file"]["packed"] = (
+                publication_pack.file_info(packed_file)
+            )
+            packed_dir = Path(
+                stale_manifest["artifacts"]["sample"]["directory"][
+                    "packed"]["path"])
+            (packed_dir / "nested.txt").write_text("stale packed nested\n",
+                                                   encoding="utf-8")
+            stale_manifest["artifacts"]["sample"]["directory"]["packed"] = (
+                publication_pack.directory_info(packed_dir)
+            )
+            self.assertTrue(
+                manifest_file_audit.manifest_file_record_audit(
+                    stale_manifest,
+                    required=True,
+                )["passed"]
+            )
+
+            stale_audit = (
+                manifest_source_copy_audit.manifest_source_copy_audit(
+                    stale_manifest,
+                    required=True,
+                )
+            )
+            self.assertFalse(stale_audit["passed"])
+            self.assertTrue(any(
+                item.get("source") == "artifacts.sample.file" and
+                "sha256" in item.get("fields", [])
+                for item in stale_audit["file_mismatches"]
+            ))
+            self.assertTrue(any(
+                item.get("source") == "artifacts.sample.directory" and
+                any(
+                    mismatch.get("relative_path") == "nested.txt"
+                    for mismatch in item.get("content_mismatches", [])
+                )
+                for item in stale_audit["directory_mismatches"]
             ))
 
     def test_manifest_claim_policy_audit_blocks_overclaim_wording(

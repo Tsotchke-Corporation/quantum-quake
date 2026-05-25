@@ -46,6 +46,7 @@ OPTIONAL_POSTPACK_REPRODUCE_COMMAND_PREFIXES = (
     "tools/qge_manifest_file_audit.py ",
     "tools/qge_manifest_summary_audit.py ",
     "tools/qge_manifest_source_input_audit.py ",
+    "tools/qge_manifest_source_copy_audit.py ",
     "tools/qge_manifest_claim_policy_audit.py ",
     "tools/qge_manifest_reproduce_audit.py ",
     "tools/qge_manifest_markdown_audit.py ",

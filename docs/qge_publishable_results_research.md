@@ -333,7 +333,8 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      sizes, and SHA-256 digests, and its runtime/advantage summary mirrors
      must rebuild from the recorded source inputs plus packed resource and
      advantage artifacts. The recorded source inputs must agree with copied
-     artifact `source_path` provenance, and the manifest claim posture must
+     artifact `source_path` provenance, packed source-copy artifacts must
+     byte-compare back to those sources, and the manifest claim posture must
      stay consistent with the blocked deployment-gate claim flags. The manifest
      reproduction command list must keep core command coverage and avoid unsafe
      shell fragments, and the registered-asset install script must rebuild
