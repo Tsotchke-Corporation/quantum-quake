@@ -33,6 +33,7 @@ import qge_moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_overclaim_audit  # noqa: E402
 import qge_moonlab_source_icc_audit  # noqa: E402
 import qge_moonlab_submission_packet_audit  # noqa: E402
+import qge_resource_icc_audit  # noqa: E402
 import qge_registered_asset_intake  # noqa: E402
 
 
@@ -831,9 +832,12 @@ def gate_summary(
     submission_packet: dict[str, Any],
     hardware_record_template: dict[str, Any],
     asset_remediation: dict[str, Any] | None = None,
+    registered_asset_intake: dict[str, Any] | None = None,
     submission_bundle: dict[str, Any] | None = None,
     hardware_submission_scope: dict[str, Any] | None = None,
     artifact_paths: dict[str, str] | None = None,
+    resource_icc_evidence: dict[str, Any] | None = None,
+    resource_icc_evidence_required: bool = False,
     source_icc_evidence: dict[str, Any] | None = None,
     source_icc_evidence_required: bool = False,
 ) -> dict[str, Any]:
@@ -886,6 +890,16 @@ def gate_summary(
         submission_packet,
         job_results,
         dict_or_empty(hardware_submission_scope),
+    )
+    resource_icc_ledger = (
+        qge_resource_icc_audit.resource_icc_evidence_audit
+    )(
+        inventory,
+        requirements,
+        dict_or_empty(registered_asset_intake),
+        dict_or_empty(resource_icc_evidence),
+        artifact_paths=paths,
+        required=resource_icc_evidence_required,
     )
     source_icc_ledger = (
         qge_moonlab_source_icc_audit.source_icc_evidence_audit
@@ -1149,6 +1163,24 @@ def gate_summary(
             hardware_result_ledger.get("row_mismatches")),
         "moonlab_hardware_result_duplicate_job_ids": (
             hardware_result_ledger.get("duplicate_hardware_result_job_ids")),
+        "resource_icc_evidence_required": (
+            resource_icc_ledger.get("required")),
+        "resource_icc_evidence_recorded": (
+            resource_icc_ledger.get("recorded")),
+        "resource_icc_evidence_expected_count": (
+            resource_icc_ledger.get("expected_sidecar_count")),
+        "resource_icc_evidence_recorded_count": (
+            resource_icc_ledger.get("recorded_sidecar_count")),
+        "resource_icc_evidence_mismatch_count": (
+            resource_icc_ledger.get("mismatch_count")),
+        "resource_icc_evidence_missing_sidecars": (
+            resource_icc_ledger.get("missing_sidecars")),
+        "resource_icc_evidence_schema_mismatches": (
+            resource_icc_ledger.get("schema_mismatches")),
+        "resource_icc_evidence_mismatches": (
+            resource_icc_ledger.get("sidecar_mismatches")),
+        "resource_icc_evidence_overclaim_flags": (
+            resource_icc_ledger.get("overclaim_flags")),
         "moonlab_source_icc_evidence_required": (
             source_icc_ledger.get("required")),
         "moonlab_source_icc_evidence_recorded": (
@@ -1251,6 +1283,9 @@ def build_criteria(
     submission_bundle: dict[str, Any] | None = None,
     hardware_submission_scope: dict[str, Any] | None = None,
     artifact_paths: dict[str, str] | None = None,
+    registered_asset_intake: dict[str, Any] | None = None,
+    resource_icc_evidence: dict[str, Any] | None = None,
+    resource_icc_evidence_required: bool = False,
     source_icc_evidence: dict[str, Any] | None = None,
     source_icc_evidence_required: bool = False,
     asset_remediation: dict[str, Any] | None = None,
@@ -1381,6 +1416,16 @@ def build_criteria(
         dict_or_empty(submission_packet),
         dict_or_empty(job_results),
         dict_or_empty(hardware_submission_scope),
+    )
+    resource_icc_ledger_audit = (
+        qge_resource_icc_audit.resource_icc_evidence_audit
+    )(
+        inventory,
+        requirements,
+        dict_or_empty(registered_asset_intake),
+        dict_or_empty(resource_icc_evidence),
+        artifact_paths=paths,
+        required=resource_icc_evidence_required,
     )
     source_icc_ledger_audit = (
         qge_moonlab_source_icc_audit.source_icc_evidence_audit
@@ -1812,6 +1857,34 @@ def build_criteria(
             ),
         ),
         criterion(
+            "resource_icc_evidence_consistent",
+            bool_true(resource_icc_ledger_audit.get("passed")),
+            {
+                "resource_icc_evidence_required": (
+                    resource_icc_ledger_audit.get("required")),
+                "resource_icc_evidence_recorded": (
+                    resource_icc_ledger_audit.get("recorded")),
+                "resource_icc_evidence_expected_count": (
+                    resource_icc_ledger_audit.get("expected_sidecar_count")),
+                "resource_icc_evidence_recorded_count": (
+                    resource_icc_ledger_audit.get("recorded_sidecar_count")),
+                "resource_icc_evidence_mismatch_count": (
+                    resource_icc_ledger_audit.get("mismatch_count")),
+                "resource_icc_evidence_missing_sidecars": (
+                    resource_icc_ledger_audit.get("missing_sidecars")),
+                "resource_icc_evidence_schema_mismatches": (
+                    resource_icc_ledger_audit.get("schema_mismatches")),
+                "resource_icc_evidence_mismatches": (
+                    resource_icc_ledger_audit.get("sidecar_mismatches")),
+                "resource_icc_evidence_overclaim_flags": (
+                    resource_icc_ledger_audit.get("overclaim_flags")),
+            },
+            (
+                "Resource ICC sidecars are missing, stale, or contain claim "
+                "flags not present in their source ledgers"
+            ),
+        ),
+        criterion(
             "moonlab_source_icc_evidence_consistent",
             bool_true(source_icc_ledger_audit.get("passed")),
             {
@@ -1975,6 +2048,13 @@ def next_actions_for_blockers(
             "match the submission packet, scope, and retained simulator "
             "evidence."
         )
+    if "resource_icc_evidence_consistent" in failed_ids:
+        actions.append(
+            "Regenerate qge_asset_inventory_icc_evidence.json, "
+            "qge_asset_requirements_icc_evidence.json, and "
+            "qge_registered_asset_intake_icc_evidence.json from the current "
+            "resource ledgers so publication sidecars cannot drift."
+        )
     if "moonlab_source_icc_evidence_consistent" in failed_ids:
         actions.append(
             "Regenerate qge_moonlab_submission_bundle_icc_evidence.json, "
@@ -2017,6 +2097,9 @@ def build_gate(
     submission_bundle: dict[str, Any] | None = None,
     hardware_submission_scope: dict[str, Any] | None = None,
     artifact_paths: dict[str, str] | None = None,
+    registered_asset_intake: dict[str, Any] | None = None,
+    resource_icc_evidence: dict[str, Any] | None = None,
+    resource_icc_evidence_required: bool = False,
     source_icc_evidence: dict[str, Any] | None = None,
     source_icc_evidence_required: bool = False,
     resource_envelope: dict[str, Any] | None = None,
@@ -2036,6 +2119,9 @@ def build_gate(
         submission_bundle=submission_bundle,
         hardware_submission_scope=hardware_submission_scope,
         artifact_paths=artifact_paths,
+        registered_asset_intake=registered_asset_intake,
+        resource_icc_evidence=resource_icc_evidence,
+        resource_icc_evidence_required=resource_icc_evidence_required,
         source_icc_evidence=source_icc_evidence,
         source_icc_evidence_required=source_icc_evidence_required,
         asset_remediation=asset_remediation,
@@ -2076,9 +2162,12 @@ def build_gate(
             submission_packet,
             hardware_record_template,
             asset_remediation=asset_remediation,
+            registered_asset_intake=registered_asset_intake,
             submission_bundle=submission_bundle,
             hardware_submission_scope=hardware_submission_scope,
             artifact_paths=artifact_paths,
+            resource_icc_evidence=resource_icc_evidence,
+            resource_icc_evidence_required=resource_icc_evidence_required,
             source_icc_evidence=source_icc_evidence,
             source_icc_evidence_required=source_icc_evidence_required,
         ),
@@ -2146,6 +2235,34 @@ def build_gate_from_manifest(
         "moonlab_hardware_submission_scope",
         manifest_path=manifest_path,
     ) or {}
+    registered_asset_intake = qge_moonlab_full_game_plan.load_resource_json(
+        manifest,
+        "registered_asset_intake",
+        manifest_path=manifest_path,
+    ) or {}
+    resource_icc_evidence = {
+        "asset_inventory_icc_evidence": (
+            qge_moonlab_full_game_plan.load_resource_json(
+                manifest,
+                "asset_inventory_icc_evidence",
+                manifest_path=manifest_path,
+            ) or {}
+        ),
+        "asset_requirements_icc_evidence": (
+            qge_moonlab_full_game_plan.load_resource_json(
+                manifest,
+                "asset_requirements_icc_evidence",
+                manifest_path=manifest_path,
+            ) or {}
+        ),
+        "registered_asset_intake_icc_evidence": (
+            qge_moonlab_full_game_plan.load_resource_json(
+                manifest,
+                "registered_asset_intake_icc_evidence",
+                manifest_path=manifest_path,
+            ) or {}
+        ),
+    }
     source_icc_evidence = {
         "moonlab_submission_bundle_icc_evidence": (
             qge_moonlab_full_game_plan.load_resource_json(
@@ -2170,6 +2287,12 @@ def build_gate_from_manifest(
         ),
     }
     artifact_paths = {
+        "asset_inventory": resource_artifact_manifest_path(
+            manifest, "asset_inventory"),
+        "asset_requirements": resource_artifact_manifest_path(
+            manifest, "asset_requirements"),
+        "registered_asset_intake": resource_artifact_manifest_path(
+            manifest, "registered_asset_intake"),
         "moonlab_full_game_plan": resource_artifact_manifest_path(
             manifest, "moonlab_full_game_plan"),
         "moonlab_submission_packet": resource_artifact_manifest_path(
@@ -2199,6 +2322,9 @@ def build_gate_from_manifest(
         submission_bundle=submission_bundle,
         hardware_submission_scope=hardware_submission_scope,
         artifact_paths=artifact_paths,
+        registered_asset_intake=registered_asset_intake,
+        resource_icc_evidence=resource_icc_evidence,
+        resource_icc_evidence_required=True,
         source_icc_evidence=source_icc_evidence,
         source_icc_evidence_required=True,
         resource_envelope=resource_envelope,
@@ -2511,6 +2637,24 @@ def build_icc_evidence(
             "moonlab_hardware_result_row_mismatches"),
         "moonlab_hardware_result_duplicate_job_ids": summary.get(
             "moonlab_hardware_result_duplicate_job_ids"),
+        "resource_icc_evidence_required": summary.get(
+            "resource_icc_evidence_required"),
+        "resource_icc_evidence_recorded": summary.get(
+            "resource_icc_evidence_recorded"),
+        "resource_icc_evidence_expected_count": summary.get(
+            "resource_icc_evidence_expected_count"),
+        "resource_icc_evidence_recorded_count": summary.get(
+            "resource_icc_evidence_recorded_count"),
+        "resource_icc_evidence_mismatch_count": summary.get(
+            "resource_icc_evidence_mismatch_count"),
+        "resource_icc_evidence_missing_sidecars": summary.get(
+            "resource_icc_evidence_missing_sidecars"),
+        "resource_icc_evidence_schema_mismatches": summary.get(
+            "resource_icc_evidence_schema_mismatches"),
+        "resource_icc_evidence_mismatches": summary.get(
+            "resource_icc_evidence_mismatches"),
+        "resource_icc_evidence_overclaim_flags": summary.get(
+            "resource_icc_evidence_overclaim_flags"),
         "moonlab_source_icc_evidence_required": summary.get(
             "moonlab_source_icc_evidence_required"),
         "moonlab_source_icc_evidence_recorded": summary.get(
@@ -2678,6 +2822,16 @@ def markdown_report(gate: dict[str, Any]) -> str:
             f"{summary.get('moonlab_hardware_result_row_count')} "
             "mismatches="
             f"{summary.get('moonlab_hardware_result_ledger_mismatch_count')}"
+        ),
+        (
+            "Resource ICC sidecars: "
+            "recorded="
+            f"{summary.get('resource_icc_evidence_recorded')} "
+            "sidecars="
+            f"{summary.get('resource_icc_evidence_recorded_count')} "
+            f"/ {summary.get('resource_icc_evidence_expected_count')} "
+            "mismatches="
+            f"{summary.get('resource_icc_evidence_mismatch_count')}"
         ),
         (
             "Moonlab source ICC sidecars: "

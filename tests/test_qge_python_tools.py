@@ -3153,6 +3153,20 @@ class PublicationPackTests(unittest.TestCase):
                     moonlab_full_game_plan.build_icc_evidence(plan)),
             }
 
+        def resource_icc_for(
+            inventory: dict[str, object],
+            requirements: dict[str, object],
+            intake: dict[str, object],
+        ) -> dict[str, object]:
+            return {
+                "asset_inventory_icc_evidence": (
+                    asset_inventory.build_icc_evidence(inventory)),
+                "asset_requirements_icc_evidence": (
+                    asset_requirements.build_icc_evidence(requirements)),
+                "registered_asset_intake_icc_evidence": (
+                    registered_asset_intake.build_icc_evidence(intake)),
+            }
+
         partial_breadth = {
             "schema": "qge.breadth_evidence.v0",
             "matrix_runs": [
@@ -3236,6 +3250,11 @@ class PublicationPackTests(unittest.TestCase):
             registered_asset_intake=partial_registered_asset_intake,
         )
         partial_source_icc_evidence = source_icc_for(partial_plan)
+        partial_resource_icc_evidence = resource_icc_for(
+            partial_inventory,
+            partial_requirements,
+            partial_registered_asset_intake,
+        )
         partial_asset_remediation = (
             moonlab_deployment_gate.asset_remediation_from_intake(
                 partial_registered_asset_intake,
@@ -3257,6 +3276,9 @@ class PublicationPackTests(unittest.TestCase):
             hardware_template,
             submission_bundle=submission_bundle,
             hardware_submission_scope=hardware_submission_scope,
+            registered_asset_intake=partial_registered_asset_intake,
+            resource_icc_evidence=partial_resource_icc_evidence,
+            resource_icc_evidence_required=True,
             source_icc_evidence=partial_source_icc_evidence,
             source_icc_evidence_required=True,
             asset_remediation=partial_asset_remediation,
@@ -3531,6 +3553,16 @@ class PublicationPackTests(unittest.TestCase):
             0,
         )
         self.assertTrue(
+            blocked_gate["summary"]["resource_icc_evidence_recorded"])
+        self.assertEqual(
+            blocked_gate["summary"]["resource_icc_evidence_mismatch_count"],
+            0,
+        )
+        self.assertEqual(
+            blocked_gate["summary"]["resource_icc_evidence_recorded_count"],
+            3,
+        )
+        self.assertTrue(
             blocked_gate["summary"][
                 "moonlab_source_icc_evidence_recorded"])
         self.assertEqual(
@@ -3580,6 +3612,7 @@ class PublicationPackTests(unittest.TestCase):
             "Moonlab hardware submission scope ledger", blocked_markdown)
         self.assertIn(
             "Moonlab hardware result ledger", blocked_markdown)
+        self.assertIn("Resource ICC sidecars", blocked_markdown)
         self.assertIn("Moonlab source ICC sidecars", blocked_markdown)
         self.assertIn(
             "Covered route authority: 2 / 2 (complete=True)",
@@ -3712,6 +3745,11 @@ class PublicationPackTests(unittest.TestCase):
             0,
         )
         self.assertEqual(blocked_icc["moonlab_hardware_result_row_count"], 0)
+        self.assertTrue(blocked_icc["resource_icc_evidence_recorded"])
+        self.assertEqual(
+            blocked_icc["resource_icc_evidence_mismatch_count"],
+            0,
+        )
         self.assertTrue(blocked_icc["moonlab_source_icc_evidence_recorded"])
         self.assertEqual(
             blocked_icc["moonlab_source_icc_evidence_mismatch_count"],
@@ -3721,6 +3759,56 @@ class PublicationPackTests(unittest.TestCase):
             "qge_registered_asset_intake.py",
             blocked_icc["registered_asset_discovery_command"],
         )
+
+        stale_resource_icc_evidence = json.loads(
+            json.dumps(partial_resource_icc_evidence))
+        stale_resource_icc_evidence[
+            "asset_requirements_icc_evidence"
+        ]["missing_map_count"] = 0
+        stale_resource_icc_evidence[
+            "registered_asset_intake_icc_evidence"
+        ]["whole_game_hardware_execution_claimed"] = True
+        stale_resource_icc_gate = moonlab_deployment_gate.build_gate(
+            partial_coverage,
+            partial_inventory,
+            partial_requirements,
+            partial_plan,
+            job_specs,
+            job_results,
+            submission_packet,
+            hardware_template,
+            submission_bundle=submission_bundle,
+            hardware_submission_scope=hardware_submission_scope,
+            registered_asset_intake=partial_registered_asset_intake,
+            resource_icc_evidence=stale_resource_icc_evidence,
+            resource_icc_evidence_required=True,
+            source_icc_evidence=partial_source_icc_evidence,
+            source_icc_evidence_required=True,
+            asset_remediation=partial_asset_remediation,
+            source_path=Path("stale-resource-icc-pack"),
+        )
+        stale_resource_icc_blockers = {
+            item["id"] for item in stale_resource_icc_gate["blockers"]
+        }
+        self.assertIn(
+            "resource_icc_evidence_consistent",
+            stale_resource_icc_blockers,
+        )
+        stale_resource_icc_criterion = next(
+            item for item in stale_resource_icc_gate["criteria"]
+            if item["id"] == "resource_icc_evidence_consistent")
+        self.assertEqual(stale_resource_icc_criterion["status"], "blocked")
+        self.assertTrue(any(
+            item.get("sidecar") == "asset_requirements_icc_evidence"
+            and "missing_map_count" in item.get("fields", [])
+            for item in stale_resource_icc_criterion[
+                "resource_icc_evidence_mismatches"]
+        ))
+        self.assertTrue(any(
+            flag.get("flag") == "whole_game_hardware_execution_claimed"
+            for flag in stale_resource_icc_criterion[
+                "resource_icc_evidence_overclaim_flags"]
+        ))
 
         stale_plan = moonlab_full_game_plan.build_plan(
             partial_coverage,

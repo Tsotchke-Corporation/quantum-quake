@@ -1524,6 +1524,9 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         submission_bundle=moonlab_submission_bundle,
         hardware_submission_scope=moonlab_hardware_submission_scope,
         artifact_paths={
+            "asset_inventory": str(asset_inventory_path),
+            "asset_requirements": str(asset_requirements_path),
+            "registered_asset_intake": str(registered_asset_intake_path),
             "moonlab_full_game_plan": str(moonlab_full_game_plan_path),
             "moonlab_submission_packet": str(moonlab_submission_packet_path),
             "moonlab_submission_bundle": str(moonlab_submission_bundle_path),
@@ -1532,6 +1535,14 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "moonlab_hardware_submission_scope": str(
                 moonlab_hardware_submission_scope_path),
         },
+        registered_asset_intake=registered_asset_intake,
+        resource_icc_evidence={
+            "asset_inventory_icc_evidence": asset_inventory_icc,
+            "asset_requirements_icc_evidence": asset_requirements_icc,
+            "registered_asset_intake_icc_evidence": (
+                registered_asset_intake_icc),
+        },
+        resource_icc_evidence_required=True,
         source_icc_evidence={
             "moonlab_submission_bundle_icc_evidence": (
                 moonlab_submission_bundle_icc),

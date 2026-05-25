@@ -315,7 +315,9 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      hardware backend result row must also match that bounded packet/scope
      before the full-game deployment gate can pass, and the Moonlab source ICC
      sidecars must match the current full-game plan, submission bundle, and
-     hardware-submission scope ledgers.
+     hardware-submission scope ledgers. Resource ICC sidecars must likewise
+     match the current asset inventory, asset requirements, and registered
+     asset-intake ledgers.
    - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
      and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
      scanning bounded candidate directories. The intake artifact records
