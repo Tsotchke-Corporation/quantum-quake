@@ -339,6 +339,8 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      from the packed intake ledger. Packed Markdown evidence reports must
      regenerate from their source JSON ledgers, and Moonlab `.moonlab` circuit
      body files must match the size and SHA-256 recorded by their JSON ledgers.
+     Generated advantage files (`qae_curve.csv`, `qae_circuit.txt`, and
+     scaling summaries) must regenerate from `advantage_metrics.json`.
    - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
      and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
      scanning bounded candidate directories. The intake artifact records

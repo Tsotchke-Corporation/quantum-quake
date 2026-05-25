@@ -21,6 +21,7 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 import qge_advantage_benchmark as advantage  # noqa: E402
+import qge_advantage_generated_file_audit as advantage_generated_file_audit  # noqa: E402
 import qge_asset_inventory as asset_inventory  # noqa: E402
 import qge_asset_requirements as asset_requirements  # noqa: E402
 import qge_breadth_evidence as breadth_evidence  # noqa: E402
@@ -1285,6 +1286,149 @@ class PublicationPackTests(unittest.TestCase):
             self.assertIn(
                 "size_bytes",
                 stale_audit["circuit_mismatches"][0]["fields"],
+            )
+
+    def test_advantage_generated_file_audit_detects_stale_artifact(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            metrics = {
+                "advantage_problem_id": "advantage.unit",
+                "oracle": {
+                    "oracle_kind": "bernoulli_lifted_test",
+                },
+                "resource_estimate": {
+                    "candidate_index_bits": 2,
+                    "contribution_threshold_bits": 3,
+                    "logical_qubits": 8,
+                    "one_qubit_gates": 21,
+                    "two_qubit_gates": 13,
+                    "circuit_depth": 55,
+                },
+                "quantum_estimators": [
+                    {
+                        "grover_powers": [0, 1],
+                        "shots_per_power": 16,
+                        "controlled_oracle_calls": 64,
+                    },
+                ],
+                "trial_records": {
+                    "classical_baselines": [
+                        {
+                            "trial": 0,
+                            "algorithm": "classical_mc",
+                            "samples": 16,
+                            "shots": None,
+                            "oracle_eval_count": 16,
+                            "estimate": 0.5,
+                            "reference_value": 0.5,
+                            "absolute_delta": 0.0,
+                            "rmse": 0.0,
+                            "seed": 17,
+                            "trial_seed": 7,
+                        },
+                    ],
+                    "quantum_estimators": [
+                        {
+                            "trial": 0,
+                            "algorithm": "mlae_simulator",
+                            "samples": None,
+                            "shots": 32,
+                            "oracle_eval_count": 64,
+                            "estimate": 0.5,
+                            "reference_value": 0.5,
+                            "absolute_delta": 0.0,
+                            "rmse": 0.0,
+                            "seed": 19,
+                            "trial_seed": 7,
+                        },
+                    ],
+                },
+                "scaling_summary": {
+                    "trial_count": 1,
+                    "confidence_level": 0.95,
+                    "classical_baselines": [
+                        {
+                            "algorithm": "classical_mc",
+                            "samples": 16,
+                            "shots": None,
+                            "oracle_eval_count": 16,
+                            "trial_count": 1,
+                            "mean_estimate": 0.5,
+                            "mean_reference_value": 0.5,
+                            "mean_absolute_delta": 0.0,
+                            "rmse": 0.0,
+                            "std_absolute_delta": 0.0,
+                            "stderr_absolute_delta": 0.0,
+                            "ci95_absolute_delta": 0.0,
+                            "min_absolute_delta": 0.0,
+                            "max_absolute_delta": 0.0,
+                            "trial_seeds": [7],
+                        },
+                    ],
+                    "quantum_estimators": [
+                        {
+                            "algorithm": "mlae_simulator",
+                            "samples": None,
+                            "shots": 32,
+                            "oracle_eval_count": 64,
+                            "trial_count": 1,
+                            "mean_estimate": 0.5,
+                            "mean_reference_value": 0.5,
+                            "mean_absolute_delta": 0.0,
+                            "rmse": 0.0,
+                            "std_absolute_delta": 0.0,
+                            "stderr_absolute_delta": 0.0,
+                            "ci95_absolute_delta": 0.0,
+                            "min_absolute_delta": 0.0,
+                            "max_absolute_delta": 0.0,
+                            "trial_seeds": [7],
+                        },
+                    ],
+                },
+            }
+            artifact_paths = {
+                name: tmpdir / filename
+                for name, filename in (
+                    advantage_generated_file_audit
+                    .GENERATED_FILENAMES.items())
+            }
+            advantage_generated_file_audit.write_expected_generated_artifacts(
+                metrics,
+                artifact_paths,
+            )
+
+            audit = (
+                advantage_generated_file_audit
+                .advantage_generated_file_audit(metrics, artifact_paths)
+            )
+            self.assertTrue(audit["passed"])
+            self.assertEqual(audit["recorded_artifact_count"], 4)
+            self.assertEqual(audit["mismatch_count"], 0)
+
+            artifact_paths["qae_circuit"].write_text(
+                artifact_paths["qae_circuit"].read_text(encoding="utf-8") +
+                "STALE\n",
+                encoding="utf-8",
+            )
+            stale_audit = (
+                advantage_generated_file_audit
+                .advantage_generated_file_audit(metrics, artifact_paths)
+            )
+            self.assertFalse(stale_audit["passed"])
+            self.assertEqual(stale_audit["mismatch_count"], 1)
+            self.assertEqual(
+                stale_audit["content_mismatches"][0]["artifact"],
+                "qae_circuit",
+            )
+            self.assertIn(
+                "sha256",
+                stale_audit["content_mismatches"][0]["fields"],
+            )
+            self.assertIn(
+                "size_bytes",
+                stale_audit["content_mismatches"][0]["fields"],
             )
 
     def test_registered_asset_script_audit_detects_stale_script(
