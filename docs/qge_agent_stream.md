@@ -437,7 +437,9 @@ Each covered matrix is audited against its route contract's required authority
 domains, so the aggregate reports `route_contract_authority_ready_run_count`
 and blocks on `route_contract_authority_not_ready` if render, visibility,
 projectile, audio, route-observation, AI, or special-route evidence is missing
-for that map class.
+for that map class. The per-domain proof rows are emitted as `domain_checks`
+so ICC runtime evidence does not mistake positive authority counters for
+generic failure-status fields.
 Use `--min-maps` when the artifact needs to prove breadth across distinct maps
 instead of repeated captures of one map.
 `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>` turns
@@ -456,11 +458,13 @@ Noesis-fire authority-smoke profile by default, gives `start` the dedicated
 orders combat maps before noncombat/endgame maps, marks `end` as
 `special_route_required`, and now attaches a route contract to every queued
 registered map. The Moonlab full-game deployment plan carries the same
-per-map contract ledger, and the deployment gate blocks if the ledger is
-missing or incomplete, or if a covered map lacks route-contract-authority-ready
-breadth evidence. Each contract records the episode/slot, route class, route
-profile, combat requirement, special-route requirement, and authority domains
-that must survive the capture. The generated shell script echoes
+per-map contract ledger under `map_deployment_rows`, and the deployment gate
+blocks if the ledger is missing or incomplete, or if a covered map lacks
+route-contract-authority-ready breadth evidence. The gate reports resource
+blockers as `blocked` statuses, reserving generic failure events for crashed or
+invalid runtime evidence. Each contract records the episode/slot, route class,
+route profile, combat requirement, special-route requirement, and authority
+domains that must survive the capture. The generated shell script echoes
 `QGE_FULL_GAME_CAPTURE_ROUTE_PROFILE` and `QGE_FULL_GAME_CAPTURE_ROUTE_CLASS`
 before each run, then rebuilds breadth evidence with the previous ready
 matrices plus the new capture directories. The `start` route is allowed to omit

@@ -30,7 +30,7 @@ import qge_registered_asset_intake  # noqa: E402
 
 
 PASS = "pass"
-FAIL = "fail"
+BLOCKED = "blocked"
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -209,7 +209,7 @@ def criterion(
 ) -> dict[str, Any]:
     return {
         "id": criterion_id,
-        "status": PASS if passed else FAIL,
+        "status": PASS if passed else BLOCKED,
         "blocker": None if passed else blocker,
         **summary,
     }

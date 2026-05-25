@@ -2588,13 +2588,17 @@ class PublicationPackTests(unittest.TestCase):
             plan["covered_route_contract_authority_ready_count"], 2)
         self.assertFalse(
             plan["claim_posture"]["whole_game_moonlab_deployment_claimed"])
+        self.assertNotIn("map_status", plan)
         start = next(
-            row for row in plan["map_status"] if row["map"] == "start")
+            row for row in plan["map_deployment_rows"]
+            if row["map"] == "start")
         self.assertEqual(
             start["deployment_status"],
             "simulator_native_evidence_present")
         self.assertEqual(start["evidence"][0]["fallback_count"], 0)
-        e1m2 = next(row for row in plan["map_status"] if row["map"] == "e1m2")
+        e1m2 = next(
+            row for row in plan["map_deployment_rows"]
+            if row["map"] == "e1m2")
         self.assertEqual(e1m2["deployment_status"], "capture_required")
         self.assertEqual(
             e1m2["route_contract"]["map_class"], "registered_combat")
@@ -2868,6 +2872,14 @@ class PublicationPackTests(unittest.TestCase):
         self.assertNotIn("full_game_route_contracts_complete", blocker_ids)
         self.assertNotIn(
             "covered_route_contract_authority_complete", blocker_ids)
+        self.assertTrue(all(
+            item["status"] == "blocked"
+            for item in blocked_gate["blockers"]
+        ))
+        self.assertNotIn(
+            "fail",
+            {item["status"] for item in blocked_gate["criteria"]},
+        )
         route_criterion = next(
             item for item in blocked_gate["criteria"]
             if item["id"] == "full_game_route_contracts_complete")
@@ -3982,11 +3994,15 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertTrue(
                 manifest["matrix_runs"][0][
                     "route_contract_authority_ready"])
+            route_authority = (
+                manifest["matrix_runs"][0]["route_contract_authority"])
             self.assertIn(
                 "ai_authority",
-                manifest["matrix_runs"][0]["route_contract_authority"]
-                ["required_authority_domains"],
+                route_authority["required_authority_domains"],
             )
+            self.assertIn("domain_checks", route_authority)
+            self.assertNotIn("domain_status", route_authority)
+            self.assertTrue(route_authority["domain_checks"])
             self.assertEqual(
                 manifest["full_game_coverage"]["schema"],
                 "qge.full_game_map_coverage.v0",

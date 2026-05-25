@@ -113,10 +113,10 @@ def route_contract_authority_audit(
             "ready": False,
             "map": None,
             "blockers": ["canonical_map_missing"],
-            "domain_status": [],
+            "domain_checks": [],
         }
     contract = route_contract_for_map(map_name)
-    domain_status = []
+    domain_checks = []
     blockers = []
     for authority_domain in contract["authority_domains"]:
         matrix_domain = matrix_domain_for_authority_domain(authority_domain)
@@ -127,7 +127,7 @@ def route_contract_authority_audit(
             blockers.append(f"{authority_domain}:matrix_domain_missing")
         elif not ready:
             blockers.append(f"{authority_domain}:matrix_domain_not_ready")
-        domain_status.append({
+        domain_checks.append({
             "authority_domain": authority_domain,
             "matrix_domain": matrix_domain,
             "ready": ready,
@@ -140,7 +140,7 @@ def route_contract_authority_audit(
         "map": map_name,
         "route_contract": contract,
         "required_authority_domains": contract["authority_domains"],
-        "domain_status": domain_status,
+        "domain_checks": domain_checks,
         "ready": not blockers,
         "blockers": blockers,
     }

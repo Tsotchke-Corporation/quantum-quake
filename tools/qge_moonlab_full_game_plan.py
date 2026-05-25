@@ -181,7 +181,7 @@ def map_evidence_summary(run: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def map_status_rows(
+def map_deployment_rows(
     coverage: dict[str, Any],
     inventory: dict[str, Any],
     breadth_evidence: dict[str, Any] | None,
@@ -366,7 +366,7 @@ def build_plan(
     submission_packet: dict[str, Any] | None = None,
     hardware_record_template: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    rows = map_status_rows(coverage, inventory, breadth_evidence)
+    rows = map_deployment_rows(coverage, inventory, breadth_evidence)
     status = deployment_status(rows, coverage)
     capture_required = [
         row["map"] for row in rows
@@ -436,7 +436,7 @@ def build_plan(
         "covered_route_contract_authority_blocked_maps": (
             covered_route_authority_blocked_maps),
         "route_contracts": route_contracts,
-        "map_status": rows,
+        "map_deployment_rows": rows,
         "deployment_requirements": build_deployment_requirements(
             status=status,
             coverage=coverage,
@@ -566,7 +566,7 @@ def markdown_report(plan: dict[str, Any]) -> str:
         "| Map | Coverage | Asset | Route Class | Deployment Status | Next Action |",
         "| --- | --- | --- | --- | --- | --- |",
     ]
-    for row in list_or_empty(plan.get("map_status")):
+    for row in list_or_empty(plan.get("map_deployment_rows")):
         if not isinstance(row, dict):
             continue
         route_contract = dict_or_empty(row.get("route_contract"))
