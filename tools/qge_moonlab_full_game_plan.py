@@ -198,6 +198,8 @@ def map_status_rows(
     for map_name in target_maps:
         evidence = [map_evidence_summary(run)
                     for run in runs_by_map.get(map_name, [])]
+        route_contract = qge_full_game_capture_queue.route_contract_for_map(
+            map_name)
         is_covered = map_name in covered
         has_asset = map_name in available
         if is_covered:
@@ -213,8 +215,8 @@ def map_status_rows(
             "map": map_name,
             "coverage_status": "covered" if is_covered else "missing",
             "asset_status": "available" if has_asset else "asset_unavailable",
-            "route_profile": qge_full_game_capture_queue.route_profile_for_map(
-                map_name),
+            "route_profile": route_contract["route_profile"],
+            "route_contract": route_contract,
             "deployment_status": deployment_status,
             "evidence": evidence,
             "next_action": next_action,
@@ -255,6 +257,15 @@ def build_deployment_requirements(
         row["map"] for row in map_rows
         if row.get("deployment_status") == "blocked_asset_unavailable"
     ]
+    missing_route_contracts = [
+        row["map"] for row in map_rows
+        if not dict_or_empty(row.get("route_contract"))
+    ]
+    route_contract_count = len(map_rows) - len(missing_route_contracts)
+    route_contracts_complete = (
+        route_contract_count == len(map_rows) and
+        not missing_route_contracts
+    )
     job_results = dict_or_empty(moonlab_job_results)
     packet = dict_or_empty(submission_packet)
     template = dict_or_empty(hardware_record_template)
@@ -278,6 +289,15 @@ def build_deployment_requirements(
             "covered_map_count": coverage.get("covered_map_count"),
             "target_map_count": coverage.get("target_map_count"),
             "capture_required_maps": capture_required,
+        },
+        {
+            "id": "full_game_route_contracts",
+            "status": "pass" if route_contracts_complete else "blocked",
+            "route_contract_schema": (
+                qge_full_game_capture_queue.ROUTE_CONTRACT_SCHEMA),
+            "route_contract_map_count": route_contract_count,
+            "target_map_count": len(map_rows),
+            "missing_route_contract_maps": missing_route_contracts,
         },
         {
             "id": "moonlab_selected_jobs_replayable",
@@ -332,6 +352,21 @@ def build_plan(
         row["map"] for row in rows
         if row.get("deployment_status") == "blocked_asset_unavailable"
     ]
+    route_contracts = {
+        row["map"]: row["route_contract"]
+        for row in rows
+        if isinstance(row.get("map"), str) and
+        dict_or_empty(row.get("route_contract"))
+    }
+    missing_route_contract_maps = [
+        row["map"] for row in rows
+        if isinstance(row.get("map"), str) and
+        not dict_or_empty(row.get("route_contract"))
+    ]
+    route_contracts_complete = (
+        len(route_contracts) == len(rows) and
+        not missing_route_contract_maps
+    )
     return {
         "schema": "qge.moonlab_full_game_deployment_plan.v0",
         "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -347,6 +382,12 @@ def build_plan(
         "capture_required_maps": capture_required,
         "asset_unavailable_map_count": len(asset_unavailable),
         "asset_unavailable_maps": asset_unavailable,
+        "route_contract_schema": (
+            qge_full_game_capture_queue.ROUTE_CONTRACT_SCHEMA),
+        "route_contract_map_count": len(route_contracts),
+        "route_contracts_complete": route_contracts_complete,
+        "missing_route_contract_maps": missing_route_contract_maps,
+        "route_contracts": route_contracts,
         "map_status": rows,
         "deployment_requirements": build_deployment_requirements(
             status=status,
@@ -429,6 +470,11 @@ def build_icc_evidence(
         "asset_unavailable_map_count": plan.get(
             "asset_unavailable_map_count"),
         "capture_required_map_count": plan.get("capture_required_map_count"),
+        "route_contract_schema": plan.get("route_contract_schema"),
+        "route_contract_map_count": plan.get("route_contract_map_count"),
+        "route_contracts_complete": plan.get("route_contracts_complete"),
+        "missing_route_contract_maps": plan.get(
+            "missing_route_contract_maps"),
         "whole_game_moonlab_deployment_claimed": False,
         "whole_game_hardware_execution_claimed": False,
         "hardware_quantum_advantage_claimed": False,
@@ -452,15 +498,23 @@ def markdown_report(plan: dict[str, Any]) -> str:
             f"{plan.get('asset_unavailable_map_count')} |"
         ),
         "",
-        "| Map | Coverage | Asset | Deployment Status | Next Action |",
-        "| --- | --- | --- | --- | --- |",
+        (
+            f"Route contracts: {plan.get('route_contract_map_count')} "
+            f"(complete={plan.get('route_contracts_complete')})"
+        ),
+        "",
+        "| Map | Coverage | Asset | Route Class | Deployment Status | Next Action |",
+        "| --- | --- | --- | --- | --- | --- |",
     ]
     for row in list_or_empty(plan.get("map_status")):
         if not isinstance(row, dict):
             continue
+        route_contract = dict_or_empty(row.get("route_contract"))
         lines.append(
             f"| {row.get('map')} | {row.get('coverage_status')} | "
-            f"{row.get('asset_status')} | {row.get('deployment_status')} | "
+            f"{row.get('asset_status')} | "
+            f"{route_contract.get('map_class') or ''} | "
+            f"{row.get('deployment_status')} | "
             f"{row.get('next_action')} |"
         )
     lines.extend([

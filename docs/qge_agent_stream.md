@@ -450,9 +450,11 @@ Noesis-fire authority-smoke profile by default, gives `start` the dedicated
 `start_hub_route_authority_smoke` route with `QGE_NOESIS_PLAN=start-hub-route`,
 orders combat maps before noncombat/endgame maps, marks `end` as
 `special_route_required`, and now attaches a route contract to every queued
-registered map. Each contract records the episode/slot, route class, route
-profile, combat requirement, special-route requirement, and authority domains
-that must survive the capture. The generated shell script echoes
+registered map. The Moonlab full-game deployment plan carries the same
+per-map contract ledger, and the deployment gate blocks if the ledger is
+missing or incomplete. Each contract records the episode/slot, route class,
+route profile, combat requirement, special-route requirement, and authority
+domains that must survive the capture. The generated shell script echoes
 `QGE_FULL_GAME_CAPTURE_ROUTE_PROFILE` and `QGE_FULL_GAME_CAPTURE_ROUTE_CLASS`
 before each run, then rebuilds breadth evidence with the previous ready
 matrices plus the new capture directories. The `start` route is allowed to omit

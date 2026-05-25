@@ -673,11 +673,13 @@ Known current visual state:
   all 32 canonical registered maps. Queued jobs record route class, episode/slot,
   route profile, combat/special-route requirements, and authority domains, and
   the generated script prints route profile/class markers before each harness
-  run. This keeps the post-asset capture path explicit instead of a generic
-  one-profile queue.
+  run. The Moonlab full-game deployment plan repeats that route-contract ledger,
+  and the deployment gate requires it to be complete before the whole-game
+  simulator/native deployment claim can become ready. This keeps the post-asset
+  capture path explicit instead of a generic one-profile queue.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
-  publication pack is `diagnostics/publication_pack/20260524-asset-gate-remediation`, with
+  publication pack is `diagnostics/publication_pack/20260525-route-contract-gate`, with
   `qge_publication_artifact_pack_complete`, the e1m1 ready vanilla/QGE capture,
   vanilla ICC evidence sidecar, agent stream, oracle/claims exports, QAE
   benchmark artifacts, `resource/qge_resource_envelope.json`,

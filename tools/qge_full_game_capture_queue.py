@@ -63,6 +63,7 @@ BASE_AUTHORITY_DOMAINS = [
     "audio_source_authority",
     "noesis_route_observation",
 ]
+ROUTE_CONTRACT_SCHEMA = "qge.full_game_capture_route_contract.v0"
 DEFAULT_ASSET_ROOT = REPO_ROOT / "assets" / "id1"
 QUAKE_BSP_VERSION = 29
 BSP_LUMP_COUNT = 15
@@ -514,7 +515,7 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
         "special_maps_last": special_maps_last,
         "special_route_maps": sorted(SPECIAL_ROUTE_MAPS),
         "start_hub_route_maps": sorted(START_HUB_ROUTE_MAPS),
-        "route_contract_schema": "qge.full_game_capture_route_contract.v0",
+        "route_contract_schema": ROUTE_CONTRACT_SCHEMA,
         "route_contract_map_count": len(route_contracts),
         "route_contracts_complete": not missing_route_contract_maps,
         "missing_route_contract_maps": missing_route_contract_maps,

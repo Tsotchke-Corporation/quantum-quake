@@ -51,7 +51,7 @@ when all of these are true:
 
 The full-port acceptance target is the ICC completion oracle
 `qge_vanilla_quake_conformance`. As of
-`diagnostics/publication_pack/20260524-asset-gate-remediation`, ICC reports
+`diagnostics/publication_pack/20260525-route-contract-gate`, ICC reports
 `qge_vanilla_runtime_complete` ready for the bundled e1m1 QGE/vanilla capture
 matrix. That evidence proves the ownership counters for the captured workload;
 it does not by itself close renderer fidelity, all-map breadth, or whole-game
@@ -69,10 +69,12 @@ ledger for the entire registered map set: which maps already have strict
 simulator/native capture evidence, which maps would become capture jobs if
 assets existed locally, and which maps are blocked by unavailable registered
 BSP assets.
-The post-asset capture queue now has a route-contract ledger for all 32
-canonical registered maps, so queued jobs carry explicit route class,
-episode/slot, combat/special-route requirements, and authority-domain
-requirements instead of relying on one generic missing-map smoke profile.
+The post-asset capture queue and Moonlab full-game deployment plan now share a
+route-contract ledger for all 32 canonical registered maps, so queued jobs and
+the final claim gate carry explicit route class, episode/slot,
+combat/special-route requirements, and authority-domain requirements instead of
+relying on one generic missing-map smoke profile. The gate remains blocked if a
+future plan lacks that complete route-contract ledger.
 `resource/qge_moonlab_deployment_gate.json` is the fail-closed claim gate for
 the sentence "the entire game runs in Moonlab." It is currently `blocked`
 because coverage is 9/32, the remaining 23 registered BSP assets are
@@ -303,7 +305,7 @@ A complete port is credible when these are true:
 
 1. Expand the ready matrix beyond the current 9/32 partial full-game map
    coverage ledger. Re-run the missing-map queue with
-   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-asset-gate-remediation`
+   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260525-route-contract-gate`
    after installing registered BSP assets. With the current `assets/id1/pak0.pak`,
    the queue has zero locally runnable missing maps and 23 registered maps
    require additional registered BSP assets before capture. Use

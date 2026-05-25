@@ -24,6 +24,7 @@ if str(SCRIPT_DIR) not in sys.path:
 import qge_asset_inventory  # noqa: E402
 import qge_asset_requirements  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
+import qge_full_game_capture_queue  # noqa: E402
 import qge_moonlab_full_game_plan  # noqa: E402
 import qge_registered_asset_intake  # noqa: E402
 
@@ -324,6 +325,13 @@ def gate_summary(
             "missing_map_count"),
         "asset_requirements_missing_maps": requirements.get("missing_maps"),
         "moonlab_full_game_plan_status": full_game_plan.get("status"),
+        "route_contract_schema": full_game_plan.get("route_contract_schema"),
+        "route_contract_map_count": full_game_plan.get(
+            "route_contract_map_count"),
+        "route_contracts_complete": full_game_plan.get(
+            "route_contracts_complete"),
+        "missing_route_contract_maps": full_game_plan.get(
+            "missing_route_contract_maps"),
         "capture_required_map_count": full_game_plan.get(
             "capture_required_map_count"),
         "capture_required_maps": full_game_plan.get("capture_required_maps"),
@@ -442,10 +450,27 @@ def build_criteria(
         "capture_required_map_count"))
     asset_unavailable = int_or_none(full_game_plan.get(
         "asset_unavailable_map_count"))
+    plan_target_count = int_or_none(full_game_plan.get("target_map_count"))
+    expected_route_contract_count = (
+        target_count if target_count is not None else plan_target_count
+    )
+    route_contract_count = int_or_none(full_game_plan.get(
+        "route_contract_map_count"))
+    missing_route_contract_maps = list_or_empty(full_game_plan.get(
+        "missing_route_contract_maps"))
+    route_contracts_passed = (
+        full_game_plan.get("route_contract_schema") ==
+        qge_full_game_capture_queue.ROUTE_CONTRACT_SCHEMA and
+        bool_true(full_game_plan.get("route_contracts_complete")) and
+        expected_route_contract_count is not None and
+        route_contract_count == expected_route_contract_count and
+        not missing_route_contract_maps
+    )
     plan_passed = (
         full_game_plan.get("schema") ==
         "qge.moonlab_full_game_deployment_plan.v0" and
         full_game_plan.get("status") == "map_coverage_complete" and
+        route_contracts_passed and
         capture_required == 0 and
         asset_unavailable == 0
     )
@@ -531,6 +556,20 @@ def build_criteria(
             "registered asset requirements are not satisfied",
         ),
         criterion(
+            "full_game_route_contracts_complete",
+            route_contracts_passed,
+            {
+                "route_contract_schema": full_game_plan.get(
+                    "route_contract_schema"),
+                "route_contract_map_count": route_contract_count,
+                "target_map_count": expected_route_contract_count,
+                "route_contracts_complete": full_game_plan.get(
+                    "route_contracts_complete"),
+                "missing_route_contract_maps": missing_route_contract_maps,
+            },
+            "full-game route contract ledger is missing or incomplete",
+        ),
+        criterion(
             "full_game_deployment_plan_complete",
             plan_passed,
             {
@@ -611,6 +650,10 @@ def next_actions_for_blockers(
     if "asset_requirements_satisfied" in failed_ids:
         actions.append(
             "Resolve every missing maps/*.bsp entry listed by qge_asset_requirements.json before weakening no-claim posture."
+        )
+    if "full_game_route_contracts_complete" in failed_ids:
+        actions.append(
+            "Regenerate qge_moonlab_full_game_plan.json so every canonical map has a full-game route contract before claiming Moonlab deployment readiness."
         )
     if "full_game_deployment_plan_complete" in failed_ids:
         if queue_command:
@@ -852,6 +895,14 @@ def build_icc_evidence(
             "capture_required_map_count"),
         "asset_unavailable_map_count": summary.get(
             "asset_unavailable_map_count"),
+        "full_game_route_contract_schema": summary.get(
+            "route_contract_schema"),
+        "full_game_route_contract_map_count": summary.get(
+            "route_contract_map_count"),
+        "full_game_route_contracts_complete": summary.get(
+            "route_contracts_complete"),
+        "full_game_missing_route_contract_maps": summary.get(
+            "missing_route_contract_maps"),
         "selected_job_count": summary.get("selected_job_count"),
         "completed_simulator_job_count": summary.get(
             "completed_simulator_job_count"),
@@ -903,6 +954,11 @@ def markdown_report(gate: dict[str, Any]) -> str:
             f"{summary.get('coverage_missing_map_count')} | "
             f"{summary.get('asset_missing_map_count')} | "
             f"{summary.get('invalid_bsp_count')} |"
+        ),
+        "",
+        (
+            f"Route contracts: {summary.get('route_contract_map_count')} "
+            f"(complete={summary.get('route_contracts_complete')})"
         ),
         "",
         "| Criterion | Status | Blocker |",

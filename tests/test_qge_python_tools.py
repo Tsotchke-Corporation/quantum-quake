@@ -2560,6 +2560,13 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(plan["covered_map_count"], 2)
         self.assertEqual(plan["capture_required_maps"], ["e1m2"])
         self.assertIn("e2m1", plan["asset_unavailable_maps"])
+        self.assertEqual(
+            plan["route_contract_schema"],
+            full_game_capture_queue.ROUTE_CONTRACT_SCHEMA,
+        )
+        self.assertEqual(plan["route_contract_map_count"], 32)
+        self.assertTrue(plan["route_contracts_complete"])
+        self.assertEqual(plan["missing_route_contract_maps"], [])
         self.assertFalse(
             plan["claim_posture"]["whole_game_moonlab_deployment_claimed"])
         start = next(
@@ -2570,15 +2577,21 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(start["evidence"][0]["fallback_count"], 0)
         e1m2 = next(row for row in plan["map_status"] if row["map"] == "e1m2")
         self.assertEqual(e1m2["deployment_status"], "capture_required")
+        self.assertEqual(
+            e1m2["route_contract"]["map_class"], "registered_combat")
+        self.assertIn(
+            "ai_authority", e1m2["route_contract"]["authority_domains"])
         icc = moonlab_full_game_plan.build_icc_evidence(
             plan, out_path=Path("qge_moonlab_full_game_plan.json"))
         self.assertEqual(
             icc["runtime_backend"], "qge_moonlab_full_game_plan")
         self.assertEqual(icc["capture_required_map_count"], 1)
+        self.assertTrue(icc["route_contracts_complete"])
         self.assertFalse(icc["whole_game_hardware_execution_claimed"])
-        self.assertIn(
-            "blocked_asset_unavailable",
-            moonlab_full_game_plan.markdown_report(plan))
+        markdown = moonlab_full_game_plan.markdown_report(plan)
+        self.assertIn("blocked_asset_unavailable", markdown)
+        self.assertIn("Route contracts: 32 (complete=True)", markdown)
+        self.assertIn("registered_combat", markdown)
 
         with tempfile.TemporaryDirectory() as tmp:
             tmpdir = Path(tmp)
@@ -2654,6 +2667,7 @@ class PublicationPackTests(unittest.TestCase):
             self.assertEqual(
                 cli_plan["schema"],
                 "qge.moonlab_full_game_deployment_plan.v0")
+            self.assertTrue(cli_plan["route_contracts_complete"])
             cli_icc = publication_pack.load_json(icc_path)
             self.assertEqual(
                 cli_icc["deployment_status"], "blocked_asset_unavailable")
@@ -2816,6 +2830,11 @@ class PublicationPackTests(unittest.TestCase):
         self.assertIn("registered_bsp_assets_ready", blocker_ids)
         self.assertIn("asset_requirements_satisfied", blocker_ids)
         self.assertIn("full_game_deployment_plan_complete", blocker_ids)
+        self.assertNotIn("full_game_route_contracts_complete", blocker_ids)
+        route_criterion = next(
+            item for item in blocked_gate["criteria"]
+            if item["id"] == "full_game_route_contracts_complete")
+        self.assertEqual(route_criterion["status"], "pass")
         self.assertEqual(
             blocked_gate["asset_remediation"][
                 "registered_asset_install_script"],
@@ -2849,6 +2868,9 @@ class PublicationPackTests(unittest.TestCase):
         self.assertTrue(
             blocked_gate["summary"][
                 "registered_asset_intake_no_candidate_asset_copy_plan"])
+        self.assertTrue(blocked_gate["summary"]["route_contracts_complete"])
+        self.assertEqual(
+            blocked_gate["summary"]["route_contract_map_count"], 32)
         self.assertTrue(
             blocked_gate["summary"][
                 "registered_asset_discovery_command_present"])
@@ -2878,6 +2900,7 @@ class PublicationPackTests(unittest.TestCase):
         self.assertIn("## Asset Remediation", blocked_markdown)
         self.assertIn("install_registered_assets.sh", blocked_markdown)
         self.assertIn("copy script mode", blocked_markdown)
+        self.assertIn("Route contracts: 32 (complete=True)", blocked_markdown)
         self.assertIn("discovery refresh", blocked_markdown)
         blocked_icc = moonlab_deployment_gate.build_icc_evidence(
             blocked_gate,
@@ -2904,6 +2927,10 @@ class PublicationPackTests(unittest.TestCase):
         self.assertTrue(
             blocked_icc[
                 "registered_asset_intake_no_candidate_asset_copy_plan"])
+        self.assertTrue(
+            blocked_icc["full_game_route_contracts_complete"])
+        self.assertEqual(
+            blocked_icc["full_game_route_contract_map_count"], 32)
         self.assertIn(
             "qge_registered_asset_intake.py",
             blocked_icc["registered_asset_discovery_command"],
@@ -2966,6 +2993,7 @@ class PublicationPackTests(unittest.TestCase):
             ready_gate["whole_game_hardware_execution_claim_allowed"])
         self.assertFalse(ready_gate["hardware_quantum_advantage_claim_allowed"])
         self.assertEqual(ready_gate["failed_criterion_count"], 0)
+        self.assertTrue(ready_gate["summary"]["route_contracts_complete"])
         icc = moonlab_deployment_gate.build_icc_evidence(
             ready_gate, out_path=Path("qge_moonlab_deployment_gate.json"))
         self.assertEqual(
@@ -2974,6 +3002,35 @@ class PublicationPackTests(unittest.TestCase):
             icc["completion_reason"], "qge_moonlab_deployment_gate_ready")
         self.assertTrue(
             icc["whole_game_moonlab_deployment_claim_allowed"])
+
+        legacy_plan = dict(complete_plan)
+        for key in (
+            "route_contract_schema",
+            "route_contract_map_count",
+            "route_contracts_complete",
+            "missing_route_contract_maps",
+            "route_contracts",
+        ):
+            legacy_plan.pop(key, None)
+        legacy_gate = moonlab_deployment_gate.build_gate(
+            complete_coverage,
+            complete_inventory,
+            complete_requirements,
+            legacy_plan,
+            job_specs,
+            job_results,
+            submission_packet,
+            hardware_template,
+            source_path=Path("legacy-pack"),
+        )
+        legacy_blockers = {
+            item["id"] for item in legacy_gate["blockers"]
+        }
+        self.assertIn(
+            "full_game_route_contracts_complete", legacy_blockers)
+        self.assertIn("full_game_deployment_plan_complete", legacy_blockers)
+        self.assertFalse(
+            legacy_gate["whole_game_moonlab_deployment_claim_allowed"])
 
         with tempfile.TemporaryDirectory() as tmp:
             tmpdir = Path(tmp)
