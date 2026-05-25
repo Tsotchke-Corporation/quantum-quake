@@ -474,8 +474,11 @@ Moonlab artifacts for nested hardware execution, hardware advantage, or
 dense-state overclaim flags, then requires the selected Moonlab job-result
 ledger to match `qge_moonlab_job_specs.json` row-by-row, so success counts
 cannot stand in for missing job result rows or missing required artifact
-evidence. The gate reports resource blockers as `blocked` statuses, reserving
-generic failure events for crashed or invalid runtime evidence. Each
+evidence. It also audits `qge_moonlab_submission_packet.json` against those
+same specs/results, so the hardware handoff candidates cannot be stale,
+missing, duplicated, or count-only. The gate reports resource blockers as
+`blocked` statuses, reserving generic failure events for crashed or invalid
+runtime evidence. Each
 contract records the episode/slot, route class, route profile, combat
 requirement, special-route requirement, and authority domains that must survive
 the capture. The generated shell script echoes

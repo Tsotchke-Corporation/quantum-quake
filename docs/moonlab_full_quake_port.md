@@ -89,8 +89,10 @@ or dense-state claim flag blocks the gate even when top-level posture fields
 are false. Selected Moonlab job results must also match the selected job specs
 row-by-row; aggregate completed-job counts alone cannot make the deployment
 gate ready, and each selected row must carry the required artifact evidence
-named by its job spec. The current covered set is 9/9 route-authority ready; the
-remaining 23 maps are still asset unavailable.
+named by its job spec. The hardware submission packet is audited as a derived
+ledger from those same job specs/results, so missing, extra, or stale candidate
+rows cannot make a hardware handoff look ready. The current covered set is 9/9
+route-authority ready; the remaining 23 maps are still asset unavailable.
 `resource/qge_moonlab_deployment_gate.json` is the fail-closed claim gate for
 the sentence "the entire game runs in Moonlab." It is currently `blocked`
 because coverage is 9/32, the remaining 23 registered BSP assets are

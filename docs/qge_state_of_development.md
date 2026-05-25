@@ -720,6 +720,9 @@ Known current visual state:
   selected Moonlab job spec with the job-result ledger, so aggregate success
   counts are not enough unless each selected job has a matching completed
   simulator result row and artifact evidence for its required artifact names.
+  It also audits the hardware submission packet against those same specs and
+  results, so stale or count-only candidate handoff rows cannot satisfy the
+  gate.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims

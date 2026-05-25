@@ -28,6 +28,7 @@ import qge_full_game_route_contracts  # noqa: E402
 import qge_moonlab_full_game_plan_audit  # noqa: E402
 import qge_moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_overclaim_audit  # noqa: E402
+import qge_moonlab_submission_packet_audit  # noqa: E402
 import qge_registered_asset_intake  # noqa: E402
 
 
@@ -834,6 +835,13 @@ def gate_summary(
         job_specs,
         job_results,
     )
+    submission_packet_ledger = (
+        qge_moonlab_submission_packet_audit.submission_packet_ledger_audit
+    )(
+        job_specs,
+        job_results,
+        submission_packet,
+    )
     return {
         "map_set": coverage.get("map_set") or inventory.get("map_set"),
         "coverage_status": coverage.get("status"),
@@ -994,6 +1002,30 @@ def gate_summary(
             selected_job_ledger.get("artifact_not_existing_job_ids")),
         "moonlab_selected_job_artifact_evidence_mismatches": (
             selected_job_ledger.get("artifact_evidence_mismatches")),
+        "moonlab_submission_packet_ledger_recorded": (
+            submission_packet_ledger.get("recorded")),
+        "moonlab_submission_packet_ledger_mismatch_count": (
+            submission_packet_ledger.get("mismatch_count")),
+        "moonlab_submission_packet_ledger_schema_mismatches": (
+            submission_packet_ledger.get("schema_mismatches")),
+        "moonlab_submission_packet_ledger_count_mismatches": (
+            submission_packet_ledger.get("count_mismatches")),
+        "moonlab_submission_packet_spec_candidate_count": (
+            submission_packet_ledger.get("spec_hardware_candidate_count")),
+        "moonlab_submission_packet_candidate_count": (
+            submission_packet_ledger.get("packet_candidate_job_count")),
+        "moonlab_submission_packet_missing_candidate_ids": (
+            submission_packet_ledger.get("missing_candidate_job_ids")),
+        "moonlab_submission_packet_unexpected_candidate_ids": (
+            submission_packet_ledger.get("unexpected_candidate_job_ids")),
+        "moonlab_submission_packet_duplicate_candidate_ids": (
+            submission_packet_ledger.get("duplicate_packet_candidate_ids")),
+        "moonlab_submission_packet_invalid_candidate_count": (
+            submission_packet_ledger.get("invalid_packet_candidate_count")),
+        "moonlab_submission_packet_row_mismatch_job_ids": (
+            submission_packet_ledger.get("row_mismatch_job_ids")),
+        "moonlab_submission_packet_row_mismatches": (
+            submission_packet_ledger.get("row_mismatches")),
         "selected_job_count": job_specs.get("selected_job_count"),
         "result_selected_job_count": job_results.get("selected_job_count"),
         "completed_simulator_job_count": job_results.get(
@@ -1171,6 +1203,13 @@ def build_criteria(
     selected_job_ledger_audit = selected_job_result_ledger_audit(
         job_specs,
         job_results,
+    )
+    submission_packet_ledger_audit = (
+        qge_moonlab_submission_packet_audit.submission_packet_ledger_audit
+    )(
+        job_specs,
+        job_results,
+        dict_or_empty(submission_packet),
     )
 
     selected_count = int_or_none(job_specs.get("selected_job_count"))
@@ -1439,6 +1478,47 @@ def build_criteria(
             ),
         ),
         criterion(
+            "moonlab_submission_packet_ledger_consistent",
+            bool_true(submission_packet_ledger_audit.get("passed")),
+            {
+                "moonlab_submission_packet_ledger_recorded": (
+                    submission_packet_ledger_audit.get("recorded")),
+                "moonlab_submission_packet_ledger_mismatch_count": (
+                    submission_packet_ledger_audit.get("mismatch_count")),
+                "moonlab_submission_packet_ledger_schema_mismatches": (
+                    submission_packet_ledger_audit.get("schema_mismatches")),
+                "moonlab_submission_packet_ledger_count_mismatches": (
+                    submission_packet_ledger_audit.get("count_mismatches")),
+                "moonlab_submission_packet_spec_candidate_count": (
+                    submission_packet_ledger_audit.get(
+                        "spec_hardware_candidate_count")),
+                "moonlab_submission_packet_candidate_count": (
+                    submission_packet_ledger_audit.get(
+                        "packet_candidate_job_count")),
+                "moonlab_submission_packet_missing_candidate_ids": (
+                    submission_packet_ledger_audit.get(
+                        "missing_candidate_job_ids")),
+                "moonlab_submission_packet_unexpected_candidate_ids": (
+                    submission_packet_ledger_audit.get(
+                        "unexpected_candidate_job_ids")),
+                "moonlab_submission_packet_duplicate_candidate_ids": (
+                    submission_packet_ledger_audit.get(
+                        "duplicate_packet_candidate_ids")),
+                "moonlab_submission_packet_invalid_candidate_count": (
+                    submission_packet_ledger_audit.get(
+                        "invalid_packet_candidate_count")),
+                "moonlab_submission_packet_row_mismatch_job_ids": (
+                    submission_packet_ledger_audit.get(
+                        "row_mismatch_job_ids")),
+                "moonlab_submission_packet_row_mismatches": (
+                    submission_packet_ledger_audit.get("row_mismatches")),
+            },
+            (
+                "Moonlab hardware submission packet is missing, stale, or "
+                "inconsistent with selected job specs/results"
+            ),
+        ),
+        criterion(
             "full_game_deployment_plan_complete",
             plan_passed,
             {
@@ -1547,6 +1627,12 @@ def next_actions_for_blockers(
             "Regenerate qge_moonlab_job_results.json from "
             "qge_moonlab_job_specs.json so every selected Moonlab job has a "
             "matching completed simulator result row and artifact evidence."
+        )
+    if "moonlab_submission_packet_ledger_consistent" in failed_ids:
+        actions.append(
+            "Regenerate qge_moonlab_submission_packet.json from current "
+            "qge_moonlab_job_specs.json and qge_moonlab_job_results.json so "
+            "hardware candidate rows match selected simulator evidence."
         )
     if "full_game_deployment_plan_complete" in failed_ids:
         if queue_command:
@@ -1921,6 +2007,30 @@ def build_icc_evidence(
             "moonlab_selected_job_artifact_not_existing_job_ids"),
         "moonlab_selected_job_artifact_evidence_mismatches": summary.get(
             "moonlab_selected_job_artifact_evidence_mismatches"),
+        "moonlab_submission_packet_ledger_recorded": summary.get(
+            "moonlab_submission_packet_ledger_recorded"),
+        "moonlab_submission_packet_ledger_mismatch_count": summary.get(
+            "moonlab_submission_packet_ledger_mismatch_count"),
+        "moonlab_submission_packet_ledger_schema_mismatches": summary.get(
+            "moonlab_submission_packet_ledger_schema_mismatches"),
+        "moonlab_submission_packet_ledger_count_mismatches": summary.get(
+            "moonlab_submission_packet_ledger_count_mismatches"),
+        "moonlab_submission_packet_spec_candidate_count": summary.get(
+            "moonlab_submission_packet_spec_candidate_count"),
+        "moonlab_submission_packet_candidate_count": summary.get(
+            "moonlab_submission_packet_candidate_count"),
+        "moonlab_submission_packet_missing_candidate_ids": summary.get(
+            "moonlab_submission_packet_missing_candidate_ids"),
+        "moonlab_submission_packet_unexpected_candidate_ids": summary.get(
+            "moonlab_submission_packet_unexpected_candidate_ids"),
+        "moonlab_submission_packet_duplicate_candidate_ids": summary.get(
+            "moonlab_submission_packet_duplicate_candidate_ids"),
+        "moonlab_submission_packet_invalid_candidate_count": summary.get(
+            "moonlab_submission_packet_invalid_candidate_count"),
+        "moonlab_submission_packet_row_mismatch_job_ids": summary.get(
+            "moonlab_submission_packet_row_mismatch_job_ids"),
+        "moonlab_submission_packet_row_mismatches": summary.get(
+            "moonlab_submission_packet_row_mismatches"),
         "full_game_route_contract_schema": summary.get(
             "route_contract_schema"),
         "full_game_route_contract_map_count": summary.get(
@@ -2034,6 +2144,15 @@ def markdown_report(gate: dict[str, Any]) -> str:
             f"{summary.get('moonlab_selected_job_artifact_evidence_mismatch_count')} "
             "mismatches="
             f"{summary.get('moonlab_selected_job_result_ledger_mismatch_count')}"
+        ),
+        (
+            "Moonlab submission packet ledger: "
+            "recorded="
+            f"{summary.get('moonlab_submission_packet_ledger_recorded')} "
+            f"candidates={summary.get('moonlab_submission_packet_candidate_count')} "
+            f"/ {summary.get('moonlab_submission_packet_spec_candidate_count')} "
+            "mismatches="
+            f"{summary.get('moonlab_submission_packet_ledger_mismatch_count')}"
         ),
         "",
         "| Criterion | Status | Blocker |",
