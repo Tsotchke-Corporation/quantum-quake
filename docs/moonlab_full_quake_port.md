@@ -122,8 +122,10 @@ deployment-gate claim flags before it is treated as safe publication wording.
 The manifest reproduction command list is checked for core command coverage
 and unsafe shell fragments, and the registered-asset install script is rebuilt
 from the packed intake ledger. Packed Markdown evidence reports are regenerated
-from their source JSON ledgers before they are treated as current. The remaining
-23 maps are still asset unavailable.
+from their source JSON ledgers before they are treated as current. Moonlab
+`.moonlab` circuit body files are hashed against their JSON records before
+control-plane payload evidence is treated as current. The remaining 23 maps are
+still asset unavailable.
 `resource/qge_moonlab_deployment_gate.json` is the fail-closed claim gate for
 the sentence "the entire game runs in Moonlab." It is currently `blocked`
 because coverage is 9/32, the remaining 23 registered BSP assets are

@@ -752,7 +752,9 @@ Known current visual state:
   command list is checked for core command coverage and unsafe shell fragments,
   and the registered-asset install script is rebuilt from the packed intake
   ledger. Packed Markdown evidence reports are regenerated from their source
-  JSON ledgers before they are treated as current.
+  JSON ledgers before they are treated as current, and Moonlab `.moonlab`
+  circuit body files are hashed against their JSON records before
+  control-plane payload evidence is accepted.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims

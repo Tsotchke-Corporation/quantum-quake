@@ -32,6 +32,7 @@ import qge_moonlab_full_game_plan as moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest as moonlab_hardware_ingest  # noqa: E402
 import qge_moonlab_hardware_result_audit as moonlab_hardware_result_audit  # noqa: E402
 import qge_moonlab_job_runner as moonlab_job_runner  # noqa: E402
+import qge_moonlab_circuit_file_audit as moonlab_circuit_file_audit  # noqa: E402
 import qge_moonlab_oracle_transpile as moonlab_oracle_transpile  # noqa: E402
 import qge_moonlab_qae_grover_plan as moonlab_grover_plan  # noqa: E402
 import qge_moonlab_qae_observation_transpile as moonlab_observation_transpile  # noqa: E402
@@ -1227,6 +1228,63 @@ class PublicationPackTests(unittest.TestCase):
                 stale_audit["markdown_mismatches"][0][
                     "first_line_mismatch"]["line"],
                 3,
+            )
+
+    def test_moonlab_circuit_file_audit_detects_stale_body(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            circuit_path = tmpdir / "observation_000.moonlab"
+            circuit_path.write_text(
+                "# moonlab-circuit v1\nNUM_QUBITS 1\nRY 0 1.0\nSHOTS 96\n",
+                encoding="utf-8",
+            )
+            payload = {
+                "observation_circuits": [
+                    {
+                        "observation_index": 0,
+                        "moonlab_circuit_file": str(circuit_path),
+                        "moonlab_circuit_sha256": (
+                            moonlab_circuit_file_audit.sha256_file(
+                                circuit_path)),
+                        "moonlab_payload_bytes": circuit_path.stat().st_size,
+                    },
+                ],
+            }
+            artifacts = {"qae_moonlab_payload": payload}
+
+            audit = moonlab_circuit_file_audit.moonlab_circuit_file_audit(
+                artifacts,
+                required_sources=("qae_moonlab_payload",),
+            )
+            self.assertTrue(audit["passed"])
+            self.assertEqual(audit["expected_circuit_count"], 1)
+            self.assertEqual(audit["mismatch_count"], 0)
+
+            circuit_path.write_text(
+                "# moonlab-circuit v1\nNUM_QUBITS 1\nRY 0 1.0\nX 0\nSHOTS 96\n",
+                encoding="utf-8",
+            )
+            stale_audit = (
+                moonlab_circuit_file_audit.moonlab_circuit_file_audit(
+                    artifacts,
+                    required_sources=("qae_moonlab_payload",),
+                )
+            )
+            self.assertFalse(stale_audit["passed"])
+            self.assertEqual(stale_audit["mismatch_count"], 1)
+            self.assertEqual(
+                stale_audit["circuit_mismatches"][0]["source_artifact"],
+                "qae_moonlab_payload",
+            )
+            self.assertIn(
+                "sha256",
+                stale_audit["circuit_mismatches"][0]["fields"],
+            )
+            self.assertIn(
+                "size_bytes",
+                stale_audit["circuit_mismatches"][0]["fields"],
             )
 
     def test_registered_asset_script_audit_detects_stale_script(

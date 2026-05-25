@@ -337,7 +337,8 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      reproduction command list must keep core command coverage and avoid unsafe
      shell fragments, and the registered-asset install script must rebuild
      from the packed intake ledger. Packed Markdown evidence reports must
-     regenerate from their source JSON ledgers.
+     regenerate from their source JSON ledgers, and Moonlab `.moonlab` circuit
+     body files must match the size and SHA-256 recorded by their JSON ledgers.
    - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
      and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
      scanning bounded candidate directories. The intake artifact records

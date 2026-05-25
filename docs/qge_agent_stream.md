@@ -508,8 +508,10 @@ deployment-gate claim flags. The manifest reproduction command list is checked
 for core command coverage and unsafe shell fragments, and the registered-asset
 install script is rebuilt from the packed intake ledger. Packed Markdown
 evidence reports are regenerated from their source JSON ledgers before they are
-treated as current. The gate reports resource blockers as `blocked` statuses,
-reserving generic failure events for crashed or invalid runtime evidence. Each
+treated as current, and Moonlab `.moonlab` circuit body files are hashed
+against their JSON records before control-plane payload evidence is accepted.
+The gate reports resource blockers as `blocked` statuses, reserving generic
+failure events for crashed or invalid runtime evidence. Each
 contract records the episode/slot, route class, route profile, combat
 requirement, special-route requirement, and authority domains that must survive
 the capture. The generated shell script echoes
