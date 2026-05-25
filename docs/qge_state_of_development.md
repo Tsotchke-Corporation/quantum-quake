@@ -732,6 +732,8 @@ Known current visual state:
   recomputed from their source ledgers before the gate accepts the publication
   sidecar evidence, and resource ICC sidecars are recomputed from the asset
   inventory, asset requirements, and registered-asset intake ledgers.
+  Advantage/control-plane ICC sidecars are recomputed from the advantage metrics
+  plus Moonlab payload, kernel, observation, and Grover schedule artifacts.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims

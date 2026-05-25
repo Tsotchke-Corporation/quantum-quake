@@ -25,6 +25,7 @@ import qge_asset_inventory  # noqa: E402
 import qge_asset_requirements  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
 import qge_full_game_route_contracts  # noqa: E402
+import qge_moonlab_advantage_icc_audit  # noqa: E402
 import qge_moonlab_hardware_result_audit  # noqa: E402
 import qge_moonlab_hardware_scope_audit  # noqa: E402
 import qge_moonlab_hardware_template_audit  # noqa: E402
@@ -69,10 +70,34 @@ def resource_artifact_manifest_path(
     manifest: dict[str, Any],
     name: str,
 ) -> str | None:
-    resource = dict_or_empty(dict_or_empty(manifest.get("artifacts")).get(
-        "resource"))
-    path = dict_or_empty(resource.get(name)).get("path")
+    path = artifact_manifest_path(manifest, "resource", name)
     return path if isinstance(path, str) and path else None
+
+
+def artifact_manifest_path(
+    manifest: dict[str, Any],
+    section: str,
+    name: str,
+) -> str | None:
+    artifacts = dict_or_empty(dict_or_empty(manifest.get("artifacts")).get(
+        section))
+    path = dict_or_empty(artifacts.get(name)).get("path")
+    return path if isinstance(path, str) and path else None
+
+
+def load_artifact_json(
+    manifest: dict[str, Any],
+    section: str,
+    name: str,
+    *,
+    manifest_path: Path | None = None,
+) -> dict[str, Any] | None:
+    raw_path = artifact_manifest_path(manifest, section, name)
+    base_dir = manifest_path.parent if manifest_path is not None else None
+    path = qge_moonlab_full_game_plan.resolve_path(raw_path, base_dir=base_dir)
+    if path is None or not path.is_file():
+        return None
+    return load_json(path)
 
 
 def list_or_empty(value: Any) -> list[Any]:
@@ -840,6 +865,9 @@ def gate_summary(
     resource_icc_evidence_required: bool = False,
     source_icc_evidence: dict[str, Any] | None = None,
     source_icc_evidence_required: bool = False,
+    advantage_artifacts: dict[str, Any] | None = None,
+    advantage_icc_evidence: dict[str, Any] | None = None,
+    advantage_icc_evidence_required: bool = False,
 ) -> dict[str, Any]:
     remediation = dict_or_empty(asset_remediation)
     paths = dict_or_empty(artifact_paths)
@@ -910,6 +938,14 @@ def gate_summary(
         dict_or_empty(source_icc_evidence),
         artifact_paths=paths,
         required=source_icc_evidence_required,
+    )
+    advantage_icc_ledger = (
+        qge_moonlab_advantage_icc_audit.advantage_icc_evidence_audit
+    )(
+        dict_or_empty(advantage_artifacts),
+        dict_or_empty(advantage_icc_evidence),
+        artifact_paths=paths,
+        required=advantage_icc_evidence_required,
     )
     return {
         "map_set": coverage.get("map_set") or inventory.get("map_set"),
@@ -1199,6 +1235,26 @@ def gate_summary(
             source_icc_ledger.get("sidecar_mismatches")),
         "moonlab_source_icc_evidence_overclaim_flags": (
             source_icc_ledger.get("overclaim_flags")),
+        "moonlab_advantage_icc_evidence_required": (
+            advantage_icc_ledger.get("required")),
+        "moonlab_advantage_icc_evidence_recorded": (
+            advantage_icc_ledger.get("recorded")),
+        "moonlab_advantage_icc_evidence_expected_count": (
+            advantage_icc_ledger.get("expected_sidecar_count")),
+        "moonlab_advantage_icc_evidence_recorded_count": (
+            advantage_icc_ledger.get("recorded_sidecar_count")),
+        "moonlab_advantage_icc_evidence_mismatch_count": (
+            advantage_icc_ledger.get("mismatch_count")),
+        "moonlab_advantage_icc_evidence_missing_sidecars": (
+            advantage_icc_ledger.get("missing_sidecars")),
+        "moonlab_advantage_icc_evidence_schema_mismatches": (
+            advantage_icc_ledger.get("schema_mismatches")),
+        "moonlab_advantage_icc_evidence_mismatches": (
+            advantage_icc_ledger.get("sidecar_mismatches")),
+        "moonlab_advantage_icc_evidence_build_errors": (
+            advantage_icc_ledger.get("sidecar_build_errors")),
+        "moonlab_advantage_icc_evidence_overclaim_flags": (
+            advantage_icc_ledger.get("overclaim_flags")),
         "selected_job_count": job_specs.get("selected_job_count"),
         "result_selected_job_count": job_results.get("selected_job_count"),
         "completed_simulator_job_count": job_results.get(
@@ -1288,6 +1344,9 @@ def build_criteria(
     resource_icc_evidence_required: bool = False,
     source_icc_evidence: dict[str, Any] | None = None,
     source_icc_evidence_required: bool = False,
+    advantage_artifacts: dict[str, Any] | None = None,
+    advantage_icc_evidence: dict[str, Any] | None = None,
+    advantage_icc_evidence_required: bool = False,
     asset_remediation: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     target_count = int_or_none(coverage.get("target_map_count"))
@@ -1436,6 +1495,14 @@ def build_criteria(
         dict_or_empty(source_icc_evidence),
         artifact_paths=paths,
         required=source_icc_evidence_required,
+    )
+    advantage_icc_ledger_audit = (
+        qge_moonlab_advantage_icc_audit.advantage_icc_evidence_audit
+    )(
+        dict_or_empty(advantage_artifacts),
+        dict_or_empty(advantage_icc_evidence),
+        artifact_paths=paths,
+        required=advantage_icc_evidence_required,
     )
 
     selected_count = int_or_none(job_specs.get("selected_job_count"))
@@ -1913,6 +1980,36 @@ def build_criteria(
             ),
         ),
         criterion(
+            "moonlab_advantage_icc_evidence_consistent",
+            bool_true(advantage_icc_ledger_audit.get("passed")),
+            {
+                "moonlab_advantage_icc_evidence_required": (
+                    advantage_icc_ledger_audit.get("required")),
+                "moonlab_advantage_icc_evidence_recorded": (
+                    advantage_icc_ledger_audit.get("recorded")),
+                "moonlab_advantage_icc_evidence_expected_count": (
+                    advantage_icc_ledger_audit.get("expected_sidecar_count")),
+                "moonlab_advantage_icc_evidence_recorded_count": (
+                    advantage_icc_ledger_audit.get("recorded_sidecar_count")),
+                "moonlab_advantage_icc_evidence_mismatch_count": (
+                    advantage_icc_ledger_audit.get("mismatch_count")),
+                "moonlab_advantage_icc_evidence_missing_sidecars": (
+                    advantage_icc_ledger_audit.get("missing_sidecars")),
+                "moonlab_advantage_icc_evidence_schema_mismatches": (
+                    advantage_icc_ledger_audit.get("schema_mismatches")),
+                "moonlab_advantage_icc_evidence_mismatches": (
+                    advantage_icc_ledger_audit.get("sidecar_mismatches")),
+                "moonlab_advantage_icc_evidence_build_errors": (
+                    advantage_icc_ledger_audit.get("sidecar_build_errors")),
+                "moonlab_advantage_icc_evidence_overclaim_flags": (
+                    advantage_icc_ledger_audit.get("overclaim_flags")),
+            },
+            (
+                "Moonlab advantage ICC sidecars are missing, stale, or "
+                "contain claim flags not present in their source artifacts"
+            ),
+        ),
+        criterion(
             "full_game_deployment_plan_complete",
             plan_passed,
             {
@@ -2062,6 +2159,12 @@ def next_actions_for_blockers(
             "qge_moonlab_full_game_plan_icc_evidence.json from the current "
             "source ledgers so publication sidecars cannot drift."
         )
+    if "moonlab_advantage_icc_evidence_consistent" in failed_ids:
+        actions.append(
+            "Regenerate qge_advantage_icc_evidence.json and the Moonlab QAE "
+            "payload/kernel/observation/schedule ICC sidecars from the current "
+            "advantage and control-plane artifacts."
+        )
     if "full_game_deployment_plan_complete" in failed_ids:
         if queue_command:
             actions.append(
@@ -2102,6 +2205,9 @@ def build_gate(
     resource_icc_evidence_required: bool = False,
     source_icc_evidence: dict[str, Any] | None = None,
     source_icc_evidence_required: bool = False,
+    advantage_artifacts: dict[str, Any] | None = None,
+    advantage_icc_evidence: dict[str, Any] | None = None,
+    advantage_icc_evidence_required: bool = False,
     resource_envelope: dict[str, Any] | None = None,
     asset_remediation: dict[str, Any] | None = None,
     source_path: Path | str | None = None,
@@ -2124,6 +2230,9 @@ def build_gate(
         resource_icc_evidence_required=resource_icc_evidence_required,
         source_icc_evidence=source_icc_evidence,
         source_icc_evidence_required=source_icc_evidence_required,
+        advantage_artifacts=advantage_artifacts,
+        advantage_icc_evidence=advantage_icc_evidence,
+        advantage_icc_evidence_required=advantage_icc_evidence_required,
         asset_remediation=asset_remediation,
     )
     blockers = failed_criteria(criteria)
@@ -2170,6 +2279,9 @@ def build_gate(
             resource_icc_evidence_required=resource_icc_evidence_required,
             source_icc_evidence=source_icc_evidence,
             source_icc_evidence_required=source_icc_evidence_required,
+            advantage_artifacts=advantage_artifacts,
+            advantage_icc_evidence=advantage_icc_evidence,
+            advantage_icc_evidence_required=advantage_icc_evidence_required,
         ),
         "next_actions": next_actions_for_blockers(
             blockers,
@@ -2286,6 +2398,90 @@ def build_gate_from_manifest(
             ) or {}
         ),
     }
+    advantage_artifacts = {
+        "advantage_metrics": (
+            load_artifact_json(
+                manifest,
+                "advantage",
+                "metrics",
+                manifest_path=manifest_path,
+            ) or {}
+        ),
+        "qae_moonlab_payload": (
+            load_artifact_json(
+                manifest,
+                "advantage",
+                "qae_moonlab_payload",
+                manifest_path=manifest_path,
+            ) or {}
+        ),
+        "qae_moonlab_oracle_kernel": (
+            load_artifact_json(
+                manifest,
+                "advantage",
+                "qae_moonlab_oracle_kernel",
+                manifest_path=manifest_path,
+            ) or {}
+        ),
+        "qae_moonlab_observation_zero": (
+            load_artifact_json(
+                manifest,
+                "advantage",
+                "qae_moonlab_observation_zero",
+                manifest_path=manifest_path,
+            ) or {}
+        ),
+        "qae_moonlab_grover_schedule_plan": (
+            load_artifact_json(
+                manifest,
+                "advantage",
+                "qae_moonlab_grover_schedule_plan",
+                manifest_path=manifest_path,
+            ) or {}
+        ),
+    }
+    advantage_icc_evidence = {
+        "advantage_icc_evidence": (
+            load_artifact_json(
+                manifest,
+                "advantage",
+                "icc_evidence",
+                manifest_path=manifest_path,
+            ) or {}
+        ),
+        "qae_moonlab_payload_icc_evidence": (
+            load_artifact_json(
+                manifest,
+                "advantage",
+                "qae_moonlab_payload_icc_evidence",
+                manifest_path=manifest_path,
+            ) or {}
+        ),
+        "qae_moonlab_oracle_kernel_icc_evidence": (
+            load_artifact_json(
+                manifest,
+                "advantage",
+                "qae_moonlab_oracle_kernel_icc_evidence",
+                manifest_path=manifest_path,
+            ) or {}
+        ),
+        "qae_moonlab_observation_zero_icc_evidence": (
+            load_artifact_json(
+                manifest,
+                "advantage",
+                "qae_moonlab_observation_zero_icc_evidence",
+                manifest_path=manifest_path,
+            ) or {}
+        ),
+        "qae_moonlab_grover_schedule_plan_icc_evidence": (
+            load_artifact_json(
+                manifest,
+                "advantage",
+                "qae_moonlab_grover_schedule_plan_icc_evidence",
+                manifest_path=manifest_path,
+            ) or {}
+        ),
+    }
     artifact_paths = {
         "asset_inventory": resource_artifact_manifest_path(
             manifest, "asset_inventory"),
@@ -2303,6 +2499,22 @@ def build_gate_from_manifest(
             manifest, "moonlab_hardware_record_template"),
         "moonlab_hardware_submission_scope": resource_artifact_manifest_path(
             manifest, "moonlab_hardware_submission_scope"),
+        "advantage_metrics": artifact_manifest_path(
+            manifest, "advantage", "metrics"),
+        "qae_curve": artifact_manifest_path(
+            manifest, "advantage", "qae_curve"),
+        "qae_circuit": artifact_manifest_path(
+            manifest, "advantage", "qae_circuit"),
+        "scaling_summary": artifact_manifest_path(
+            manifest, "advantage", "scaling_summary"),
+        "qae_moonlab_payload": artifact_manifest_path(
+            manifest, "advantage", "qae_moonlab_payload"),
+        "qae_moonlab_oracle_kernel": artifact_manifest_path(
+            manifest, "advantage", "qae_moonlab_oracle_kernel"),
+        "qae_moonlab_observation_zero": artifact_manifest_path(
+            manifest, "advantage", "qae_moonlab_observation_zero"),
+        "qae_moonlab_grover_schedule_plan": artifact_manifest_path(
+            manifest, "advantage", "qae_moonlab_grover_schedule_plan"),
     }
     resource_envelope = qge_moonlab_full_game_plan.load_resource_json(
         manifest, "envelope", manifest_path=manifest_path) or {}
@@ -2327,6 +2539,9 @@ def build_gate_from_manifest(
         resource_icc_evidence_required=True,
         source_icc_evidence=source_icc_evidence,
         source_icc_evidence_required=True,
+        advantage_artifacts=advantage_artifacts,
+        advantage_icc_evidence=advantage_icc_evidence,
+        advantage_icc_evidence_required=True,
         resource_envelope=resource_envelope,
         asset_remediation=asset_remediation,
         source_path=manifest_path,
@@ -2673,6 +2888,26 @@ def build_icc_evidence(
             "moonlab_source_icc_evidence_mismatches"),
         "moonlab_source_icc_evidence_overclaim_flags": summary.get(
             "moonlab_source_icc_evidence_overclaim_flags"),
+        "moonlab_advantage_icc_evidence_required": summary.get(
+            "moonlab_advantage_icc_evidence_required"),
+        "moonlab_advantage_icc_evidence_recorded": summary.get(
+            "moonlab_advantage_icc_evidence_recorded"),
+        "moonlab_advantage_icc_evidence_expected_count": summary.get(
+            "moonlab_advantage_icc_evidence_expected_count"),
+        "moonlab_advantage_icc_evidence_recorded_count": summary.get(
+            "moonlab_advantage_icc_evidence_recorded_count"),
+        "moonlab_advantage_icc_evidence_mismatch_count": summary.get(
+            "moonlab_advantage_icc_evidence_mismatch_count"),
+        "moonlab_advantage_icc_evidence_missing_sidecars": summary.get(
+            "moonlab_advantage_icc_evidence_missing_sidecars"),
+        "moonlab_advantage_icc_evidence_schema_mismatches": summary.get(
+            "moonlab_advantage_icc_evidence_schema_mismatches"),
+        "moonlab_advantage_icc_evidence_mismatches": summary.get(
+            "moonlab_advantage_icc_evidence_mismatches"),
+        "moonlab_advantage_icc_evidence_build_errors": summary.get(
+            "moonlab_advantage_icc_evidence_build_errors"),
+        "moonlab_advantage_icc_evidence_overclaim_flags": summary.get(
+            "moonlab_advantage_icc_evidence_overclaim_flags"),
         "full_game_route_contract_schema": summary.get(
             "route_contract_schema"),
         "full_game_route_contract_map_count": summary.get(
@@ -2842,6 +3077,16 @@ def markdown_report(gate: dict[str, Any]) -> str:
             f"/ {summary.get('moonlab_source_icc_evidence_expected_count')} "
             "mismatches="
             f"{summary.get('moonlab_source_icc_evidence_mismatch_count')}"
+        ),
+        (
+            "Moonlab advantage ICC sidecars: "
+            "recorded="
+            f"{summary.get('moonlab_advantage_icc_evidence_recorded')} "
+            "sidecars="
+            f"{summary.get('moonlab_advantage_icc_evidence_recorded_count')} "
+            f"/ {summary.get('moonlab_advantage_icc_evidence_expected_count')} "
+            "mismatches="
+            f"{summary.get('moonlab_advantage_icc_evidence_mismatch_count')}"
         ),
         "",
         "| Criterion | Status | Blocker |",

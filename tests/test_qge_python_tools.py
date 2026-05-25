@@ -25,6 +25,7 @@ import qge_asset_requirements as asset_requirements  # noqa: E402
 import qge_breadth_evidence as breadth_evidence  # noqa: E402
 import qge_full_game_capture_queue as full_game_capture_queue  # noqa: E402
 import qge_image_metrics as image_metrics  # noqa: E402
+import qge_moonlab_advantage_icc_audit as moonlab_advantage_icc_audit  # noqa: E402
 import qge_moonlab_deployment_gate as moonlab_deployment_gate  # noqa: E402
 import qge_moonlab_full_game_plan as moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest as moonlab_hardware_ingest  # noqa: E402
@@ -3167,6 +3168,143 @@ class PublicationPackTests(unittest.TestCase):
                     registered_asset_intake.build_icc_evidence(intake)),
             }
 
+        advantage_artifact_paths = {
+            "advantage_metrics": "advantage/advantage_metrics.json",
+            "qae_curve": "advantage/qae_curve.csv",
+            "qae_circuit": "advantage/qae_circuit.txt",
+            "scaling_summary": "advantage/scaling_summary.json",
+            "qae_moonlab_payload": "advantage/qae_moonlab_payload.json",
+            "qae_moonlab_oracle_kernel": (
+                "advantage/qae_moonlab_oracle_kernel.json"),
+            "qae_moonlab_observation_zero": (
+                "advantage/qae_moonlab_observation_zero.json"),
+            "qae_moonlab_grover_schedule_plan": (
+                "advantage/qae_moonlab_grover_schedule_plan.json"),
+        }
+        advantage_artifacts = {
+            "advantage_metrics": {
+                "advantage_problem_id": "advantage.test",
+                "comparison": {
+                    "best_qae": {
+                        "oracle_eval_count": 1728,
+                        "shots": 384,
+                        "mean_reference_value": 0.5,
+                        "rmse": 0.01,
+                        "ci95_absolute_delta": 0.02,
+                    },
+                    "best_classical": {
+                        "oracle_eval_count": 128,
+                    },
+                },
+                "oracle": {
+                    "state_prep_cost": 234,
+                    "readout_model": "finite_shot_mlae",
+                },
+                "scaling_summary": {
+                    "trial_count": 3,
+                    "confidence_level": 0.95,
+                },
+            },
+            "qae_moonlab_payload": {
+                "schema": "qge.moonlab_qae_payload.v0",
+                "status": (
+                    "calibration_payload_ready_oracle_transpilation_required"),
+                "semantic_scope": "mlae_observation_distribution_payload",
+                "payload_resource_estimate": {
+                    "circuit_count": 4,
+                    "total_shots": 384,
+                    "logical_qubits": 1,
+                },
+            },
+            "qae_moonlab_oracle_kernel": {
+                "schema": "qge.moonlab_qae_oracle_kernel.v0",
+                "status": "qf_oracle_kernel_ready_qae_transpilation_required",
+                "semantic_scope": "bernoulli_lift_qf_oracle_kernel",
+                "moonlab_circuit_file": (
+                    "advantage/qae_moonlab_oracle_kernel.moonlab"),
+                "moonlab_control_plane": {
+                    "control_plane_executable": True,
+                    "body_bytes": 64172,
+                    "body_limit_bytes": 4194304,
+                },
+                "resource_estimate": {
+                    "logical_qubits": 32,
+                    "gate_count": 7415,
+                },
+                "claim_posture": {
+                    "qf_oracle_kernel_transpiled": True,
+                    "candidate_state_preparation_transpiled": False,
+                    "grover_operator_transpiled": False,
+                    "full_qae_oracle_transpiled": False,
+                },
+            },
+            "qae_moonlab_observation_zero": {
+                "schema": "qge.moonlab_qae_observation_circuit.v0",
+                "status": (
+                    "qae_observation_zero_ready_grover_schedule_required"),
+                "semantic_scope": (
+                    "bernoulli_lift_qae_power_zero_observation"),
+                "moonlab_circuit_file": (
+                    "advantage/qae_moonlab_observation_zero.moonlab"),
+                "moonlab_control_plane": {
+                    "control_plane_executable": True,
+                    "body_bytes": 67643,
+                    "body_limit_bytes": 4194304,
+                },
+                "resource_estimate": {
+                    "logical_qubits": 32,
+                    "gate_count": 7740,
+                },
+                "state_preparation": {
+                    "candidate_count": 234,
+                    "invalid_candidate_probability": 0.0,
+                },
+                "claim_posture": {
+                    "candidate_state_preparation_transpiled": True,
+                    "qf_oracle_kernel_transpiled": True,
+                    "power_zero_observation_transpiled": True,
+                    "grover_operator_transpiled": False,
+                    "full_mlae_schedule_transpiled": False,
+                    "full_qae_oracle_transpiled": False,
+                },
+            },
+            "qae_moonlab_grover_schedule_plan": {
+                "schema": "qge.moonlab_qae_grover_schedule_plan.v0",
+                "status": (
+                    "qae_grover_schedule_ready_for_control_plane_submission"),
+                "semantic_scope": (
+                    "bernoulli_lift_qae_grover_schedule_control_plane_plan"),
+                "moonlab_control_plane": {
+                    "ready_observation_count": 4,
+                    "blocked_observation_count": 0,
+                    "first_blocked_power": None,
+                    "body_limit_bytes": 4194304,
+                },
+                "resource_estimate": {
+                    "observation_count": 4,
+                    "power_zero_body_bytes": 67643,
+                    "logical_qubits": 32,
+                    "max_gate_count": 69924,
+                    "max_body_bytes": 610599,
+                },
+                "claim_posture": {
+                    "candidate_state_preparation_transpiled": True,
+                    "qf_oracle_kernel_transpiled": True,
+                    "power_zero_observation_transpiled": True,
+                    "nonzero_grover_powers_transpiled": True,
+                    "grover_operator_transpiled": True,
+                    "full_mlae_schedule_transpiled": True,
+                    "full_qae_oracle_transpiled": True,
+                },
+            },
+        }
+        advantage_icc_evidence = (
+            moonlab_advantage_icc_audit.expected_advantage_icc_sidecars(
+                advantage_artifacts,
+                artifact_paths=advantage_artifact_paths,
+            )
+        )
+
         partial_breadth = {
             "schema": "qge.breadth_evidence.v0",
             "matrix_runs": [
@@ -3281,6 +3419,10 @@ class PublicationPackTests(unittest.TestCase):
             resource_icc_evidence_required=True,
             source_icc_evidence=partial_source_icc_evidence,
             source_icc_evidence_required=True,
+            advantage_artifacts=advantage_artifacts,
+            advantage_icc_evidence=advantage_icc_evidence,
+            advantage_icc_evidence_required=True,
+            artifact_paths=advantage_artifact_paths,
             asset_remediation=partial_asset_remediation,
             source_path=Path("partial-pack"),
         )
@@ -3307,6 +3449,8 @@ class PublicationPackTests(unittest.TestCase):
             "moonlab_selected_job_result_ledger_consistent", blocker_ids)
         self.assertNotIn(
             "moonlab_hardware_result_ledger_consistent", blocker_ids)
+        self.assertNotIn(
+            "moonlab_advantage_icc_evidence_consistent", blocker_ids)
         self.assertTrue(all(
             item["status"] == "blocked"
             for item in blocked_gate["blockers"]
@@ -3575,6 +3719,19 @@ class PublicationPackTests(unittest.TestCase):
                 "moonlab_source_icc_evidence_recorded_count"],
             3,
         )
+        self.assertTrue(
+            blocked_gate["summary"][
+                "moonlab_advantage_icc_evidence_recorded"])
+        self.assertEqual(
+            blocked_gate["summary"][
+                "moonlab_advantage_icc_evidence_mismatch_count"],
+            0,
+        )
+        self.assertEqual(
+            blocked_gate["summary"][
+                "moonlab_advantage_icc_evidence_recorded_count"],
+            5,
+        )
         self.assertIn(
             "qge_registered_asset_intake.py",
             blocked_gate["summary"]["registered_asset_discovery_command"],
@@ -3614,6 +3771,7 @@ class PublicationPackTests(unittest.TestCase):
             "Moonlab hardware result ledger", blocked_markdown)
         self.assertIn("Resource ICC sidecars", blocked_markdown)
         self.assertIn("Moonlab source ICC sidecars", blocked_markdown)
+        self.assertIn("Moonlab advantage ICC sidecars", blocked_markdown)
         self.assertIn(
             "Covered route authority: 2 / 2 (complete=True)",
             blocked_markdown,
@@ -3753,6 +3911,12 @@ class PublicationPackTests(unittest.TestCase):
         self.assertTrue(blocked_icc["moonlab_source_icc_evidence_recorded"])
         self.assertEqual(
             blocked_icc["moonlab_source_icc_evidence_mismatch_count"],
+            0,
+        )
+        self.assertTrue(
+            blocked_icc["moonlab_advantage_icc_evidence_recorded"])
+        self.assertEqual(
+            blocked_icc["moonlab_advantage_icc_evidence_mismatch_count"],
             0,
         )
         self.assertIn(
@@ -3966,6 +4130,10 @@ class PublicationPackTests(unittest.TestCase):
             hardware_submission_scope=hardware_submission_scope,
             source_icc_evidence=complete_source_icc_evidence,
             source_icc_evidence_required=True,
+            advantage_artifacts=advantage_artifacts,
+            advantage_icc_evidence=advantage_icc_evidence,
+            advantage_icc_evidence_required=True,
+            artifact_paths=advantage_artifact_paths,
             source_path=Path("complete-pack"),
         )
         self.assertEqual(
@@ -4045,6 +4213,14 @@ class PublicationPackTests(unittest.TestCase):
                 "moonlab_source_icc_evidence_mismatch_count"],
             0,
         )
+        self.assertTrue(
+            ready_gate["summary"][
+                "moonlab_advantage_icc_evidence_recorded"])
+        self.assertEqual(
+            ready_gate["summary"][
+                "moonlab_advantage_icc_evidence_mismatch_count"],
+            0,
+        )
         icc = moonlab_deployment_gate.build_icc_evidence(
             ready_gate, out_path=Path("qge_moonlab_deployment_gate.json"))
         self.assertEqual(
@@ -4069,6 +4245,8 @@ class PublicationPackTests(unittest.TestCase):
             icc["moonlab_hardware_result_ledger_mismatch_count"], 0)
         self.assertEqual(
             icc["moonlab_source_icc_evidence_mismatch_count"], 0)
+        self.assertEqual(
+            icc["moonlab_advantage_icc_evidence_mismatch_count"], 0)
         self.assertTrue(
             icc["whole_game_moonlab_deployment_claim_allowed"])
 
@@ -4331,6 +4509,58 @@ class PublicationPackTests(unittest.TestCase):
         ))
         self.assertFalse(
             stale_source_icc_gate[
+                "whole_game_moonlab_deployment_claim_allowed"])
+
+        stale_advantage_icc_evidence = json.loads(
+            json.dumps(advantage_icc_evidence))
+        stale_advantage_icc_evidence[
+            "qae_moonlab_grover_schedule_plan_icc_evidence"
+        ]["ready_observation_count"] = 0
+        stale_advantage_icc_evidence[
+            "advantage_icc_evidence"
+        ]["hardware_quantum_advantage_claimed"] = True
+        stale_advantage_icc_gate = moonlab_deployment_gate.build_gate(
+            complete_coverage,
+            complete_inventory,
+            complete_requirements,
+            complete_plan,
+            job_specs,
+            complete_job_results,
+            submission_packet,
+            hardware_template,
+            submission_bundle=submission_bundle,
+            hardware_submission_scope=hardware_submission_scope,
+            advantage_artifacts=advantage_artifacts,
+            advantage_icc_evidence=stale_advantage_icc_evidence,
+            advantage_icc_evidence_required=True,
+            artifact_paths=advantage_artifact_paths,
+            source_path=Path("stale-advantage-icc-pack"),
+        )
+        stale_advantage_icc_blockers = {
+            item["id"] for item in stale_advantage_icc_gate["blockers"]
+        }
+        self.assertIn(
+            "moonlab_advantage_icc_evidence_consistent",
+            stale_advantage_icc_blockers,
+        )
+        stale_advantage_icc_criterion = next(
+            item for item in stale_advantage_icc_gate["criteria"]
+            if item["id"] == "moonlab_advantage_icc_evidence_consistent")
+        self.assertEqual(stale_advantage_icc_criterion["status"], "blocked")
+        self.assertTrue(any(
+            item.get("sidecar") ==
+            "qae_moonlab_grover_schedule_plan_icc_evidence"
+            and "ready_observation_count" in item.get("fields", [])
+            for item in stale_advantage_icc_criterion[
+                "moonlab_advantage_icc_evidence_mismatches"]
+        ))
+        self.assertTrue(any(
+            flag.get("flag") == "hardware_quantum_advantage_claimed"
+            for flag in stale_advantage_icc_criterion[
+                "moonlab_advantage_icc_evidence_overclaim_flags"]
+        ))
+        self.assertFalse(
+            stale_advantage_icc_gate[
                 "whole_game_moonlab_deployment_claim_allowed"])
 
         coverage_only_job_results = dict(complete_job_results)

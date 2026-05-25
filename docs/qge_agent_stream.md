@@ -487,7 +487,9 @@ job-result ledger. The gate also recomputes the Moonlab source ICC sidecars
 from the full-game plan, submission bundle, and hardware-submission scope
 ledgers before accepting those sidecars, and recomputes the resource ICC
 sidecars from the asset inventory, asset requirements, and registered-asset
-intake ledgers. The gate
+intake ledgers. The advantage/control-plane ICC sidecars are recomputed from
+the advantage metrics and Moonlab payload, kernel, observation, and Grover
+schedule artifacts before the gate accepts them. The gate
 reports resource blockers as `blocked` statuses, reserving generic failure
 events for crashed or invalid runtime evidence. Each
 contract records the episode/slot, route class, route profile, combat
