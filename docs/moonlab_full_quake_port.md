@@ -79,7 +79,9 @@ relying on one generic missing-map smoke profile. The gate remains blocked if a
 future plan lacks that complete route-contract ledger, or if a covered map lacks
 route-contract authority evidence from breadth capture matrices. It also blocks
 if the deployment plan omits or disagrees with the registered-asset handoff
-ledger while remediation evidence is present. The current covered set is 9/9
+ledger while remediation evidence is present, and if the Moonlab
+`full_game_map_coverage` job result is stale against the current coverage,
+inventory, and asset-requirements artifacts. The current covered set is 9/9
 route-authority ready; the remaining 23 maps are still asset unavailable.
 `resource/qge_moonlab_deployment_gate.json` is the fail-closed claim gate for
 the sentence "the entire game runs in Moonlab." It is currently `blocked`

@@ -116,6 +116,55 @@ def write_pak(
     )
 
 
+def moonlab_coverage_ledger_result_job(
+    coverage: dict,
+    inventory: dict,
+    requirements: dict,
+    *,
+    observations_override: dict | None = None,
+) -> dict:
+    observations = {
+        "coverage_status": coverage.get("status"),
+        "map_set": coverage.get("map_set"),
+        "target_map_count": coverage.get("target_map_count"),
+        "covered_map_count": coverage.get("covered_map_count"),
+        "missing_map_count": coverage.get("missing_map_count"),
+        "missing_maps": coverage.get("missing_maps"),
+        "asset_inventory_status": inventory.get("status"),
+        "asset_available_map_count": inventory.get("available_map_count"),
+        "asset_missing_map_count": inventory.get("missing_map_count"),
+        "asset_invalid_bsp_count": inventory.get("invalid_bsp_count"),
+        "full_game_asset_ready": inventory.get("full_game_asset_ready"),
+        "asset_requirement_status": requirements.get("status"),
+        "asset_requirements_present_map_count": (
+            requirements.get("present_map_count")),
+        "asset_requirements_missing_map_count": (
+            requirements.get("missing_map_count")),
+        "asset_requirements_satisfied": (
+            moonlab_deployment_gate.dict_or_empty(
+                requirements.get("claim_posture")
+            ).get("asset_requirements_satisfied")),
+    }
+    if observations_override:
+        observations.update(observations_override)
+    return {
+        "job_id": "qge.full_game_map_coverage.ledger.v0",
+        "domain": "full_game_map_coverage",
+        "kind": "moonlab_coverage_ledger_replay",
+        "result_status": "completed",
+        "missing_required_artifacts": [],
+        "backend_results": [
+            {
+                "backend_id": "moonlab-simulator-local/qge-publication-pack",
+                "backend_kind": "moonlab_simulator",
+                "status": "completed",
+                "run_id": "moonlab-sim-test-ledger",
+            },
+        ],
+        "observations": observations,
+    }
+
+
 def minimal_oracle_scene() -> dict:
     return {
         "scene": {
@@ -2860,7 +2909,13 @@ class PublicationPackTests(unittest.TestCase):
             "blocked_job_count": 0,
             "hardware_candidate_job_count": 1,
             "hardware_submitted_job_count": 0,
-            "jobs": [],
+            "jobs": [
+                moonlab_coverage_ledger_result_job(
+                    partial_coverage,
+                    partial_inventory,
+                    partial_requirements,
+                ),
+            ],
         }
         submission_packet = {
             "schema": "qge.moonlab_submission_packet.v0",
@@ -2999,6 +3054,8 @@ class PublicationPackTests(unittest.TestCase):
             "covered_route_contract_authority_complete", blocker_ids)
         self.assertNotIn(
             "registered_asset_handoff_consistent", blocker_ids)
+        self.assertNotIn(
+            "moonlab_coverage_ledger_consistent", blocker_ids)
         self.assertTrue(all(
             item["status"] == "blocked"
             for item in blocked_gate["blockers"]
@@ -3025,6 +3082,17 @@ class PublicationPackTests(unittest.TestCase):
             handoff_criterion[
                 "registered_asset_handoff_licensed_asset_required_count"],
             30,
+        )
+        coverage_ledger_criterion = next(
+            item for item in blocked_gate["criteria"]
+            if item["id"] == "moonlab_coverage_ledger_consistent")
+        self.assertEqual(coverage_ledger_criterion["status"], "pass")
+        self.assertTrue(
+            coverage_ledger_criterion["moonlab_coverage_ledger_recorded"])
+        self.assertEqual(
+            coverage_ledger_criterion[
+                "moonlab_coverage_ledger_mismatch_count"],
+            0,
         )
         self.assertEqual(
             blocked_gate["asset_remediation"][
@@ -3089,6 +3157,18 @@ class PublicationPackTests(unittest.TestCase):
         self.assertTrue(
             blocked_gate["summary"][
                 "registered_asset_discovery_command_present"])
+        self.assertTrue(
+            blocked_gate["summary"]["moonlab_coverage_ledger_recorded"])
+        self.assertEqual(
+            blocked_gate["summary"][
+                "moonlab_coverage_ledger_mismatch_count"],
+            0,
+        )
+        self.assertEqual(
+            blocked_gate["summary"][
+                "moonlab_coverage_ledger_observed_missing_map_count"],
+            30,
+        )
         self.assertIn(
             "qge_registered_asset_intake.py",
             blocked_gate["summary"]["registered_asset_discovery_command"],
@@ -3117,6 +3197,7 @@ class PublicationPackTests(unittest.TestCase):
         self.assertIn("copy script mode", blocked_markdown)
         self.assertIn("Route contracts: 32 (complete=True)", blocked_markdown)
         self.assertIn("Registered asset handoff", blocked_markdown)
+        self.assertIn("Moonlab coverage ledger", blocked_markdown)
         self.assertIn(
             "Covered route authority: 2 / 2 (complete=True)",
             blocked_markdown,
@@ -3169,6 +3250,17 @@ class PublicationPackTests(unittest.TestCase):
             blocked_icc["full_game_route_contract_map_count"], 32)
         self.assertTrue(
             blocked_icc["covered_route_contract_authority_complete"])
+        self.assertTrue(
+            blocked_icc["moonlab_coverage_ledger_recorded"])
+        self.assertEqual(
+            blocked_icc["moonlab_coverage_ledger_mismatch_count"],
+            0,
+        )
+        self.assertEqual(
+            blocked_icc[
+                "moonlab_coverage_ledger_observed_missing_map_count"],
+            30,
+        )
         self.assertIn(
             "qge_registered_asset_intake.py",
             blocked_icc["registered_asset_discovery_command"],
@@ -3251,11 +3343,28 @@ class PublicationPackTests(unittest.TestCase):
                 for name in all_maps
             ],
         }
+        complete_job_results = {
+            "schema": "qge.moonlab_job_results.v0",
+            "overall_status": "simulator_complete_hardware_not_submitted",
+            "selected_job_count": 4,
+            "completed_simulator_job_count": 4,
+            "completed_native_replay_job_count": 2,
+            "blocked_job_count": 0,
+            "hardware_candidate_job_count": 1,
+            "hardware_submitted_job_count": 0,
+            "jobs": [
+                moonlab_coverage_ledger_result_job(
+                    complete_coverage,
+                    complete_inventory,
+                    complete_requirements,
+                ),
+            ],
+        }
         complete_plan = moonlab_full_game_plan.build_plan(
             complete_coverage,
             complete_inventory,
             breadth_evidence=complete_breadth,
-            moonlab_job_results=job_results,
+            moonlab_job_results=complete_job_results,
             submission_packet=submission_packet,
             hardware_record_template=hardware_template,
         )
@@ -3265,7 +3374,7 @@ class PublicationPackTests(unittest.TestCase):
             complete_requirements,
             complete_plan,
             job_specs,
-            job_results,
+            complete_job_results,
             submission_packet,
             hardware_template,
             source_path=Path("complete-pack"),
@@ -3283,6 +3392,13 @@ class PublicationPackTests(unittest.TestCase):
         self.assertTrue(
             ready_gate["summary"][
                 "covered_route_contract_authority_complete"])
+        self.assertTrue(
+            ready_gate["summary"]["moonlab_coverage_ledger_recorded"])
+        self.assertEqual(
+            ready_gate["summary"][
+                "moonlab_coverage_ledger_mismatch_count"],
+            0,
+        )
         icc = moonlab_deployment_gate.build_icc_evidence(
             ready_gate, out_path=Path("qge_moonlab_deployment_gate.json"))
         self.assertEqual(
@@ -3291,6 +3407,53 @@ class PublicationPackTests(unittest.TestCase):
             icc["completion_reason"], "qge_moonlab_deployment_gate_ready")
         self.assertTrue(
             icc["whole_game_moonlab_deployment_claim_allowed"])
+
+        stale_job_results = dict(complete_job_results)
+        stale_job_results["jobs"] = [
+            moonlab_coverage_ledger_result_job(
+                complete_coverage,
+                complete_inventory,
+                complete_requirements,
+                observations_override={
+                    "coverage_status": "partial",
+                    "missing_map_count": 30,
+                },
+            ),
+        ]
+        stale_ledger_gate = moonlab_deployment_gate.build_gate(
+            complete_coverage,
+            complete_inventory,
+            complete_requirements,
+            complete_plan,
+            job_specs,
+            stale_job_results,
+            submission_packet,
+            hardware_template,
+            source_path=Path("stale-ledger-pack"),
+        )
+        stale_ledger_blockers = {
+            item["id"] for item in stale_ledger_gate["blockers"]
+        }
+        self.assertIn(
+            "moonlab_coverage_ledger_consistent",
+            stale_ledger_blockers,
+        )
+        stale_ledger_criterion = next(
+            item for item in stale_ledger_gate["criteria"]
+            if item["id"] == "moonlab_coverage_ledger_consistent")
+        self.assertEqual(stale_ledger_criterion["status"], "blocked")
+        self.assertIn(
+            "coverage_status",
+            stale_ledger_criterion["moonlab_coverage_ledger_mismatches"],
+        )
+        self.assertIn(
+            "missing_map_count",
+            stale_ledger_criterion["moonlab_coverage_ledger_mismatches"],
+        )
+        self.assertTrue(any(
+            "qge_moonlab_job_results.json" in action
+            for action in stale_ledger_gate["next_actions"]
+        ))
 
         legacy_plan = dict(complete_plan)
         for key in (
@@ -3307,7 +3470,7 @@ class PublicationPackTests(unittest.TestCase):
             complete_requirements,
             legacy_plan,
             job_specs,
-            job_results,
+            complete_job_results,
             submission_packet,
             hardware_template,
             source_path=Path("legacy-pack"),

@@ -301,7 +301,9 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      `asset_handoff_status`, so the post-asset plan can tell copy-plan-ready
      maps from blocked destinations and maps that still need manual licensed
      assets. The Moonlab deployment gate rejects stale plans whose handoff is
-     missing or inconsistent with the intake remediation ledger.
+     missing or inconsistent with the intake remediation ledger, and rejects
+     stale Moonlab coverage-ledger job results that disagree with current
+     coverage, inventory, or asset-requirements artifacts.
    - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
      and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
      scanning bounded candidate directories. The intake artifact records

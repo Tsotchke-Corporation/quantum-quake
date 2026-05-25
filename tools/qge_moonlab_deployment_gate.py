@@ -437,6 +437,159 @@ def registered_asset_handoff_audit(
     }
 
 
+def first_job_by_domain(
+    job_results: dict[str, Any],
+    domain: str,
+) -> dict[str, Any]:
+    for job in list_or_empty(job_results.get("jobs")):
+        if isinstance(job, dict) and job.get("domain") == domain:
+            return job
+    return {}
+
+
+def backend_completed(job: dict[str, Any], backend_kind: str) -> bool:
+    return any(
+        isinstance(item, dict) and
+        item.get("backend_kind") == backend_kind and
+        item.get("status") == "completed"
+        for item in list_or_empty(job.get("backend_results"))
+    )
+
+
+def coverage_ledger_mismatches(
+    observations: dict[str, Any],
+    coverage: dict[str, Any],
+    inventory: dict[str, Any],
+    requirements: dict[str, Any],
+) -> list[str]:
+    pairs = [
+        ("coverage_status", "coverage_status", coverage.get("status")),
+        ("map_set", "map_set", coverage.get("map_set")),
+        (
+            "target_map_count",
+            "target_map_count",
+            coverage.get("target_map_count"),
+        ),
+        (
+            "covered_map_count",
+            "covered_map_count",
+            coverage.get("covered_map_count"),
+        ),
+        (
+            "missing_map_count",
+            "missing_map_count",
+            coverage.get("missing_map_count"),
+        ),
+        (
+            "asset_inventory_status",
+            "asset_inventory_status",
+            inventory.get("status"),
+        ),
+        (
+            "asset_available_map_count",
+            "asset_available_map_count",
+            inventory.get("available_map_count"),
+        ),
+        (
+            "asset_missing_map_count",
+            "asset_missing_map_count",
+            inventory.get("missing_map_count"),
+        ),
+        (
+            "asset_invalid_bsp_count",
+            "asset_invalid_bsp_count",
+            inventory.get("invalid_bsp_count"),
+        ),
+        (
+            "full_game_asset_ready",
+            "full_game_asset_ready",
+            inventory.get("full_game_asset_ready"),
+        ),
+        (
+            "asset_requirement_status",
+            "asset_requirement_status",
+            requirements.get("status"),
+        ),
+        (
+            "asset_requirements_present_map_count",
+            "asset_requirements_present_map_count",
+            requirements.get("present_map_count"),
+        ),
+        (
+            "asset_requirements_missing_map_count",
+            "asset_requirements_missing_map_count",
+            requirements.get("missing_map_count"),
+        ),
+        (
+            "asset_requirements_satisfied",
+            "asset_requirements_satisfied",
+            dict_or_empty(requirements.get("claim_posture")).get(
+                "asset_requirements_satisfied"),
+        ),
+    ]
+    mismatches = []
+    for label, observation_key, expected in pairs:
+        if expected is None:
+            continue
+        if observations.get(observation_key) != expected:
+            mismatches.append(label)
+    expected_missing = coverage.get("missing_maps")
+    if expected_missing is not None and string_list(
+        observations.get("missing_maps")
+    ) != string_list(expected_missing):
+        mismatches.append("missing_maps")
+    return mismatches
+
+
+def moonlab_coverage_ledger_audit(
+    coverage: dict[str, Any],
+    inventory: dict[str, Any],
+    requirements: dict[str, Any],
+    job_results: dict[str, Any],
+) -> dict[str, Any]:
+    job = first_job_by_domain(job_results, "full_game_map_coverage")
+    observations = dict_or_empty(job.get("observations"))
+    missing_required_artifacts = [
+        item for item in list_or_empty(job.get("missing_required_artifacts"))
+        if isinstance(item, str)
+    ]
+    mismatches = (
+        coverage_ledger_mismatches(
+            observations,
+            coverage,
+            inventory,
+            requirements,
+        )
+        if job else
+        []
+    )
+    recorded = bool(job)
+    simulator_completed = backend_completed(job, "moonlab_simulator")
+    result_status = job.get("result_status")
+    return {
+        "recorded": recorded,
+        "result_status": result_status,
+        "simulator_backend_completed": simulator_completed,
+        "missing_required_artifact_count": len(missing_required_artifacts),
+        "missing_required_artifacts": missing_required_artifacts,
+        "mismatch_count": len(mismatches),
+        "mismatches": mismatches,
+        "observed_coverage_status": observations.get("coverage_status"),
+        "observed_missing_map_count": observations.get("missing_map_count"),
+        "observed_asset_requirement_status": observations.get(
+            "asset_requirement_status"),
+        "observed_asset_requirements_satisfied": observations.get(
+            "asset_requirements_satisfied"),
+        "passed": (
+            recorded and
+            result_status == "completed" and
+            simulator_completed and
+            not missing_required_artifacts and
+            not mismatches
+        ),
+    }
+
+
 def gate_summary(
     coverage: dict[str, Any],
     inventory: dict[str, Any],
@@ -450,6 +603,12 @@ def gate_summary(
     remediation = dict_or_empty(asset_remediation)
     handoff = dict_or_empty(full_game_plan.get("registered_asset_handoff"))
     handoff_counts = asset_handoff_status_counts(full_game_plan)
+    coverage_ledger = moonlab_coverage_ledger_audit(
+        coverage,
+        inventory,
+        requirements,
+        job_results,
+    )
     return {
         "map_set": coverage.get("map_set") or inventory.get("map_set"),
         "coverage_status": coverage.get("status"),
@@ -511,6 +670,25 @@ def gate_summary(
             handoff_counts.get("copy_plan_unblocked", 0)),
         "registered_asset_handoff_copy_plan_blocked_count": (
             handoff_counts.get("copy_plan_blocked", 0)),
+        "moonlab_coverage_ledger_recorded": coverage_ledger.get("recorded"),
+        "moonlab_coverage_ledger_result_status": coverage_ledger.get(
+            "result_status"),
+        "moonlab_coverage_ledger_simulator_backend_completed": (
+            coverage_ledger.get("simulator_backend_completed")),
+        "moonlab_coverage_ledger_mismatch_count": coverage_ledger.get(
+            "mismatch_count"),
+        "moonlab_coverage_ledger_mismatches": coverage_ledger.get(
+            "mismatches"),
+        "moonlab_coverage_ledger_missing_required_artifact_count": (
+            coverage_ledger.get("missing_required_artifact_count")),
+        "moonlab_coverage_ledger_observed_coverage_status": (
+            coverage_ledger.get("observed_coverage_status")),
+        "moonlab_coverage_ledger_observed_missing_map_count": (
+            coverage_ledger.get("observed_missing_map_count")),
+        "moonlab_coverage_ledger_observed_asset_requirement_status": (
+            coverage_ledger.get("observed_asset_requirement_status")),
+        "moonlab_coverage_ledger_observed_asset_requirements_satisfied": (
+            coverage_ledger.get("observed_asset_requirements_satisfied")),
         "selected_job_count": job_specs.get("selected_job_count"),
         "result_selected_job_count": job_results.get("selected_job_count"),
         "completed_simulator_job_count": job_results.get(
@@ -671,6 +849,12 @@ def build_criteria(
         remediation,
         asset_unavailable=asset_unavailable,
     )
+    coverage_ledger_audit = moonlab_coverage_ledger_audit(
+        coverage,
+        inventory,
+        requirements,
+        job_results,
+    )
 
     selected_count = int_or_none(job_specs.get("selected_job_count"))
     result_selected_count = int_or_none(job_results.get("selected_job_count"))
@@ -803,6 +987,40 @@ def build_criteria(
             "full-game plan is missing or inconsistent with registered asset intake handoff evidence",
         ),
         criterion(
+            "moonlab_coverage_ledger_consistent",
+            bool_true(coverage_ledger_audit.get("passed")),
+            {
+                "moonlab_coverage_ledger_recorded": (
+                    coverage_ledger_audit.get("recorded")),
+                "moonlab_coverage_ledger_result_status": (
+                    coverage_ledger_audit.get("result_status")),
+                "moonlab_coverage_ledger_simulator_backend_completed": (
+                    coverage_ledger_audit.get(
+                        "simulator_backend_completed")),
+                "moonlab_coverage_ledger_missing_required_artifact_count": (
+                    coverage_ledger_audit.get(
+                        "missing_required_artifact_count")),
+                "moonlab_coverage_ledger_mismatch_count": (
+                    coverage_ledger_audit.get("mismatch_count")),
+                "moonlab_coverage_ledger_mismatches": (
+                    coverage_ledger_audit.get("mismatches")),
+                "moonlab_coverage_ledger_observed_coverage_status": (
+                    coverage_ledger_audit.get("observed_coverage_status")),
+                "moonlab_coverage_ledger_observed_missing_map_count": (
+                    coverage_ledger_audit.get("observed_missing_map_count")),
+                "moonlab_coverage_ledger_observed_asset_requirement_status": (
+                    coverage_ledger_audit.get(
+                        "observed_asset_requirement_status")),
+                "moonlab_coverage_ledger_observed_asset_requirements_satisfied": (
+                    coverage_ledger_audit.get(
+                        "observed_asset_requirements_satisfied")),
+            },
+            (
+                "Moonlab coverage-ledger replay is missing, stale, or "
+                "inconsistent with coverage and asset evidence"
+            ),
+        ),
+        criterion(
             "full_game_deployment_plan_complete",
             plan_passed,
             {
@@ -895,6 +1113,12 @@ def next_actions_for_blockers(
     if "registered_asset_handoff_consistent" in failed_ids:
         actions.append(
             "Regenerate qge_moonlab_full_game_plan.json from the current registered-asset intake so per-map asset_handoff_status matches the copy-plan ledger."
+        )
+    if "moonlab_coverage_ledger_consistent" in failed_ids:
+        actions.append(
+            "Regenerate qge_moonlab_job_results.json from the current pack so "
+            "the full_game_map_coverage Moonlab replay observations match "
+            "coverage, inventory, and asset requirements."
         )
     if "full_game_deployment_plan_complete" in failed_ids:
         if queue_command:
@@ -1169,6 +1393,29 @@ def build_icc_evidence(
             "registered_asset_handoff_copy_plan_unblocked_count"),
         "registered_asset_handoff_copy_plan_blocked_count": summary.get(
             "registered_asset_handoff_copy_plan_blocked_count"),
+        "moonlab_coverage_ledger_recorded": summary.get(
+            "moonlab_coverage_ledger_recorded"),
+        "moonlab_coverage_ledger_result_status": summary.get(
+            "moonlab_coverage_ledger_result_status"),
+        "moonlab_coverage_ledger_simulator_backend_completed": summary.get(
+            "moonlab_coverage_ledger_simulator_backend_completed"),
+        "moonlab_coverage_ledger_mismatch_count": summary.get(
+            "moonlab_coverage_ledger_mismatch_count"),
+        "moonlab_coverage_ledger_mismatches": summary.get(
+            "moonlab_coverage_ledger_mismatches"),
+        "moonlab_coverage_ledger_missing_required_artifact_count": (
+            summary.get(
+                "moonlab_coverage_ledger_missing_required_artifact_count")),
+        "moonlab_coverage_ledger_observed_coverage_status": summary.get(
+            "moonlab_coverage_ledger_observed_coverage_status"),
+        "moonlab_coverage_ledger_observed_missing_map_count": summary.get(
+            "moonlab_coverage_ledger_observed_missing_map_count"),
+        "moonlab_coverage_ledger_observed_asset_requirement_status": (
+            summary.get(
+                "moonlab_coverage_ledger_observed_asset_requirement_status")),
+        "moonlab_coverage_ledger_observed_asset_requirements_satisfied": (
+            summary.get(
+                "moonlab_coverage_ledger_observed_asset_requirements_satisfied")),
         "full_game_route_contract_schema": summary.get(
             "route_contract_schema"),
         "full_game_route_contract_map_count": summary.get(
@@ -1253,6 +1500,14 @@ def markdown_report(gate: dict[str, Any]) -> str:
             f"licensed_required={summary.get('registered_asset_handoff_licensed_asset_required_count')} "
             f"copy_unblocked={summary.get('registered_asset_handoff_copy_plan_unblocked_count')} "
             f"copy_blocked={summary.get('registered_asset_handoff_copy_plan_blocked_count')}"
+        ),
+        (
+            "Moonlab coverage ledger: "
+            f"recorded={summary.get('moonlab_coverage_ledger_recorded')} "
+            f"status={summary.get('moonlab_coverage_ledger_result_status')} "
+            "backend_completed="
+            f"{summary.get('moonlab_coverage_ledger_simulator_backend_completed')} "
+            f"mismatches={summary.get('moonlab_coverage_ledger_mismatch_count')}"
         ),
         "",
         "| Criterion | Status | Blocker |",
