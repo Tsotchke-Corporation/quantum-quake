@@ -759,10 +759,14 @@ def build_icc_evidence(
     out_path: Path | None = None,
 ) -> dict[str, Any]:
     summary = dict_or_empty(gate.get("summary"))
+    claim_allowed = gate.get("whole_game_moonlab_deployment_claim_allowed")
+    completion_reason = "qge_moonlab_deployment_gate_blocked"
+    if claim_allowed is True:
+        completion_reason = "qge_moonlab_deployment_gate_ready"
     return {
         "schema": "qge.icc_evidence.v0",
         "runtime_backend": "qge_moonlab_deployment_gate",
-        "completion_reason": "qge_moonlab_deployment_gate_recorded",
+        "completion_reason": completion_reason,
         "moonlab_deployment_gate_file": str(out_path) if out_path else None,
         "status": "success",
         "gate_status": gate.get("status"),

@@ -439,6 +439,64 @@
       ]
     },
     {
+      "name": "qge_moonlab_full_game_deployment",
+      "target": "Full Quake running in Moonlab with publishable hardware-deployment evidence",
+      "aliases": [
+        "qge_moonlab_full_game_deployment",
+        "full quake moonlab deployment",
+        "whole game moonlab deployment",
+        "full-game moonlab deployment"
+      ],
+      "requires": [
+        {
+          "id": "qge_moonlab_full_game_deployment_backend",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_moonlab_deployment_gate"
+          ],
+          "severity": "high",
+          "label": "Moonlab full-game deployment gate backend evidence is present",
+          "action": "emit_qge_moonlab_deployment_gate_icc_evidence"
+        },
+        {
+          "id": "qge_moonlab_full_game_deployment_ready",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_moonlab_deployment_gate_ready"
+          ],
+          "severity": "high",
+          "label": "Moonlab full-game deployment gate is ready",
+          "action": "complete_registered_assets_and_full_game_capture_gate"
+        },
+        {
+          "id": "qge_moonlab_full_game_deployment_artifact",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "moonlab_deployment_gate_file",
+            "qge_moonlab_deployment_gate.json"
+          ],
+          "severity": "high",
+          "label": "Moonlab full-game deployment gate artifact is visible to ICC",
+          "action": "write_qge_moonlab_deployment_gate_json"
+        }
+      ]
+    },
+    {
       "name": "qge_breadth_evidence_pack",
       "target": "qge_breadth_evidence_pack",
       "aliases": [

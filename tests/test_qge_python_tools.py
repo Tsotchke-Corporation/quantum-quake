@@ -200,6 +200,46 @@ class ICCProfileTests(unittest.TestCase):
             artifact_requirement["event_names"],
         )
 
+    def test_moonlab_full_game_deployment_oracle_requires_ready_gate(self) -> None:
+        profile = json.loads(
+            (REPO_ROOT / ".icc" / "completion-oracles.json")
+            .read_text(encoding="utf-8")
+        )
+        oracle = next(
+            item for item in profile["oracles"]
+            if item["name"] == "qge_moonlab_full_game_deployment"
+        )
+        self.assertEqual(
+            oracle["target"],
+            "Full Quake running in Moonlab with publishable "
+            "hardware-deployment evidence",
+        )
+        self.assertNotIn("suppressed_runtime_checks", oracle)
+
+        requirements = {item["id"]: item for item in oracle["requires"]}
+        backend_requirement = (
+            requirements["qge_moonlab_full_game_deployment_backend"])
+        ready_requirement = (
+            requirements["qge_moonlab_full_game_deployment_ready"])
+        artifact_requirement = (
+            requirements["qge_moonlab_full_game_deployment_artifact"])
+        self.assertEqual(
+            backend_requirement["event_values"],
+            ["qge_moonlab_deployment_gate"],
+        )
+        self.assertEqual(
+            ready_requirement["event_values"],
+            ["qge_moonlab_deployment_gate_ready"],
+        )
+        self.assertIn(
+            "moonlab_deployment_gate_file",
+            artifact_requirement["event_names"],
+        )
+        self.assertIn(
+            "qge_moonlab_deployment_gate.json",
+            artifact_requirement["event_names"],
+        )
+
 
 class OracleExportTests(unittest.TestCase):
     def test_parse_helpers_and_icc_evidence(self) -> None:
@@ -2823,6 +2863,9 @@ class PublicationPackTests(unittest.TestCase):
             out_path=Path("qge_moonlab_deployment_gate.blocked.json"),
         )
         self.assertEqual(
+            blocked_icc["completion_reason"],
+            "qge_moonlab_deployment_gate_blocked")
+        self.assertEqual(
             blocked_icc["registered_asset_install_script"],
             "resource/install_registered_assets.sh",
         )
@@ -2896,6 +2939,8 @@ class PublicationPackTests(unittest.TestCase):
             ready_gate, out_path=Path("qge_moonlab_deployment_gate.json"))
         self.assertEqual(
             icc["runtime_backend"], "qge_moonlab_deployment_gate")
+        self.assertEqual(
+            icc["completion_reason"], "qge_moonlab_deployment_gate_ready")
         self.assertTrue(
             icc["whole_game_moonlab_deployment_claim_allowed"])
 
@@ -3051,6 +3096,9 @@ class PublicationPackTests(unittest.TestCase):
                 cli_gate["summary"][
                     "post_install_capture_queue_command_present"])
             cli_icc = publication_pack.load_json(icc_path)
+            self.assertEqual(
+                cli_icc["completion_reason"],
+                "qge_moonlab_deployment_gate_blocked")
             self.assertFalse(
                 cli_icc["whole_game_moonlab_deployment_claim_allowed"])
             self.assertEqual(

@@ -32,6 +32,11 @@ The oracles in `completion-oracles.json` deliberately separate task classes:
   It suppresses the generic pack-level `failure_free` check only for this
   hardware-packet target so the full-game Moonlab deployment gate remains
   blocked until registered BSP assets and full-game evidence are present.
+- `qge_moonlab_full_game_deployment`: whole-game Moonlab simulator/native
+  deployment work. It requires the deployment-gate artifact, the matching
+  runtime backend event, and the `qge_moonlab_deployment_gate_ready` completion
+  event, so a blocked deployment gate is reported as an incomplete full-game
+  oracle instead of a generic runtime failure.
 
 The criteria use ICC event-name and event-value filters so an oracle-export
 sidecar cannot accidentally satisfy an advantage-benchmark or publication gate.

@@ -166,6 +166,8 @@ grep -q 'runtime_backend_probe_resolved_run_count' "$repo_root/tools/qge_breadth
 grep -q 'qge_breadth_evidence_pack' "$repo_root/.icc/completion-oracles.json"
 grep -q 'qge_moonlab_hardware_submission_scope' "$repo_root/.icc/completion-oracles.json"
 grep -q 'qge_moonlab_hardware_submission_scope_ready' "$repo_root/.icc/completion-oracles.json"
+grep -q 'qge_moonlab_full_game_deployment' "$repo_root/.icc/completion-oracles.json"
+grep -q 'qge_moonlab_deployment_gate_ready' "$repo_root/.icc/completion-oracles.json"
 grep -q 'suppressed_runtime_checks' "$repo_root/.icc/completion-oracles.json"
 grep -q 'qge_breadth_evidence.py' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'qge_asset_inventory.py' "$repo_root/docs/qge_agent_stream.md"
