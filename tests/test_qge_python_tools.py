@@ -60,6 +60,7 @@ import qge_registered_asset_intake as registered_asset_intake  # noqa: E402
 import qge_registered_asset_script_audit as registered_asset_script_audit  # noqa: E402
 import qge_runtime_icc_audit as runtime_icc_audit  # noqa: E402
 import qge_trace_summary as trace_summary  # noqa: E402
+import qge_trace_summary_audit as trace_summary_audit  # noqa: E402
 import qge_vanilla_capture_matrix as vanilla_matrix  # noqa: E402
 import qge_world_frame_metrics as world_frame_metrics  # noqa: E402
 
@@ -3885,6 +3886,46 @@ class PublicationPackTests(unittest.TestCase):
             and "render_time_ms_max" in item.get("fields", [])
             for item in stale_audit["sidecar_mismatches"]
         ))
+        self.assertTrue(any(
+            flag.get("flag") == "hardware_quantum_advantage_claimed"
+            for flag in stale_audit["overclaim_flags"]
+        ))
+
+    def test_trace_summary_audit_ignores_path_and_detects_stale_fields(
+        self,
+    ) -> None:
+        expected = {
+            "path": "packed/capture/qge_trace.bin",
+            "records": {
+                "frame_begin": 3,
+                "frame_end": 3,
+            },
+            "runtime_evidence": {
+                "single_trace_ready": False,
+            },
+        }
+        recorded = json.loads(json.dumps(expected))
+        recorded["path"] = "diagnostics/quake_stream/source/qge_trace.bin"
+
+        audit = trace_summary_audit.trace_summary_audit(
+            expected,
+            recorded,
+            required=True,
+        )
+        self.assertTrue(audit["passed"])
+        self.assertEqual(audit["field_mismatches"], [])
+        self.assertEqual(audit["ignored_fields"], ["path"])
+
+        stale = json.loads(json.dumps(recorded))
+        stale["records"]["frame_end"] = 2
+        stale["hardware_quantum_advantage_claimed"] = True
+        stale_audit = trace_summary_audit.trace_summary_audit(
+            expected,
+            stale,
+            required=True,
+        )
+        self.assertFalse(stale_audit["passed"])
+        self.assertIn("records.frame_end", stale_audit["field_mismatches"])
         self.assertTrue(any(
             flag.get("flag") == "hardware_quantum_advantage_claimed"
             for flag in stale_audit["overclaim_flags"]

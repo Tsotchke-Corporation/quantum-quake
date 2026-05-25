@@ -761,7 +761,8 @@ Known current visual state:
   agent-stream manifest is checked against packed frame, log, input,
   trace-summary, performance, audio-byte, and Noesis files before stream status
   evidence is accepted. The agent-stream ICC JSONL is rebuilt from that packed
-  agent manifest.
+  agent manifest. The packed trace summary is regenerated from
+  `capture/qge_trace.bin` before trace-derived runtime evidence is accepted.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims
