@@ -749,7 +749,9 @@ Known current visual state:
   advantage artifacts. The recorded source inputs are checked against copied
   artifact `source_path` provenance, and the manifest claim posture is checked
   against the blocked deployment-gate claim flags. The manifest reproduction
-  command list is checked for core command coverage and unsafe shell fragments.
+  command list is checked for core command coverage and unsafe shell fragments,
+  and the registered-asset install script is rebuilt from the packed intake
+  ledger.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims

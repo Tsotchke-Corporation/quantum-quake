@@ -52,6 +52,7 @@ import qge_publication_icc_audit as publication_icc_audit  # noqa: E402
 import qge_publication_pack as publication_pack  # noqa: E402
 import qge_resource_boundary_audit as resource_boundary_audit  # noqa: E402
 import qge_registered_asset_intake as registered_asset_intake  # noqa: E402
+import qge_registered_asset_script_audit as registered_asset_script_audit  # noqa: E402
 import qge_runtime_icc_audit as runtime_icc_audit  # noqa: E402
 import qge_trace_summary as trace_summary  # noqa: E402
 import qge_vanilla_capture_matrix as vanilla_matrix  # noqa: E402
@@ -1145,6 +1146,55 @@ class PublicationPackTests(unittest.TestCase):
             for item in stale_audit["unsafe_commands"]
         ))
         self.assertTrue(stale_audit["malformed_commands"])
+
+    def test_registered_asset_script_audit_detects_stale_script(
+        self,
+    ) -> None:
+        intake = {
+            "copy_plan": [],
+            "copy_script_mode": "no_op_blocked",
+            "missing_maps_after_plan": ["e2m1", "e2m2"],
+            "registered_asset_blocker_reason": "no_candidate_assets_found",
+            "post_install_verification": {
+                "commands": [
+                    {
+                        "kind": "asset_inventory",
+                        "shell_command": (
+                            "python3 tools/qge_asset_inventory.py "
+                            "--asset-root assets/id1 --json /tmp/a.json"),
+                    },
+                ],
+            },
+        }
+        script = "\n".join(registered_asset_intake.script_lines(intake))
+
+        audit = (
+            registered_asset_script_audit.registered_asset_script_audit(
+                intake,
+                script,
+                script_path="resource/install_registered_assets.sh",
+            )
+        )
+        self.assertTrue(audit["passed"])
+        self.assertEqual(audit["mismatch_count"], 0)
+
+        stale_audit = (
+            registered_asset_script_audit.registered_asset_script_audit(
+                intake,
+                script.replace(
+                    "QGE_REGISTERED_ASSET_NO_CANDIDATES",
+                    "QGE_REGISTERED_ASSET_COPY_PLAN_COMPLETE",
+                ),
+                script_path="resource/install_registered_assets.sh",
+            )
+        )
+        self.assertFalse(stale_audit["passed"])
+        self.assertEqual(stale_audit["mismatch_count"], 1)
+        self.assertEqual(
+            stale_audit["mismatches"][0]["kind"],
+            "script_content_mismatch",
+        )
+        self.assertTrue(stale_audit["mismatches"][0]["first_line_mismatch"])
 
     def test_manifest_source_input_audit_detects_stale_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
