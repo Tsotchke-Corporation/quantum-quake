@@ -933,12 +933,210 @@ def build_icc_evidence(
     }
 
 
+def candidate_digest_index(bundle: dict[str, Any]) -> dict[str, str]:
+    indexed: dict[str, str] = {}
+    for candidate in list_or_empty(bundle.get("candidate_jobs")):
+        if not isinstance(candidate, dict):
+            continue
+        job_id = candidate.get("job_id")
+        digest = candidate.get("candidate_digest")
+        if isinstance(job_id, str) and isinstance(digest, str):
+            indexed[job_id] = digest
+    return indexed
+
+
+def scoped_check(name: str, passed: bool, evidence: Any) -> dict[str, Any]:
+    return {
+        "check": name,
+        "status": "pass" if passed else "attention_required",
+        "evidence": evidence,
+    }
+
+
+def build_hardware_submission_scope(
+    submission_packet: dict[str, Any],
+    submission_bundle: dict[str, Any],
+    hardware_record_template: dict[str, Any],
+    *,
+    packet_path: Path | None = None,
+    bundle_path: Path | None = None,
+    hardware_template_path: Path | None = None,
+) -> dict[str, Any]:
+    digests = candidate_digest_index(submission_bundle)
+    template_record = dict_or_empty(hardware_record_template.get("record"))
+    validation_contract = dict_or_empty(
+        hardware_record_template.get("validation_contract"))
+    template_job_id = hardware_record_template.get("job_id")
+    template_digest = hardware_record_template.get("candidate_digest")
+    expected_digest = (
+        digests.get(template_job_id)
+        if isinstance(template_job_id, str)
+        else None
+    )
+    checks = [
+        scoped_check(
+            "submission_packet_schema",
+            submission_packet.get("schema") == "qge.moonlab_submission_packet.v0",
+            submission_packet.get("schema"),
+        ),
+        scoped_check(
+            "submission_bundle_schema",
+            submission_bundle.get("schema") == "qge.moonlab_submission_bundle.v0",
+            submission_bundle.get("schema"),
+        ),
+        scoped_check(
+            "hardware_record_template_schema",
+            hardware_record_template.get("schema") ==
+            "qge.moonlab_hardware_record_template.v0",
+            hardware_record_template.get("schema"),
+        ),
+        scoped_check(
+            "control_plane_payloads_ready",
+            submission_bundle.get("status") ==
+            "ready_for_control_plane_submission",
+            submission_bundle.get("status"),
+        ),
+        scoped_check(
+            "hardware_submission_directly_executable",
+            bool(submission_bundle.get("hardware_submission_directly_executable")),
+            submission_bundle.get("hardware_submission_directly_executable"),
+        ),
+        scoped_check(
+            "ready_candidate_count_positive",
+            isinstance(submission_bundle.get("ready_for_control_plane_submission_count"), int) and
+            submission_bundle.get("ready_for_control_plane_submission_count") > 0,
+            submission_bundle.get("ready_for_control_plane_submission_count"),
+        ),
+        scoped_check(
+            "hardware_template_candidate_digest_matches_bundle",
+            isinstance(template_digest, str) and template_digest == expected_digest,
+            {
+                "template_job_id": template_job_id,
+                "template_candidate_digest": template_digest,
+                "bundle_candidate_digest": expected_digest,
+            },
+        ),
+        scoped_check(
+            "hardware_record_validation_contract_present",
+            bool(validation_contract),
+            sorted(validation_contract.keys()),
+        ),
+        scoped_check(
+            "hardware_record_no_overclaim_template",
+            not bool(template_record.get("hardware_quantum_advantage_claimed")) and
+            not bool(template_record.get("whole_game_hardware_execution_claimed")) and
+            not bool(template_record.get("dense_70000_qubit_state_claimed")),
+            {
+                "hardware_quantum_advantage_claimed": template_record.get(
+                    "hardware_quantum_advantage_claimed"),
+                "whole_game_hardware_execution_claimed": template_record.get(
+                    "whole_game_hardware_execution_claimed"),
+                "dense_70000_qubit_state_claimed": template_record.get(
+                    "dense_70000_qubit_state_claimed"),
+            },
+        ),
+    ]
+    ready = all(check["status"] == "pass" for check in checks)
+    return {
+        "schema": "qge.moonlab_hardware_submission_scope.v0",
+        "status": "ready_for_control_plane_submission"
+        if ready else "attention_required_for_control_plane_submission",
+        "scope": "bounded_qae_hardware_candidate",
+        "source_submission_packet": str(packet_path) if packet_path else None,
+        "source_submission_bundle": str(bundle_path) if bundle_path else None,
+        "source_hardware_record_template": (
+            str(hardware_template_path) if hardware_template_path else None),
+        "hardware_submission_scope_ready": ready,
+        "hardware_candidate_job_count": submission_bundle.get(
+            "hardware_candidate_job_count"),
+        "ready_for_control_plane_submission_count": submission_bundle.get(
+            "ready_for_control_plane_submission_count"),
+        "hardware_submission_directly_executable": submission_bundle.get(
+            "hardware_submission_directly_executable"),
+        "grover_schedule_directly_executable": submission_bundle.get(
+            "grover_schedule_directly_executable"),
+        "candidate_job_ids": sorted(digests.keys()),
+        "candidate_digests": digests,
+        "hardware_record_template_job_id": template_job_id,
+        "hardware_record_template_candidate_digest": template_digest,
+        "hardware_record_schema": hardware_record_template.get("record_schema"),
+        "hardware_record_validation_contract": validation_contract,
+        "readiness_checks": checks,
+        "passing_check_count": sum(
+            1 for check in checks if check["status"] == "pass"),
+        "attention_check_count": sum(
+            1 for check in checks if check["status"] != "pass"),
+        "out_of_scope": [
+            "full_game_moonlab_deployment_gate",
+            "registered_bsp_asset_availability",
+            "whole_game_hardware_execution",
+            "hardware_quantum_advantage",
+            "dense_70000_qubit_state_execution",
+        ],
+        "claim_posture": {
+            "bounded_hardware_submission_ready_claimed": ready,
+            "hardware_result_claimed": False,
+            "hardware_quantum_advantage_claimed": False,
+            "whole_game_hardware_execution_claimed": False,
+            "dense_70000_qubit_state_claimed": False,
+        },
+        "limits": [
+            "This scoped artifact covers only the bounded QAE hardware-candidate handoff.",
+            "Full-game Moonlab deployment remains governed by qge_moonlab_deployment_gate.json.",
+            "A ready submission scope is not a returned hardware result.",
+        ],
+    }
+
+
+def build_scope_icc_evidence(
+    scope: dict[str, Any],
+    *,
+    out_path: Path | None = None,
+) -> dict[str, Any]:
+    ready = bool(scope.get("hardware_submission_scope_ready"))
+    return {
+        "schema": "qge.icc_evidence.v0",
+        "runtime_backend": "qge_moonlab_hardware_submission_scope",
+        "completion_reason": (
+            "qge_moonlab_hardware_submission_scope_ready"
+            if ready else
+            "qge_moonlab_hardware_submission_scope_attention_required"
+        ),
+        "moonlab_hardware_submission_scope_file": (
+            str(out_path) if out_path else None),
+        "moonlab_hardware_submission_scope_schema": scope.get("schema"),
+        "moonlab_hardware_submission_scope_status": scope.get("status"),
+        "moonlab_hardware_submission_scope_ready": ready,
+        "hardware_candidate_job_count": scope.get(
+            "hardware_candidate_job_count"),
+        "ready_for_control_plane_submission_count": scope.get(
+            "ready_for_control_plane_submission_count"),
+        "hardware_submission_directly_executable": scope.get(
+            "hardware_submission_directly_executable"),
+        "grover_schedule_directly_executable": scope.get(
+            "grover_schedule_directly_executable"),
+        "passing_check_count": scope.get("passing_check_count"),
+        "attention_check_count": scope.get("attention_check_count"),
+        "candidate_job_ids": scope.get("candidate_job_ids"),
+        "hardware_record_schema": scope.get("hardware_record_schema"),
+        "hardware_record_template_job_id": scope.get(
+            "hardware_record_template_job_id"),
+        "hardware_quantum_advantage_claimed": False,
+        "whole_game_hardware_execution_claimed": False,
+        "dense_70000_qubit_state_claimed": False,
+        "status": "success",
+    }
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("submission_packet", type=Path)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--markdown", type=Path)
     parser.add_argument("--icc-json", type=Path)
+    parser.add_argument("--hardware-template", type=Path)
+    parser.add_argument("--scope-out", type=Path)
+    parser.add_argument("--scope-icc-json", type=Path)
     return parser.parse_args(argv)
 
 
@@ -960,6 +1158,27 @@ def main(argv: Sequence[str] | None = None) -> int:
                 bundle,
                 out_path=args.out,
             ))
+        if args.scope_out or args.scope_icc_json:
+            if not args.hardware_template:
+                raise ValueError(
+                    "--hardware-template is required with --scope-out or "
+                    "--scope-icc-json")
+            template = load_json(args.hardware_template)
+            scope = build_hardware_submission_scope(
+                packet,
+                bundle,
+                template,
+                packet_path=args.submission_packet,
+                bundle_path=args.out,
+                hardware_template_path=args.hardware_template,
+            )
+            if args.scope_out:
+                write_json(args.scope_out, scope)
+            if args.scope_icc_json:
+                write_json(
+                    args.scope_icc_json,
+                    build_scope_icc_evidence(scope, out_path=args.scope_out),
+                )
     except (OSError, ValueError, KeyError, IndexError) as exc:
         print(f"qge_moonlab_submission_bundle: {exc}", file=sys.stderr)
         return 1
@@ -968,6 +1187,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"QGE_MOONLAB_SUBMISSION_BUNDLE_MARKDOWN {args.markdown}")
     if args.icc_json:
         print(f"QGE_MOONLAB_SUBMISSION_BUNDLE_ICC_EVIDENCE {args.icc_json}")
+    if args.scope_out:
+        print(f"QGE_MOONLAB_HARDWARE_SUBMISSION_SCOPE {args.scope_out}")
+    if args.scope_icc_json:
+        print(
+            "QGE_MOONLAB_HARDWARE_SUBMISSION_SCOPE_ICC_EVIDENCE "
+            f"{args.scope_icc_json}")
     return 0
 
 

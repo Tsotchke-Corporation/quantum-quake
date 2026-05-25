@@ -122,6 +122,9 @@ claimed from that artifact alone.
 `resource/qge_moonlab_hardware_record_template.json` is generated from that
 packet and provides the exact `qge.moonlab_hardware_record.v0` object Moonlab
 must fill before any hardware result is ingested.
+`resource/qge_moonlab_hardware_submission_scope.json` is the scoped handoff
+verdict for that bounded QAE candidate; it excludes the full-game deployment
+gate so asset blockers do not contaminate hardware-packet readiness evidence.
 `tools/qge_moonlab_job_runner.py` regenerates those results independently from
 the job specs, can compare them with `--expect`, and can emit a replay plan
 with `--plan-out` plus the submission packet with `--submission-out`, so the

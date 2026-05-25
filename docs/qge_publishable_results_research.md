@@ -174,6 +174,7 @@ claims evidence, finite-shot QAE benchmark artifacts,
 `advantage/qae_moonlab_oracle_kernel.moonlab`,
 `resource/qge_moonlab_submission_bundle.json`,
 `resource/qge_moonlab_hardware_record_template.json`,
+`resource/qge_moonlab_hardware_submission_scope.json`,
 `resource/qge_moonlab_deployment_gate.json`, and the nine-map breadth sidecar from
 `diagnostics/breadth_evidence/20260523-152522`. The full-game map coverage
 ledger is explicit: 9/32 canonical registered single-player maps covered, 23
@@ -390,8 +391,11 @@ observation circuit with exact candidate state preparation and inline `Q_f`,
 `advantage/qae_moonlab_grover_schedule_plan.json` for exact selected Grover
 power body-limit evidence,
 `resource/qge_moonlab_submission_bundle.json` for the control-plane readiness
-verdict, and `resource/qge_moonlab_hardware_record_template.json` for the
-exact no-claim hardware-return object. Regenerate the submission packet
+verdict, `resource/qge_moonlab_hardware_record_template.json` for the
+exact no-claim hardware-return object, and
+`resource/qge_moonlab_hardware_submission_scope.json` for the scoped QAE
+hardware handoff verdict that intentionally excludes the full-game deployment
+gate. Regenerate the submission packet
 independently with
 `tools/qge_moonlab_job_runner.py` when validating or re-submitting the selected
 Moonlab jobs outside publication-pack assembly:

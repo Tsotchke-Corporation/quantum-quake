@@ -684,6 +684,7 @@ Known current visual state:
   `resource/qge_moonlab_submission_packet.json`,
   `resource/qge_moonlab_submission_bundle.json`,
   `resource/qge_moonlab_hardware_record_template.json`,
+  `resource/qge_moonlab_hardware_submission_scope.json`,
   `resource/qge_moonlab_deployment_gate.json`, and the nine-map breadth
   counters plus per-target native backend proof maps. The full-game plan joins
   coverage and asset inventory into one deployment ledger; current status is

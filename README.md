@@ -109,7 +109,9 @@ Important known limitations:
   `resource/qge_moonlab_submission_bundle.json` with the stricter
   control-plane readiness verdict, plus
   `resource/qge_moonlab_hardware_record_template.json` with the exact
-  no-claim record Moonlab must fill after a hardware run.
+  no-claim record Moonlab must fill after a hardware run, and
+  `resource/qge_moonlab_hardware_submission_scope.json` to evaluate the
+  bounded QAE hardware handoff separately from full-game asset blockers.
   `tools/qge_moonlab_job_runner.py` can
   regenerate those results directly from the job specs, compare them against
   the packed expected results, and emit both a replay plan and submission

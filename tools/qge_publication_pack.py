@@ -1447,6 +1447,37 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         moonlab_hardware_record_template_path,
         moonlab_hardware_record_template,
     )
+    moonlab_hardware_submission_scope = (
+        qge_moonlab_submission_bundle.build_hardware_submission_scope(
+            moonlab_submission_packet,
+            moonlab_submission_bundle,
+            moonlab_hardware_record_template,
+            packet_path=moonlab_submission_packet_path,
+            bundle_path=moonlab_submission_bundle_path,
+            hardware_template_path=moonlab_hardware_record_template_path,
+        )
+    )
+    moonlab_hardware_submission_scope_path = (
+        args.outdir / "resource" / "qge_moonlab_hardware_submission_scope.json"
+    )
+    write_json(
+        moonlab_hardware_submission_scope_path,
+        moonlab_hardware_submission_scope,
+    )
+    moonlab_hardware_submission_scope_icc = (
+        qge_moonlab_submission_bundle.build_scope_icc_evidence(
+            moonlab_hardware_submission_scope,
+            out_path=moonlab_hardware_submission_scope_path,
+        )
+    )
+    moonlab_hardware_submission_scope_icc_path = (
+        args.outdir / "resource" /
+        "qge_moonlab_hardware_submission_scope_icc_evidence.json"
+    )
+    write_json(
+        moonlab_hardware_submission_scope_icc_path,
+        moonlab_hardware_submission_scope_icc,
+    )
     moonlab_full_game_plan = qge_moonlab_full_game_plan.build_plan(
         full_game_map_coverage,
         asset_inventory,
@@ -1552,6 +1583,10 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             moonlab_submission_bundle_icc_path),
         "moonlab_hardware_record_template": file_info(
             moonlab_hardware_record_template_path),
+        "moonlab_hardware_submission_scope": file_info(
+            moonlab_hardware_submission_scope_path),
+        "moonlab_hardware_submission_scope_icc_evidence": file_info(
+            moonlab_hardware_submission_scope_icc_path),
         "moonlab_full_game_plan": file_info(moonlab_full_game_plan_path),
         "moonlab_full_game_plan_markdown": file_info(
             moonlab_full_game_plan_markdown_path),
@@ -2070,6 +2105,27 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "candidate_digest": moonlab_hardware_record_template.get(
                     "candidate_digest"),
             },
+            "moonlab_hardware_submission_scope_summary": {
+                "schema": moonlab_hardware_submission_scope.get("schema"),
+                "status": moonlab_hardware_submission_scope.get("status"),
+                "hardware_submission_scope_ready": (
+                    moonlab_hardware_submission_scope.get(
+                        "hardware_submission_scope_ready")),
+                "hardware_candidate_job_count": (
+                    moonlab_hardware_submission_scope.get(
+                        "hardware_candidate_job_count")),
+                "ready_for_control_plane_submission_count": (
+                    moonlab_hardware_submission_scope.get(
+                        "ready_for_control_plane_submission_count")),
+                "passing_check_count": (
+                    moonlab_hardware_submission_scope.get(
+                        "passing_check_count")),
+                "attention_check_count": (
+                    moonlab_hardware_submission_scope.get(
+                        "attention_check_count")),
+                "out_of_scope": moonlab_hardware_submission_scope.get(
+                    "out_of_scope"),
+            },
             "moonlab_full_game_plan_summary": {
                 "schema": moonlab_full_game_plan.get("schema"),
                 "status": moonlab_full_game_plan.get("status"),
@@ -2200,6 +2256,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("moonlab_submission_bundle_summary"))
     hardware_record_template_summary = dict_or_empty(
         advantage_summary.get("moonlab_hardware_record_template_summary"))
+    hardware_submission_scope_summary = dict_or_empty(
+        advantage_summary.get("moonlab_hardware_submission_scope_summary"))
     full_game_plan_summary = dict_or_empty(
         advantage_summary.get("moonlab_full_game_plan_summary"))
     deployment_gate_summary = dict_or_empty(
@@ -2423,6 +2481,13 @@ def build_icc_evidence(manifest: dict[str, Any],
         "moonlab_hardware_record_template_file": (
             artifacts.get("resource", {}).get(
                 "moonlab_hardware_record_template", {}).get("path")),
+        "moonlab_hardware_submission_scope_file": (
+            artifacts.get("resource", {}).get(
+                "moonlab_hardware_submission_scope", {}).get("path")),
+        "moonlab_hardware_submission_scope_icc_evidence_file": (
+            artifacts.get("resource", {}).get(
+                "moonlab_hardware_submission_scope_icc_evidence", {}).get(
+                    "path")),
         "moonlab_full_game_plan_file": artifacts.get("resource", {}).get(
             "moonlab_full_game_plan", {}).get("path"),
         "moonlab_full_game_plan_markdown_file": (
@@ -2502,6 +2567,17 @@ def build_icc_evidence(manifest: dict[str, Any],
             hardware_record_template_summary.get("record_schema")),
         "moonlab_hardware_record_template_job_id": (
             hardware_record_template_summary.get("job_id")),
+        "moonlab_hardware_submission_scope_schema": (
+            hardware_submission_scope_summary.get("schema")),
+        "moonlab_hardware_submission_scope_status": (
+            hardware_submission_scope_summary.get("status")),
+        "moonlab_hardware_submission_scope_ready": (
+            hardware_submission_scope_summary.get(
+                "hardware_submission_scope_ready")),
+        "moonlab_hardware_submission_scope_passing_check_count": (
+            hardware_submission_scope_summary.get("passing_check_count")),
+        "moonlab_hardware_submission_scope_attention_check_count": (
+            hardware_submission_scope_summary.get("attention_check_count")),
         "moonlab_full_game_plan_schema": full_game_plan_summary.get("schema"),
         "moonlab_full_game_deployment_status": (
             full_game_plan_summary.get("status")),

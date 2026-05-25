@@ -1387,6 +1387,16 @@ class PublicationPackTests(unittest.TestCase):
                             "resource/"
                             "qge_moonlab_hardware_record_template.json")
                     },
+                    "moonlab_hardware_submission_scope": {
+                        "path": (
+                            "resource/"
+                            "qge_moonlab_hardware_submission_scope.json")
+                    },
+                    "moonlab_hardware_submission_scope_icc_evidence": {
+                        "path": (
+                            "resource/"
+                            "qge_moonlab_hardware_submission_scope_icc_evidence.json")
+                    },
                     "moonlab_full_game_plan": {
                         "path": "resource/qge_moonlab_full_game_plan.json"
                     },
@@ -1553,6 +1563,20 @@ class PublicationPackTests(unittest.TestCase):
                     "record_schema": "qge.moonlab_hardware_record.v0",
                     "job_id": "qge.light_transport_qae_benchmark.mlae.v0",
                     "candidate_digest": "candidate-digest",
+                },
+                "moonlab_hardware_submission_scope_summary": {
+                    "schema": "qge.moonlab_hardware_submission_scope.v0",
+                    "status": (
+                        "attention_required_for_control_plane_submission"),
+                    "hardware_submission_scope_ready": False,
+                    "hardware_candidate_job_count": 1,
+                    "ready_for_control_plane_submission_count": 0,
+                    "passing_check_count": 7,
+                    "attention_check_count": 2,
+                    "out_of_scope": [
+                        "full_game_moonlab_deployment_gate",
+                        "registered_bsp_asset_availability",
+                    ],
                 },
                 "moonlab_full_game_plan_summary": {
                     "schema": "qge.moonlab_full_game_deployment_plan.v0",
@@ -1862,6 +1886,23 @@ class PublicationPackTests(unittest.TestCase):
             icc["moonlab_hardware_record_template_job_id"],
             "qge.light_transport_qae_benchmark.mlae.v0")
         self.assertEqual(
+            icc["moonlab_hardware_submission_scope_file"],
+            "resource/qge_moonlab_hardware_submission_scope.json")
+        self.assertEqual(
+            icc["moonlab_hardware_submission_scope_icc_evidence_file"],
+            "resource/qge_moonlab_hardware_submission_scope_icc_evidence.json")
+        self.assertEqual(
+            icc["moonlab_hardware_submission_scope_schema"],
+            "qge.moonlab_hardware_submission_scope.v0")
+        self.assertEqual(
+            icc["moonlab_hardware_submission_scope_status"],
+            "attention_required_for_control_plane_submission")
+        self.assertFalse(icc["moonlab_hardware_submission_scope_ready"])
+        self.assertEqual(
+            icc["moonlab_hardware_submission_scope_passing_check_count"], 7)
+        self.assertEqual(
+            icc["moonlab_hardware_submission_scope_attention_check_count"], 2)
+        self.assertEqual(
             icc["moonlab_full_game_plan_file"],
             "resource/qge_moonlab_full_game_plan.json")
         self.assertEqual(
@@ -2041,6 +2082,40 @@ class PublicationPackTests(unittest.TestCase):
             self.assertTrue(
                 schedule_bundle["hardware_submission_directly_executable"])
 
+            schedule_packet = packet_for(abstract_circuit, grover_schedule)
+            hardware_template = (
+                moonlab_hardware_ingest.build_hardware_record_template(
+                    schedule_packet)
+            )
+            submission_scope = (
+                moonlab_submission_bundle.build_hardware_submission_scope(
+                    schedule_packet,
+                    schedule_bundle,
+                    hardware_template,
+                )
+            )
+            self.assertEqual(
+                submission_scope["schema"],
+                "qge.moonlab_hardware_submission_scope.v0")
+            self.assertEqual(
+                submission_scope["status"],
+                "ready_for_control_plane_submission")
+            self.assertTrue(
+                submission_scope["hardware_submission_scope_ready"])
+            self.assertEqual(
+                submission_scope["attention_check_count"], 0)
+            self.assertIn(
+                "full_game_moonlab_deployment_gate",
+                submission_scope["out_of_scope"])
+            scope_icc = moonlab_submission_bundle.build_scope_icc_evidence(
+                submission_scope)
+            self.assertEqual(
+                scope_icc["runtime_backend"],
+                "qge_moonlab_hardware_submission_scope")
+            self.assertEqual(
+                scope_icc["completion_reason"],
+                "qge_moonlab_hardware_submission_scope_ready")
+
             packet_path = tmpdir / "qge_moonlab_submission_packet.json"
             out_path = tmpdir / "qge_moonlab_submission_bundle.json"
             markdown_path = tmpdir / "qge_moonlab_submission_bundle.md"
@@ -2079,6 +2154,46 @@ class PublicationPackTests(unittest.TestCase):
                 "qge_moonlab_submission_bundle")
             self.assertFalse(
                 cli_icc["hardware_submission_directly_executable"])
+
+            ready_packet_path = (
+                tmpdir / "qge_moonlab_submission_packet.ready.json")
+            ready_out_path = (
+                tmpdir / "qge_moonlab_submission_bundle.ready.json")
+            template_path = (
+                tmpdir / "qge_moonlab_hardware_record_template.json")
+            scope_path = (
+                tmpdir / "qge_moonlab_hardware_submission_scope.json")
+            scope_icc_path = (
+                tmpdir /
+                "qge_moonlab_hardware_submission_scope_icc_evidence.json")
+            publication_pack.write_json(ready_packet_path, schedule_packet)
+            publication_pack.write_json(template_path, hardware_template)
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(
+                    moonlab_submission_bundle.main([
+                        str(ready_packet_path),
+                        "--out",
+                        str(ready_out_path),
+                        "--hardware-template",
+                        str(template_path),
+                        "--scope-out",
+                        str(scope_path),
+                        "--scope-icc-json",
+                        str(scope_icc_path),
+                    ]),
+                    0,
+                )
+            self.assertIn(
+                "QGE_MOONLAB_HARDWARE_SUBMISSION_SCOPE",
+                stdout.getvalue(),
+            )
+            cli_scope = publication_pack.load_json(scope_path)
+            self.assertTrue(cli_scope["hardware_submission_scope_ready"])
+            cli_scope_icc = publication_pack.load_json(scope_icc_path)
+            self.assertEqual(
+                cli_scope_icc["runtime_backend"],
+                "qge_moonlab_hardware_submission_scope")
 
     def test_moonlab_hardware_ingest_records_bounded_result(self) -> None:
         job_id = "qge.light_transport_qae_benchmark.mlae.v0"
