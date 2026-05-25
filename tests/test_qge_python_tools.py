@@ -3486,6 +3486,11 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(
                 intake["status"], "partial_candidate_assets_found")
             self.assertEqual(intake["current_available_map_count"], 2)
+            self.assertEqual(intake["candidate_scan_target_count"], 1)
+            self.assertEqual(
+                intake["candidate_scan_targets"][0]["path"],
+                str(candidate_root),
+            )
             self.assertEqual(intake["candidate_new_map_count"], 3)
             self.assertEqual(
                 intake["missing_map_count_after_plan"],
@@ -3545,6 +3550,7 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertFalse(icc["asset_intake_copies_game_data"])
             self.assertEqual(
                 icc["post_install_verification_command_count"], 2)
+            self.assertEqual(icc["candidate_scan_target_count"], 1)
             self.assertTrue(icc["post_install_capture_queue_command_present"])
             self.assertTrue(icc["manual_registered_asset_required"])
             self.assertEqual(icc["copy_script_mode"], "partial_copy_plan")
@@ -3628,6 +3634,7 @@ class BreadthEvidenceTests(unittest.TestCase):
                 discovery=discovery,
             )
             self.assertEqual(intake["discovered_candidate_count"], 1)
+            self.assertEqual(intake["candidate_scan_target_count"], 1)
             self.assertEqual(
                 intake["discovery_metadata"]["roots_scanned_count"], 1)
             self.assertEqual(intake["candidate_new_map_count"], 2)
@@ -3637,6 +3644,7 @@ class BreadthEvidenceTests(unittest.TestCase):
             )
             icc = registered_asset_intake.build_icc_evidence(intake)
             self.assertEqual(icc["discovered_candidate_count"], 1)
+            self.assertEqual(icc["candidate_scan_target_count"], 1)
             self.assertEqual(icc["discovery_roots_scanned_count"], 1)
 
             out_path = tmpdir / "intake.json"
@@ -3692,6 +3700,7 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(
                 empty_intake["copy_script_mode"], "no_op_blocked")
             self.assertTrue(empty_intake["no_candidate_asset_copy_plan"])
+            self.assertEqual(empty_intake["candidate_scan_target_count"], 0)
             empty_script = "\n".join(
                 registered_asset_intake.script_lines(empty_intake))
             self.assertIn(
@@ -3714,6 +3723,31 @@ class BreadthEvidenceTests(unittest.TestCase):
                 "no_candidate_assets_found",
             )
             self.assertTrue(empty_icc["no_candidate_asset_copy_plan"])
+            self.assertEqual(empty_icc["candidate_scan_target_count"], 0)
+
+            enhanced_root = tmpdir / "QuakeEnhanced"
+            enhanced_id1 = enhanced_root / "rerelease" / "id1"
+            enhanced_id1.mkdir(parents=True)
+            write_pak(enhanced_id1 / "PAK1.PAK", [
+                "maps/e2m1.bsp",
+                "maps/e2m2.bsp",
+            ])
+            enhanced_targets = (
+                registered_asset_intake.candidate_scan_targets(
+                    [enhanced_root]))
+            self.assertEqual(
+                enhanced_targets,
+                [{"kind": "asset_root", "path": enhanced_id1}],
+            )
+            enhanced_intake = registered_asset_intake.build_intake(
+                current_root,
+                [enhanced_root],
+            )
+            self.assertEqual(enhanced_intake["candidate_new_map_count"], 2)
+            self.assertEqual(
+                enhanced_intake["candidate_scan_targets"][0]["path"],
+                str(enhanced_id1),
+            )
 
     def test_registered_asset_intake_derives_steam_quake_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

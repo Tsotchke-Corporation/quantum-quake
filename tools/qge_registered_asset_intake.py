@@ -355,10 +355,8 @@ def candidate_scan_targets(inputs: Sequence[Path]) -> list[dict[str, Any]]:
         elif path.is_dir():
             if pak_files(path) or maps_directory(path):
                 candidates.append(("asset_root", path))
-            for name in ("id1", "Id1", "ID1"):
-                child = path / name
-                if child.is_dir():
-                    candidates.append(("asset_root", child))
+            for child in candidate_asset_root_children(path):
+                candidates.append(("asset_root", child))
             if not candidates:
                 candidates.append(("empty_directory", path))
         else:
@@ -370,6 +368,31 @@ def candidate_scan_targets(inputs: Sequence[Path]) -> list[dict[str, Any]]:
             seen.add(key)
             targets.append({"kind": kind, "path": candidate})
     return targets
+
+
+def candidate_asset_root_children(path: Path) -> list[Path]:
+    roots: list[Path] = []
+    seen: set[str] = set()
+    for parts in (
+        ("id1",),
+        ("Id1",),
+        ("ID1",),
+        ("rerelease", "id1"),
+        ("rerelease", "Id1"),
+        ("rerelease", "ID1"),
+    ):
+        child = path.joinpath(*parts)
+        if not child.is_dir():
+            continue
+        try:
+            key = str(child.resolve())
+        except OSError:
+            key = str(child)
+        key = key.casefold()
+        if key not in seen:
+            seen.add(key)
+            roots.append(child)
+    return roots
 
 
 def source_record(
@@ -839,9 +862,8 @@ def build_intake(
     ]
     target_maps = qge_breadth_evidence.map_targets_for_set(map_set)
     target_set = set(target_maps)
-    candidate_reports = [
-        scan_target(target) for target in candidate_scan_targets(candidates)
-    ]
+    scan_targets = candidate_scan_targets(candidates)
+    candidate_reports = [scan_target(target) for target in scan_targets]
     candidate_sources: dict[str, list[dict[str, Any]]] = {}
     invalid_sources: list[dict[str, Any]] = []
     for report in candidate_reports:
@@ -899,6 +921,14 @@ def build_intake(
         "current_missing_map_count": len(missing_maps),
         "current_missing_maps": missing_maps,
         "candidate_inputs": [str(path) for path in candidates],
+        "candidate_scan_target_count": len(scan_targets),
+        "candidate_scan_targets": [
+            {
+                "kind": target.get("kind"),
+                "path": str(target.get("path")),
+            }
+            for target in scan_targets
+        ],
         "candidate_reports": candidate_reports,
         "discovered_candidate_count": 0,
         "candidate_valid_map_count": len([
@@ -1234,6 +1264,9 @@ def build_icc_evidence(
         "current_available_map_count": intake.get("current_available_map_count"),
         "current_missing_map_count": intake.get("current_missing_map_count"),
         "candidate_new_map_count": intake.get("candidate_new_map_count"),
+        "candidate_scan_target_count": intake.get(
+            "candidate_scan_target_count"),
+        "candidate_scan_targets": intake.get("candidate_scan_targets"),
         "discovered_candidate_count": intake.get(
             "discovered_candidate_count", 0),
         "discovery_roots_scanned_count": discovery_meta.get(

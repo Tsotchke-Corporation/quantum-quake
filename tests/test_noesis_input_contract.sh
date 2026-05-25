@@ -140,6 +140,8 @@ grep -q 'asset_intake_copies_game_data' "$repo_root/tools/qge_registered_asset_i
 grep -q 'manual_registered_asset_required' "$repo_root/tools/qge_registered_asset_intake.py"
 grep -q 'QGE_REGISTERED_ASSET_NO_CANDIDATES' "$repo_root/tools/qge_registered_asset_intake.py"
 grep -q 'copy_script_mode' "$repo_root/tools/qge_registered_asset_intake.py"
+grep -q 'candidate_asset_root_children' "$repo_root/tools/qge_registered_asset_intake.py"
+grep -q 'candidate_scan_target_count' "$repo_root/tools/qge_registered_asset_intake.py"
 grep -q 'post_install_verification' "$repo_root/tools/qge_registered_asset_intake.py"
 grep -q 'verify_sha256' "$repo_root/tools/qge_registered_asset_intake.py"
 grep -q 'qge_full_game_capture_queue.py' "$repo_root/tools/qge_registered_asset_intake.py"

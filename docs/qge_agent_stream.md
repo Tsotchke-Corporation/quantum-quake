@@ -476,10 +476,13 @@ hashes, BSP validation status, available canonical maps, invalid BSP entries,
 and missing registered maps, so asset blockers can be checked before running
 the queue. `tools/qge_registered_asset_intake.py --candidate <path>` scans
 external Quake install roots, PAK files, or loose BSPs, validates BSP29 payloads,
+derives direct `id1` and `rerelease/id1` asset roots from install directories,
 and writes `qge.registered_asset_intake.v0` plus an optional copy script so
 registered assets can be installed locally without bundling copyrighted data in
-the repo. `--discover-root` and `--discover-common` add bounded local discovery
-for candidate installs when the exact registered asset path is unknown;
+the repo. The intake evidence records `candidate_scan_target_count` and the
+exact scan targets so direct-root handoffs are auditable. `--discover-root` and
+`--discover-common` add bounded local discovery for candidate installs when the
+exact registered asset path is unknown;
 `--discover-common` also derives Steam Quake roots from `libraryfolders.vdf`
 and `appmanifest_2310.acf`, plus GOG/Heroic-style local roots. The
 publication pack records this intake ledger, Markdown, ICC evidence, and safe

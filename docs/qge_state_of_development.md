@@ -659,11 +659,13 @@ Known current visual state:
   zero invalid BSP entries, and no whole-game Moonlab coverage claim.
   `tools/qge_registered_asset_intake.py` now scans external registered Quake
   install roots, PAKs, or loose BSPs and emits `qge.registered_asset_intake.v0`
-  plus an optional non-destructive copy script. It can also run bounded local
-  discovery with `--discover-root` or `--discover-common`, making the 23
-  missing-map asset blocker operational without checking game payloads into the
-  repo. Publication packs now carry the intake ledger and safe install script
-  as first-class resource artifacts; that script verifies copied SHA-256s,
+  plus an optional non-destructive copy script. Direct install-root candidates
+  now derive nested `id1` and `rerelease/id1` scan targets and record the exact
+  scan-target ledger. It can also run bounded local discovery with
+  `--discover-root` or `--discover-common`, making the 23 missing-map asset
+  blocker operational without checking game payloads into the repo. Publication
+  packs now carry the intake ledger and safe install script as first-class
+  resource artifacts; that script verifies copied SHA-256s,
   marks no-candidate plans as `no_op_blocked`, emits
   `QGE_REGISTERED_ASSET_NO_CANDIDATES`, and still prints the post-install
   full-game capture queue command for the same pack. The Moonlab deployment
