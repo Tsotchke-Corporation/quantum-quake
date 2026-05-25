@@ -117,7 +117,9 @@ directory records are checked against current path existence, sizes, and
 SHA-256 digests, and its runtime/advantage summary mirrors are rebuilt from
 the recorded source inputs plus packed resource and advantage artifacts. The
 recorded source inputs are checked against copied artifact `source_path`
-provenance. The remaining 23 maps are still asset unavailable.
+provenance, and the manifest claim posture is checked against the blocked
+deployment-gate claim flags before it is treated as safe publication wording.
+The remaining 23 maps are still asset unavailable.
 `resource/qge_moonlab_deployment_gate.json` is the fail-closed claim gate for
 the sentence "the entire game runs in Moonlab." It is currently `blocked`
 because coverage is 9/32, the remaining 23 registered BSP assets are

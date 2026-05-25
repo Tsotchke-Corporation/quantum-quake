@@ -747,7 +747,8 @@ Known current visual state:
   existence, sizes, and SHA-256 digests, and its runtime/advantage summary
   mirrors are rebuilt from the recorded source inputs plus packed resource and
   advantage artifacts. The recorded source inputs are checked against copied
-  artifact `source_path` provenance.
+  artifact `source_path` provenance, and the manifest claim posture is checked
+  against the blocked deployment-gate claim flags.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims

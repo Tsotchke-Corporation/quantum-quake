@@ -39,6 +39,7 @@ import qge_moonlab_qae_transpile as moonlab_qae_transpile  # noqa: E402
 import qge_moonlab_submission_bundle as moonlab_submission_bundle  # noqa: E402
 import qge_noesis_summary as noesis_summary  # noqa: E402
 import qge_manifest_file_audit as manifest_file_audit  # noqa: E402
+import qge_manifest_claim_policy_audit as manifest_claim_policy_audit  # noqa: E402
 import qge_manifest_source_input_audit as manifest_source_input_audit  # noqa: E402
 import qge_manifest_summary_audit as manifest_summary_audit  # noqa: E402
 import qge_oracle_claims_audit as oracle_claims_audit  # noqa: E402
@@ -1042,6 +1043,62 @@ class PublicationPackTests(unittest.TestCase):
                 "file_count" in item.get("fields", [])
                 for item in stale_audit["mismatches"]
             ))
+
+    def test_manifest_claim_policy_audit_blocks_overclaim_wording(
+        self,
+    ) -> None:
+        manifest = {
+            "claim_posture": {
+                "allowed_wording": (
+                    "This pack contains reproducible Quantum Quake artifact "
+                    "evidence for a QGE-owned vanilla capture, scene-oracle "
+                    "IR, and a finite-shot amplitude-estimation benchmark "
+                    "under an explicit oracle model."
+                ),
+                "disallowed_wording": (
+                    "This pack proves practical hardware speedup, full-frame "
+                    "quantum rendering, or unrestricted quantum advantage."
+                ),
+            },
+            "advantage_summary": {
+                "moonlab_deployment_gate_summary": {
+                    "whole_game_moonlab_deployment_claim_allowed": False,
+                    "whole_game_hardware_execution_claim_allowed": False,
+                    "hardware_quantum_advantage_claim_allowed": False,
+                    "dense_70000_qubit_state_claim_allowed": False,
+                },
+            },
+        }
+
+        audit = manifest_claim_policy_audit.manifest_claim_policy_audit(
+            manifest)
+        self.assertTrue(audit["passed"])
+        self.assertEqual(audit["mismatch_count"], 0)
+
+        stale_manifest = json.loads(json.dumps(manifest))
+        stale_manifest["claim_posture"]["allowed_wording"] = (
+            "The whole game runs in Moonlab with hardware quantum advantage.")
+        stale_manifest["claim_posture"]["disallowed_wording"] = (
+            "This pack avoids broad claims.")
+        stale_audit = (
+            manifest_claim_policy_audit.manifest_claim_policy_audit(
+                stale_manifest)
+        )
+        self.assertFalse(stale_audit["passed"])
+        self.assertIn(
+            "hardware speedup",
+            stale_audit["missing_disallowed_phrases"],
+        )
+        self.assertTrue(any(
+            item.get("claim_flag") ==
+            "whole_game_moonlab_deployment_claim_allowed"
+            for item in stale_audit["forbidden_allowed_phrases"]
+        ))
+        self.assertTrue(any(
+            item.get("claim_flag") ==
+            "hardware_quantum_advantage_claim_allowed"
+            for item in stale_audit["forbidden_allowed_phrases"]
+        ))
 
     def test_manifest_source_input_audit_detects_stale_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
