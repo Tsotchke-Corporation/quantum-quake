@@ -115,8 +115,9 @@ against the packed oracle and claims evidence, the oracle claims evidence is
 rebuilt from the packed claims ledger and oracle scene, and the oracle scene is
 rebuilt from its recorded source capture. The publication manifest's file and
 directory records are checked against current path existence, sizes, and
-SHA-256 digests, and its runtime/advantage summary mirrors are rebuilt from
-the recorded source inputs plus packed resource and advantage artifacts. The
+SHA-256 digests, with directory file lists checked against actual relative
+paths; its runtime/advantage summary mirrors are rebuilt from the recorded
+source inputs plus packed resource and advantage artifacts. The
 recorded source inputs are checked against copied artifact `source_path`
 provenance, packed source-copy artifacts are byte-compared back to those
 sources, and the manifest claim posture is checked against the blocked

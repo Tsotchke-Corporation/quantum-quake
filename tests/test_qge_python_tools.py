@@ -1298,6 +1298,26 @@ class PublicationPackTests(unittest.TestCase):
                 for item in stale_audit["mismatches"]
             ))
 
+            replacement = tmpdir / "replacement.txt"
+            replacement.write_text("nested artifact\n", encoding="utf-8")
+            stale_membership = json.loads(json.dumps(manifest))
+            stale_file = publication_pack.file_info(replacement)
+            stale_file["relative_path"] = "replacement.txt"
+            stale_membership["artifacts"]["sample"]["directory"][
+                "files"][0] = stale_file
+            stale_membership_audit = (
+                manifest_file_audit.manifest_file_record_audit(
+                    stale_membership,
+                    required=True,
+                )
+            )
+            self.assertFalse(stale_membership_audit["passed"])
+            self.assertTrue(any(
+                item.get("source") == "artifacts.sample.directory" and
+                "files" in item.get("fields", [])
+                for item in stale_membership_audit["mismatches"]
+            ))
+
     def test_manifest_source_copy_audit_detects_stale_copies(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmpdir = Path(tmp)

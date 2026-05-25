@@ -330,9 +330,10 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      ledger plus oracle scene. The oracle scene
      must also rebuild from its recorded source capture. The publication
      manifest's file and directory records must match current path existence,
-     sizes, and SHA-256 digests, and its runtime/advantage summary mirrors
-     must rebuild from the recorded source inputs plus packed resource and
-     advantage artifacts. The recorded source inputs must agree with copied
+     sizes, SHA-256 digests, and actual directory relative-path membership;
+     its runtime/advantage summary mirrors must rebuild from the recorded
+     source inputs plus packed resource and advantage artifacts. The recorded
+     source inputs must agree with copied
      artifact `source_path` provenance, packed source-copy artifacts must
      byte-compare back to those sources, and the manifest claim posture must
      stay consistent with the blocked deployment-gate claim flags. The manifest

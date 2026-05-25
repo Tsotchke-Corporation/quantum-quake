@@ -745,9 +745,10 @@ Known current visual state:
   ledger plus oracle scene. The
   oracle scene is rebuilt from its recorded source capture. The publication
   manifest's file and directory records are checked against current path
-  existence, sizes, and SHA-256 digests, and its runtime/advantage summary
-  mirrors are rebuilt from the recorded source inputs plus packed resource and
-  advantage artifacts. The recorded source inputs are checked against copied
+  existence, sizes, SHA-256 digests, and actual directory relative-path
+  membership; its runtime/advantage summary mirrors are rebuilt from the
+  recorded source inputs plus packed resource and advantage artifacts. The
+  recorded source inputs are checked against copied
   artifact `source_path` provenance, packed source-copy artifacts are
   byte-compared back to those sources, and the manifest claim posture is checked
   against the blocked deployment-gate claim flags. The manifest reproduction

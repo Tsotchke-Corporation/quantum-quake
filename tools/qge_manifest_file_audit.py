@@ -104,6 +104,28 @@ def file_record_mismatches(record: dict[str, Any]) -> list[str]:
     return mismatches
 
 
+def normalized_relative_paths(files: list[Path], root: Path) -> list[str]:
+    return [child.relative_to(root).as_posix() for child in files]
+
+
+def recorded_relative_paths(record: dict[str, Any]) -> tuple[list[str], bool]:
+    files = record.get("files")
+    if not isinstance(files, list):
+        return [], bool(files)
+    paths = []
+    malformed = False
+    for item in files:
+        if not isinstance(item, dict):
+            malformed = True
+            continue
+        relative_path = item.get("relative_path")
+        if not isinstance(relative_path, str) or not relative_path:
+            malformed = True
+            continue
+        paths.append(Path(relative_path).as_posix())
+    return paths, malformed
+
+
 def directory_record_mismatches(record: dict[str, Any]) -> list[str]:
     path_value = record.get("path")
     path = Path(path_value) if isinstance(path_value, str) else None
@@ -120,6 +142,12 @@ def directory_record_mismatches(record: dict[str, Any]) -> list[str]:
         mismatches.append("file_count")
     if record.get("size_bytes") != size_bytes:
         mismatches.append("size_bytes")
+    recorded_paths, malformed_paths = recorded_relative_paths(record)
+    actual_paths = (
+        normalized_relative_paths(files, path) if exists and path else []
+    )
+    if malformed_paths or recorded_paths != actual_paths:
+        mismatches.append("files")
     return mismatches
 
 

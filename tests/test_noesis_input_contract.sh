@@ -238,6 +238,7 @@ grep -q 'publication_icc_evidence_audit' "$repo_root/tools/qge_publication_icc_a
 grep -q 'qge_publication_icc_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'manifest_file_record_audit' "$repo_root/tools/qge_manifest_file_audit.py"
 grep -q 'sha256_file' "$repo_root/tools/qge_manifest_file_audit.py"
+grep -q 'recorded_relative_paths' "$repo_root/tools/qge_manifest_file_audit.py"
 grep -q 'qge_manifest_file_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'manifest_summary_audit' "$repo_root/tools/qge_manifest_summary_audit.py"
 grep -q 'expected_runtime_summary' "$repo_root/tools/qge_manifest_summary_audit.py"
