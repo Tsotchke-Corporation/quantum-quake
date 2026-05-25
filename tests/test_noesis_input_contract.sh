@@ -172,6 +172,8 @@ grep -q 'full_game_route_contracts_complete' "$repo_root/tools/qge_moonlab_deplo
 grep -q 'covered_route_contract_authority_complete' "$repo_root/tools/qge_moonlab_deployment_gate.py"
 grep -q 'registered_asset_handoff_consistent' "$repo_root/tools/qge_moonlab_deployment_gate.py"
 grep -q 'registered_asset_handoff_status_counts' "$repo_root/tools/qge_moonlab_deployment_gate.py"
+grep -q 'moonlab_full_game_plan_ledger_consistent' "$repo_root/tools/qge_moonlab_deployment_gate.py"
+grep -q 'moonlab_full_game_plan_ledger_mismatch_count' "$repo_root/tools/qge_moonlab_deployment_gate.py"
 grep -q 'moonlab_coverage_ledger_consistent' "$repo_root/tools/qge_moonlab_deployment_gate.py"
 grep -q 'moonlab_coverage_ledger_mismatches' "$repo_root/tools/qge_moonlab_deployment_gate.py"
 grep -q 'moonlab_selected_job_result_ledger_consistent' "$repo_root/tools/qge_moonlab_deployment_gate.py"

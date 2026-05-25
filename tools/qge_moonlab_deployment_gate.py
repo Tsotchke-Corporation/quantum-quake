@@ -25,6 +25,7 @@ import qge_asset_inventory  # noqa: E402
 import qge_asset_requirements  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
 import qge_full_game_route_contracts  # noqa: E402
+import qge_moonlab_full_game_plan_audit  # noqa: E402
 import qge_moonlab_full_game_plan  # noqa: E402
 import qge_registered_asset_intake  # noqa: E402
 
@@ -891,6 +892,11 @@ def gate_summary(
     remediation = dict_or_empty(asset_remediation)
     handoff = dict_or_empty(full_game_plan.get("registered_asset_handoff"))
     handoff_counts = asset_handoff_status_counts(full_game_plan)
+    plan_ledger = qge_moonlab_full_game_plan_audit.full_game_plan_ledger_audit(
+        coverage,
+        inventory,
+        full_game_plan,
+    )
     coverage_ledger = moonlab_coverage_ledger_audit(
         coverage,
         inventory,
@@ -962,6 +968,32 @@ def gate_summary(
             handoff_counts.get("copy_plan_unblocked", 0)),
         "registered_asset_handoff_copy_plan_blocked_count": (
             handoff_counts.get("copy_plan_blocked", 0)),
+        "moonlab_full_game_plan_ledger_recorded": plan_ledger.get(
+            "recorded"),
+        "moonlab_full_game_plan_ledger_mismatch_count": (
+            plan_ledger.get("mismatch_count")),
+        "moonlab_full_game_plan_ledger_top_level_mismatches": (
+            plan_ledger.get("top_level_mismatches")),
+        "moonlab_full_game_plan_ledger_row_count": (
+            plan_ledger.get("row_count")),
+        "moonlab_full_game_plan_ledger_expected_row_count": (
+            plan_ledger.get("expected_row_count")),
+        "moonlab_full_game_plan_ledger_invalid_row_count": (
+            plan_ledger.get("invalid_row_count")),
+        "moonlab_full_game_plan_ledger_duplicate_row_maps": (
+            plan_ledger.get("duplicate_row_maps")),
+        "moonlab_full_game_plan_ledger_missing_row_maps": (
+            plan_ledger.get("missing_row_maps")),
+        "moonlab_full_game_plan_ledger_unexpected_row_maps": (
+            plan_ledger.get("unexpected_row_maps")),
+        "moonlab_full_game_plan_ledger_row_mismatches": (
+            plan_ledger.get("row_mismatches")),
+        "moonlab_full_game_plan_ledger_route_contract_mismatch_maps": (
+            plan_ledger.get("route_contract_mismatch_maps")),
+        "moonlab_full_game_plan_ledger_expected_status": (
+            plan_ledger.get("expected_status")),
+        "moonlab_full_game_plan_ledger_recorded_status": (
+            plan_ledger.get("recorded_status")),
         "moonlab_coverage_ledger_recorded": coverage_ledger.get("recorded"),
         "moonlab_coverage_ledger_result_status": coverage_ledger.get(
             "result_status"),
@@ -1180,12 +1212,20 @@ def build_criteria(
         route_authority_ready_count == covered_count and
         not covered_route_authority_blocked_maps
     )
+    plan_ledger_audit = (
+        qge_moonlab_full_game_plan_audit.full_game_plan_ledger_audit
+    )(
+        coverage,
+        inventory,
+        full_game_plan,
+    )
     plan_passed = (
         full_game_plan.get("schema") ==
         "qge.moonlab_full_game_deployment_plan.v0" and
         full_game_plan.get("status") == "map_coverage_complete" and
         route_contracts_passed and
         route_authority_passed and
+        bool_true(plan_ledger_audit.get("passed")) and
         capture_required == 0 and
         asset_unavailable == 0
     )
@@ -1335,6 +1375,43 @@ def build_criteria(
                     handoff_audit.get("status_counts")),
             },
             "full-game plan is missing or inconsistent with registered asset intake handoff evidence",
+        ),
+        criterion(
+            "moonlab_full_game_plan_ledger_consistent",
+            bool_true(plan_ledger_audit.get("passed")),
+            {
+                "moonlab_full_game_plan_ledger_recorded": (
+                    plan_ledger_audit.get("recorded")),
+                "moonlab_full_game_plan_ledger_mismatch_count": (
+                    plan_ledger_audit.get("mismatch_count")),
+                "moonlab_full_game_plan_ledger_top_level_mismatches": (
+                    plan_ledger_audit.get("top_level_mismatches")),
+                "moonlab_full_game_plan_ledger_row_count": (
+                    plan_ledger_audit.get("row_count")),
+                "moonlab_full_game_plan_ledger_expected_row_count": (
+                    plan_ledger_audit.get("expected_row_count")),
+                "moonlab_full_game_plan_ledger_invalid_row_count": (
+                    plan_ledger_audit.get("invalid_row_count")),
+                "moonlab_full_game_plan_ledger_duplicate_row_maps": (
+                    plan_ledger_audit.get("duplicate_row_maps")),
+                "moonlab_full_game_plan_ledger_missing_row_maps": (
+                    plan_ledger_audit.get("missing_row_maps")),
+                "moonlab_full_game_plan_ledger_unexpected_row_maps": (
+                    plan_ledger_audit.get("unexpected_row_maps")),
+                "moonlab_full_game_plan_ledger_row_mismatches": (
+                    plan_ledger_audit.get("row_mismatches")),
+                "moonlab_full_game_plan_ledger_route_contract_mismatch_maps": (
+                    plan_ledger_audit.get("route_contract_mismatch_maps")),
+                "moonlab_full_game_plan_ledger_expected_status": (
+                    plan_ledger_audit.get("expected_status")),
+                "moonlab_full_game_plan_ledger_recorded_status": (
+                    plan_ledger_audit.get("recorded_status")),
+            },
+            (
+                "Moonlab full-game deployment plan rows are stale or "
+                "inconsistent with coverage, asset inventory, or route "
+                "contracts"
+            ),
         ),
         criterion(
             "moonlab_coverage_ledger_consistent",
@@ -1527,6 +1604,10 @@ def next_actions_for_blockers(
     if "registered_asset_handoff_consistent" in failed_ids:
         actions.append(
             "Regenerate qge_moonlab_full_game_plan.json from the current registered-asset intake so per-map asset_handoff_status matches the copy-plan ledger."
+        )
+    if "moonlab_full_game_plan_ledger_consistent" in failed_ids:
+        actions.append(
+            "Regenerate qge_moonlab_full_game_plan.json from current coverage, asset inventory, and route contracts so every per-map deployment row matches the source ledgers."
         )
     if "moonlab_coverage_ledger_consistent" in failed_ids:
         actions.append(
@@ -1813,6 +1894,33 @@ def build_icc_evidence(
             "registered_asset_handoff_copy_plan_unblocked_count"),
         "registered_asset_handoff_copy_plan_blocked_count": summary.get(
             "registered_asset_handoff_copy_plan_blocked_count"),
+        "moonlab_full_game_plan_ledger_recorded": summary.get(
+            "moonlab_full_game_plan_ledger_recorded"),
+        "moonlab_full_game_plan_ledger_mismatch_count": summary.get(
+            "moonlab_full_game_plan_ledger_mismatch_count"),
+        "moonlab_full_game_plan_ledger_top_level_mismatches": summary.get(
+            "moonlab_full_game_plan_ledger_top_level_mismatches"),
+        "moonlab_full_game_plan_ledger_row_count": summary.get(
+            "moonlab_full_game_plan_ledger_row_count"),
+        "moonlab_full_game_plan_ledger_expected_row_count": summary.get(
+            "moonlab_full_game_plan_ledger_expected_row_count"),
+        "moonlab_full_game_plan_ledger_invalid_row_count": summary.get(
+            "moonlab_full_game_plan_ledger_invalid_row_count"),
+        "moonlab_full_game_plan_ledger_duplicate_row_maps": summary.get(
+            "moonlab_full_game_plan_ledger_duplicate_row_maps"),
+        "moonlab_full_game_plan_ledger_missing_row_maps": summary.get(
+            "moonlab_full_game_plan_ledger_missing_row_maps"),
+        "moonlab_full_game_plan_ledger_unexpected_row_maps": summary.get(
+            "moonlab_full_game_plan_ledger_unexpected_row_maps"),
+        "moonlab_full_game_plan_ledger_row_mismatches": summary.get(
+            "moonlab_full_game_plan_ledger_row_mismatches"),
+        "moonlab_full_game_plan_ledger_route_contract_mismatch_maps": (
+            summary.get(
+                "moonlab_full_game_plan_ledger_route_contract_mismatch_maps")),
+        "moonlab_full_game_plan_ledger_expected_status": summary.get(
+            "moonlab_full_game_plan_ledger_expected_status"),
+        "moonlab_full_game_plan_ledger_recorded_status": summary.get(
+            "moonlab_full_game_plan_ledger_recorded_status"),
         "moonlab_coverage_ledger_recorded": summary.get(
             "moonlab_coverage_ledger_recorded"),
         "moonlab_coverage_ledger_result_status": summary.get(
@@ -1970,6 +2078,14 @@ def markdown_report(gate: dict[str, Any]) -> str:
             f"licensed_required={summary.get('registered_asset_handoff_licensed_asset_required_count')} "
             f"copy_unblocked={summary.get('registered_asset_handoff_copy_plan_unblocked_count')} "
             f"copy_blocked={summary.get('registered_asset_handoff_copy_plan_blocked_count')}"
+        ),
+        (
+            "Full-game plan ledger: "
+            f"recorded={summary.get('moonlab_full_game_plan_ledger_recorded')} "
+            f"rows={summary.get('moonlab_full_game_plan_ledger_row_count')} "
+            f"/ {summary.get('moonlab_full_game_plan_ledger_expected_row_count')} "
+            "mismatches="
+            f"{summary.get('moonlab_full_game_plan_ledger_mismatch_count')}"
         ),
         (
             "Moonlab coverage ledger: "

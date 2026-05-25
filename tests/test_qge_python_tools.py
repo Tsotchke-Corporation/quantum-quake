@@ -3247,6 +3247,8 @@ class PublicationPackTests(unittest.TestCase):
         self.assertNotIn(
             "registered_asset_handoff_consistent", blocker_ids)
         self.assertNotIn(
+            "moonlab_full_game_plan_ledger_consistent", blocker_ids)
+        self.assertNotIn(
             "moonlab_coverage_ledger_consistent", blocker_ids)
         self.assertNotIn(
             "moonlab_selected_job_result_ledger_consistent", blocker_ids)
@@ -3276,6 +3278,23 @@ class PublicationPackTests(unittest.TestCase):
             handoff_criterion[
                 "registered_asset_handoff_licensed_asset_required_count"],
             30,
+        )
+        plan_ledger_criterion = next(
+            item for item in blocked_gate["criteria"]
+            if item["id"] == "moonlab_full_game_plan_ledger_consistent")
+        self.assertEqual(plan_ledger_criterion["status"], "pass")
+        self.assertTrue(
+            plan_ledger_criterion[
+                "moonlab_full_game_plan_ledger_recorded"])
+        self.assertEqual(
+            plan_ledger_criterion[
+                "moonlab_full_game_plan_ledger_mismatch_count"],
+            0,
+        )
+        self.assertEqual(
+            plan_ledger_criterion[
+                "moonlab_full_game_plan_ledger_row_count"],
+            32,
         )
         coverage_ledger_criterion = next(
             item for item in blocked_gate["criteria"]
@@ -3377,6 +3396,19 @@ class PublicationPackTests(unittest.TestCase):
                 "registered_asset_handoff_not_recorded_count"],
             0,
         )
+        self.assertTrue(
+            blocked_gate["summary"][
+                "moonlab_full_game_plan_ledger_recorded"])
+        self.assertEqual(
+            blocked_gate["summary"][
+                "moonlab_full_game_plan_ledger_mismatch_count"],
+            0,
+        )
+        self.assertEqual(
+            blocked_gate["summary"][
+                "moonlab_full_game_plan_ledger_row_count"],
+            32,
+        )
         self.assertTrue(blocked_gate["summary"]["route_contracts_complete"])
         self.assertEqual(
             blocked_gate["summary"]["route_contract_map_count"], 32)
@@ -3443,6 +3475,7 @@ class PublicationPackTests(unittest.TestCase):
         self.assertIn("copy script mode", blocked_markdown)
         self.assertIn("Route contracts: 32 (complete=True)", blocked_markdown)
         self.assertIn("Registered asset handoff", blocked_markdown)
+        self.assertIn("Full-game plan ledger", blocked_markdown)
         self.assertIn("Moonlab coverage ledger", blocked_markdown)
         self.assertIn(
             "Covered route authority: 2 / 2 (complete=True)",
@@ -3489,6 +3522,16 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(
             blocked_icc["registered_asset_handoff_not_recorded_count"],
             0,
+        )
+        self.assertTrue(
+            blocked_icc["moonlab_full_game_plan_ledger_recorded"])
+        self.assertEqual(
+            blocked_icc["moonlab_full_game_plan_ledger_mismatch_count"],
+            0,
+        )
+        self.assertEqual(
+            blocked_icc["moonlab_full_game_plan_ledger_row_count"],
+            32,
         )
         self.assertTrue(
             blocked_icc["full_game_route_contracts_complete"])
@@ -3562,6 +3605,44 @@ class PublicationPackTests(unittest.TestCase):
         self.assertTrue(any(
             "asset_handoff_status" in action
             for action in stale_gate["next_actions"]
+        ))
+
+        stale_row_plan = json.loads(json.dumps(partial_plan))
+        stale_row_plan["map_deployment_rows"] = [
+            row for row in stale_row_plan["map_deployment_rows"]
+            if row.get("map") != "e1m1"
+        ]
+        stale_row_gate = moonlab_deployment_gate.build_gate(
+            partial_coverage,
+            partial_inventory,
+            partial_requirements,
+            stale_row_plan,
+            job_specs,
+            job_results,
+            submission_packet,
+            hardware_template,
+            asset_remediation=partial_asset_remediation,
+            source_path=Path("stale-row-pack"),
+        )
+        stale_row_blockers = {
+            item["id"] for item in stale_row_gate["blockers"]
+        }
+        self.assertIn(
+            "moonlab_full_game_plan_ledger_consistent",
+            stale_row_blockers,
+        )
+        stale_row_criterion = next(
+            item for item in stale_row_gate["criteria"]
+            if item["id"] == "moonlab_full_game_plan_ledger_consistent")
+        self.assertEqual(stale_row_criterion["status"], "blocked")
+        self.assertIn(
+            "e1m1",
+            stale_row_criterion[
+                "moonlab_full_game_plan_ledger_missing_row_maps"],
+        )
+        self.assertTrue(any(
+            "qge_moonlab_full_game_plan.json" in action
+            for action in stale_row_gate["next_actions"]
         ))
 
         all_maps = breadth_evidence.QUAKE_REGISTERED_SINGLE_PLAYER_MAPS
@@ -3649,6 +3730,11 @@ class PublicationPackTests(unittest.TestCase):
         self.assertFalse(ready_gate["hardware_quantum_advantage_claim_allowed"])
         self.assertEqual(ready_gate["failed_criterion_count"], 0)
         self.assertTrue(ready_gate["summary"]["route_contracts_complete"])
+        self.assertEqual(
+            ready_gate["summary"][
+                "moonlab_full_game_plan_ledger_mismatch_count"],
+            0,
+        )
         self.assertTrue(
             ready_gate["summary"][
                 "covered_route_contract_authority_complete"])
@@ -3678,6 +3764,8 @@ class PublicationPackTests(unittest.TestCase):
             icc["runtime_backend"], "qge_moonlab_deployment_gate")
         self.assertEqual(
             icc["completion_reason"], "qge_moonlab_deployment_gate_ready")
+        self.assertEqual(
+            icc["moonlab_full_game_plan_ledger_mismatch_count"], 0)
         self.assertTrue(
             icc["whole_game_moonlab_deployment_claim_allowed"])
 

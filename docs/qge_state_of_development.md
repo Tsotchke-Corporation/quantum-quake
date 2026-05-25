@@ -711,12 +711,14 @@ Known current visual state:
   so unavailable maps record whether they have an actionable copy plan, a
   blocked copy destination, or a remaining manual licensed-asset requirement.
   The deployment gate now audits that handoff for presence and consistency with
-  the intake remediation ledger, and separately audits the Moonlab
-  `full_game_map_coverage` job result against current coverage, inventory, and
-  asset-requirements artifacts. It also compares every selected Moonlab job
-  spec with the job-result ledger, so aggregate success counts are not enough
-  unless each selected job has a matching completed simulator result row and
-  artifact evidence for its required artifact names.
+  the intake remediation ledger, audits the plan's per-map deployment rows
+  against current coverage, asset inventory, and canonical route contracts, and
+  separately audits the Moonlab `full_game_map_coverage` job result against
+  current coverage, inventory, and asset-requirements artifacts. It also
+  compares every selected Moonlab job spec with the job-result ledger, so
+  aggregate success counts are not enough unless each selected job has a
+  matching completed simulator result row and artifact evidence for its required
+  artifact names.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims

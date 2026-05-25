@@ -79,7 +79,9 @@ relying on one generic missing-map smoke profile. The gate remains blocked if a
 future plan lacks that complete route-contract ledger, or if a covered map lacks
 route-contract authority evidence from breadth capture matrices. It also blocks
 if the deployment plan omits or disagrees with the registered-asset handoff
-ledger while remediation evidence is present, and if the Moonlab
+ledger while remediation evidence is present, if the plan's per-map rows do not
+match the current coverage, asset inventory, and canonical route contracts, and
+if the Moonlab
 `full_game_map_coverage` job result is stale against the current coverage,
 inventory, and asset-requirements artifacts. Selected Moonlab job results must
 also match the selected job specs row-by-row; aggregate completed-job counts

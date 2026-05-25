@@ -464,8 +464,10 @@ registered-asset handoff ledger from intake, including each missing map's
 and maps that still require manual licensed assets are not collapsed into one
 generic unavailable bucket. The deployment gate now audits that handoff with
 `registered_asset_handoff_consistent`, then blocks if the route-contract
-ledger is missing or incomplete, if the handoff is stale, if a covered map lacks
-route-contract-authority-ready breadth evidence, or if the Moonlab
+ledger is missing or incomplete, if the handoff is stale, if the plan's per-map
+rows disagree with current coverage, asset inventory, or canonical route
+contracts, if a covered map lacks route-contract-authority-ready breadth
+evidence, or if the Moonlab
 `full_game_map_coverage` job result no longer matches the current coverage,
 inventory, and asset-requirements artifacts. It also requires the selected
 Moonlab job-result ledger to match `qge_moonlab_job_specs.json` row-by-row, so
