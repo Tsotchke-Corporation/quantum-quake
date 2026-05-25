@@ -751,6 +751,47 @@ def build_post_install_verification(
     }
 
 
+def build_candidate_discovery_command(
+    current_root: Path,
+    *,
+    publication_pack_dir: Path | None = None,
+    discover_max_depth: int = 5,
+) -> dict[str, Any]:
+    intake_json = Path("/tmp/qge_registered_asset_intake.after_discovery.json")
+    intake_markdown = Path("/tmp/qge_registered_asset_intake.after_discovery.md")
+    install_script = Path("/tmp/install_registered_assets.after_discovery.sh")
+    icc_json = Path(
+        "/tmp/qge_registered_asset_intake.after_discovery.icc.json")
+    command = (
+        "python3 tools/qge_registered_asset_intake.py "
+        f"--current-root {shell_quote(current_root)} "
+        "--discover-common "
+        f"--discover-max-depth {discover_max_depth} "
+    )
+    if publication_pack_dir is not None:
+        command += f"--publication-pack {shell_quote(publication_pack_dir)} "
+    command += (
+        f"--json {shell_quote(intake_json)} "
+        f"--markdown {shell_quote(intake_markdown)} "
+        f"--script-out {shell_quote(install_script)} "
+        f"--icc-json {shell_quote(icc_json)}"
+    )
+    return {
+        "kind": "registered_asset_discovery",
+        "shell_command": command,
+        "discover_common": True,
+        "discover_max_depth": discover_max_depth,
+        "publication_pack": (
+            str(publication_pack_dir) if publication_pack_dir is not None
+            else None
+        ),
+        "json": str(intake_json),
+        "markdown": str(intake_markdown),
+        "script": str(install_script),
+        "icc_json": str(icc_json),
+    }
+
+
 def build_intake(
     current_root: Path,
     candidates: Sequence[Path],
@@ -784,6 +825,10 @@ def build_intake(
     }
     copy_plan = build_copy_plan(chosen_sources, current_root, current_inventory)
     post_install_verification = build_post_install_verification(
+        current_root,
+        publication_pack_dir=publication_pack_dir,
+    )
+    candidate_discovery = build_candidate_discovery_command(
         current_root,
         publication_pack_dir=publication_pack_dir,
     )
@@ -827,6 +872,9 @@ def build_intake(
         "invalid_candidate_sources": invalid_sources,
         "copy_plan": copy_plan,
         "copy_plan_count": len(copy_plan),
+        "candidate_discovery": candidate_discovery,
+        "candidate_discovery_command": (
+            candidate_discovery["shell_command"]),
         "post_install_verification": post_install_verification,
         "post_install_verification_command_count": (
             post_install_verification["command_count"]),
@@ -996,6 +1044,18 @@ def markdown_report(intake: dict[str, Any]) -> str:
         )
     if not intake.get("copy_plan"):
         lines.append("| none | blocked |  |  |  |")
+    discovery_command = dict_or_empty(intake.get("candidate_discovery"))
+    if discovery_command:
+        lines.extend([
+            "",
+            "## Candidate Discovery Refresh",
+            "",
+            (
+                "`"
+                f"{discovery_command.get('shell_command')}"
+                "`"
+            ),
+        ])
     lines.extend([
         "",
         "## Post-Install Verification",
@@ -1059,6 +1119,10 @@ def build_icc_evidence(
         "invalid_candidate_source_count": intake.get(
             "invalid_candidate_source_count"),
         "copy_plan_count": intake.get("copy_plan_count"),
+        "candidate_discovery_command": intake.get(
+            "candidate_discovery_command"),
+        "candidate_discovery_script": dict_or_empty(
+            intake.get("candidate_discovery")).get("script"),
         "post_install_verification_command_count": intake.get(
             "post_install_verification_command_count"),
         "post_install_capture_queue_command_present": any(

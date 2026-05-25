@@ -2459,6 +2459,7 @@ class PublicationPackTests(unittest.TestCase):
             moonlab_deployment_gate.asset_remediation_from_intake(
                 {
                     "status": "blocked_no_candidate_assets",
+                    "current_asset_root": "assets/id1",
                     "candidate_new_map_count": 0,
                     "missing_map_count_after_plan": 30,
                     "copy_plan_count": 0,
@@ -2553,8 +2554,19 @@ class PublicationPackTests(unittest.TestCase):
                 "registered_asset_intake_steam_quake_path_count"],
             3,
         )
+        self.assertTrue(
+            blocked_gate["summary"][
+                "registered_asset_discovery_command_present"])
+        self.assertIn(
+            "qge_registered_asset_intake.py",
+            blocked_gate["summary"]["registered_asset_discovery_command"],
+        )
         self.assertTrue(any(
             "install_registered_assets.sh" in action
+            for action in blocked_gate["next_actions"]
+        ))
+        self.assertTrue(any(
+            "qge_registered_asset_intake.py" in action
             for action in blocked_gate["next_actions"]
         ))
         self.assertTrue(any(
@@ -2566,6 +2578,7 @@ class PublicationPackTests(unittest.TestCase):
         self.assertIn("blocked", blocked_markdown)
         self.assertIn("## Asset Remediation", blocked_markdown)
         self.assertIn("install_registered_assets.sh", blocked_markdown)
+        self.assertIn("discovery refresh", blocked_markdown)
         blocked_icc = moonlab_deployment_gate.build_icc_evidence(
             blocked_gate,
             out_path=Path("qge_moonlab_deployment_gate.blocked.json"),
@@ -2576,6 +2589,12 @@ class PublicationPackTests(unittest.TestCase):
         )
         self.assertTrue(
             blocked_icc["post_install_capture_queue_command_present"])
+        self.assertTrue(
+            blocked_icc["registered_asset_discovery_command_present"])
+        self.assertIn(
+            "qge_registered_asset_intake.py",
+            blocked_icc["registered_asset_discovery_command"],
+        )
 
         all_maps = breadth_evidence.QUAKE_REGISTERED_SINGLE_PLAYER_MAPS
         complete_coverage = breadth_evidence.build_full_game_map_coverage(
@@ -2674,6 +2693,7 @@ class PublicationPackTests(unittest.TestCase):
                 {
                     "schema": "qge.registered_asset_intake.v0",
                     "status": "blocked_no_candidate_assets",
+                    "current_asset_root": "assets/id1",
                     "candidate_new_map_count": 0,
                     "missing_map_count_after_plan": 30,
                     "copy_plan_count": 0,
@@ -2808,6 +2828,12 @@ class PublicationPackTests(unittest.TestCase):
             self.assertEqual(
                 cli_icc["registered_asset_intake_steam_quake_path_count"],
                 3,
+            )
+            self.assertTrue(
+                cli_icc["registered_asset_discovery_command_present"])
+            self.assertIn(
+                "qge_registered_asset_intake.py",
+                cli_icc["registered_asset_discovery_command"],
             )
 
 
@@ -3021,6 +3047,14 @@ class BreadthEvidenceTests(unittest.TestCase):
                 pak_plan["destination"].endswith("current-id1/pak1.pak"))
             self.assertEqual(
                 intake["post_install_verification_command_count"], 2)
+            self.assertIn(
+                "qge_registered_asset_intake.py",
+                intake["candidate_discovery_command"],
+            )
+            self.assertIn(
+                "--discover-common",
+                intake["candidate_discovery_command"],
+            )
             self.assertTrue(any(
                 command["kind"] == "capture_queue"
                 for command in
@@ -3049,6 +3083,7 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertTrue(icc["post_install_capture_queue_command_present"])
             markdown = registered_asset_intake.markdown_report(intake)
             self.assertIn("partial_candidate_assets_found", markdown)
+            self.assertIn("Candidate Discovery Refresh", markdown)
             self.assertIn("Post-Install Verification", markdown)
             self.assertIn("qge_full_game_capture_queue.py", markdown)
 
@@ -3086,6 +3121,10 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(
                 cli_icc["completion_reason"],
                 "qge_registered_asset_intake_plan_recorded")
+            self.assertIn(
+                "qge_registered_asset_intake.py",
+                cli_icc["candidate_discovery_command"],
+            )
 
     def test_registered_asset_intake_discovers_candidate_roots(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

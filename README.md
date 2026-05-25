@@ -145,7 +145,8 @@ Important known limitations:
   Publication packs now include the same `qge_registered_asset_intake.json`,
   Markdown, ICC evidence, and safe install script so the asset blocker is part
   of the reproducible bundle. The generated install script verifies SHA-256
-  after local copies and emits the post-install capture queue command for the
+  after local copies and emits both a discovery-refresh command for newly
+  installed licensed assets and the post-install capture queue command for the
   same publication pack. The Moonlab deployment gate repeats those remediation
   paths in its summary, next actions, Markdown, and ICC evidence.
 - `quantum_render 2` is not visually complete. The current renderer has

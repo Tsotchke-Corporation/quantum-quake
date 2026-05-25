@@ -25,6 +25,7 @@ import qge_asset_inventory  # noqa: E402
 import qge_asset_requirements  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
 import qge_moonlab_full_game_plan  # noqa: E402
+import qge_registered_asset_intake  # noqa: E402
 
 
 PASS = "pass"
@@ -101,6 +102,21 @@ def asset_remediation_from_intake(
     ]
     capture_queue = capture_queue_commands[0] if capture_queue_commands else {}
     discovery_meta = dict_or_empty(data.get("discovery_metadata"))
+    candidate_discovery = dict_or_empty(data.get("candidate_discovery"))
+    if not candidate_discovery.get("shell_command"):
+        current_root = data.get("current_asset_root")
+        publication_pack = post_install.get("publication_pack")
+        if isinstance(current_root, str) and current_root:
+            candidate_discovery = (
+                qge_registered_asset_intake.build_candidate_discovery_command(
+                    Path(current_root),
+                    publication_pack_dir=(
+                        Path(publication_pack)
+                        if isinstance(publication_pack, str) and publication_pack
+                        else None
+                    ),
+                )
+            )
     return {
         "registered_asset_intake_status": data.get("status"),
         "registered_asset_intake_file": (
@@ -125,6 +141,16 @@ def asset_remediation_from_intake(
             "steam_library_root_count", 0),
         "steam_quake_path_count": discovery_meta.get(
             "steam_quake_path_count", 0),
+        "registered_asset_discovery_command_present": bool(
+            candidate_discovery.get("shell_command")),
+        "registered_asset_discovery_command": candidate_discovery.get(
+            "shell_command"),
+        "registered_asset_discovery_json": candidate_discovery.get("json"),
+        "registered_asset_discovery_markdown": candidate_discovery.get(
+            "markdown"),
+        "registered_asset_discovery_script": candidate_discovery.get("script"),
+        "registered_asset_discovery_icc_evidence": candidate_discovery.get(
+            "icc_json"),
         "post_install_verification_command_count": data.get(
             "post_install_verification_command_count",
             post_install.get("command_count"),
@@ -336,6 +362,12 @@ def gate_summary(
             "steam_library_root_count"),
         "registered_asset_intake_steam_quake_path_count": remediation.get(
             "steam_quake_path_count"),
+        "registered_asset_discovery_command_present": remediation.get(
+            "registered_asset_discovery_command_present"),
+        "registered_asset_discovery_command": remediation.get(
+            "registered_asset_discovery_command"),
+        "registered_asset_discovery_script": remediation.get(
+            "registered_asset_discovery_script"),
         "post_install_verification_command_count": remediation.get(
             "post_install_verification_command_count"),
         "post_install_capture_queue_command_present": remediation.get(
@@ -535,8 +567,14 @@ def next_actions_for_blockers(
     }
     remediation = dict_or_empty(asset_remediation)
     install_script = remediation.get("registered_asset_install_script")
+    discovery_command = remediation.get("registered_asset_discovery_command")
     queue_command = remediation.get("post_install_capture_queue_command")
     if "registered_bsp_assets_ready" in failed_ids:
+        if discovery_command:
+            actions.append(
+                "Run the registered asset discovery refresh command after installing or linking licensed Quake assets: "
+                f"{discovery_command}"
+            )
         if install_script:
             actions.append(
                 f"Run {install_script} after placing licensed registered Quake assets where the intake ledger expects them."
@@ -763,6 +801,12 @@ def build_icc_evidence(
             "registered_asset_intake_steam_library_root_count"),
         "registered_asset_intake_steam_quake_path_count": summary.get(
             "registered_asset_intake_steam_quake_path_count"),
+        "registered_asset_discovery_command_present": summary.get(
+            "registered_asset_discovery_command_present"),
+        "registered_asset_discovery_command": summary.get(
+            "registered_asset_discovery_command"),
+        "registered_asset_discovery_script": summary.get(
+            "registered_asset_discovery_script"),
         "post_install_verification_command_count": summary.get(
             "post_install_verification_command_count"),
         "post_install_capture_queue_command_present": summary.get(
@@ -868,6 +912,10 @@ def markdown_report(gate: dict[str, Any]) -> str:
             (
                 "| Steam Quake candidate paths | "
                 f"`{remediation.get('steam_quake_path_count', 0)}` |"
+            ),
+            (
+                "| discovery refresh | "
+                f"`{remediation.get('registered_asset_discovery_command') or ''}` |"
             ),
             (
                 "| post-install queue | "
