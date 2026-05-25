@@ -132,6 +132,13 @@ def asset_remediation_from_intake(
         "missing_map_count_after_plan": data.get(
             "missing_map_count_after_plan"),
         "missing_maps_after_plan": data.get("missing_maps_after_plan"),
+        "manual_registered_asset_required": data.get(
+            "manual_registered_asset_required"),
+        "registered_asset_blocker_reason": data.get(
+            "registered_asset_blocker_reason"),
+        "copy_script_mode": data.get("copy_script_mode"),
+        "no_candidate_asset_copy_plan": data.get(
+            "no_candidate_asset_copy_plan"),
         "copy_plan_count": data.get("copy_plan_count"),
         "discovered_candidate_count": data.get(
             "discovered_candidate_count", 0),
@@ -350,6 +357,14 @@ def gate_summary(
             "registered_asset_intake_icc_evidence_file"),
         "registered_asset_intake_missing_map_count_after_plan": (
             remediation.get("missing_map_count_after_plan")),
+        "registered_asset_intake_manual_asset_required": remediation.get(
+            "manual_registered_asset_required"),
+        "registered_asset_intake_blocker_reason": remediation.get(
+            "registered_asset_blocker_reason"),
+        "registered_asset_intake_copy_script_mode": remediation.get(
+            "copy_script_mode"),
+        "registered_asset_intake_no_candidate_asset_copy_plan": (
+            remediation.get("no_candidate_asset_copy_plan")),
         "registered_asset_intake_copy_plan_count": remediation.get(
             "copy_plan_count"),
         "registered_asset_intake_candidate_new_map_count": remediation.get(
@@ -570,6 +585,12 @@ def next_actions_for_blockers(
     discovery_command = remediation.get("registered_asset_discovery_command")
     queue_command = remediation.get("post_install_capture_queue_command")
     if "registered_bsp_assets_ready" in failed_ids:
+        if remediation.get("no_candidate_asset_copy_plan") is True:
+            actions.append(
+                "No registered asset copy plan exists yet; install or link "
+                "licensed registered Quake PAK/BSP assets, then rerun the "
+                "discovery refresh command."
+            )
         if discovery_command:
             actions.append(
                 "Run the registered asset discovery refresh command after installing or linking licensed Quake assets: "
@@ -793,6 +814,14 @@ def build_icc_evidence(
             "registered_asset_intake_icc_evidence_file"),
         "registered_asset_intake_missing_map_count_after_plan": summary.get(
             "registered_asset_intake_missing_map_count_after_plan"),
+        "registered_asset_intake_manual_asset_required": summary.get(
+            "registered_asset_intake_manual_asset_required"),
+        "registered_asset_intake_blocker_reason": summary.get(
+            "registered_asset_intake_blocker_reason"),
+        "registered_asset_intake_copy_script_mode": summary.get(
+            "registered_asset_intake_copy_script_mode"),
+        "registered_asset_intake_no_candidate_asset_copy_plan": summary.get(
+            "registered_asset_intake_no_candidate_asset_copy_plan"),
         "registered_asset_intake_copy_plan_count": summary.get(
             "registered_asset_intake_copy_plan_count"),
         "registered_asset_intake_candidate_new_map_count": summary.get(
@@ -908,6 +937,18 @@ def markdown_report(gate: dict[str, Any]) -> str:
             (
                 "| install script | "
                 f"`{remediation.get('registered_asset_install_script') or ''}` |"
+            ),
+            (
+                "| copy script mode | "
+                f"`{remediation.get('copy_script_mode') or ''}` |"
+            ),
+            (
+                "| manual assets required | "
+                f"`{remediation.get('manual_registered_asset_required')}` |"
+            ),
+            (
+                "| blocker reason | "
+                f"`{remediation.get('registered_asset_blocker_reason') or ''}` |"
             ),
             (
                 "| discovery roots scanned | "

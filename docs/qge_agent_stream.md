@@ -468,10 +468,14 @@ for candidate installs when the exact registered asset path is unknown;
 and `appmanifest_2310.acf`, plus GOG/Heroic-style local roots. The
 publication pack records this intake ledger, Markdown, ICC evidence, and safe
 install script under `resource/` even when no candidate assets are found. The
-script verifies copied asset SHA-256 values; the intake ledger and Moonlab
-deployment gate also surface a discovery-refresh command that rebuilds the
-intake/install script after licensed assets are installed or linked, then emit
-the matching post-install full-game capture queue command.
+script verifies copied asset SHA-256 values and now emits explicit
+`QGE_REGISTERED_ASSET_NO_CANDIDATES` / `no_op_blocked` markers when it has no
+copy operations because no licensed candidate assets were discovered. The
+intake ledger, ICC evidence, and Moonlab deployment gate carry
+`manual_registered_asset_required`, `registered_asset_blocker_reason`, and the
+remaining missing map list, then surface a discovery-refresh command that
+rebuilds the intake/install script after licensed assets are installed or
+linked and emits the matching post-install full-game capture queue command.
 
 `tools/qge_noesis_summary.py` reads the stream manifest, Noesis action trace,
 translated command buffer, runtime log, `noesis/gameplay_outcomes.ndjson`,

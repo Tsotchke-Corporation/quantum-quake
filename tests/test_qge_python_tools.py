@@ -2741,6 +2741,11 @@ class PublicationPackTests(unittest.TestCase):
                     "current_asset_root": "assets/id1",
                     "candidate_new_map_count": 0,
                     "missing_map_count_after_plan": 30,
+                    "manual_registered_asset_required": True,
+                    "registered_asset_blocker_reason": (
+                        "no_candidate_assets_found"),
+                    "copy_script_mode": "no_op_blocked",
+                    "no_candidate_asset_copy_plan": True,
                     "copy_plan_count": 0,
                     "discovered_candidate_count": 1,
                     "discovery_metadata": {
@@ -2835,6 +2840,17 @@ class PublicationPackTests(unittest.TestCase):
         )
         self.assertTrue(
             blocked_gate["summary"][
+                "registered_asset_intake_manual_asset_required"])
+        self.assertEqual(
+            blocked_gate["summary"][
+                "registered_asset_intake_copy_script_mode"],
+            "no_op_blocked",
+        )
+        self.assertTrue(
+            blocked_gate["summary"][
+                "registered_asset_intake_no_candidate_asset_copy_plan"])
+        self.assertTrue(
+            blocked_gate["summary"][
                 "registered_asset_discovery_command_present"])
         self.assertIn(
             "qge_registered_asset_intake.py",
@@ -2849,6 +2865,10 @@ class PublicationPackTests(unittest.TestCase):
             for action in blocked_gate["next_actions"]
         ))
         self.assertTrue(any(
+            "No registered asset copy plan exists yet" in action
+            for action in blocked_gate["next_actions"]
+        ))
+        self.assertTrue(any(
             "qge_full_game_capture_queue.py" in action
             for action in blocked_gate["next_actions"]
         ))
@@ -2857,6 +2877,7 @@ class PublicationPackTests(unittest.TestCase):
         self.assertIn("blocked", blocked_markdown)
         self.assertIn("## Asset Remediation", blocked_markdown)
         self.assertIn("install_registered_assets.sh", blocked_markdown)
+        self.assertIn("copy script mode", blocked_markdown)
         self.assertIn("discovery refresh", blocked_markdown)
         blocked_icc = moonlab_deployment_gate.build_icc_evidence(
             blocked_gate,
@@ -2873,6 +2894,16 @@ class PublicationPackTests(unittest.TestCase):
             blocked_icc["post_install_capture_queue_command_present"])
         self.assertTrue(
             blocked_icc["registered_asset_discovery_command_present"])
+        self.assertTrue(
+            blocked_icc[
+                "registered_asset_intake_manual_asset_required"])
+        self.assertEqual(
+            blocked_icc["registered_asset_intake_copy_script_mode"],
+            "no_op_blocked",
+        )
+        self.assertTrue(
+            blocked_icc[
+                "registered_asset_intake_no_candidate_asset_copy_plan"])
         self.assertIn(
             "qge_registered_asset_intake.py",
             blocked_icc["registered_asset_discovery_command"],
@@ -2980,6 +3011,11 @@ class PublicationPackTests(unittest.TestCase):
                     "current_asset_root": "assets/id1",
                     "candidate_new_map_count": 0,
                     "missing_map_count_after_plan": 30,
+                    "manual_registered_asset_required": True,
+                    "registered_asset_blocker_reason": (
+                        "no_candidate_assets_found"),
+                    "copy_script_mode": "no_op_blocked",
+                    "no_candidate_asset_copy_plan": True,
                     "copy_plan_count": 0,
                     "discovered_candidate_count": 1,
                     "discovery_metadata": {
@@ -3321,6 +3357,13 @@ class BreadthEvidenceTests(unittest.TestCase):
                 intake["missing_map_count_after_plan"],
                 intake["current_missing_map_count"] - 3,
             )
+            self.assertTrue(intake["manual_registered_asset_required"])
+            self.assertEqual(
+                intake["registered_asset_blocker_reason"],
+                "partial_plan_remaining_registered_assets_missing",
+            )
+            self.assertEqual(intake["copy_script_mode"], "partial_copy_plan")
+            self.assertFalse(intake["no_candidate_asset_copy_plan"])
             self.assertIn("e2m1", intake["candidate_new_maps"])
             self.assertIn("e3m2", intake["candidate_new_maps"])
             self.assertEqual(intake["invalid_candidate_source_count"], 1)
@@ -3356,6 +3399,7 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertIn("verify_sha256", script)
             self.assertIn("copy_registered_asset", script)
             self.assertIn("cp -n", script)
+            self.assertIn("QGE_REGISTERED_ASSET_PARTIAL_COPY_PLAN", script)
             self.assertIn("qge_asset_inventory.py", script)
             self.assertIn("qge_full_game_capture_queue.py", script)
             icc = registered_asset_intake.build_icc_evidence(
@@ -3368,8 +3412,13 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(
                 icc["post_install_verification_command_count"], 2)
             self.assertTrue(icc["post_install_capture_queue_command_present"])
+            self.assertTrue(icc["manual_registered_asset_required"])
+            self.assertEqual(icc["copy_script_mode"], "partial_copy_plan")
+            self.assertIn("missing_maps_after_plan", icc)
             markdown = registered_asset_intake.markdown_report(intake)
             self.assertIn("partial_candidate_assets_found", markdown)
+            self.assertIn("Blocker Summary", markdown)
+            self.assertIn("partial_copy_plan", markdown)
             self.assertIn("Candidate Discovery Refresh", markdown)
             self.assertIn("Post-Install Verification", markdown)
             self.assertIn("qge_full_game_capture_queue.py", markdown)
@@ -3500,6 +3549,37 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(
                 empty_intake["status"], "blocked_no_candidate_assets")
             self.assertEqual(empty_intake["discovered_candidate_count"], 0)
+            self.assertTrue(
+                empty_intake["manual_registered_asset_required"])
+            self.assertEqual(
+                empty_intake["registered_asset_blocker_reason"],
+                "no_candidate_assets_found",
+            )
+            self.assertEqual(
+                empty_intake["copy_script_mode"], "no_op_blocked")
+            self.assertTrue(empty_intake["no_candidate_asset_copy_plan"])
+            empty_script = "\n".join(
+                registered_asset_intake.script_lines(empty_intake))
+            self.assertIn(
+                "QGE_REGISTERED_ASSET_COPY_SCRIPT_MODE no_op_blocked",
+                empty_script,
+            )
+            self.assertIn(
+                "QGE_REGISTERED_ASSET_NO_CANDIDATES",
+                empty_script,
+            )
+            self.assertIn(
+                "QGE_REGISTERED_ASSET_MISSING_MAP_COUNT",
+                empty_script,
+            )
+            empty_icc = registered_asset_intake.build_icc_evidence(
+                empty_intake)
+            self.assertTrue(empty_icc["manual_registered_asset_required"])
+            self.assertEqual(
+                empty_icc["registered_asset_blocker_reason"],
+                "no_candidate_assets_found",
+            )
+            self.assertTrue(empty_icc["no_candidate_asset_copy_plan"])
 
     def test_registered_asset_intake_derives_steam_quake_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

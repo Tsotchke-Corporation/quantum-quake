@@ -76,7 +76,10 @@ unavailable locally, and the whole-game simulator/native deployment claim is
 not allowed until those criteria all pass. The gate summary, Markdown, next
 actions, and ICC evidence now cite the registered-asset install script and the
 post-install capture queue command needed to continue without weakening the
-claim gate.
+claim gate. When discovery finds no licensed candidate assets, the intake
+evidence and generated script now say `no_op_blocked`, set
+`manual_registered_asset_required`, and list the remaining maps instead of
+looking like a real copy plan was produced.
 `resource/qge_native_backend_boundary.json` records the native bridge boundary
 verdict for `qge_context_get_or_create_render_acceleration`, `qge_dwt_render`,
 and `qge_metal_init_common`.

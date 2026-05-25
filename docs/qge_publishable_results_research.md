@@ -291,9 +291,13 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      scanning bounded candidate directories. The intake artifact records
      `qge.registered_asset_intake.v0`, candidate-new maps, invalid candidate
      BSPs, bounded discovery results, and no-claim posture; it does not copy or
-     bundle game data by default. It also records a discovery-refresh command
-     that rebuilds the intake/install script after licensed assets are
-     installed or linked. `tools/qge_publication_pack.py` now writes
+     bundle game data by default. When discovery finds no licensed candidates,
+     the JSON/ICC evidence sets `manual_registered_asset_required`, records
+     `registered_asset_blocker_reason`, and the script announces
+     `QGE_REGISTERED_ASSET_NO_CANDIDATES` / `no_op_blocked` before running
+     verification. It also records a discovery-refresh command that rebuilds
+     the intake/install script after licensed assets are installed or linked.
+     `tools/qge_publication_pack.py` now writes
      the same intake ledger, Markdown, ICC evidence, and safe install script
      under `resource/`, and accepts `--registered-asset-candidate`,
      `--registered-asset-discover-root`, and
@@ -364,8 +368,8 @@ availability ledger,
 `resource/qge_asset_requirements.json`, which lists the required registered BSP
 entries still needed to unblock captures,
 `resource/qge_registered_asset_intake.json`, which records the bounded local
-candidate discovery attempt, zero new registered maps, and the safe no-copy
-install script,
+candidate discovery attempt, zero new registered maps, the manual licensed
+asset requirement, and the safe no-op install script,
 `resource/qge_moonlab_full_game_plan.json`, which records the full registered
 map deployment ledger and no-claim posture,
 `resource/qge_moonlab_deployment_gate.json`, which records the hard

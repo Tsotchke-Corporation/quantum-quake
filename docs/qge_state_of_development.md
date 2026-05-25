@@ -663,10 +663,12 @@ Known current visual state:
   discovery with `--discover-root` or `--discover-common`, making the 23
   missing-map asset blocker operational without checking game payloads into the
   repo. Publication packs now carry the intake ledger and safe install script
-  as first-class resource artifacts; that script verifies copied SHA-256s and
-  emits the post-install full-game capture queue command for the same pack,
-  and the Moonlab deployment gate now repeats those remediation artifacts in
-  its summary, next actions, Markdown, and ICC evidence.
+  as first-class resource artifacts; that script verifies copied SHA-256s,
+  marks no-candidate plans as `no_op_blocked`, emits
+  `QGE_REGISTERED_ASSET_NO_CANDIDATES`, and still prints the post-install
+  full-game capture queue command for the same pack. The Moonlab deployment
+  gate now repeats those remediation artifacts plus the manual-asset blocker
+  reason in its summary, next actions, Markdown, and ICC evidence.
 - `tools/qge_publication_pack.py --breadth-evidence` now carries that multi-map
   breadth evidence into the paper/demo bundle. The current strongest
   publication pack is `diagnostics/publication_pack/20260524-asset-gate-remediation`, with
