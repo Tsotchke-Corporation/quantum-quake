@@ -741,7 +741,8 @@ Known current visual state:
   and the copied vanilla, breadth, and performance ICC sidecars are audited
   against their runtime source artifacts. The scene-oracle ICC sidecar is
   audited against the packed oracle and claims evidence, and the oracle claims
-  evidence is rebuilt from the packed claims ledger plus oracle scene.
+  evidence is rebuilt from the packed claims ledger plus oracle scene. The
+  oracle scene is rebuilt from its recorded source capture.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims

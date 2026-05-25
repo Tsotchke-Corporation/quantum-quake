@@ -40,6 +40,7 @@ import qge_noesis_summary as noesis_summary  # noqa: E402
 import qge_oracle_claims_audit as oracle_claims_audit  # noqa: E402
 import qge_oracle_icc_audit as oracle_icc_audit  # noqa: E402
 import qge_oracle_export as oracle_export  # noqa: E402
+import qge_oracle_scene_audit as oracle_scene_audit  # noqa: E402
 import qge_perf_summary as perf_summary  # noqa: E402
 import qge_publication_icc_audit as publication_icc_audit  # noqa: E402
 import qge_publication_pack as publication_pack  # noqa: E402
@@ -507,6 +508,7 @@ class OracleExportTests(unittest.TestCase):
         }
         render = {"shots": 16}
         oracle_scene = {
+            "schema": "qge.scene_oracle_ir.v0",
             "scene": {"scene_id": "e1m1:7", "trace_run_id": "0x1"},
             "observable": {"observable_id": "light_transport"},
             "sample_space": {"candidate_count": 8},
@@ -523,6 +525,31 @@ class OracleExportTests(unittest.TestCase):
             },
             "snapshot": {"render": render},
         }
+        scene_audit = oracle_scene_audit.oracle_scene_source_audit(
+            oracle_scene,
+            expected_oracle_scene=oracle_scene,
+            required=True,
+        )
+        self.assertTrue(scene_audit["passed"])
+        self.assertEqual(scene_audit["mismatch_count"], 0)
+
+        stale_scene = json.loads(json.dumps(oracle_scene))
+        stale_scene["sample_space"]["candidate_count"] = 0
+        stale_scene["hardware_quantum_advantage_claimed"] = True
+        stale_scene_audit = oracle_scene_audit.oracle_scene_source_audit(
+            stale_scene,
+            expected_oracle_scene=oracle_scene,
+            required=True,
+        )
+        self.assertFalse(stale_scene_audit["passed"])
+        self.assertIn(
+            "sample_space.candidate_count",
+            stale_scene_audit["field_mismatches"],
+        )
+        self.assertTrue(any(
+            flag.get("flag") == "hardware_quantum_advantage_claimed"
+            for flag in stale_scene_audit["overclaim_flags"]
+        ))
         ledger = {
             "claims": [
                 {

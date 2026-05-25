@@ -2157,6 +2157,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         },
         "reproduce_commands": [
             "tools/qge_oracle_export.py <capture_dir>",
+            "tools/qge_oracle_scene_audit.py <pack_dir> --out /tmp/qge_oracle_scene_audit.json --fail-on-mismatch",
             "tools/qge_oracle_claims_audit.py <pack_dir> --out /tmp/qge_oracle_claims_audit.json --fail-on-mismatch",
             "tools/qge_oracle_icc_audit.py <pack_dir> --out /tmp/qge_oracle_icc_audit.json --fail-on-mismatch",
             "tools/qge_advantage_benchmark.py <oracle_scene.json> --outdir <outdir>",
