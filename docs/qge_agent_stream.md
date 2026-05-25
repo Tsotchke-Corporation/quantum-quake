@@ -498,7 +498,9 @@ vanilla, breadth, and performance ICC sidecars are audited against their
 runtime source artifacts. The scene-oracle ICC sidecar is likewise audited
 against the packed oracle and claims evidence, the oracle claims evidence is
 rebuilt from the packed claims ledger and oracle scene, and the oracle scene is
-rebuilt from its recorded source capture. The gate
+rebuilt from its recorded source capture. The publication manifest's file and
+directory records are checked against current path existence, sizes, and
+SHA-256 digests. The gate
 reports resource blockers as `blocked` statuses, reserving generic failure
 events for crashed or invalid runtime evidence. Each
 contract records the episode/slot, route class, route profile, combat

@@ -112,8 +112,9 @@ vanilla, breadth, and performance ICC sidecars are audited against their
 runtime source artifacts. The scene-oracle ICC sidecar is likewise audited
 against the packed oracle and claims evidence, the oracle claims evidence is
 rebuilt from the packed claims ledger and oracle scene, and the oracle scene is
-rebuilt from its recorded source capture. The remaining 23 maps are still asset
-unavailable.
+rebuilt from its recorded source capture. The publication manifest's file and
+directory records are checked against current path existence, sizes, and
+SHA-256 digests. The remaining 23 maps are still asset unavailable.
 `resource/qge_moonlab_deployment_gate.json` is the fail-closed claim gate for
 the sentence "the entire game runs in Moonlab." It is currently `blocked`
 because coverage is 9/32, the remaining 23 registered BSP assets are

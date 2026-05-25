@@ -37,6 +37,7 @@ import qge_moonlab_qae_observation_transpile as moonlab_observation_transpile  #
 import qge_moonlab_qae_transpile as moonlab_qae_transpile  # noqa: E402
 import qge_moonlab_submission_bundle as moonlab_submission_bundle  # noqa: E402
 import qge_noesis_summary as noesis_summary  # noqa: E402
+import qge_manifest_file_audit as manifest_file_audit  # noqa: E402
 import qge_oracle_claims_audit as oracle_claims_audit  # noqa: E402
 import qge_oracle_icc_audit as oracle_icc_audit  # noqa: E402
 import qge_oracle_export as oracle_export  # noqa: E402
@@ -991,6 +992,53 @@ class PublicationPackTests(unittest.TestCase):
             perf = publication_pack.performance_summary(summary)
             self.assertFalse(publication_pack.explicit_performance_failure(perf))
             self.assertEqual(perf["render_time_ms_max"], 22.0)
+
+    def test_manifest_file_record_audit_detects_stale_records(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            artifact = tmpdir / "artifact.txt"
+            artifact.write_text("manifest-bound artifact\n", encoding="utf-8")
+            bundle = tmpdir / "bundle"
+            bundle.mkdir()
+            nested = bundle / "nested.txt"
+            nested.write_text("nested artifact\n", encoding="utf-8")
+            manifest = {
+                "artifacts": {
+                    "sample": {
+                        "file": publication_pack.file_info(artifact),
+                        "directory": publication_pack.directory_info(bundle),
+                    }
+                }
+            }
+
+            audit = manifest_file_audit.manifest_file_record_audit(
+                manifest,
+                required=True,
+            )
+            self.assertTrue(audit["passed"])
+            self.assertEqual(audit["file_record_count"], 2)
+            self.assertEqual(audit["directory_record_count"], 1)
+            self.assertEqual(audit["mismatch_count"], 0)
+
+            stale_manifest = json.loads(json.dumps(manifest))
+            stale_manifest["artifacts"]["sample"]["file"]["sha256"] = "0" * 64
+            stale_directory = stale_manifest["artifacts"]["sample"]["directory"]
+            stale_directory["file_count"] = 0
+            stale_audit = manifest_file_audit.manifest_file_record_audit(
+                stale_manifest,
+                required=True,
+            )
+            self.assertFalse(stale_audit["passed"])
+            self.assertTrue(any(
+                item.get("source") == "artifacts.sample.file" and
+                "sha256" in item.get("fields", [])
+                for item in stale_audit["mismatches"]
+            ))
+            self.assertTrue(any(
+                item.get("source") == "artifacts.sample.directory" and
+                "file_count" in item.get("fields", [])
+                for item in stale_audit["mismatches"]
+            ))
 
     def test_manifest_summaries_and_icc_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
