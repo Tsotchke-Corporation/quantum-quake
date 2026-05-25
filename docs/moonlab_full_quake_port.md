@@ -94,7 +94,9 @@ ledger from those same job specs/results, so missing, extra, or stale candidate
 rows cannot make a hardware handoff look ready. The current covered set is 9/9
 route-authority ready; the hardware record template is also audited against the
 submission packet so a returned Moonlab hardware record updates the intended
-bounded candidate. The remaining 23 maps are still asset unavailable.
+bounded candidate, and the scoped hardware-submission artifact is audited
+against the packet, submission bundle, and template so its bounded ready claim
+cannot drift. The remaining 23 maps are still asset unavailable.
 `resource/qge_moonlab_deployment_gate.json` is the fail-closed claim gate for
 the sentence "the entire game runs in Moonlab." It is currently `blocked`
 because coverage is 9/32, the remaining 23 registered BSP assets are

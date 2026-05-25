@@ -310,8 +310,9 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      execution, hardware advantage, or dense-state overclaim flags: every
      selected job spec must have a matching completed simulator result row with
      the required artifact evidence, and the submission packet's hardware
-     candidate rows plus the hardware record template must match those
-     specs/results, before the full-game deployment gate can pass.
+     candidate rows plus the hardware record template and scoped submission
+     readiness artifact must match those specs/results, before the full-game
+     deployment gate can pass.
    - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
      and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
      scanning bounded candidate directories. The intake artifact records

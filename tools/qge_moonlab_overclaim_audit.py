@@ -56,7 +56,9 @@ def overclaim_flags(
     job_specs: dict[str, Any] | None = None,
     job_results: dict[str, Any] | None = None,
     submission_packet: dict[str, Any] | None = None,
+    submission_bundle: dict[str, Any] | None = None,
     hardware_record_template: dict[str, Any] | None = None,
+    hardware_submission_scope: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     sources = (
         ("resource_envelope", dict_or_empty(resource_envelope)),
@@ -65,9 +67,14 @@ def overclaim_flags(
         ("moonlab_job_specs", dict_or_empty(job_specs)),
         ("moonlab_job_results", dict_or_empty(job_results)),
         ("moonlab_submission_packet", dict_or_empty(submission_packet)),
+        ("moonlab_submission_bundle", dict_or_empty(submission_bundle)),
         (
             "moonlab_hardware_record_template",
             dict_or_empty(hardware_record_template),
+        ),
+        (
+            "moonlab_hardware_submission_scope",
+            dict_or_empty(hardware_submission_scope),
         ),
     )
     flags = []

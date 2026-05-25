@@ -1521,6 +1521,14 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         moonlab_job_results,
         moonlab_submission_packet,
         moonlab_hardware_record_template,
+        submission_bundle=moonlab_submission_bundle,
+        hardware_submission_scope=moonlab_hardware_submission_scope,
+        artifact_paths={
+            "moonlab_submission_packet": str(moonlab_submission_packet_path),
+            "moonlab_submission_bundle": str(moonlab_submission_bundle_path),
+            "moonlab_hardware_record_template": str(
+                moonlab_hardware_record_template_path),
+        },
         resource_envelope=resource_envelope,
         asset_remediation=(
             qge_moonlab_deployment_gate.asset_remediation_from_intake(

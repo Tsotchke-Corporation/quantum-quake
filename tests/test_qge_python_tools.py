@@ -3117,6 +3117,15 @@ class PublicationPackTests(unittest.TestCase):
             moonlab_hardware_ingest.build_hardware_record_template(
                 submission_packet)
         )
+        submission_bundle = moonlab_submission_bundle.build_submission_bundle(
+            submission_packet)
+        hardware_submission_scope = (
+            moonlab_submission_bundle.build_hardware_submission_scope(
+                submission_packet,
+                submission_bundle,
+                hardware_template,
+            )
+        )
         partial_breadth = {
             "schema": "qge.breadth_evidence.v0",
             "matrix_runs": [
@@ -3218,6 +3227,8 @@ class PublicationPackTests(unittest.TestCase):
             job_results,
             submission_packet,
             hardware_template,
+            submission_bundle=submission_bundle,
+            hardware_submission_scope=hardware_submission_scope,
             asset_remediation=partial_asset_remediation,
             source_path=Path("partial-pack"),
         )
@@ -3461,6 +3472,20 @@ class PublicationPackTests(unittest.TestCase):
         self.assertTrue(
             blocked_gate["summary"][
                 "moonlab_hardware_record_template_candidate_found"])
+        self.assertTrue(
+            blocked_gate["summary"][
+                "moonlab_hardware_submission_scope_ledger_recorded"])
+        self.assertEqual(
+            blocked_gate["summary"][
+                "moonlab_hardware_submission_scope_ledger_mismatch_count"],
+            0,
+        )
+        self.assertEqual(
+            blocked_gate["summary"][
+                "moonlab_hardware_submission_scope_recorded_ready"],
+            blocked_gate["summary"][
+                "moonlab_hardware_submission_scope_expected_ready"],
+        )
         self.assertIn(
             "qge_registered_asset_intake.py",
             blocked_gate["summary"]["registered_asset_discovery_command"],
@@ -3494,6 +3519,8 @@ class PublicationPackTests(unittest.TestCase):
         self.assertIn("Moonlab submission packet ledger", blocked_markdown)
         self.assertIn(
             "Moonlab hardware record template ledger", blocked_markdown)
+        self.assertIn(
+            "Moonlab hardware submission scope ledger", blocked_markdown)
         self.assertIn(
             "Covered route authority: 2 / 2 (complete=True)",
             blocked_markdown,
@@ -3604,6 +3631,20 @@ class PublicationPackTests(unittest.TestCase):
         self.assertTrue(
             blocked_icc[
                 "moonlab_hardware_record_template_candidate_found"])
+        self.assertTrue(
+            blocked_icc[
+                "moonlab_hardware_submission_scope_ledger_recorded"])
+        self.assertEqual(
+            blocked_icc[
+                "moonlab_hardware_submission_scope_ledger_mismatch_count"],
+            0,
+        )
+        self.assertEqual(
+            blocked_icc[
+                "moonlab_hardware_submission_scope_recorded_ready"],
+            blocked_icc[
+                "moonlab_hardware_submission_scope_expected_ready"],
+        )
         self.assertIn(
             "qge_registered_asset_intake.py",
             blocked_icc["registered_asset_discovery_command"],
@@ -3626,6 +3667,8 @@ class PublicationPackTests(unittest.TestCase):
             job_results,
             submission_packet,
             hardware_template,
+            submission_bundle=submission_bundle,
+            hardware_submission_scope=hardware_submission_scope,
             asset_remediation=partial_asset_remediation,
             source_path=Path("stale-pack"),
         )
@@ -3659,6 +3702,8 @@ class PublicationPackTests(unittest.TestCase):
             job_results,
             submission_packet,
             hardware_template,
+            submission_bundle=submission_bundle,
+            hardware_submission_scope=hardware_submission_scope,
             asset_remediation=partial_asset_remediation,
             source_path=Path("stale-row-pack"),
         )
@@ -3756,6 +3801,8 @@ class PublicationPackTests(unittest.TestCase):
             complete_job_results,
             submission_packet,
             hardware_template,
+            submission_bundle=submission_bundle,
+            hardware_submission_scope=hardware_submission_scope,
             source_path=Path("complete-pack"),
         )
         self.assertEqual(
@@ -3812,6 +3859,14 @@ class PublicationPackTests(unittest.TestCase):
                 "moonlab_hardware_record_template_ledger_mismatch_count"],
             0,
         )
+        self.assertTrue(
+            ready_gate["summary"][
+                "moonlab_hardware_submission_scope_ledger_recorded"])
+        self.assertEqual(
+            ready_gate["summary"][
+                "moonlab_hardware_submission_scope_ledger_mismatch_count"],
+            0,
+        )
         icc = moonlab_deployment_gate.build_icc_evidence(
             ready_gate, out_path=Path("qge_moonlab_deployment_gate.json"))
         self.assertEqual(
@@ -3825,6 +3880,11 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(
             icc[
                 "moonlab_hardware_record_template_ledger_mismatch_count"],
+            0,
+        )
+        self.assertEqual(
+            icc[
+                "moonlab_hardware_submission_scope_ledger_mismatch_count"],
             0,
         )
         self.assertTrue(
@@ -3847,6 +3907,8 @@ class PublicationPackTests(unittest.TestCase):
             complete_job_results,
             submission_packet,
             hardware_template,
+            submission_bundle=submission_bundle,
+            hardware_submission_scope=hardware_submission_scope,
             source_path=Path("nested-overclaim-pack"),
         )
         nested_overclaim_blockers = {
@@ -3881,6 +3943,8 @@ class PublicationPackTests(unittest.TestCase):
             complete_job_results,
             stale_submission_packet,
             hardware_template,
+            submission_bundle=submission_bundle,
+            hardware_submission_scope=hardware_submission_scope,
             source_path=Path("stale-submission-packet-pack"),
         )
         stale_submission_blockers = {
@@ -3915,6 +3979,8 @@ class PublicationPackTests(unittest.TestCase):
             complete_job_results,
             submission_packet,
             stale_hardware_template,
+            submission_bundle=submission_bundle,
+            hardware_submission_scope=hardware_submission_scope,
             source_path=Path("stale-hardware-template-pack"),
         )
         stale_template_blockers = {
@@ -3937,6 +4003,42 @@ class PublicationPackTests(unittest.TestCase):
             stale_template_gate[
                 "whole_game_moonlab_deployment_claim_allowed"])
 
+        stale_scope = json.loads(json.dumps(hardware_submission_scope))
+        stale_scope["candidate_digests"] = {}
+        stale_scope["passing_check_count"] = 0
+        stale_scope_gate = moonlab_deployment_gate.build_gate(
+            complete_coverage,
+            complete_inventory,
+            complete_requirements,
+            complete_plan,
+            job_specs,
+            complete_job_results,
+            submission_packet,
+            hardware_template,
+            submission_bundle=submission_bundle,
+            hardware_submission_scope=stale_scope,
+            source_path=Path("stale-hardware-submission-scope-pack"),
+        )
+        stale_scope_blockers = {
+            item["id"] for item in stale_scope_gate["blockers"]
+        }
+        self.assertIn(
+            "moonlab_hardware_submission_scope_consistent",
+            stale_scope_blockers,
+        )
+        stale_scope_criterion = next(
+            item for item in stale_scope_gate["criteria"]
+            if item["id"] == "moonlab_hardware_submission_scope_consistent")
+        self.assertEqual(stale_scope_criterion["status"], "blocked")
+        self.assertIn(
+            "candidate_digests",
+            stale_scope_criterion[
+                "moonlab_hardware_submission_scope_mismatches"],
+        )
+        self.assertFalse(
+            stale_scope_gate[
+                "whole_game_moonlab_deployment_claim_allowed"])
+
         coverage_only_job_results = dict(complete_job_results)
         coverage_only_job_results["jobs"] = [
             moonlab_coverage_ledger_result_job(
@@ -3954,6 +4056,8 @@ class PublicationPackTests(unittest.TestCase):
             coverage_only_job_results,
             submission_packet,
             hardware_template,
+            submission_bundle=submission_bundle,
+            hardware_submission_scope=hardware_submission_scope,
             source_path=Path("coverage-only-results-pack"),
         )
         coverage_only_blockers = {
@@ -3999,6 +4103,8 @@ class PublicationPackTests(unittest.TestCase):
             artifactless_job_results,
             submission_packet,
             hardware_template,
+            submission_bundle=submission_bundle,
+            hardware_submission_scope=hardware_submission_scope,
             source_path=Path("artifactless-results-pack"),
         )
         artifactless_blockers = {
@@ -4043,6 +4149,8 @@ class PublicationPackTests(unittest.TestCase):
             stale_job_results,
             submission_packet,
             hardware_template,
+            submission_bundle=submission_bundle,
+            hardware_submission_scope=hardware_submission_scope,
             source_path=Path("stale-ledger-pack"),
         )
         stale_ledger_blockers = {
@@ -4091,6 +4199,8 @@ class PublicationPackTests(unittest.TestCase):
             complete_job_results,
             submission_packet,
             hardware_template,
+            submission_bundle=submission_bundle,
+            hardware_submission_scope=hardware_submission_scope,
             source_path=Path("legacy-pack"),
         )
         legacy_blockers = {
