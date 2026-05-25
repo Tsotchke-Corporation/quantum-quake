@@ -84,7 +84,11 @@ Important known limitations:
   jobs and one unsubmitted hardware-candidate QAE benchmark job, and
   `resource/qge_moonlab_job_results.json` with four completed simulator jobs,
   two completed native replay jobs, zero blocked jobs, and zero hardware
-  submissions, plus `resource/qge_moonlab_replay_plan.json` with the exact
+  submissions. Its runtime-backend-probe job records the performance and
+  breadth aggregate evidence for the three native sparse-DWT bridge targets,
+  including native target sets, missing target sets, proof maps, event counts,
+  and the 945 native bridge breadth count, plus
+  `resource/qge_moonlab_replay_plan.json` with the exact
   replay/validation contract and
   `resource/qge_moonlab_submission_packet.json` with the deterministic
   hardware-candidate handoff contract,

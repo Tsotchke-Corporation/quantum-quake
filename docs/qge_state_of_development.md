@@ -698,7 +698,11 @@ Known current visual state:
   The job results complete
   four simulator jobs total: the three simulator/native evidence jobs plus the
   coverage-ledger replay, with two native replay jobs, zero blocked jobs, zero
-  hardware submissions; `tools/qge_moonlab_job_runner.py` regenerates that
+  hardware submissions, and runtime-backend-probe observations copied from the
+  performance and breadth aggregates so the job result records native target
+  sets, missing target sets, proof maps, event counts, nine resolved breadth
+  runs, and 945 native bridge events; `tools/qge_moonlab_job_runner.py`
+  regenerates that
   result evidence directly from the job-spec artifact, can compare it to the
   packed expected results, and can emit the replay plan plus the
   hardware-candidate submission packet. `tools/qge_moonlab_qae_transpile.py`

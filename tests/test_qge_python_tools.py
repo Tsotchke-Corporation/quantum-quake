@@ -915,17 +915,47 @@ class PublicationPackTests(unittest.TestCase):
             publication_pack.write_json(
                 performance_path,
                 {
-                    "runtime_backend_probe_resolved": True,
-                    "runtime_backend_probe_native_targets": ["qge_dwt_render"],
-                    "runtime_backend_probe_missing_targets": [],
+                    "aggregate": {
+                        "runtime_backend_probe_resolved": True,
+                        "runtime_backend_probe_event_count": 3,
+                        "required_runtime_backend_probe_targets": [
+                            "qge_dwt_render",
+                        ],
+                        "runtime_backend_probe_native_targets": [
+                            "qge_dwt_render",
+                        ],
+                        "runtime_backend_probe_missing_targets": [],
+                        "runtime_backend_probe_proofs": {
+                            "qge_dwt_render": {
+                                "native_bridge_evidence": True,
+                            },
+                        },
+                    },
                 },
             )
             publication_pack.write_json(
                 breadth_path,
                 {
-                    "map_count": 4,
-                    "runtime_backend_probe_resolved_run_count": 4,
-                    "total_native_bridge_count": 420,
+                    "aggregate": {
+                        "map_count": 4,
+                        "runtime_backend_probe_run_count": 4,
+                        "runtime_backend_probe_resolved_run_count": 4,
+                        "total_runtime_backend_probe_event_count": 16,
+                        "runtime_backend_probe_targets": ["qge_dwt_render"],
+                        "runtime_backend_probe_paths": [
+                            "native_sparse_dwt_render_bridge",
+                        ],
+                        "runtime_backend_probe_missing_targets": [],
+                        "runtime_backend_probe_native_targets": [
+                            "qge_dwt_render",
+                        ],
+                        "runtime_backend_probe_proofs": {
+                            "qge_dwt_render": {
+                                "native_bridge_run_count": 4,
+                            },
+                        },
+                        "total_native_bridge_count": 420,
+                    },
                 },
             )
             publication_pack.write_json(
@@ -1021,6 +1051,33 @@ class PublicationPackTests(unittest.TestCase):
             self.assertEqual(
                 moonlab_job_results["hardware_submitted_job_count"], 0)
             self.assertEqual(moonlab_job_results["blocked_job_count"], 0)
+            runtime_job = next(
+                job for job in moonlab_job_results["jobs"]
+                if job["domain"] == "runtime_backend_probes")
+            self.assertEqual(
+                runtime_job["observations"]["performance_native_targets"],
+                ["qge_dwt_render"])
+            self.assertEqual(
+                runtime_job["observations"]
+                ["performance_runtime_backend_probe_event_count"],
+                3)
+            self.assertTrue(
+                runtime_job["observations"]
+                ["performance_runtime_backend_probe_resolved"])
+            self.assertEqual(
+                runtime_job["observations"]["breadth_map_count"], 4)
+            self.assertEqual(
+                runtime_job["observations"]
+                ["breadth_total_runtime_backend_probe_event_count"],
+                16)
+            self.assertEqual(
+                runtime_job["observations"]
+                ["breadth_runtime_backend_probe_resolved_run_count"],
+                4)
+            self.assertEqual(
+                runtime_job["observations"]
+                ["breadth_total_native_bridge_count"],
+                420)
             full_game_job = next(
                 job for job in moonlab_job_results["jobs"]
                 if job["domain"] == "full_game_map_coverage")

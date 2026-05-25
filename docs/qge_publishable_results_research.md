@@ -190,7 +190,11 @@ bundling copyrighted game data, and the deployment gate now cites the
 registered-asset install script plus the post-install capture queue command.
 The Moonlab job results record
 four completed simulator jobs, two completed native replay jobs, zero blocked
-jobs, and zero hardware submissions; `tools/qge_moonlab_job_runner.py` can
+jobs, and zero hardware submissions. The runtime-backend-probe job now carries
+the performance and breadth aggregate observations directly, including native
+target sets, missing target sets, proof maps, event counts, nine resolved
+breadth runs, and the 945 native bridge breadth count.
+`tools/qge_moonlab_job_runner.py` can
 regenerate the same result evidence from the job specs and emits
 `QGE_MOONLAB_JOB_RESULTS` when it writes the output. With `--expect` and
 `--plan-out`, the same tool compares regenerated results against the packed

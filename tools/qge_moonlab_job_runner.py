@@ -50,6 +50,11 @@ def dict_or_empty(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def aggregate_or_self(value: dict[str, Any]) -> dict[str, Any]:
+    aggregate = dict_or_empty(value.get("aggregate"))
+    return aggregate if aggregate else value
+
+
 def artifact_evidence(
     required_artifacts: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[str]]:
@@ -103,22 +108,42 @@ def job_observations(job: dict[str, Any]) -> dict[str, Any]:
     elif domain == "runtime_backend_probes":
         performance_path = required.get("performance_summary")
         if isinstance(performance_path, str) and Path(performance_path).is_file():
-            performance = load_json(Path(performance_path))
+            performance = aggregate_or_self(load_json(Path(performance_path)))
             observations.update({
                 "performance_runtime_backend_probe_resolved": (
                     performance.get("runtime_backend_probe_resolved")),
+                "performance_runtime_backend_probe_event_count": (
+                    performance.get("runtime_backend_probe_event_count")),
+                "performance_required_runtime_backend_probe_targets": (
+                    performance.get("required_runtime_backend_probe_targets")),
                 "performance_native_targets": (
                     performance.get("runtime_backend_probe_native_targets")),
                 "performance_missing_targets": (
                     performance.get("runtime_backend_probe_missing_targets")),
+                "performance_runtime_backend_probe_proofs": (
+                    performance.get("runtime_backend_probe_proofs")),
             })
         breadth_path = required.get("breadth_evidence")
         if isinstance(breadth_path, str) and Path(breadth_path).is_file():
-            breadth = load_json(Path(breadth_path))
+            breadth = aggregate_or_self(load_json(Path(breadth_path)))
             observations.update({
                 "breadth_map_count": breadth.get("map_count"),
+                "breadth_runtime_backend_probe_run_count": (
+                    breadth.get("runtime_backend_probe_run_count")),
+                "breadth_total_runtime_backend_probe_event_count": (
+                    breadth.get("total_runtime_backend_probe_event_count")),
                 "breadth_runtime_backend_probe_resolved_run_count": (
                     breadth.get("runtime_backend_probe_resolved_run_count")),
+                "breadth_runtime_backend_probe_targets": (
+                    breadth.get("runtime_backend_probe_targets")),
+                "breadth_runtime_backend_probe_paths": (
+                    breadth.get("runtime_backend_probe_paths")),
+                "breadth_runtime_backend_probe_missing_targets": (
+                    breadth.get("runtime_backend_probe_missing_targets")),
+                "breadth_runtime_backend_probe_native_targets": (
+                    breadth.get("runtime_backend_probe_native_targets")),
+                "breadth_runtime_backend_probe_proofs": (
+                    breadth.get("runtime_backend_probe_proofs")),
                 "breadth_total_native_bridge_count": (
                     breadth.get("total_native_bridge_count")),
             })
