@@ -157,6 +157,50 @@ def minimal_oracle_scene() -> dict:
     }
 
 
+class ICCProfileTests(unittest.TestCase):
+    def test_moonlab_hardware_submission_oracle_is_scoped(self) -> None:
+        profile = json.loads(
+            (REPO_ROOT / ".icc" / "completion-oracles.json")
+            .read_text(encoding="utf-8")
+        )
+        oracle = next(
+            item for item in profile["oracles"]
+            if item["name"] == "qge_moonlab_hardware_submission_scope"
+        )
+        self.assertEqual(
+            oracle["target"],
+            "Moonlab hardware submission packet with replayable circuit "
+            "and backend proof evidence",
+        )
+        self.assertEqual(
+            oracle["suppressed_runtime_checks"],
+            ["failure_free"],
+        )
+        self.assertNotIn("hardware-deployment evidence", oracle["aliases"])
+
+        requirements = {item["id"]: item for item in oracle["requires"]}
+        backend_requirement = requirements["qge_moonlab_hardware_scope_backend"]
+        completion_requirement = (
+            requirements["qge_moonlab_hardware_scope_completion"])
+        artifact_requirement = requirements["qge_moonlab_hardware_scope_artifact"]
+        self.assertEqual(
+            backend_requirement["event_values"],
+            ["qge_moonlab_hardware_submission_scope"],
+        )
+        self.assertEqual(
+            completion_requirement["event_values"],
+            ["qge_moonlab_hardware_submission_scope_ready"],
+        )
+        self.assertIn(
+            "moonlab_hardware_submission_scope_file",
+            artifact_requirement["event_names"],
+        )
+        self.assertIn(
+            "qge_moonlab_hardware_submission_scope.json",
+            artifact_requirement["event_names"],
+        )
+
+
 class OracleExportTests(unittest.TestCase):
     def test_parse_helpers_and_icc_evidence(self) -> None:
         fields = oracle_export.parse_kv_body(

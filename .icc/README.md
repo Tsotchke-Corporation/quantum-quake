@@ -26,6 +26,12 @@ The oracles in `completion-oracles.json` deliberately separate task classes:
   publication toolchain (`tools/`, `qge/`, Quake QGE hooks, and the claims
   ledger). It intentionally does not fail on unrelated Windows, QuakeWorld,
   codec, or Moonlab research-backend symbols.
+- `qge_moonlab_hardware_submission_scope`: bounded Moonlab hardware handoff
+  work. It requires the scoped submission artifact, the matching runtime backend
+  event, and the `qge_moonlab_hardware_submission_scope_ready` completion event.
+  It suppresses the generic pack-level `failure_free` check only for this
+  hardware-packet target so the full-game Moonlab deployment gate remains
+  blocked until registered BSP assets and full-game evidence are present.
 
 The criteria use ICC event-name and event-value filters so an oracle-export
 sidecar cannot accidentally satisfy an advantage-benchmark or publication gate.

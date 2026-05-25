@@ -378,6 +378,67 @@
       ]
     },
     {
+      "name": "qge_moonlab_hardware_submission_scope",
+      "target": "Moonlab hardware submission packet with replayable circuit and backend proof evidence",
+      "aliases": [
+        "qge_moonlab_hardware_submission_scope",
+        "moonlab hardware submission packet",
+        "bounded qae hardware handoff",
+        "bounded hardware submission ready"
+      ],
+      "suppressed_runtime_checks": [
+        "failure_free"
+      ],
+      "requires": [
+        {
+          "id": "qge_moonlab_hardware_scope_backend",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_moonlab_hardware_submission_scope"
+          ],
+          "severity": "high",
+          "label": "Scoped Moonlab hardware-submission backend evidence is present",
+          "action": "emit_qge_moonlab_hardware_submission_scope_icc_evidence"
+        },
+        {
+          "id": "qge_moonlab_hardware_scope_completion",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_moonlab_hardware_submission_scope_ready"
+          ],
+          "severity": "high",
+          "label": "Scoped Moonlab hardware-submission readiness is recorded",
+          "action": "emit_qge_moonlab_hardware_submission_scope_ready"
+        },
+        {
+          "id": "qge_moonlab_hardware_scope_artifact",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "moonlab_hardware_submission_scope_file",
+            "qge_moonlab_hardware_submission_scope.json"
+          ],
+          "severity": "high",
+          "label": "Scoped Moonlab hardware-submission artifact is visible to ICC",
+          "action": "write_qge_moonlab_hardware_submission_scope_json"
+        }
+      ]
+    },
+    {
       "name": "qge_breadth_evidence_pack",
       "target": "qge_breadth_evidence_pack",
       "aliases": [
