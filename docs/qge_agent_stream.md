@@ -518,8 +518,10 @@ frame, log, input, trace-summary, performance, audio-byte, and Noesis files
 before stream status evidence is accepted. The agent-stream ICC JSONL is
 rebuilt from that packed agent manifest. The packed trace summary is
 regenerated from `capture/qge_trace.bin` before trace-derived runtime evidence
-is accepted. Packed breadth evidence is regenerated from the recorded source
-matrix ledgers before all-map coverage counters are accepted.
+is accepted. The primary packed vanilla matrix is rebuilt from its recorded
+capture directory before its conformance counters are accepted. Packed breadth
+evidence is regenerated from the recorded source matrix ledgers before all-map
+coverage counters are accepted.
 The gate reports resource blockers as `blocked` statuses, reserving generic
 failure events for crashed or invalid runtime evidence. Each
 contract records the episode/slot, route class, route profile, combat

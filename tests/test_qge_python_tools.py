@@ -63,6 +63,7 @@ import qge_runtime_icc_audit as runtime_icc_audit  # noqa: E402
 import qge_trace_summary as trace_summary  # noqa: E402
 import qge_trace_summary_audit as trace_summary_audit  # noqa: E402
 import qge_vanilla_capture_matrix as vanilla_matrix  # noqa: E402
+import qge_vanilla_matrix_audit as vanilla_matrix_audit  # noqa: E402
 import qge_world_frame_metrics as world_frame_metrics  # noqa: E402
 
 
@@ -11032,6 +11033,45 @@ class VanillaCaptureMatrixTests(unittest.TestCase):
                 qge_render=2,
             )
             matrix = vanilla_matrix.build_matrix(args)
+            audit = vanilla_matrix_audit.vanilla_matrix_audit(
+                matrix,
+                required=True,
+            )
+            self.assertTrue(audit["passed"])
+            self.assertEqual(audit["field_mismatches"], [])
+
+            legacy_matrix = json.loads(json.dumps(matrix))
+            legacy_summary = legacy_matrix["conformance_summary"]
+            legacy_summary.pop("map", None)
+            legacy_summary.pop("qge_entity_culls", None)
+            legacy_summary.pop("qge_entity_misses", None)
+            legacy_audit = vanilla_matrix_audit.vanilla_matrix_audit(
+                legacy_matrix,
+                required=True,
+            )
+            self.assertTrue(legacy_audit["passed"])
+            self.assertIn(
+                "conformance_summary.qge_entity_culls",
+                legacy_audit["additive_expected_fields"],
+            )
+
+            stale_matrix = json.loads(json.dumps(matrix))
+            stale_matrix["conformance_summary"]["qge_render_cpu_idwt"] = 7
+            stale_matrix["hardware_quantum_advantage_claimed"] = True
+            stale_audit = vanilla_matrix_audit.vanilla_matrix_audit(
+                stale_matrix,
+                required=True,
+            )
+            self.assertFalse(stale_audit["passed"])
+            self.assertIn(
+                "conformance_summary.qge_render_cpu_idwt",
+                stale_audit["field_mismatches"],
+            )
+            self.assertTrue(any(
+                flag.get("flag") == "hardware_quantum_advantage_claimed"
+                for flag in stale_audit["overclaim_flags"]
+            ))
+
             summary = matrix["conformance_summary"]
             self.assertTrue(summary["classic_frame_exists"])
             self.assertTrue(summary["qge_frame_exists"])
