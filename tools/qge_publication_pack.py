@@ -1524,11 +1524,23 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         submission_bundle=moonlab_submission_bundle,
         hardware_submission_scope=moonlab_hardware_submission_scope,
         artifact_paths={
+            "moonlab_full_game_plan": str(moonlab_full_game_plan_path),
             "moonlab_submission_packet": str(moonlab_submission_packet_path),
             "moonlab_submission_bundle": str(moonlab_submission_bundle_path),
             "moonlab_hardware_record_template": str(
                 moonlab_hardware_record_template_path),
+            "moonlab_hardware_submission_scope": str(
+                moonlab_hardware_submission_scope_path),
         },
+        source_icc_evidence={
+            "moonlab_submission_bundle_icc_evidence": (
+                moonlab_submission_bundle_icc),
+            "moonlab_hardware_submission_scope_icc_evidence": (
+                moonlab_hardware_submission_scope_icc),
+            "moonlab_full_game_plan_icc_evidence": (
+                moonlab_full_game_plan_icc),
+        },
+        source_icc_evidence_required=True,
         resource_envelope=resource_envelope,
         asset_remediation=(
             qge_moonlab_deployment_gate.asset_remediation_from_intake(

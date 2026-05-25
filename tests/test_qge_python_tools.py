@@ -3140,6 +3140,19 @@ class PublicationPackTests(unittest.TestCase):
                 hardware_template,
             )
         )
+
+        def source_icc_for(plan: dict[str, object]) -> dict[str, object]:
+            return {
+                "moonlab_submission_bundle_icc_evidence": (
+                    moonlab_submission_bundle.build_icc_evidence(
+                        submission_bundle)),
+                "moonlab_hardware_submission_scope_icc_evidence": (
+                    moonlab_submission_bundle.build_scope_icc_evidence(
+                        hardware_submission_scope)),
+                "moonlab_full_game_plan_icc_evidence": (
+                    moonlab_full_game_plan.build_icc_evidence(plan)),
+            }
+
         partial_breadth = {
             "schema": "qge.breadth_evidence.v0",
             "matrix_runs": [
@@ -3222,6 +3235,7 @@ class PublicationPackTests(unittest.TestCase):
             hardware_record_template=hardware_template,
             registered_asset_intake=partial_registered_asset_intake,
         )
+        partial_source_icc_evidence = source_icc_for(partial_plan)
         partial_asset_remediation = (
             moonlab_deployment_gate.asset_remediation_from_intake(
                 partial_registered_asset_intake,
@@ -3243,6 +3257,8 @@ class PublicationPackTests(unittest.TestCase):
             hardware_template,
             submission_bundle=submission_bundle,
             hardware_submission_scope=hardware_submission_scope,
+            source_icc_evidence=partial_source_icc_evidence,
+            source_icc_evidence_required=True,
             asset_remediation=partial_asset_remediation,
             source_path=Path("partial-pack"),
         )
@@ -3514,6 +3530,19 @@ class PublicationPackTests(unittest.TestCase):
             blocked_gate["summary"]["moonlab_hardware_result_row_count"],
             0,
         )
+        self.assertTrue(
+            blocked_gate["summary"][
+                "moonlab_source_icc_evidence_recorded"])
+        self.assertEqual(
+            blocked_gate["summary"][
+                "moonlab_source_icc_evidence_mismatch_count"],
+            0,
+        )
+        self.assertEqual(
+            blocked_gate["summary"][
+                "moonlab_source_icc_evidence_recorded_count"],
+            3,
+        )
         self.assertIn(
             "qge_registered_asset_intake.py",
             blocked_gate["summary"]["registered_asset_discovery_command"],
@@ -3551,6 +3580,7 @@ class PublicationPackTests(unittest.TestCase):
             "Moonlab hardware submission scope ledger", blocked_markdown)
         self.assertIn(
             "Moonlab hardware result ledger", blocked_markdown)
+        self.assertIn("Moonlab source ICC sidecars", blocked_markdown)
         self.assertIn(
             "Covered route authority: 2 / 2 (complete=True)",
             blocked_markdown,
@@ -3682,6 +3712,11 @@ class PublicationPackTests(unittest.TestCase):
             0,
         )
         self.assertEqual(blocked_icc["moonlab_hardware_result_row_count"], 0)
+        self.assertTrue(blocked_icc["moonlab_source_icc_evidence_recorded"])
+        self.assertEqual(
+            blocked_icc["moonlab_source_icc_evidence_mismatch_count"],
+            0,
+        )
         self.assertIn(
             "qge_registered_asset_intake.py",
             blocked_icc["registered_asset_discovery_command"],
@@ -3829,6 +3864,7 @@ class PublicationPackTests(unittest.TestCase):
             submission_packet=submission_packet,
             hardware_record_template=hardware_template,
         )
+        complete_source_icc_evidence = source_icc_for(complete_plan)
         ready_gate = moonlab_deployment_gate.build_gate(
             complete_coverage,
             complete_inventory,
@@ -3840,6 +3876,8 @@ class PublicationPackTests(unittest.TestCase):
             hardware_template,
             submission_bundle=submission_bundle,
             hardware_submission_scope=hardware_submission_scope,
+            source_icc_evidence=complete_source_icc_evidence,
+            source_icc_evidence_required=True,
             source_path=Path("complete-pack"),
         )
         self.assertEqual(
@@ -3912,6 +3950,13 @@ class PublicationPackTests(unittest.TestCase):
                 "moonlab_hardware_result_ledger_mismatch_count"],
             0,
         )
+        self.assertTrue(
+            ready_gate["summary"]["moonlab_source_icc_evidence_recorded"])
+        self.assertEqual(
+            ready_gate["summary"][
+                "moonlab_source_icc_evidence_mismatch_count"],
+            0,
+        )
         icc = moonlab_deployment_gate.build_icc_evidence(
             ready_gate, out_path=Path("qge_moonlab_deployment_gate.json"))
         self.assertEqual(
@@ -3934,6 +3979,8 @@ class PublicationPackTests(unittest.TestCase):
         )
         self.assertEqual(
             icc["moonlab_hardware_result_ledger_mismatch_count"], 0)
+        self.assertEqual(
+            icc["moonlab_source_icc_evidence_mismatch_count"], 0)
         self.assertTrue(
             icc["whole_game_moonlab_deployment_claim_allowed"])
 
@@ -4147,6 +4194,55 @@ class PublicationPackTests(unittest.TestCase):
         )
         self.assertFalse(
             stale_hardware_result_gate[
+                "whole_game_moonlab_deployment_claim_allowed"])
+
+        stale_source_icc_evidence = json.loads(
+            json.dumps(complete_source_icc_evidence))
+        stale_source_icc_evidence[
+            "moonlab_submission_bundle_icc_evidence"
+        ]["hardware_candidate_job_count"] = 0
+        stale_source_icc_evidence[
+            "moonlab_hardware_submission_scope_icc_evidence"
+        ]["hardware_quantum_advantage_claimed"] = True
+        stale_source_icc_gate = moonlab_deployment_gate.build_gate(
+            complete_coverage,
+            complete_inventory,
+            complete_requirements,
+            complete_plan,
+            job_specs,
+            complete_job_results,
+            submission_packet,
+            hardware_template,
+            submission_bundle=submission_bundle,
+            hardware_submission_scope=hardware_submission_scope,
+            source_icc_evidence=stale_source_icc_evidence,
+            source_icc_evidence_required=True,
+            source_path=Path("stale-source-icc-pack"),
+        )
+        stale_source_icc_blockers = {
+            item["id"] for item in stale_source_icc_gate["blockers"]
+        }
+        self.assertIn(
+            "moonlab_source_icc_evidence_consistent",
+            stale_source_icc_blockers,
+        )
+        stale_source_icc_criterion = next(
+            item for item in stale_source_icc_gate["criteria"]
+            if item["id"] == "moonlab_source_icc_evidence_consistent")
+        self.assertEqual(stale_source_icc_criterion["status"], "blocked")
+        self.assertTrue(any(
+            item.get("sidecar") == "moonlab_submission_bundle_icc_evidence"
+            and "hardware_candidate_job_count" in item.get("fields", [])
+            for item in stale_source_icc_criterion[
+                "moonlab_source_icc_evidence_mismatches"]
+        ))
+        self.assertTrue(any(
+            flag.get("flag") == "hardware_quantum_advantage_claimed"
+            for flag in stale_source_icc_criterion[
+                "moonlab_source_icc_evidence_overclaim_flags"]
+        ))
+        self.assertFalse(
+            stale_source_icc_gate[
                 "whole_game_moonlab_deployment_claim_allowed"])
 
         coverage_only_job_results = dict(complete_job_results)

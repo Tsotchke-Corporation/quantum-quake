@@ -98,7 +98,9 @@ bounded candidate, and the scoped hardware-submission artifact is audited
 against the packet, submission bundle, and template so its bounded ready claim
 cannot drift. Any returned Moonlab hardware backend result row is also audited
 against that bounded packet/scope before it can remain in the job-result
-ledger. The remaining 23 maps are still asset unavailable.
+ledger, and Moonlab source ICC sidecars are recomputed from their JSON ledgers
+before the gate accepts them. The remaining 23 maps are still asset
+unavailable.
 `resource/qge_moonlab_deployment_gate.json` is the fail-closed claim gate for
 the sentence "the entire game runs in Moonlab." It is currently `blocked`
 because coverage is 9/32, the remaining 23 registered BSP assets are

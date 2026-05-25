@@ -483,7 +483,9 @@ then audited against the packet, submission bundle, and template so bounded
 hardware handoff readiness cannot drift from its source ledgers. If returned
 Moonlab hardware backend rows appear in `qge_moonlab_job_results.json`, the
 gate audits them against the same bounded packet/scope before accepting the
-job-result ledger. The gate
+job-result ledger. The gate also recomputes the Moonlab source ICC sidecars
+from the full-game plan, submission bundle, and hardware-submission scope
+ledgers before accepting those sidecars. The gate
 reports resource blockers as `blocked` statuses, reserving generic failure
 events for crashed or invalid runtime evidence. Each
 contract records the episode/slot, route class, route profile, combat
