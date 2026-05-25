@@ -490,6 +490,70 @@ def result_job_blocked(job: dict[str, Any]) -> bool:
     )
 
 
+def artifact_evidence_by_name(
+    result_job: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    indexed = {}
+    for item in list_or_empty(result_job.get("artifact_evidence")):
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        if isinstance(name, str) and name:
+            indexed[name] = item
+    return indexed
+
+
+def job_artifact_evidence_audit(
+    spec_job: dict[str, Any],
+    result_job: dict[str, Any],
+) -> dict[str, Any]:
+    required = dict_or_empty(spec_job.get("required_artifacts"))
+    evidence = artifact_evidence_by_name(result_job)
+    expected_names = sorted(required.keys())
+    evidence_names = sorted(evidence.keys())
+    missing_names = sorted(set(expected_names) - set(evidence_names))
+    unexpected_names = sorted(set(evidence_names) - set(expected_names))
+    false_exists_names = []
+    missing_digest_names = []
+    zero_size_names = []
+    path_mismatch_names = []
+    for name in expected_names:
+        item = evidence.get(name)
+        if not item:
+            continue
+        expected_path = required.get(name)
+        if item.get("exists") is not True:
+            false_exists_names.append(name)
+        if not isinstance(item.get("sha256"), str) or not item.get("sha256"):
+            missing_digest_names.append(name)
+        size_bytes = int_or_none(item.get("size_bytes"))
+        if size_bytes is None or size_bytes <= 0:
+            zero_size_names.append(name)
+        if isinstance(expected_path, str) and item.get("path") != expected_path:
+            path_mismatch_names.append(name)
+    mismatch_names = sorted(set(
+        missing_names +
+        unexpected_names +
+        false_exists_names +
+        missing_digest_names +
+        zero_size_names +
+        path_mismatch_names
+    ))
+    return {
+        "required_artifact_count": len(expected_names),
+        "artifact_evidence_count": len(evidence_names),
+        "missing_artifact_evidence_names": missing_names,
+        "unexpected_artifact_evidence_names": unexpected_names,
+        "artifact_exists_false_names": sorted(false_exists_names),
+        "artifact_missing_digest_names": sorted(missing_digest_names),
+        "artifact_zero_size_names": sorted(zero_size_names),
+        "artifact_path_mismatch_names": sorted(path_mismatch_names),
+        "artifact_evidence_mismatch_names": mismatch_names,
+        "artifact_evidence_mismatch_count": len(mismatch_names),
+        "passed": len(mismatch_names) == 0,
+    }
+
+
 def selected_job_result_ledger_audit(
     job_specs: dict[str, Any],
     job_results: dict[str, Any],
@@ -512,6 +576,13 @@ def selected_job_result_ledger_audit(
     unexpected_result_ids = sorted(set(result_ids) - set(spec_ids))
     invalid_spec_job_count = len(spec_jobs) - len(spec_ids)
     invalid_result_job_count = len(result_jobs) - len(result_ids)
+    result_index = {
+        item_id: job
+        for item_id, job in (
+            (job_id(job), job) for job in result_jobs
+        )
+        if item_id
+    }
 
     completed_simulator_ids = [
         item for item in (
@@ -584,6 +655,35 @@ def selected_job_result_ledger_audit(
     if result_hardware_submitted_count != spec_hardware_submitted_count:
         count_mismatches.append("result_hardware_submitted_count")
 
+    artifact_audits = []
+    artifact_mismatch_job_ids = []
+    artifact_missing_evidence_job_ids = []
+    artifact_path_mismatch_job_ids = []
+    artifact_not_existing_job_ids = []
+    total_required_artifact_count = 0
+    total_artifact_evidence_count = 0
+    artifact_evidence_mismatch_count = 0
+    for spec_job in spec_jobs:
+        item_id = job_id(spec_job)
+        if not item_id or item_id not in result_index:
+            continue
+        audit = job_artifact_evidence_audit(spec_job, result_index[item_id])
+        total_required_artifact_count += int(
+            audit.get("required_artifact_count") or 0)
+        total_artifact_evidence_count += int(
+            audit.get("artifact_evidence_count") or 0)
+        artifact_evidence_mismatch_count += int(
+            audit.get("artifact_evidence_mismatch_count") or 0)
+        if not audit.get("passed"):
+            artifact_mismatch_job_ids.append(item_id)
+            artifact_audits.append({"job_id": item_id, **audit})
+        if audit.get("missing_artifact_evidence_names"):
+            artifact_missing_evidence_job_ids.append(item_id)
+        if audit.get("artifact_path_mismatch_names"):
+            artifact_path_mismatch_job_ids.append(item_id)
+        if audit.get("artifact_exists_false_names"):
+            artifact_not_existing_job_ids.append(item_id)
+
     mismatch_count = (
         len(count_mismatches) +
         len(missing_result_ids) +
@@ -593,7 +693,8 @@ def selected_job_result_ledger_audit(
         invalid_spec_job_count +
         invalid_result_job_count +
         len(non_completed_simulator_ids) +
-        len(blocked_result_ids)
+        len(blocked_result_ids) +
+        artifact_evidence_mismatch_count
     )
     recorded = (
         job_specs.get("schema") == "qge.moonlab_job_specs.v0" and
@@ -622,6 +723,18 @@ def selected_job_result_ledger_audit(
         "missing_result_job_ids": missing_result_ids,
         "unexpected_result_job_ids": unexpected_result_ids,
         "missing_required_artifact_job_ids": sorted(set(missing_artifact_ids)),
+        "required_artifact_count": total_required_artifact_count,
+        "artifact_evidence_count": total_artifact_evidence_count,
+        "artifact_evidence_mismatch_count": artifact_evidence_mismatch_count,
+        "artifact_evidence_mismatch_job_ids": sorted(
+            set(artifact_mismatch_job_ids)),
+        "artifact_missing_evidence_job_ids": sorted(
+            set(artifact_missing_evidence_job_ids)),
+        "artifact_path_mismatch_job_ids": sorted(
+            set(artifact_path_mismatch_job_ids)),
+        "artifact_not_existing_job_ids": sorted(
+            set(artifact_not_existing_job_ids)),
+        "artifact_evidence_mismatches": artifact_audits,
         "blocked_result_job_ids": sorted(set(blocked_result_ids)),
         "non_completed_simulator_job_ids": sorted(
             set(non_completed_simulator_ids)),
@@ -906,6 +1019,22 @@ def gate_summary(
                     "missing_required_artifact_job_ids"))),
         "moonlab_selected_job_missing_required_artifact_ids": (
             selected_job_ledger.get("missing_required_artifact_job_ids")),
+        "moonlab_selected_job_required_artifact_count": (
+            selected_job_ledger.get("required_artifact_count")),
+        "moonlab_selected_job_artifact_evidence_count": (
+            selected_job_ledger.get("artifact_evidence_count")),
+        "moonlab_selected_job_artifact_evidence_mismatch_count": (
+            selected_job_ledger.get("artifact_evidence_mismatch_count")),
+        "moonlab_selected_job_artifact_evidence_mismatch_job_ids": (
+            selected_job_ledger.get("artifact_evidence_mismatch_job_ids")),
+        "moonlab_selected_job_artifact_missing_evidence_job_ids": (
+            selected_job_ledger.get("artifact_missing_evidence_job_ids")),
+        "moonlab_selected_job_artifact_path_mismatch_job_ids": (
+            selected_job_ledger.get("artifact_path_mismatch_job_ids")),
+        "moonlab_selected_job_artifact_not_existing_job_ids": (
+            selected_job_ledger.get("artifact_not_existing_job_ids")),
+        "moonlab_selected_job_artifact_evidence_mismatches": (
+            selected_job_ledger.get("artifact_evidence_mismatches")),
         "selected_job_count": job_specs.get("selected_job_count"),
         "result_selected_job_count": job_results.get("selected_job_count"),
         "completed_simulator_job_count": job_results.get(
@@ -1278,6 +1407,27 @@ def build_criteria(
                 "moonlab_selected_job_missing_required_artifact_ids": (
                     selected_job_ledger_audit.get(
                         "missing_required_artifact_job_ids")),
+                "moonlab_selected_job_required_artifact_count": (
+                    selected_job_ledger_audit.get(
+                        "required_artifact_count")),
+                "moonlab_selected_job_artifact_evidence_count": (
+                    selected_job_ledger_audit.get(
+                        "artifact_evidence_count")),
+                "moonlab_selected_job_artifact_evidence_mismatch_count": (
+                    selected_job_ledger_audit.get(
+                        "artifact_evidence_mismatch_count")),
+                "moonlab_selected_job_artifact_evidence_mismatch_job_ids": (
+                    selected_job_ledger_audit.get(
+                        "artifact_evidence_mismatch_job_ids")),
+                "moonlab_selected_job_artifact_missing_evidence_job_ids": (
+                    selected_job_ledger_audit.get(
+                        "artifact_missing_evidence_job_ids")),
+                "moonlab_selected_job_artifact_path_mismatch_job_ids": (
+                    selected_job_ledger_audit.get(
+                        "artifact_path_mismatch_job_ids")),
+                "moonlab_selected_job_artifact_not_existing_job_ids": (
+                    selected_job_ledger_audit.get(
+                        "artifact_not_existing_job_ids")),
             },
             (
                 "selected Moonlab job result ledger is missing, stale, or "
@@ -1720,6 +1870,22 @@ def build_icc_evidence(
             "moonlab_selected_job_missing_required_artifact_count"),
         "moonlab_selected_job_missing_required_artifact_ids": summary.get(
             "moonlab_selected_job_missing_required_artifact_ids"),
+        "moonlab_selected_job_required_artifact_count": summary.get(
+            "moonlab_selected_job_required_artifact_count"),
+        "moonlab_selected_job_artifact_evidence_count": summary.get(
+            "moonlab_selected_job_artifact_evidence_count"),
+        "moonlab_selected_job_artifact_evidence_mismatch_count": summary.get(
+            "moonlab_selected_job_artifact_evidence_mismatch_count"),
+        "moonlab_selected_job_artifact_evidence_mismatch_job_ids": summary.get(
+            "moonlab_selected_job_artifact_evidence_mismatch_job_ids"),
+        "moonlab_selected_job_artifact_missing_evidence_job_ids": summary.get(
+            "moonlab_selected_job_artifact_missing_evidence_job_ids"),
+        "moonlab_selected_job_artifact_path_mismatch_job_ids": summary.get(
+            "moonlab_selected_job_artifact_path_mismatch_job_ids"),
+        "moonlab_selected_job_artifact_not_existing_job_ids": summary.get(
+            "moonlab_selected_job_artifact_not_existing_job_ids"),
+        "moonlab_selected_job_artifact_evidence_mismatches": summary.get(
+            "moonlab_selected_job_artifact_evidence_mismatches"),
         "full_game_route_contract_schema": summary.get(
             "route_contract_schema"),
         "full_game_route_contract_map_count": summary.get(
@@ -1821,6 +1987,8 @@ def markdown_report(gate: dict[str, Any]) -> str:
             f"results={summary.get('moonlab_selected_job_result_job_count')} "
             "missing_results="
             f"{summary.get('moonlab_selected_job_missing_result_count')} "
+            "artifact_mismatches="
+            f"{summary.get('moonlab_selected_job_artifact_evidence_mismatch_count')} "
             "mismatches="
             f"{summary.get('moonlab_selected_job_result_ledger_mismatch_count')}"
         ),

@@ -469,11 +469,12 @@ route-contract-authority-ready breadth evidence, or if the Moonlab
 `full_game_map_coverage` job result no longer matches the current coverage,
 inventory, and asset-requirements artifacts. It also requires the selected
 Moonlab job-result ledger to match `qge_moonlab_job_specs.json` row-by-row, so
-success counts cannot stand in for missing job result rows. The gate reports
-resource blockers as `blocked` statuses, reserving generic failure events for
-crashed or invalid runtime evidence. Each contract records the episode/slot,
-route class, route profile, combat requirement, special-route requirement, and
-authority domains that must survive the capture. The generated shell script echoes
+success counts cannot stand in for missing job result rows or missing required
+artifact evidence. The gate reports resource blockers as `blocked` statuses,
+reserving generic failure events for crashed or invalid runtime evidence. Each
+contract records the episode/slot, route class, route profile, combat
+requirement, special-route requirement, and authority domains that must survive
+the capture. The generated shell script echoes
 `QGE_FULL_GAME_CAPTURE_ROUTE_PROFILE` and `QGE_FULL_GAME_CAPTURE_ROUTE_CLASS`
 before each run, then rebuilds breadth evidence with the previous ready
 matrices plus the new capture directories. The `start` route is allowed to omit

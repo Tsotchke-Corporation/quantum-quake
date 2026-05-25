@@ -305,8 +305,8 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      stale Moonlab coverage-ledger job results that disagree with current
      coverage, inventory, or asset-requirements artifacts. It also rejects
      count-only Moonlab job-result ledgers: every selected job spec must have a
-     matching completed simulator result row before the full-game deployment
-     gate can pass.
+     matching completed simulator result row with the required artifact
+     evidence before the full-game deployment gate can pass.
    - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
      and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
      scanning bounded candidate directories. The intake artifact records

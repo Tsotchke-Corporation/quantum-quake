@@ -161,6 +161,36 @@ def moonlab_coverage_ledger_result_job(
                 "run_id": "moonlab-sim-test-ledger",
             },
         ],
+        "artifact_evidence": [
+            {
+                "name": "asset_inventory",
+                "path": "resource/qge_asset_inventory.json",
+                "exists": True,
+                "size_bytes": 128,
+                "sha256": "asset-inventory-sha",
+            },
+            {
+                "name": "asset_requirements",
+                "path": "resource/qge_asset_requirements.json",
+                "exists": True,
+                "size_bytes": 128,
+                "sha256": "asset-requirements-sha",
+            },
+            {
+                "name": "full_game_map_coverage",
+                "path": "resource/qge_full_game_map_coverage.json",
+                "exists": True,
+                "size_bytes": 128,
+                "sha256": "coverage-sha",
+            },
+            {
+                "name": "registered_asset_intake",
+                "path": "resource/qge_registered_asset_intake.json",
+                "exists": True,
+                "size_bytes": 128,
+                "sha256": "asset-intake-sha",
+            },
+        ],
         "observations": observations,
     }
 
@@ -174,6 +204,11 @@ def moonlab_selected_job_spec_jobs() -> list[dict]:
             "hardware_candidate": False,
             "hardware_submission_status": (
                 "not_applicable_full_frame_hardware_execution_not_claimed"),
+            "required_artifacts": {
+                "frame": "capture/frame_001.png",
+                "oracle_scene": "oracle/oracle_scene.json",
+                "trace": "capture/qge_trace.bin",
+            },
         },
         {
             "job_id": "qge.light_transport_qae_benchmark.mlae.v0",
@@ -181,6 +216,10 @@ def moonlab_selected_job_spec_jobs() -> list[dict]:
             "kind": "moonlab_qae_kernel",
             "hardware_candidate": True,
             "hardware_submission_status": "not_submitted",
+            "required_artifacts": {
+                "advantage_metrics": "advantage/advantage_metrics.json",
+                "qae_circuit": "advantage/qae_circuit.txt",
+            },
         },
         {
             "job_id": "qge.runtime_backend_probe.replay.v0",
@@ -188,6 +227,10 @@ def moonlab_selected_job_spec_jobs() -> list[dict]:
             "kind": "moonlab_runtime_boundary_replay",
             "hardware_candidate": False,
             "hardware_submission_status": "not_a_quantum_hardware_job",
+            "required_artifacts": {
+                "breadth_evidence": "breadth/breadth_evidence.json",
+                "performance_summary": "capture/qge_perf_summary.json",
+            },
         },
         {
             "job_id": "qge.full_game_map_coverage.ledger.v0",
@@ -195,6 +238,14 @@ def moonlab_selected_job_spec_jobs() -> list[dict]:
             "kind": "moonlab_coverage_ledger_replay",
             "hardware_candidate": False,
             "hardware_submission_status": "not_a_quantum_hardware_job",
+            "required_artifacts": {
+                "asset_inventory": "resource/qge_asset_inventory.json",
+                "asset_requirements": "resource/qge_asset_requirements.json",
+                "full_game_map_coverage": (
+                    "resource/qge_full_game_map_coverage.json"),
+                "registered_asset_intake": (
+                    "resource/qge_registered_asset_intake.json"),
+            },
         },
     ]
 
@@ -241,6 +292,31 @@ def moonlab_completed_result_job(
         "hardware_candidate": hardware_candidate,
         "hardware_submission_status": hardware_submission_status,
         "missing_required_artifacts": [],
+        "artifact_evidence": [
+            {
+                "name": name,
+                "path": path,
+                "exists": True,
+                "size_bytes": 128,
+                "sha256": f"{domain}-{name}-sha",
+            }
+            for name, path in {
+                "render_primary_framebuffer": {
+                    "frame": "capture/frame_001.png",
+                    "oracle_scene": "oracle/oracle_scene.json",
+                    "trace": "capture/qge_trace.bin",
+                },
+                "light_transport_qae_benchmark": {
+                    "advantage_metrics": (
+                        "advantage/advantage_metrics.json"),
+                    "qae_circuit": "advantage/qae_circuit.txt",
+                },
+                "runtime_backend_probes": {
+                    "breadth_evidence": "breadth/breadth_evidence.json",
+                    "performance_summary": "capture/qge_perf_summary.json",
+                },
+            }.get(domain, {}).items()
+        ],
         "backend_results": backend_results,
         "observations": {},
     }
@@ -3233,6 +3309,21 @@ class PublicationPackTests(unittest.TestCase):
             0,
         )
         self.assertEqual(
+            selected_job_ledger_criterion[
+                "moonlab_selected_job_required_artifact_count"],
+            11,
+        )
+        self.assertEqual(
+            selected_job_ledger_criterion[
+                "moonlab_selected_job_artifact_evidence_count"],
+            11,
+        )
+        self.assertEqual(
+            selected_job_ledger_criterion[
+                "moonlab_selected_job_artifact_evidence_mismatch_count"],
+            0,
+        )
+        self.assertEqual(
             blocked_gate["asset_remediation"][
                 "registered_asset_install_script"],
             "resource/install_registered_assets.sh",
@@ -3318,6 +3409,11 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(
             blocked_gate["summary"]["moonlab_selected_job_result_job_count"],
             4,
+        )
+        self.assertEqual(
+            blocked_gate["summary"][
+                "moonlab_selected_job_artifact_evidence_mismatch_count"],
+            0,
         )
         self.assertIn(
             "qge_registered_asset_intake.py",
@@ -3421,6 +3517,11 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(
             blocked_icc["moonlab_selected_job_result_job_count"],
             4,
+        )
+        self.assertEqual(
+            blocked_icc[
+                "moonlab_selected_job_artifact_evidence_mismatch_count"],
+            0,
         )
         self.assertIn(
             "qge_registered_asset_intake.py",
@@ -3566,6 +3667,11 @@ class PublicationPackTests(unittest.TestCase):
                 "moonlab_selected_job_result_ledger_mismatch_count"],
             0,
         )
+        self.assertEqual(
+            ready_gate["summary"][
+                "moonlab_selected_job_artifact_evidence_mismatch_count"],
+            0,
+        )
         icc = moonlab_deployment_gate.build_icc_evidence(
             ready_gate, out_path=Path("qge_moonlab_deployment_gate.json"))
         self.assertEqual(
@@ -3624,6 +3730,43 @@ class PublicationPackTests(unittest.TestCase):
             "qge_moonlab_job_specs.json" in action
             for action in coverage_only_gate["next_actions"]
         ))
+
+        artifactless_job_results = json.loads(
+            json.dumps(complete_job_results))
+        artifactless_job_results["jobs"][0]["artifact_evidence"] = []
+        artifactless_gate = moonlab_deployment_gate.build_gate(
+            complete_coverage,
+            complete_inventory,
+            complete_requirements,
+            complete_plan,
+            job_specs,
+            artifactless_job_results,
+            submission_packet,
+            hardware_template,
+            source_path=Path("artifactless-results-pack"),
+        )
+        artifactless_blockers = {
+            item["id"] for item in artifactless_gate["blockers"]
+        }
+        self.assertIn(
+            "moonlab_selected_job_result_ledger_consistent",
+            artifactless_blockers,
+        )
+        artifactless_criterion = next(
+            item for item in artifactless_gate["criteria"]
+            if item["id"] ==
+            "moonlab_selected_job_result_ledger_consistent")
+        self.assertEqual(artifactless_criterion["status"], "blocked")
+        self.assertEqual(
+            artifactless_criterion[
+                "moonlab_selected_job_artifact_evidence_mismatch_count"],
+            3,
+        )
+        self.assertIn(
+            "qge.render_primary_framebuffer.sparse_dwt_replay.v0",
+            artifactless_criterion[
+                "moonlab_selected_job_artifact_missing_evidence_job_ids"],
+        )
 
         stale_job_results = dict(complete_job_results)
         stale_job_results["jobs"] = moonlab_selected_job_result_jobs(
