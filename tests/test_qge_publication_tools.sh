@@ -590,6 +590,25 @@ assert icc["moonlab_hardware_submitted_job_count"] == 0
 assert icc["whole_game_hardware_execution_claimed"] is False
 assert icc["vanilla_icc_evidence_file"].endswith("vanilla/qge_vanilla_icc_evidence.json")
 assert icc["status"] == "success"
+assert any(
+    "qge_publication_icc_audit.py" in command
+    for command in manifest["reproduce_commands"]
+)
+PY
+
+python3 "$repo_root/tools/qge_publication_icc_audit.py" "$pack_dir" \
+  --out "$tmpdir/qge_publication_icc_audit.json" \
+  --fail-on-mismatch > "$tmpdir/qge_publication_icc_audit.stdout"
+grep -F 'QGE_PUBLICATION_ICC_AUDIT' "$tmpdir/qge_publication_icc_audit.stdout" >/dev/null
+python3 - "$tmpdir/qge_publication_icc_audit.json" <<'PY'
+import json
+import sys
+
+audit = json.load(open(sys.argv[1], encoding="utf-8"))
+assert audit["passed"] is True
+assert audit["recorded"] is True
+assert audit["mismatch_count"] == 0
+assert audit["field_mismatches"] == []
 PY
 
 python3 "$repo_root/tools/qge_moonlab_qae_transpile.py" \

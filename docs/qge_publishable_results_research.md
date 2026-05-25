@@ -321,7 +321,8 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      current advantage metrics plus Moonlab payload, kernel, observation, and
      Grover schedule artifacts. The resource envelope and native backend
      boundary ledgers must match the current oracle, advantage, vanilla,
-     performance, and breadth evidence.
+     performance, and breadth evidence. The top-level publication ICC sidecar
+     must match `publication_manifest.json` after pack generation.
    - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
      and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
      scanning bounded candidate directories. The intake artifact records

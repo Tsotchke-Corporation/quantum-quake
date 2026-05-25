@@ -39,6 +39,7 @@ import qge_moonlab_submission_bundle as moonlab_submission_bundle  # noqa: E402
 import qge_noesis_summary as noesis_summary  # noqa: E402
 import qge_oracle_export as oracle_export  # noqa: E402
 import qge_perf_summary as perf_summary  # noqa: E402
+import qge_publication_icc_audit as publication_icc_audit  # noqa: E402
 import qge_publication_pack as publication_pack  # noqa: E402
 import qge_resource_boundary_audit as resource_boundary_audit  # noqa: E402
 import qge_registered_asset_intake as registered_asset_intake  # noqa: E402
@@ -1985,6 +1986,34 @@ class PublicationPackTests(unittest.TestCase):
             Path("publication_manifest.json"),
             Path("qge_publication_icc_evidence.json"),
         )
+        icc_audit = publication_icc_audit.publication_icc_evidence_audit(
+            manifest,
+            icc,
+            manifest_path=Path("publication_manifest.json"),
+            icc_path=Path("qge_publication_icc_evidence.json"),
+            required=True,
+        )
+        self.assertTrue(icc_audit["passed"])
+        self.assertEqual(icc_audit["mismatch_count"], 0)
+        stale_icc = json.loads(json.dumps(icc))
+        stale_icc["moonlab_deployment_gate_blocker_count"] = 0
+        stale_icc["hardware_quantum_advantage_claimed"] = True
+        stale_audit = publication_icc_audit.publication_icc_evidence_audit(
+            manifest,
+            stale_icc,
+            manifest_path=Path("publication_manifest.json"),
+            icc_path=Path("qge_publication_icc_evidence.json"),
+            required=True,
+        )
+        self.assertFalse(stale_audit["passed"])
+        self.assertIn(
+            "moonlab_deployment_gate_blocker_count",
+            stale_audit["field_mismatches"],
+        )
+        self.assertTrue(any(
+            flag.get("flag") == "hardware_quantum_advantage_claimed"
+            for flag in stale_audit["overclaim_flags"]
+        ))
         self.assertEqual(icc["runtime_backend"], "qge_publication_pack")
         self.assertEqual(icc["completion_reason"], "qge_publication_artifact_pack_complete")
         self.assertTrue(icc["publication_ready_for_complete_claim"])

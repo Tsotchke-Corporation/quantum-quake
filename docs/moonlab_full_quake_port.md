@@ -106,7 +106,9 @@ advantage metrics and Moonlab payload, kernel, observation, and Grover schedule
 artifacts before the gate accepts them. The resource envelope and native
 backend boundary ledgers are rebuilt from the oracle, advantage, vanilla,
 performance, and breadth evidence before the gate accepts their
-simulator/native posture. The remaining 23 maps are still asset unavailable.
+simulator/native posture. The top-level publication ICC sidecar is audited
+against `publication_manifest.json` after the pack is written. The remaining
+23 maps are still asset unavailable.
 `resource/qge_moonlab_deployment_gate.json` is the fail-closed claim gate for
 the sentence "the entire game runs in Moonlab." It is currently `blocked`
 because coverage is 9/32, the remaining 23 registered BSP assets are
