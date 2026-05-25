@@ -333,7 +333,9 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      must rebuild from the recorded source inputs plus packed resource and
      advantage artifacts. The recorded source inputs must agree with copied
      artifact `source_path` provenance, and the manifest claim posture must
-     stay consistent with the blocked deployment-gate claim flags.
+     stay consistent with the blocked deployment-gate claim flags. The manifest
+     reproduction command list must keep core command coverage and avoid unsafe
+     shell fragments.
    - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
      and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
      scanning bounded candidate directories. The intake artifact records

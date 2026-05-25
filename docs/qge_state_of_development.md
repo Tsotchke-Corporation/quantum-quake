@@ -748,7 +748,8 @@ Known current visual state:
   mirrors are rebuilt from the recorded source inputs plus packed resource and
   advantage artifacts. The recorded source inputs are checked against copied
   artifact `source_path` provenance, and the manifest claim posture is checked
-  against the blocked deployment-gate claim flags.
+  against the blocked deployment-gate claim flags. The manifest reproduction
+  command list is checked for core command coverage and unsafe shell fragments.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims

@@ -504,9 +504,10 @@ SHA-256 digests, and its runtime/advantage summary mirrors are rebuilt from
 the recorded source inputs plus packed resource and advantage artifacts. The
 recorded source inputs are checked against copied artifact `source_path`
 provenance, and the manifest claim posture is checked against the blocked
-deployment-gate claim flags. The gate reports resource blockers as `blocked`
-statuses, reserving generic failure events for crashed or invalid runtime
-evidence. Each
+deployment-gate claim flags. The manifest reproduction command list is checked
+for core command coverage and unsafe shell fragments. The gate reports resource
+blockers as `blocked` statuses, reserving generic failure events for crashed or
+invalid runtime evidence. Each
 contract records the episode/slot, route class, route profile, combat
 requirement, special-route requirement, and authority domains that must survive
 the capture. The generated shell script echoes

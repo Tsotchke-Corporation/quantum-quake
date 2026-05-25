@@ -40,6 +40,7 @@ import qge_moonlab_submission_bundle as moonlab_submission_bundle  # noqa: E402
 import qge_noesis_summary as noesis_summary  # noqa: E402
 import qge_manifest_file_audit as manifest_file_audit  # noqa: E402
 import qge_manifest_claim_policy_audit as manifest_claim_policy_audit  # noqa: E402
+import qge_manifest_reproduce_audit as manifest_reproduce_audit  # noqa: E402
 import qge_manifest_source_input_audit as manifest_source_input_audit  # noqa: E402
 import qge_manifest_summary_audit as manifest_summary_audit  # noqa: E402
 import qge_oracle_claims_audit as oracle_claims_audit  # noqa: E402
@@ -1099,6 +1100,51 @@ class PublicationPackTests(unittest.TestCase):
             "hardware_quantum_advantage_claim_allowed"
             for item in stale_audit["forbidden_allowed_phrases"]
         ))
+
+    def test_manifest_reproduce_audit_detects_missing_unsafe_commands(
+        self,
+    ) -> None:
+        commands = [
+            f"{prefix}<arg>"
+            for prefix in (
+                manifest_reproduce_audit
+                .REQUIRED_REPRODUCE_COMMAND_PREFIXES)
+        ]
+        manifest = {
+            "reproduce_commands": commands,
+        }
+
+        audit = manifest_reproduce_audit.manifest_reproduce_audit(manifest)
+        self.assertTrue(audit["passed"])
+        self.assertEqual(audit["mismatch_count"], 0)
+        self.assertEqual(
+            audit["required_command_count"],
+            len(commands),
+        )
+
+        stale_manifest = json.loads(json.dumps(manifest))
+        stale_manifest["reproduce_commands"] = [
+            command for command in commands
+            if not command.startswith("tools/qge_moonlab_deployment_gate.py ")
+        ]
+        stale_manifest["reproduce_commands"].append(commands[0])
+        stale_manifest["reproduce_commands"].append(commands[0])
+        stale_manifest["reproduce_commands"].append("rm -rf /tmp/qge")
+        stale_manifest["reproduce_commands"].append(None)
+        stale_audit = manifest_reproduce_audit.manifest_reproduce_audit(
+            stale_manifest)
+        self.assertFalse(stale_audit["passed"])
+        self.assertIn(
+            "tools/qge_moonlab_deployment_gate.py ",
+            stale_audit["missing_required_commands"],
+        )
+        self.assertIn(commands[0], stale_audit["duplicate_commands"])
+        self.assertTrue(any(
+            item.get("command") == "rm -rf /tmp/qge" and
+            "non_tools_command" in item.get("reasons", [])
+            for item in stale_audit["unsafe_commands"]
+        ))
+        self.assertTrue(stale_audit["malformed_commands"])
 
     def test_manifest_source_input_audit_detects_stale_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
