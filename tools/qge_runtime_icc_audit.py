@@ -25,6 +25,7 @@ RUNTIME_ICC_SIDECARS = (
     "vanilla_icc_evidence",
     "breadth_icc_evidence",
     "performance_icc_evidence",
+    "agent_stream_performance_icc_evidence",
 )
 RUNTIME_SIDECAR_FORBIDDEN_CLAIMS = (
     "whole_game_moonlab_deployment_claimed",
@@ -85,6 +86,15 @@ def expected_runtime_icc_sidecars(
                 dict_or_empty(sources.get("performance_summary")),
                 path_or_empty(paths.get("performance_summary")),
                 path_or_empty(paths.get("performance_icc_evidence")),
+            )
+        ),
+        "agent_stream_performance_icc_evidence": (
+            expected_performance_icc_evidence(
+                dict_or_empty(sources.get(
+                    "agent_stream_performance_summary")),
+                path_or_empty(paths.get("agent_stream_performance_summary")),
+                path_or_empty(paths.get(
+                    "agent_stream_performance_icc_evidence")),
             )
         ),
     }
@@ -304,11 +314,69 @@ def load_artifact(
     return load_json(file_path)
 
 
+def load_json_file(path: Path | None) -> dict[str, Any]:
+    if path is None or not path.is_file():
+        return {}
+    return load_json(path)
+
+
+def agent_stream_directory(manifest: dict[str, Any]) -> Path | None:
+    path = artifact_path(
+        manifest,
+        "agent_stream",
+        "stream_directory",
+        packed=True,
+    )
+    return Path(path) if path else None
+
+
+def agent_stream_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
+    stream_dir = agent_stream_directory(manifest)
+    return load_json_file(
+        stream_dir / "manifest.json" if stream_dir is not None else None)
+
+
+def agent_stream_performance_paths(
+    agent_manifest: dict[str, Any],
+) -> tuple[str | None, str | None]:
+    performance = dict_or_empty(agent_manifest.get("performance"))
+    summary = performance.get("capture_summary_file") or performance.get(
+        "summary_file")
+    icc = performance.get("capture_icc_evidence_file") or performance.get(
+        "icc_evidence_file")
+    return (
+        summary if isinstance(summary, str) and summary else None,
+        icc if isinstance(icc, str) and icc else None,
+    )
+
+
+def load_agent_stream_performance_summary(
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    stream_dir = agent_stream_directory(manifest)
+    return load_json_file(
+        stream_dir / "performance" / "qge_perf_summary.json"
+        if stream_dir is not None else None)
+
+
+def load_agent_stream_performance_icc(
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    stream_dir = agent_stream_directory(manifest)
+    return load_json_file(
+        stream_dir / "performance" / "qge_perf_icc_evidence.json"
+        if stream_dir is not None else None)
+
+
 def runtime_icc_sidecar_audit_from_manifest(
     manifest: dict[str, Any],
     *,
     required: bool = True,
 ) -> dict[str, Any]:
+    agent_manifest = agent_stream_manifest(manifest)
+    agent_perf_summary_path, agent_perf_icc_path = (
+        agent_stream_performance_paths(agent_manifest)
+    )
     source_artifacts = {
         "vanilla_matrix": load_artifact(manifest, "vanilla", "matrix"),
         "breadth_evidence": load_artifact(manifest, "breadth", "evidence"),
@@ -317,6 +385,8 @@ def runtime_icc_sidecar_audit_from_manifest(
             "capture",
             "performance_summary",
         ),
+        "agent_stream_performance_summary": (
+            load_agent_stream_performance_summary(manifest)),
     }
     runtime_icc_evidence = {
         "vanilla_icc_evidence": load_artifact(
@@ -334,6 +404,8 @@ def runtime_icc_sidecar_audit_from_manifest(
             "capture",
             "performance_icc_evidence",
         ),
+        "agent_stream_performance_icc_evidence": (
+            load_agent_stream_performance_icc(manifest)),
     }
     artifact_paths = {
         "vanilla_matrix": artifact_path(manifest, "vanilla", "matrix"),
@@ -358,6 +430,8 @@ def runtime_icc_sidecar_audit_from_manifest(
             "capture",
             "performance_icc_evidence",
         ),
+        "agent_stream_performance_summary": agent_perf_summary_path,
+        "agent_stream_performance_icc_evidence": agent_perf_icc_path,
     }
     return runtime_icc_sidecar_audit(
         source_artifacts,

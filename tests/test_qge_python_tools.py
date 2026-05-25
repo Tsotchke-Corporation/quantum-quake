@@ -3831,6 +3831,7 @@ class PublicationPackTests(unittest.TestCase):
             "vanilla_matrix": vanilla_matrix,
             "breadth_evidence": breadth_evidence,
             "performance_summary": performance_summary,
+            "agent_stream_performance_summary": performance_summary,
         }
         artifact_paths = {
             "vanilla_matrix": "vanilla/vanilla_capture_matrix.json",
@@ -3840,6 +3841,10 @@ class PublicationPackTests(unittest.TestCase):
             "performance_summary": "capture/qge_perf_summary.json",
             "performance_icc_evidence": (
                 "capture/qge_perf_icc_evidence.json"),
+            "agent_stream_performance_summary": (
+                "diagnostics/quake_stream/test/qge_perf_summary.json"),
+            "agent_stream_performance_icc_evidence": (
+                "diagnostics/quake_stream/test/qge_perf_icc_evidence.json"),
         }
         sidecars = runtime_icc_audit.expected_runtime_icc_sidecars(
             source_artifacts,
@@ -3852,11 +3857,14 @@ class PublicationPackTests(unittest.TestCase):
             required=True,
         )
         self.assertTrue(clean_audit["passed"])
-        self.assertEqual(clean_audit["recorded_sidecar_count"], 3)
+        self.assertEqual(clean_audit["recorded_sidecar_count"], 4)
         self.assertEqual(clean_audit["mismatch_count"], 0)
 
         stale_sidecars = json.loads(json.dumps(sidecars))
         stale_sidecars["performance_icc_evidence"]["native_idwt_sum"] = 0
+        stale_sidecars[
+            "agent_stream_performance_icc_evidence"
+        ]["render_time_ms_max"] = 0
         stale_sidecars[
             "vanilla_icc_evidence"
         ]["hardware_quantum_advantage_claimed"] = True
@@ -3870,6 +3878,11 @@ class PublicationPackTests(unittest.TestCase):
         self.assertTrue(any(
             item.get("sidecar") == "performance_icc_evidence"
             and "native_idwt_sum" in item.get("fields", [])
+            for item in stale_audit["sidecar_mismatches"]
+        ))
+        self.assertTrue(any(
+            item.get("sidecar") == "agent_stream_performance_icc_evidence"
+            and "render_time_ms_max" in item.get("fields", [])
             for item in stale_audit["sidecar_mismatches"]
         ))
         self.assertTrue(any(

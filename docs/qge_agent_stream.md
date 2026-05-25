@@ -494,8 +494,9 @@ native backend boundary ledgers are rebuilt from the oracle, advantage,
 vanilla, performance, and breadth evidence before the gate accepts their
 simulator/native posture. The top-level publication ICC sidecar is audited
 against `publication_manifest.json` after the pack is written, and the copied
-vanilla, breadth, and performance ICC sidecars are audited against their
-runtime source artifacts. The scene-oracle ICC sidecar is likewise audited
+vanilla, breadth, publication-performance, and agent-stream performance ICC
+sidecars are audited against their runtime source artifacts. The scene-oracle
+ICC sidecar is likewise audited
 against the packed oracle and claims evidence, the oracle claims evidence is
 rebuilt from the packed claims ledger and oracle scene, and the oracle scene is
 rebuilt from its recorded source capture. The publication manifest's file and

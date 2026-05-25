@@ -323,10 +323,11 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      boundary ledgers must match the current oracle, advantage, vanilla,
      performance, and breadth evidence. The top-level publication ICC sidecar
      must match `publication_manifest.json` after pack generation, and the
-     copied vanilla, breadth, and performance ICC sidecars must match their
-     runtime source artifacts. The scene-oracle ICC sidecar must match the
-     packed oracle scene and claims evidence, and the oracle claims evidence
-     must match the packed claims ledger plus oracle scene. The oracle scene
+     copied vanilla, breadth, publication-performance, and agent-stream
+     performance ICC sidecars must match their runtime source artifacts. The
+     scene-oracle ICC sidecar must match the packed oracle scene and claims
+     evidence, and the oracle claims evidence must match the packed claims
+     ledger plus oracle scene. The oracle scene
      must also rebuild from its recorded source capture. The publication
      manifest's file and directory records must match current path existence,
      sizes, and SHA-256 digests, and its runtime/advantage summary mirrors

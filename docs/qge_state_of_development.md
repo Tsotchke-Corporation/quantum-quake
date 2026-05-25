@@ -738,10 +738,11 @@ Known current visual state:
   the oracle, advantage, vanilla, performance, and breadth evidence before the
   gate accepts their simulator/native posture. The top-level publication ICC
   sidecar is audited against `publication_manifest.json` after pack generation,
-  and the copied vanilla, breadth, and performance ICC sidecars are audited
-  against their runtime source artifacts. The scene-oracle ICC sidecar is
-  audited against the packed oracle and claims evidence, and the oracle claims
-  evidence is rebuilt from the packed claims ledger plus oracle scene. The
+  and the copied vanilla, breadth, publication-performance, and agent-stream
+  performance ICC sidecars are audited against their runtime source artifacts.
+  The scene-oracle ICC sidecar is audited against the packed oracle and claims
+  evidence, and the oracle claims evidence is rebuilt from the packed claims
+  ledger plus oracle scene. The
   oracle scene is rebuilt from its recorded source capture. The publication
   manifest's file and directory records are checked against current path
   existence, sizes, and SHA-256 digests, and its runtime/advantage summary
