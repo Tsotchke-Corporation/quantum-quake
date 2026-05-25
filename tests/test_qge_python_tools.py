@@ -13,6 +13,7 @@ import unittest
 import zlib
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TOOLS_DIR = REPO_ROOT / "tools"
@@ -38,6 +39,7 @@ import qge_moonlab_qae_transpile as moonlab_qae_transpile  # noqa: E402
 import qge_moonlab_submission_bundle as moonlab_submission_bundle  # noqa: E402
 import qge_noesis_summary as noesis_summary  # noqa: E402
 import qge_manifest_file_audit as manifest_file_audit  # noqa: E402
+import qge_manifest_summary_audit as manifest_summary_audit  # noqa: E402
 import qge_oracle_claims_audit as oracle_claims_audit  # noqa: E402
 import qge_oracle_icc_audit as oracle_icc_audit  # noqa: E402
 import qge_oracle_export as oracle_export  # noqa: E402
@@ -1038,6 +1040,419 @@ class PublicationPackTests(unittest.TestCase):
                 item.get("source") == "artifacts.sample.directory" and
                 "file_count" in item.get("fields", [])
                 for item in stale_audit["mismatches"]
+            ))
+
+    def test_manifest_summary_audit_detects_stale_mirrors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            source = tmpdir / "source"
+            source.mkdir()
+            agent_stream = source / "agent_stream"
+            agent_stream.mkdir()
+            vanilla_matrix = source / "vanilla_capture_matrix.json"
+            performance = source / "qge_perf_summary.json"
+            breadth = source / "breadth_evidence.json"
+            coverage = {
+                "schema": "qge.full_game_map_coverage.v0",
+                "map_set": "unit",
+                "status": "complete",
+                "target_map_count": 1,
+                "covered_map_count": 1,
+                "missing_map_count": 0,
+                "missing_maps": [],
+                "extra_maps": [],
+            }
+            publication_pack.write_json(
+                vanilla_matrix,
+                {
+                    "conformance_summary": {
+                        "ready_for_complete_claim": True,
+                        "fallback_count": 0,
+                        "qge_surface_surrogates": 0,
+                        "agent_stream_runs_success": True,
+                        "performance_sidecars_success": True,
+                    }
+                },
+            )
+            publication_pack.write_json(
+                agent_stream / "manifest.json",
+                {
+                    "status": "complete",
+                    "frames_requested": 1,
+                    "frames_captured": 1,
+                    "trace_requested": 1,
+                    "trace_status": "copied",
+                    "trace_bytes": 64,
+                    "run": {
+                        "status": "ok",
+                        "success": 1,
+                        "startup_issue": "",
+                        "process_status": 0,
+                        "timed_out": 0,
+                    },
+                    "performance": {"status": "pass"},
+                },
+            )
+            publication_pack.write_json(
+                performance,
+                {
+                    "status": "pass",
+                    "aggregate": {
+                        "threshold_failures": [],
+                        "metric_evidence_present": True,
+                    },
+                },
+            )
+            publication_pack.write_json(
+                breadth,
+                {
+                    "status": "success",
+                    "aggregate": {
+                        "breadth_ready_for_complete_claim": True,
+                        "matrix_run_count": 1,
+                        "ready_matrix_run_count": 1,
+                        "map_count": 1,
+                        "maps": ["start"],
+                        "full_game_coverage": coverage,
+                    },
+                },
+            )
+            manifest: dict[str, Any] = {
+                "source_inputs": {
+                    "vanilla_matrix": str(vanilla_matrix),
+                    "publication_performance_source": "unit_test",
+                    "publication_performance_summary": str(performance),
+                    "agent_stream_dir": str(agent_stream),
+                    "breadth_evidence": str(breadth),
+                },
+                "artifacts": {
+                    "advantage": {},
+                    "resource": {},
+                },
+            }
+
+            def add_artifact(
+                section: str,
+                name: str,
+                data: dict[str, Any],
+            ) -> None:
+                path = tmpdir / section / f"{name}.json"
+                publication_pack.write_json(path, data)
+                artifacts = manifest["artifacts"]
+                section_artifacts = artifacts[section]
+                section_artifacts[name] = {"path": str(path)}
+
+            add_artifact("resource", "full_game_map_coverage", coverage)
+            add_artifact(
+                "resource",
+                "asset_inventory",
+                {
+                    "status": "complete",
+                    "asset_root_status": "present",
+                    "available_map_count": 1,
+                    "missing_map_count": 0,
+                    "pak_count": 1,
+                    "invalid_pak_count": 0,
+                    "invalid_bsp_count": 0,
+                    "full_game_asset_ready": True,
+                },
+            )
+            add_artifact(
+                "resource",
+                "asset_requirements",
+                {
+                    "schema": "qge.asset_requirements.v0",
+                    "status": "satisfied",
+                    "target_map_count": 1,
+                    "present_map_count": 1,
+                    "missing_map_count": 0,
+                    "claim_posture": {
+                        "asset_requirements_satisfied": True,
+                    },
+                },
+            )
+            add_artifact(
+                "resource",
+                "registered_asset_intake",
+                {
+                    "schema": "qge.registered_asset_intake.v0",
+                    "status": "complete",
+                    "candidate_new_map_count": 0,
+                    "missing_map_count_after_plan": 0,
+                    "copy_plan_count": 0,
+                    "post_install_verification_command_count": 1,
+                    "post_install_verification": {
+                        "commands": [{"kind": "capture_queue"}],
+                    },
+                    "discovered_candidate_count": 0,
+                    "claim_posture": {
+                        "asset_intake_copies_game_data": False,
+                    },
+                },
+            )
+            add_artifact(
+                "resource",
+                "envelope",
+                {
+                    "posture": {
+                        "moonlab_simulator_path_claimed": True,
+                        "whole_game_hardware_execution_claimed": False,
+                    },
+                },
+            )
+            add_artifact(
+                "resource",
+                "native_backend_boundary",
+                {
+                    "status": "pass",
+                    "required_target_count": 3,
+                    "passed_target_count": 3,
+                    "blocked_target_count": 0,
+                },
+            )
+            add_artifact(
+                "resource",
+                "moonlab_job_specs",
+                {
+                    "selected_job_count": 1,
+                    "hardware_candidate_job_count": 1,
+                    "submission_scope": "unit",
+                },
+            )
+            add_artifact(
+                "resource",
+                "moonlab_job_results",
+                {
+                    "overall_status": "simulator_complete_hardware_not_submitted",
+                    "completed_simulator_job_count": 1,
+                    "completed_native_replay_job_count": 1,
+                    "hardware_submitted_job_count": 0,
+                    "blocked_job_count": 0,
+                },
+            )
+            add_artifact(
+                "resource",
+                "moonlab_replay_plan",
+                {
+                    "schema": "qge.moonlab_replay_plan.v0",
+                    "selected_job_count": 1,
+                    "hardware_candidate_job_count": 1,
+                    "hardware_submitted_job_count": 0,
+                    "blocked_job_count": 0,
+                },
+            )
+            add_artifact(
+                "resource",
+                "moonlab_submission_packet",
+                {
+                    "schema": "qge.moonlab_submission_packet.v0",
+                    "hardware_candidate_job_count": 1,
+                    "ready_candidate_count": 1,
+                    "blocked_candidate_count": 0,
+                    "submitted_candidate_count": 0,
+                },
+            )
+            add_artifact(
+                "resource",
+                "moonlab_submission_bundle",
+                {
+                    "schema": "qge.moonlab_submission_bundle.v0",
+                    "status": "ready_for_control_plane_submission",
+                    "hardware_candidate_job_count": 1,
+                    "ready_for_control_plane_submission_count": 1,
+                    "calibration_payload_ready_count": 1,
+                    "oracle_kernel_ready_count": 1,
+                    "qae_observation_ready_count": 1,
+                    "grover_schedule_ready_count": 1,
+                    "transpilation_required_count": 0,
+                    "missing_artifact_candidate_count": 0,
+                    "hardware_submission_directly_executable": True,
+                    "control_plane_payload_directly_executable": True,
+                    "oracle_kernel_directly_executable": True,
+                    "qae_observation_directly_executable": True,
+                    "grover_schedule_directly_executable": True,
+                },
+            )
+            add_artifact(
+                "resource",
+                "moonlab_hardware_record_template",
+                {
+                    "schema": "qge.moonlab_hardware_record_template.v0",
+                    "record_schema": "qge.moonlab_hardware_record.v0",
+                    "job_id": "unit.job",
+                    "candidate_digest": "abc123",
+                },
+            )
+            add_artifact(
+                "resource",
+                "moonlab_hardware_submission_scope",
+                {
+                    "schema": "qge.moonlab_hardware_submission_scope.v0",
+                    "status": "ready_for_control_plane_submission",
+                    "hardware_submission_scope_ready": True,
+                    "hardware_candidate_job_count": 1,
+                    "ready_for_control_plane_submission_count": 1,
+                    "passing_check_count": 1,
+                    "attention_check_count": 0,
+                    "out_of_scope": ["whole_game_hardware_execution"],
+                },
+            )
+            add_artifact(
+                "resource",
+                "moonlab_full_game_plan",
+                {
+                    "schema": "qge.moonlab_full_game_deployment_plan.v0",
+                    "status": "blocked_asset_unavailable",
+                    "target_map_count": 1,
+                    "covered_map_count": 1,
+                    "missing_map_count": 0,
+                    "asset_unavailable_map_count": 0,
+                    "claim_posture": {
+                        "whole_game_moonlab_deployment_claimed": False,
+                    },
+                },
+            )
+            add_artifact(
+                "resource",
+                "moonlab_deployment_gate",
+                {
+                    "schema": "qge.moonlab_deployment_gate.v0",
+                    "status": "blocked",
+                    "failed_criterion_count": 4,
+                    "blocker_count": 4,
+                    "whole_game_moonlab_deployment_claim_allowed": False,
+                    "whole_game_hardware_execution_claim_allowed": False,
+                    "hardware_quantum_advantage_claim_allowed": False,
+                    "dense_70000_qubit_state_claim_allowed": False,
+                    "summary": {
+                        "target_map_count": 1,
+                        "covered_map_count": 1,
+                        "coverage_missing_map_count": 0,
+                        "asset_missing_map_count": 0,
+                        "invalid_bsp_count": 0,
+                        "registered_asset_install_script": "install.sh",
+                        "registered_asset_intake_file": "intake.json",
+                        "post_install_verification_command_count": 1,
+                        "post_install_capture_queue_command_present": True,
+                        "post_install_capture_queue_command": "capture",
+                        "post_install_capture_queue_script": "capture.sh",
+                    },
+                },
+            )
+            add_artifact(
+                "advantage",
+                "metrics",
+                {
+                    "advantage_problem_id": "unit.advantage",
+                    "scaling_summary": {"trial_count": 1},
+                    "comparison": {
+                        "best_classical": {"algorithm": "classical"},
+                        "best_qae": {"algorithm": "qae"},
+                    },
+                    "resource_estimate": {"logical_qubits": 3},
+                },
+            )
+            add_artifact(
+                "advantage",
+                "qae_moonlab_payload",
+                {
+                    "schema": "qge.moonlab_qae_payload.v0",
+                    "status": "payload_ready",
+                    "semantic_scope": "unit_payload",
+                    "payload_resource_estimate": {"circuit_count": 1},
+                    "claim_posture": {
+                        "full_qae_oracle_transpiled": False,
+                    },
+                },
+            )
+            add_artifact(
+                "advantage",
+                "qae_moonlab_oracle_kernel",
+                {
+                    "schema": "qge.moonlab_qae_oracle_kernel.v0",
+                    "status": "kernel_ready",
+                    "semantic_scope": "unit_kernel",
+                    "resource_estimate": {"gate_count": 7},
+                    "moonlab_control_plane": {
+                        "control_plane_executable": True,
+                    },
+                    "claim_posture": {
+                        "qf_oracle_kernel_transpiled": True,
+                        "full_qae_oracle_transpiled": False,
+                    },
+                },
+            )
+            add_artifact(
+                "advantage",
+                "qae_moonlab_observation_zero",
+                {
+                    "schema": "qge.moonlab_qae_observation_circuit.v0",
+                    "status": "observation_ready",
+                    "semantic_scope": "unit_observation",
+                    "resource_estimate": {"gate_count": 9},
+                    "state_preparation": {"candidate_count": 1},
+                    "moonlab_control_plane": {
+                        "control_plane_executable": True,
+                    },
+                    "claim_posture": {
+                        "candidate_state_preparation_transpiled": True,
+                        "power_zero_observation_transpiled": True,
+                        "full_qae_oracle_transpiled": False,
+                    },
+                },
+            )
+            add_artifact(
+                "advantage",
+                "qae_moonlab_grover_schedule_plan",
+                {
+                    "schema": "qge.moonlab_qae_grover_schedule_plan.v0",
+                    "status": "schedule_ready",
+                    "semantic_scope": "unit_schedule",
+                    "resource_estimate": {"observation_count": 1},
+                    "moonlab_control_plane": {
+                        "ready_observation_count": 1,
+                        "blocked_observation_count": 0,
+                        "first_blocked_power": None,
+                    },
+                    "claim_posture": {
+                        "full_mlae_schedule_transpiled": True,
+                        "full_qae_oracle_transpiled": True,
+                    },
+                },
+            )
+            manifest["runtime_summary"] = (
+                manifest_summary_audit.expected_runtime_summary(manifest))
+            manifest["advantage_summary"] = (
+                manifest_summary_audit.expected_advantage_summary(manifest))
+            self.assertEqual(
+                manifest["runtime_summary"]["performance_status"], "pass")
+            self.assertEqual(
+                manifest["advantage_summary"][
+                    "moonlab_deployment_gate_summary"]["blocker_count"],
+                4,
+            )
+
+            audit = manifest_summary_audit.manifest_summary_audit(manifest)
+            self.assertTrue(audit["passed"])
+            self.assertEqual(audit["mismatch_count"], 0)
+
+            stale_manifest = json.loads(json.dumps(manifest))
+            stale_manifest["runtime_summary"]["performance_status"] = "blocked"
+            stale_manifest[
+                "advantage_summary"
+            ]["moonlab_deployment_gate_summary"]["blocker_count"] = 0
+            stale_audit = manifest_summary_audit.manifest_summary_audit(
+                stale_manifest)
+            self.assertFalse(stale_audit["passed"])
+            self.assertTrue(any(
+                item.get("path") == "runtime_summary.performance_status"
+                for item in stale_audit["mismatches"]["runtime_summary"]
+            ))
+            self.assertTrue(any(
+                item.get("path") == (
+                    "advantage_summary."
+                    "moonlab_deployment_gate_summary.blocker_count")
+                for item in stale_audit["mismatches"]["advantage_summary"]
             ))
 
     def test_manifest_summaries_and_icc_evidence(self) -> None:

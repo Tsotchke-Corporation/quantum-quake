@@ -329,7 +329,9 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      must match the packed claims ledger plus oracle scene. The oracle scene
      must also rebuild from its recorded source capture. The publication
      manifest's file and directory records must match current path existence,
-     sizes, and SHA-256 digests.
+     sizes, and SHA-256 digests, and its runtime/advantage summary mirrors
+     must rebuild from the recorded source inputs plus packed resource and
+     advantage artifacts.
    - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
      and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
      scanning bounded candidate directories. The intake artifact records
