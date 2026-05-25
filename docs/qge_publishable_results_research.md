@@ -325,7 +325,8 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      must match `publication_manifest.json` after pack generation, and the
      copied vanilla, breadth, and performance ICC sidecars must match their
      runtime source artifacts. The scene-oracle ICC sidecar must match the
-     packed oracle scene and claims evidence.
+     packed oracle scene and claims evidence, and the oracle claims evidence
+     must match the packed claims ledger plus oracle scene.
    - `--discover-common` derives Steam Quake roots from `libraryfolders.vdf`
      and `appmanifest_2310.acf`, then adds GOG/Heroic-style local roots before
      scanning bounded candidate directories. The intake artifact records

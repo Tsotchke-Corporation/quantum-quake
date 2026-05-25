@@ -37,6 +37,7 @@ import qge_moonlab_qae_observation_transpile as moonlab_observation_transpile  #
 import qge_moonlab_qae_transpile as moonlab_qae_transpile  # noqa: E402
 import qge_moonlab_submission_bundle as moonlab_submission_bundle  # noqa: E402
 import qge_noesis_summary as noesis_summary  # noqa: E402
+import qge_oracle_claims_audit as oracle_claims_audit  # noqa: E402
 import qge_oracle_icc_audit as oracle_icc_audit  # noqa: E402
 import qge_oracle_export as oracle_export  # noqa: E402
 import qge_perf_summary as perf_summary  # noqa: E402
@@ -515,7 +516,12 @@ class OracleExportTests(unittest.TestCase):
                 "shots": 16,
                 "fallback_count": 0,
             },
-            "trace_summary": {"sequence_errors": 0},
+            "trace_summary": {
+                "records": trace["records"],
+                "state_probes": trace["state_probes"],
+                "sequence_errors": 0,
+            },
+            "snapshot": {"render": render},
         }
         ledger = {
             "claims": [
@@ -540,6 +546,35 @@ class OracleExportTests(unittest.TestCase):
         self.assertEqual(claims["claims"][0]["evidence_status"], "supported")
         self.assertEqual(claims["claims"][1]["evidence_status"], "planned")
         self.assertEqual(claims["claims"][1]["missing_fields"], ["baseline_id"])
+        claims_audit = oracle_claims_audit.oracle_claims_evidence_audit(
+            oracle_scene,
+            ledger,
+            claims,
+            required=True,
+        )
+        self.assertTrue(claims_audit["passed"])
+        self.assertEqual(claims_audit["mismatch_count"], 0)
+
+        stale_claims = json.loads(json.dumps(claims))
+        stale_claims["claims"][0]["evidence_status"] = "blocked"
+        stale_claims["whole_game_hardware_execution_claimed"] = True
+        stale_claims_audit = (
+            oracle_claims_audit.oracle_claims_evidence_audit(
+                oracle_scene,
+                ledger,
+                stale_claims,
+                required=True,
+            )
+        )
+        self.assertFalse(stale_claims_audit["passed"])
+        self.assertIn(
+            "claims[0].evidence_status",
+            stale_claims_audit["field_mismatches"],
+        )
+        self.assertTrue(any(
+            flag.get("flag") == "whole_game_hardware_execution_claimed"
+            for flag in stale_claims_audit["overclaim_flags"]
+        ))
 
         icc = oracle_export.build_icc_evidence(
             oracle_scene,
