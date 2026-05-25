@@ -520,9 +520,10 @@ before control-plane payload evidence is accepted.
 Generated advantage files (`qae_curve.csv`, `qae_circuit.txt`, and scaling
 summaries) are regenerated from `advantage_metrics.json` before the pack treats
 them as current. The packed agent-stream manifest is checked against packed
-frame, log, input, trace-summary, performance, audio-byte, and Noesis files
-before stream status evidence is accepted. The agent-stream ICC JSONL is
-rebuilt from that packed agent manifest. The packed trace summary is
+frame, exact `frame_001.png` through `frame_N.png` membership, log, input,
+trace-summary, performance, audio-byte, and Noesis files before stream status
+evidence is accepted. The agent-stream ICC JSONL is rebuilt from that packed
+agent manifest. The packed trace summary is
 regenerated from `capture/qge_trace.bin` before trace-derived runtime evidence
 is accepted. The primary packed vanilla matrix is rebuilt from its recorded
 capture directory before its conformance counters are accepted. Packed breadth

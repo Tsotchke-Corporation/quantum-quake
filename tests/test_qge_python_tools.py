@@ -1226,6 +1226,22 @@ class PublicationPackTests(unittest.TestCase):
             self.assertEqual(audit["mismatch_count"], 0)
             self.assertEqual(audit["missing_file_count"], 0)
 
+            (packed_stream / "video/frames/frame_001.png").unlink()
+            write_packed("video/frames/frame_000.png", "png")
+            stale_frame_sequence_audit = (
+                agent_stream_manifest_audit.audit_agent_stream_manifest(
+                    manifest,
+                    packed_stream,
+                )
+            )
+            self.assertFalse(stale_frame_sequence_audit["passed"])
+            self.assertTrue(any(
+                item.get("name") == "video_frame_sequence"
+                for item in stale_frame_sequence_audit["value_mismatches"]
+            ))
+            (packed_stream / "video/frames/frame_000.png").unlink()
+            write_packed("video/frames/frame_001.png", "png")
+
             stale_manifest = json.loads(json.dumps(manifest))
             stale_manifest["hardware_quantum_advantage_claimed"] = True
             write_packed("video/frame_count.txt", "2\n")

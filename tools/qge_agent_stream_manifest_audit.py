@@ -151,6 +151,13 @@ def add_value_mismatch(
         })
 
 
+def expected_frame_names(frames_captured: int) -> list[str]:
+    return [
+        f"frame_{index:03d}.png"
+        for index in range(1, frames_captured + 1)
+    ]
+
+
 def audit_video_files(
     manifest: dict[str, Any],
     packed_stream_dir: Path,
@@ -170,13 +177,24 @@ def audit_video_files(
             "exists": False,
         })
         actual_frame_count = 0
+        actual_frame_names: list[str] = []
     else:
-        actual_frame_count = len(sorted(frames_dir.glob("frame_*.png")))
+        actual_frame_names = sorted(
+            path.name for path in frames_dir.glob("frame_*.png")
+            if path.is_file()
+        )
+        actual_frame_count = len(actual_frame_names)
     add_value_mismatch(
         value_mismatches,
         "video_frame_file_count",
         frames_captured,
         actual_frame_count,
+    )
+    add_value_mismatch(
+        value_mismatches,
+        "video_frame_sequence",
+        expected_frame_names(frames_captured),
+        actual_frame_names,
     )
 
     frame_count_path = packed_stream_path(
