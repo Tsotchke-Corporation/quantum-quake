@@ -751,7 +751,8 @@ Known current visual state:
   against the blocked deployment-gate claim flags. The manifest reproduction
   command list is checked for core command coverage and unsafe shell fragments,
   and the registered-asset install script is rebuilt from the packed intake
-  ledger.
+  ledger. Packed Markdown evidence reports are regenerated from their source
+  JSON ledgers before they are treated as current.
   The deployment gate turns that ledger into the hard claim verdict:
   `blocked`, with whole-game Moonlab simulator/native deployment, whole-game
   hardware execution, hardware advantage, and dense 70,000-qubit state claims

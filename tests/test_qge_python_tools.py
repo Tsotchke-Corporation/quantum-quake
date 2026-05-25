@@ -40,6 +40,7 @@ import qge_moonlab_submission_bundle as moonlab_submission_bundle  # noqa: E402
 import qge_noesis_summary as noesis_summary  # noqa: E402
 import qge_manifest_file_audit as manifest_file_audit  # noqa: E402
 import qge_manifest_claim_policy_audit as manifest_claim_policy_audit  # noqa: E402
+import qge_manifest_markdown_audit as manifest_markdown_audit  # noqa: E402
 import qge_manifest_reproduce_audit as manifest_reproduce_audit  # noqa: E402
 import qge_manifest_source_input_audit as manifest_source_input_audit  # noqa: E402
 import qge_manifest_summary_audit as manifest_summary_audit  # noqa: E402
@@ -1146,6 +1147,87 @@ class PublicationPackTests(unittest.TestCase):
             for item in stale_audit["unsafe_commands"]
         ))
         self.assertTrue(stale_audit["malformed_commands"])
+
+    def test_manifest_markdown_audit_detects_stale_report(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            requirements_path = tmpdir / "qge_asset_requirements.json"
+            markdown_path = tmpdir / "qge_asset_requirements.md"
+            requirements = {
+                "schema": "qge.asset_requirements.v0",
+                "status": "blocked_missing_registered_assets",
+                "asset_root": "assets/id1",
+                "map_set": "unit",
+                "present_map_count": 0,
+                "target_map_count": 1,
+                "missing_map_count": 1,
+                "requirements": [
+                    {
+                        "map": "e2m1",
+                        "required_entry": "maps/e2m1.bsp",
+                        "status": "missing",
+                        "next_action": "install_registered_asset",
+                    },
+                ],
+                "missing_required_entries": ["maps/e2m1.bsp"],
+            }
+            requirements_path.write_text(
+                json.dumps(requirements, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            markdown = asset_requirements.markdown_report(requirements)
+            markdown_path.write_text(markdown, encoding="utf-8")
+            manifest = {
+                "artifacts": {
+                    "resource": {
+                        "asset_requirements": {
+                            "path": str(requirements_path),
+                        },
+                        "asset_requirements_markdown": {
+                            "path": str(markdown_path),
+                        },
+                    },
+                },
+            }
+            specs = tuple(
+                spec for spec in manifest_markdown_audit.MARKDOWN_ARTIFACTS
+                if spec.markdown_artifact == "asset_requirements_markdown"
+            )
+
+            audit = manifest_markdown_audit.manifest_markdown_audit(
+                manifest,
+                specs=specs,
+            )
+            self.assertTrue(audit["passed"])
+            self.assertEqual(audit["expected_markdown_count"], 1)
+            self.assertEqual(audit["mismatch_count"], 0)
+
+            stale_markdown = markdown.replace(
+                "Status: blocked_missing_registered_assets",
+                "Status: complete",
+            )
+            markdown_path.write_text(stale_markdown, encoding="utf-8")
+            stale_audit = manifest_markdown_audit.manifest_markdown_audit(
+                manifest,
+                specs=specs,
+            )
+            self.assertFalse(stale_audit["passed"])
+            self.assertEqual(stale_audit["mismatch_count"], 1)
+            self.assertEqual(
+                stale_audit["markdown_mismatches"][0]["kind"],
+                "markdown_content_mismatch",
+            )
+            self.assertEqual(
+                stale_audit["markdown_mismatches"][0]["artifact"],
+                "resource.asset_requirements_markdown",
+            )
+            self.assertEqual(
+                stale_audit["markdown_mismatches"][0][
+                    "first_line_mismatch"]["line"],
+                3,
+            )
 
     def test_registered_asset_script_audit_detects_stale_script(
         self,
