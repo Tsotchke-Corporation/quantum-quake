@@ -2878,6 +2878,11 @@ class PublicationPackTests(unittest.TestCase):
                     "agent_stream_dir": str(agent),
                     "breadth_evidence": str(breadth / "breadth_evidence.json"),
                     "claims_ledger": str(docs / "qge_claims.json"),
+                    "scene_oracle_ir_doc": str(docs / "qge_scene_oracle_ir.md"),
+                    "architecture_doc": str(
+                        docs / "qge_engine_architecture.md"),
+                    "advantage_roadmap_doc": str(
+                        docs / "qge_quantum_advantage_research_roadmap.md"),
                 },
                 "artifacts": {
                     "capture": {
@@ -2947,6 +2952,18 @@ class PublicationPackTests(unittest.TestCase):
                         "claims_ledger": {
                             "source_path": str(docs / "qge_claims.json"),
                         },
+                        "scene_oracle_ir": {
+                            "source_path": str(docs / "qge_scene_oracle_ir.md"),
+                        },
+                        "architecture": {
+                            "source_path": str(
+                                docs / "qge_engine_architecture.md"),
+                        },
+                        "advantage_roadmap": {
+                            "source_path": str(
+                                docs /
+                                "qge_quantum_advantage_research_roadmap.md"),
+                        },
                     },
                 },
             }
@@ -2955,7 +2972,7 @@ class PublicationPackTests(unittest.TestCase):
                 manifest)
             self.assertTrue(audit["passed"])
             self.assertEqual(audit["mismatch_count"], 0)
-            self.assertEqual(audit["check_count"], 17)
+            self.assertEqual(audit["check_count"], 20)
 
             stale_manifest = json.loads(json.dumps(manifest))
             stale_manifest["source_inputs"]["capture_dir"] = str(
@@ -2995,6 +3012,20 @@ class PublicationPackTests(unittest.TestCase):
                 item.get("reason") ==
                 "missing_source_input_and_artifact_source_path"
                 for item in missing_both_audit["mismatches"]
+            ))
+
+            missing_doc_manifest = json.loads(json.dumps(manifest))
+            del missing_doc_manifest["source_inputs"]["architecture_doc"]
+            missing_doc_audit = (
+                manifest_source_input_audit.manifest_source_input_audit(
+                    missing_doc_manifest)
+            )
+            self.assertFalse(missing_doc_audit["passed"])
+            self.assertTrue(any(
+                item.get("source_input") == "architecture_doc" and
+                item.get("artifact") == "source_docs.architecture" and
+                item.get("reason") == "missing_source_input"
+                for item in missing_doc_audit["mismatches"]
             ))
 
     def test_manifest_summary_audit_detects_stale_mirrors(self) -> None:

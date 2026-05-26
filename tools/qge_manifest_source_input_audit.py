@@ -15,6 +15,9 @@ EXACT_SOURCE_CHECKS = (
     ("vanilla_icc_evidence", "vanilla", "icc_evidence"),
     ("publication_performance_summary", "capture", "performance_summary"),
     ("claims_ledger", "source_docs", "claims_ledger"),
+    ("scene_oracle_ir_doc", "source_docs", "scene_oracle_ir"),
+    ("architecture_doc", "source_docs", "architecture"),
+    ("advantage_roadmap_doc", "source_docs", "advantage_roadmap"),
     ("agent_stream_dir", "agent_stream", "stream_directory"),
     ("breadth_evidence", "breadth", "evidence"),
 )

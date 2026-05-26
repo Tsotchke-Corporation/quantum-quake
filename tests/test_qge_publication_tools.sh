@@ -624,6 +624,16 @@ assert any(
     for command in manifest["reproduce_commands"]
 )
 source_inputs = manifest["source_inputs"]
+for input_name, artifact_name in (
+    ("claims_ledger", "claims_ledger"),
+    ("scene_oracle_ir_doc", "scene_oracle_ir"),
+    ("architecture_doc", "architecture"),
+    ("advantage_roadmap_doc", "advantage_roadmap"),
+):
+    assert (
+        source_inputs[input_name] ==
+        manifest["artifacts"]["source_docs"][artifact_name]["source_path"]
+    )
 advantage_commands = [
     command for command in manifest["reproduce_commands"]
     if command.startswith("tools/qge_advantage_benchmark.py ")

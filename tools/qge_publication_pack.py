@@ -1810,6 +1810,12 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "breadth_evidence_reproduction": (
                 breadth_evidence_reproduction_inputs(inputs)),
             "claims_ledger": str(claims_path),
+            "scene_oracle_ir_doc": str(
+                REPO_ROOT / "docs/qge_scene_oracle_ir.md"),
+            "architecture_doc": str(
+                REPO_ROOT / "docs/qge_engine_architecture.md"),
+            "advantage_roadmap_doc": str(
+                REPO_ROOT / "docs/qge_quantum_advantage_research_roadmap.md"),
             "asset_root": str(args.asset_root),
             "registered_asset_intake_reproduction": (
                 registered_asset_intake_reproduction_inputs(
