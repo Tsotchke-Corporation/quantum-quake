@@ -136,6 +136,44 @@ def option_values(tokens: list[str], option: str) -> list[str]:
     return values
 
 
+def expected_command_token_indexes(
+    tokens: list[str],
+    checks: list[dict[str, Any]],
+) -> set[int]:
+    indexes = {0}
+    for check in checks:
+        if "position" in check:
+            position = int(check["position"])
+            if position < len(tokens):
+                indexes.add(position)
+            continue
+        option = check["option"]
+        for index, token in enumerate(tokens):
+            if token != option:
+                continue
+            indexes.add(index)
+            if not check.get("boolean") and index + 1 < len(tokens):
+                indexes.add(index + 1)
+    return indexes
+
+
+def unexpected_command_token_mismatches(
+    tokens: list[str],
+    checks: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    expected_indexes = expected_command_token_indexes(tokens, checks)
+    return [
+        {
+            "position": index,
+            "reason": "unexpected_token",
+            "expected_values": [],
+            "actual_values": [token],
+        }
+        for index, token in enumerate(tokens)
+        if index not in expected_indexes
+    ]
+
+
 def add_scalar_option_check(
     checks: list[dict[str, Any]],
     option: str,
@@ -325,6 +363,7 @@ def publication_pack_command_field_mismatches(
             "expected_values": expected_values,
             "actual_values": actual_values,
         })
+    mismatches.extend(unexpected_command_token_mismatches(tokens, checks))
     return mismatches
 
 
@@ -346,6 +385,15 @@ def core_command_option_checks(
             })
         add_scalar_option_check(
             command_checks, "--claims", claims_ledger, required=True)
+        add_scalar_option_check(
+            command_checks, "--oracle-out", "/tmp/oracle_scene.json",
+            required=True)
+        add_scalar_option_check(
+            command_checks, "--claims-out", "/tmp/claims_evidence.json",
+            required=True)
+        add_scalar_option_check(
+            command_checks, "--icc-out", "/tmp/qge_icc_evidence.json",
+            required=True)
         checks["tools/qge_oracle_export.py "] = command_checks
 
     benchmark = dict_or_empty(source_inputs.get("advantage_benchmark"))
@@ -383,10 +431,17 @@ def core_command_option_checks(
     if vanilla_source is None and source_inputs.get("vanilla_matrix"):
         vanilla_source = str(Path(str(source_inputs["vanilla_matrix"])).parent)
     if vanilla_source is not None:
-        checks["tools/qge_vanilla_capture_matrix.py "] = [{
+        vanilla_checks = [{
             "position": 1,
             "expected_values": [str(vanilla_source)],
         }]
+        add_scalar_option_check(
+            vanilla_checks, "--out", "/tmp/vanilla_capture_matrix.json",
+            required=True)
+        add_scalar_option_check(
+            vanilla_checks, "--icc-out",
+            "/tmp/qge_vanilla_icc_evidence.json", required=True)
+        checks["tools/qge_vanilla_capture_matrix.py "] = vanilla_checks
 
     breadth_plan = dict_or_empty(
         source_inputs.get("breadth_evidence_reproduction"))
@@ -409,6 +464,12 @@ def core_command_option_checks(
         add_scalar_option_check(
             breadth_checks, "--map-set",
             breadth_plan.get("map_set"), required=True)
+        add_scalar_option_check(
+            breadth_checks, "--out", "/tmp/breadth_evidence.json",
+            required=True)
+        add_scalar_option_check(
+            breadth_checks, "--icc-out", "/tmp/qge_breadth_icc_evidence.json",
+            required=True)
         checks["tools/qge_breadth_evidence.py "] = breadth_checks
 
     intake_plan = dict_or_empty(
@@ -454,6 +515,19 @@ def core_command_option_checks(
         add_scalar_option_check(
             intake_checks, "--map-set",
             intake_plan.get("map_set"), required=True)
+        add_scalar_option_check(
+            intake_checks, "--json",
+            "/tmp/qge_registered_asset_intake.json", required=True)
+        add_scalar_option_check(
+            intake_checks, "--markdown",
+            "/tmp/qge_registered_asset_intake.md", required=True)
+        add_scalar_option_check(
+            intake_checks, "--script-out",
+            "/tmp/install_registered_assets.sh", required=True)
+        add_scalar_option_check(
+            intake_checks, "--icc-json",
+            "/tmp/qge_registered_asset_intake_icc_evidence.json",
+            required=True)
         checks["tools/qge_registered_asset_intake.py "] = intake_checks
 
     asset_root = source_inputs.get("asset_root")
@@ -463,6 +537,24 @@ def core_command_option_checks(
             checks["tools/qge_asset_requirements.py "],
             "--asset-root",
             asset_root,
+            required=True,
+        )
+        add_scalar_option_check(
+            checks["tools/qge_asset_requirements.py "],
+            "--json",
+            "/tmp/qge_asset_requirements.json",
+            required=True,
+        )
+        add_scalar_option_check(
+            checks["tools/qge_asset_requirements.py "],
+            "--markdown",
+            "/tmp/qge_asset_requirements.md",
+            required=True,
+        )
+        add_scalar_option_check(
+            checks["tools/qge_asset_requirements.py "],
+            "--icc-json",
+            "/tmp/qge_asset_requirements_icc_evidence.json",
             required=True,
         )
     checks.update({

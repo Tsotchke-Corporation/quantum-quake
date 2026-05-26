@@ -1964,6 +1964,46 @@ class PublicationPackTests(unittest.TestCase):
             for field in item.get("field_mismatches", [])
         ))
 
+        extra_pack_manifest = json.loads(json.dumps(manifest))
+        extra_pack_manifest["reproduce_commands"] = [
+            (
+                command + " stale-extra"
+                if command.startswith("tools/qge_publication_pack.py ")
+                else command
+            )
+            for command in extra_pack_manifest["reproduce_commands"]
+        ]
+        extra_pack_audit = manifest_reproduce_audit.manifest_reproduce_audit(
+            extra_pack_manifest)
+        self.assertFalse(extra_pack_audit["passed"])
+        self.assertTrue(any(
+            field.get("reason") == "unexpected_token" and
+            field.get("actual_values") == ["stale-extra"]
+            for item in extra_pack_audit["publication_pack_source_mismatches"]
+            for field in item.get("field_mismatches", [])
+        ))
+
+        boolean_value_manifest = json.loads(json.dumps(manifest))
+        boolean_value_manifest["reproduce_commands"] = [
+            (
+                command + " false"
+                if command.startswith("tools/qge_postpack_audit.py ")
+                else command
+            )
+            for command in boolean_value_manifest["reproduce_commands"]
+        ]
+        boolean_value_audit = (
+            manifest_reproduce_audit.manifest_reproduce_audit(
+                boolean_value_manifest))
+        self.assertFalse(boolean_value_audit["passed"])
+        self.assertTrue(any(
+            field.get("reason") == "unexpected_token" and
+            field.get("actual_values") == ["false"]
+            for item in boolean_value_audit[
+                "postpack_command_source_mismatches"]
+            for field in item.get("field_mismatches", [])
+        ))
+
     def test_resource_boundary_audit_from_manifest_detects_stale_ledgers(
         self,
     ) -> None:
