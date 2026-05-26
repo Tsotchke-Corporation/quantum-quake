@@ -316,6 +316,7 @@ python3 "$repo_root/tools/qge_publication_pack.py" \
 
 python3 - "$pack_dir/publication_manifest.json" "$pack_dir/qge_publication_icc_evidence.json" <<'PY'
 import json
+import shlex
 import sys
 
 manifest = json.load(open(sys.argv[1], encoding="utf-8"))
@@ -598,6 +599,31 @@ assert any(
     "qge_postpack_audit.py" in command
     for command in manifest["reproduce_commands"]
 )
+pack_commands = [
+    command for command in manifest["reproduce_commands"]
+    if command.startswith("tools/qge_publication_pack.py ")
+]
+assert len(pack_commands) == 1
+pack_tokens = shlex.split(pack_commands[0])
+source_inputs = manifest["source_inputs"]
+for option, expected in (
+    ("--capture-dir", source_inputs["capture_dir"]),
+    ("--vanilla-matrix", source_inputs["vanilla_matrix"]),
+    ("--agent-stream-dir", source_inputs["agent_stream_dir"]),
+    ("--asset-root", source_inputs["asset_root"]),
+    ("--claims", source_inputs["claims_ledger"]),
+    ("--seed", "1337"),
+    ("--trials", "1"),
+    ("--qae-levels", "2"),
+    ("--qae-shots", "4"),
+    ("--qae-grid-steps", "64"),
+    ("--contribution-bits", "4"),
+):
+    index = pack_tokens.index(option)
+    assert pack_tokens[index + 1] == str(expected)
+assert pack_tokens.count("--samples") == 1
+assert pack_tokens[pack_tokens.index("--samples") + 1] == "4"
+assert "<trace_capture_dir>" not in pack_commands[0]
 PY
 
 python3 "$repo_root/tools/qge_publication_icc_audit.py" "$pack_dir" \

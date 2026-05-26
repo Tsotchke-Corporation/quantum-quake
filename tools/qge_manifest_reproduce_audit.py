@@ -87,6 +87,10 @@ def command_matches(commands: list[str], prefix: str) -> bool:
     return any(command.startswith(prefix) for command in commands)
 
 
+def commands_with_prefix(commands: list[str], prefix: str) -> list[str]:
+    return [command for command in commands if command.startswith(prefix)]
+
+
 def duplicate_commands(commands: list[str]) -> list[str]:
     seen: set[str] = set()
     duplicates: list[str] = []
@@ -112,6 +116,189 @@ def unsafe_command_reasons(command: str) -> list[str]:
     if not tokens[0].startswith("tools/"):
         reasons.append("non_tools_command")
     return reasons
+
+
+def list_or_empty(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def option_values(tokens: list[str], option: str) -> list[str]:
+    values = []
+    for index, token in enumerate(tokens):
+        if token != option:
+            continue
+        if index + 1 < len(tokens):
+            values.append(tokens[index + 1])
+        else:
+            values.append("")
+    return values
+
+
+def add_scalar_option_check(
+    checks: list[dict[str, Any]],
+    option: str,
+    expected: Any,
+    *,
+    required: bool,
+) -> None:
+    if expected is None and not required:
+        checks.append({
+            "option": option,
+            "expected_values": [],
+            "required": False,
+        })
+        return
+    if expected is None:
+        return
+    checks.append({
+        "option": option,
+        "expected_values": [str(expected)],
+        "required": required,
+    })
+
+
+def publication_pack_option_checks(
+    manifest: dict[str, Any],
+) -> list[dict[str, Any]]:
+    source_inputs = dict_or_empty(manifest.get("source_inputs"))
+    if not source_inputs:
+        return []
+    checks: list[dict[str, Any]] = []
+    add_scalar_option_check(
+        checks, "--capture-dir", source_inputs.get("capture_dir"),
+        required=True)
+    add_scalar_option_check(
+        checks, "--vanilla-matrix", source_inputs.get("vanilla_matrix"),
+        required=True)
+    add_scalar_option_check(
+        checks, "--graphics-capture-dir",
+        source_inputs.get("graphics_capture_dir"), required=False)
+    add_scalar_option_check(
+        checks, "--agent-stream-dir", source_inputs.get("agent_stream_dir"),
+        required=False)
+    add_scalar_option_check(
+        checks, "--breadth-evidence", source_inputs.get("breadth_evidence"),
+        required=False)
+    add_scalar_option_check(
+        checks, "--asset-root", source_inputs.get("asset_root"),
+        required=True)
+    for option, field in (
+        ("--registered-asset-candidate", "registered_asset_candidates"),
+        ("--registered-asset-discover-root", "registered_asset_discover_roots"),
+    ):
+        checks.append({
+            "option": option,
+            "expected_values": [
+                str(value) for value in list_or_empty(source_inputs.get(field))
+            ],
+            "required": False,
+        })
+    checks.append({
+        "option": "--registered-asset-discover-common",
+        "expected_present": bool(
+            source_inputs.get("registered_asset_discover_common")),
+        "boolean": True,
+    })
+    add_scalar_option_check(
+        checks,
+        "--registered-asset-discover-max-depth",
+        source_inputs.get("registered_asset_discover_max_depth"),
+        required=True,
+    )
+    add_scalar_option_check(
+        checks, "--claims", source_inputs.get("claims_ledger"),
+        required=True)
+    benchmark = dict_or_empty(source_inputs.get("advantage_benchmark"))
+    for option, field in (
+        ("--seed", "seed"),
+        ("--trials", "trials"),
+        ("--qae-levels", "qae_levels"),
+        ("--qae-shots", "qae_shots"),
+        ("--qae-grid-steps", "qae_grid_steps"),
+        ("--contribution-bits", "contribution_bits"),
+    ):
+        add_scalar_option_check(
+            checks, option, benchmark.get(field), required=True)
+    checks.append({
+        "option": "--samples",
+        "expected_values": [
+            str(value) for value in list_or_empty(benchmark.get("samples"))
+        ],
+        "required": True,
+    })
+    return checks
+
+
+def publication_pack_command_field_mismatches(
+    command: str,
+    checks: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    try:
+        tokens = shlex.split(command)
+    except ValueError as exc:
+        return [{
+            "option": None,
+            "reason": f"parse_error:{exc}",
+            "expected_values": [],
+            "actual_values": [],
+        }]
+    mismatches = []
+    for check in checks:
+        option = check["option"]
+        if check.get("boolean"):
+            expected_present = bool(check.get("expected_present"))
+            actual_present = option in tokens
+            if expected_present != actual_present:
+                mismatches.append({
+                    "option": option,
+                    "reason": "presence_mismatch",
+                    "expected_present": expected_present,
+                    "actual_present": actual_present,
+                })
+            continue
+        expected_values = [
+            str(value) for value in list_or_empty(check.get("expected_values"))
+        ]
+        actual_values = option_values(tokens, option)
+        if expected_values == actual_values:
+            continue
+        reason = "value_mismatch"
+        if expected_values and not actual_values:
+            reason = "missing_option"
+        elif not expected_values and actual_values:
+            reason = "unexpected_option"
+        mismatches.append({
+            "option": option,
+            "reason": reason,
+            "expected_values": expected_values,
+            "actual_values": actual_values,
+        })
+    return mismatches
+
+
+def publication_pack_source_mismatches(
+    manifest: dict[str, Any],
+    commands: list[str],
+) -> list[dict[str, Any]]:
+    checks = publication_pack_option_checks(manifest)
+    if not checks:
+        return []
+    pack_commands = commands_with_prefix(
+        commands, "tools/qge_publication_pack.py ")
+    if not pack_commands:
+        return []
+    per_command = [
+        {
+            "command": command,
+            "field_mismatches": publication_pack_command_field_mismatches(
+                command, checks),
+        }
+        for command in pack_commands
+    ]
+    return [
+        item for item in per_command
+        if item["field_mismatches"]
+    ]
 
 
 def manifest_reproduce_audit(
@@ -145,6 +332,8 @@ def manifest_reproduce_audit(
             "duplicate_commands": [],
             "unsafe_commands": [],
             "malformed_commands": [],
+            "publication_pack_command_count": 0,
+            "publication_pack_source_mismatches": [],
             "mismatch_count": 0,
             "passed": True,
         }
@@ -167,12 +356,19 @@ def manifest_reproduce_audit(
         for reasons in [unsafe_command_reasons(command)]
         if reasons
     ]
+    pack_source_mismatches = publication_pack_source_mismatches(
+        manifest_data, string_commands)
+    pack_source_mismatch_count = sum(
+        len(item.get("field_mismatches", []))
+        for item in pack_source_mismatches
+    )
     mismatch_count = (
         len(missing_required) +
         len(missing_postpack) +
         len(duplicates) +
         len(unsafe_commands) +
-        len(malformed_commands)
+        len(malformed_commands) +
+        pack_source_mismatch_count
     )
     passed = mismatch_count == 0 and (recorded or not required)
     return {
@@ -189,6 +385,9 @@ def manifest_reproduce_audit(
         "duplicate_commands": duplicates,
         "unsafe_commands": unsafe_commands,
         "malformed_commands": malformed_commands,
+        "publication_pack_command_count": len(commands_with_prefix(
+            string_commands, "tools/qge_publication_pack.py ")),
+        "publication_pack_source_mismatches": pack_source_mismatches,
         "mismatch_count": mismatch_count,
         "passed": passed,
     }

@@ -337,9 +337,10 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      artifact `source_path` provenance, packed source-copy artifacts must
      byte-compare back to those sources, and the manifest claim posture must
      stay consistent with the blocked deployment-gate claim flags. The manifest
-     reproduction command list must keep core command coverage and avoid unsafe
-     shell fragments, and the registered-asset install script must rebuild
-     from the packed intake ledger while retaining executable permissions.
+     reproduction command list must keep core command coverage, exact
+     publication-pack source flags, and avoid unsafe shell fragments; the
+     registered-asset install script must rebuild from the packed intake ledger
+     while retaining executable permissions.
      Packed advantage metrics, asset-resource ledgers, resource boundary
      ledgers, Moonlab full-game plan artifacts, Moonlab job plan artifacts,
      Moonlab advantage/control-plane artifacts, hardware handoff artifacts, and

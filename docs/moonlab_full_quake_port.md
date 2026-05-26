@@ -123,9 +123,9 @@ provenance, packed source-copy artifacts are byte-compared back to those
 sources, and the manifest claim posture is checked against the blocked
 deployment-gate claim flags before it is treated as safe publication wording.
 The manifest reproduction command list is checked for core and postpack audit
-coverage plus unsafe shell fragments, and the registered-asset install script is
-rebuilt from the packed intake ledger with its executable bit intact. A single
-postpack audit runner executes
+coverage, unsafe shell fragments, and exact publication-pack source flags; the
+registered-asset install script is rebuilt from the packed intake ledger with
+its executable bit intact. A single postpack audit runner executes
 the advertised verifier set before signoff, clearing each child audit output
 path first so stale verifier JSON cannot satisfy the run; the top-level
 publication ICC sidecar records the reproduce/postpack audit verdict. Packed

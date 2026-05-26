@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shlex
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -78,6 +79,59 @@ def advantage_benchmark_reproduce_command(args: argparse.Namespace) -> str:
         f"--qae-grid-steps {args.qae_grid_steps} "
         f"--contribution-bits {args.contribution_bits}"
     )
+
+
+def command_arg(value: Any) -> str:
+    return shlex.quote(str(value))
+
+
+def append_command_option(parts: list[str], option: str, value: Any) -> None:
+    if value is None:
+        return
+    parts.extend([option, command_arg(value)])
+
+
+def publication_pack_reproduce_command(
+    args: argparse.Namespace,
+    inputs: dict[str, Any],
+) -> str:
+    parts = [
+        "tools/qge_publication_pack.py",
+        "--outdir",
+        "<outdir>",
+    ]
+    append_command_option(parts, "--capture-dir", inputs.get("capture_dir"))
+    append_command_option(parts, "--vanilla-matrix",
+                          inputs.get("vanilla_matrix"))
+    append_command_option(parts, "--graphics-capture-dir",
+                          inputs.get("graphics_capture_dir"))
+    append_command_option(parts, "--agent-stream-dir",
+                          inputs.get("agent_stream_dir"))
+    append_command_option(parts, "--breadth-evidence",
+                          inputs.get("breadth_evidence"))
+    append_command_option(parts, "--asset-root", args.asset_root)
+    for candidate in getattr(args, "registered_asset_candidate", []) or []:
+        append_command_option(parts, "--registered-asset-candidate",
+                              candidate)
+    for root in getattr(args, "registered_asset_discover_root", []) or []:
+        append_command_option(parts, "--registered-asset-discover-root", root)
+    if getattr(args, "registered_asset_discover_common", False):
+        parts.append("--registered-asset-discover-common")
+    append_command_option(
+        parts,
+        "--registered-asset-discover-max-depth",
+        getattr(args, "registered_asset_discover_max_depth", None),
+    )
+    append_command_option(parts, "--claims", args.claims)
+    append_command_option(parts, "--seed", args.seed)
+    append_command_option(parts, "--trials", args.trials)
+    for samples in qge_advantage_benchmark.sample_counts(args):
+        append_command_option(parts, "--samples", samples)
+    append_command_option(parts, "--qae-levels", args.qae_levels)
+    append_command_option(parts, "--qae-shots", args.qae_shots)
+    append_command_option(parts, "--qae-grid-steps", args.qae_grid_steps)
+    append_command_option(parts, "--contribution-bits", args.contribution_bits)
+    return " ".join(parts)
 
 
 def sha256_file(path: Path) -> str | None:
@@ -1584,6 +1638,29 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "breadth_evidence": str(breadth_evidence)
             if breadth_evidence is not None else None,
             "claims_ledger": str(claims_path),
+            "asset_root": str(args.asset_root),
+            "registered_asset_candidates": [
+                str(path)
+                for path in getattr(args, "registered_asset_candidate", []) or []
+            ],
+            "registered_asset_discover_roots": [
+                str(path)
+                for path in (
+                    getattr(args, "registered_asset_discover_root", []) or [])
+            ],
+            "registered_asset_discover_common": bool(
+                getattr(args, "registered_asset_discover_common", False)),
+            "registered_asset_discover_max_depth": (
+                args.registered_asset_discover_max_depth),
+            "advantage_benchmark": {
+                "seed": args.seed,
+                "trials": args.trials,
+                "samples": qge_advantage_benchmark.sample_counts(args),
+                "qae_levels": args.qae_levels,
+                "qae_shots": args.qae_shots,
+                "qae_grid_steps": args.qae_grid_steps,
+                "contribution_bits": args.contribution_bits,
+            },
         },
         "artifacts": {
             "source_docs": source_docs,
@@ -2188,7 +2265,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_moonlab_qae_grover_plan.py --metrics <pack_dir>/advantage/advantage_metrics.json --oracle-scene <pack_dir>/oracle/oracle_scene.json --out /tmp/qae_moonlab_grover_schedule_plan.json --markdown /tmp/qae_moonlab_grover_schedule_plan.md --icc-json /tmp/qae_moonlab_grover_schedule_plan_icc_evidence.json",
             "tools/qge_vanilla_capture_matrix.py <graphics_capture_dir>",
             "tools/qge_breadth_evidence.py --matrix <graphics_capture_dir> --min-maps N",
-            "tools/qge_publication_pack.py --capture-dir <trace_capture_dir> --vanilla-matrix <graphics_capture_dir>/vanilla_capture_matrix.json --graphics-capture-dir <graphics_capture_dir> --breadth-evidence <breadth_dir>",
+            publication_pack_reproduce_command(args, inputs),
             "tools/qge_registered_asset_intake.py --current-root <asset_root> --candidate <quake_install_or_pak> --discover-common --json /tmp/qge_registered_asset_intake.json --markdown /tmp/qge_registered_asset_intake.md --script-out /tmp/install_registered_assets.sh --icc-json /tmp/qge_registered_asset_intake_icc_evidence.json",
             "tools/qge_registered_asset_script_audit.py <pack_dir> --out /tmp/qge_registered_asset_script_audit.json --fail-on-mismatch",
             "tools/qge_asset_requirements.py --asset-root <asset_root> --json /tmp/qge_asset_requirements.json --markdown /tmp/qge_asset_requirements.md --icc-json /tmp/qge_asset_requirements_icc_evidence.json",

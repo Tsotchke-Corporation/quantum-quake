@@ -272,6 +272,8 @@ grep -q 'REQUIRED_DISALLOWED_PHRASES' "$repo_root/tools/qge_manifest_claim_polic
 grep -q 'qge_manifest_claim_policy_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'manifest_reproduce_audit' "$repo_root/tools/qge_manifest_reproduce_audit.py"
 grep -q 'REQUIRED_REPRODUCE_COMMAND_PREFIXES' "$repo_root/tools/qge_manifest_reproduce_audit.py"
+grep -q 'publication_pack_source_mismatches' "$repo_root/tools/qge_manifest_reproduce_audit.py"
+grep -q 'publication_pack_reproduce_command' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'qge_manifest_reproduce_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'manifest_markdown_audit' "$repo_root/tools/qge_manifest_markdown_audit.py"
 grep -q 'markdown_content_mismatch' "$repo_root/tools/qge_manifest_markdown_audit.py"

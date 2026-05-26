@@ -1685,6 +1685,119 @@ class PublicationPackTests(unittest.TestCase):
         ))
         self.assertTrue(stale_audit["malformed_commands"])
 
+    def test_manifest_reproduce_audit_checks_publication_pack_sources(
+        self,
+    ) -> None:
+        args = SimpleNamespace(
+            asset_root=Path("assets/id1"),
+            registered_asset_candidate=[
+                Path("/tmp/Registered Quake/id1/pak1.pak"),
+            ],
+            registered_asset_discover_root=[
+                Path("/tmp/Registered Quake"),
+            ],
+            registered_asset_discover_common=True,
+            registered_asset_discover_max_depth=7,
+            claims=Path("docs/claims/qge_claims.json"),
+            seed=99,
+            trials=2,
+            samples=[4, 8],
+            qae_levels=3,
+            qae_shots=12,
+            qae_grid_steps=128,
+            contribution_bits=5,
+        )
+        inputs = {
+            "capture_dir": Path("diagnostics/quake_stream/run"),
+            "vanilla_matrix": Path(
+                "diagnostics/quake_graphics/run/vanilla_capture_matrix.json"),
+            "graphics_capture_dir": Path("diagnostics/quake_graphics/run"),
+            "agent_stream_dir": Path("diagnostics/agent_stream/run"),
+            "breadth_evidence": Path(
+                "diagnostics/breadth/run/breadth_evidence.json"),
+        }
+        pack_command = publication_pack.publication_pack_reproduce_command(
+            args, inputs)
+        commands = [
+            (
+                pack_command
+                if prefix == "tools/qge_publication_pack.py "
+                else f"{prefix}<arg>"
+            )
+            for prefix in (
+                manifest_reproduce_audit.REQUIRED_REPRODUCE_COMMAND_PREFIXES +
+                manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES)
+        ]
+        manifest = {
+            "source_inputs": {
+                "capture_dir": str(inputs["capture_dir"]),
+                "vanilla_matrix": str(inputs["vanilla_matrix"]),
+                "graphics_capture_dir": str(inputs["graphics_capture_dir"]),
+                "agent_stream_dir": str(inputs["agent_stream_dir"]),
+                "breadth_evidence": str(inputs["breadth_evidence"]),
+                "claims_ledger": str(args.claims),
+                "asset_root": str(args.asset_root),
+                "registered_asset_candidates": [
+                    str(path) for path in args.registered_asset_candidate
+                ],
+                "registered_asset_discover_roots": [
+                    str(path) for path in args.registered_asset_discover_root
+                ],
+                "registered_asset_discover_common": True,
+                "registered_asset_discover_max_depth": 7,
+                "advantage_benchmark": {
+                    "seed": args.seed,
+                    "trials": args.trials,
+                    "samples": args.samples,
+                    "qae_levels": args.qae_levels,
+                    "qae_shots": args.qae_shots,
+                    "qae_grid_steps": args.qae_grid_steps,
+                    "contribution_bits": args.contribution_bits,
+                },
+            },
+            "reproduce_commands": commands,
+        }
+
+        audit = manifest_reproduce_audit.manifest_reproduce_audit(manifest)
+        self.assertTrue(audit["passed"], audit)
+        self.assertEqual(audit["mismatch_count"], 0)
+        self.assertEqual(audit["publication_pack_command_count"], 1)
+        self.assertEqual(audit["publication_pack_source_mismatches"], [])
+
+        mixed_manifest = json.loads(json.dumps(manifest))
+        mixed_manifest["reproduce_commands"].append(
+            "tools/qge_publication_pack.py --capture-dir stale")
+        mixed_audit = manifest_reproduce_audit.manifest_reproduce_audit(
+            mixed_manifest)
+        self.assertFalse(mixed_audit["passed"])
+        self.assertEqual(mixed_audit["publication_pack_command_count"], 2)
+        self.assertTrue(mixed_audit["publication_pack_source_mismatches"])
+
+        stale_manifest = json.loads(json.dumps(manifest))
+        stale_manifest["reproduce_commands"] = [
+            (
+                "tools/qge_publication_pack.py --capture-dir stale"
+                if command.startswith("tools/qge_publication_pack.py ")
+                else command
+            )
+            for command in stale_manifest["reproduce_commands"]
+        ]
+        stale_audit = manifest_reproduce_audit.manifest_reproduce_audit(
+            stale_manifest)
+        self.assertFalse(stale_audit["passed"])
+        self.assertTrue(any(
+            field.get("option") == "--capture-dir" and
+            field.get("reason") == "value_mismatch"
+            for item in stale_audit["publication_pack_source_mismatches"]
+            for field in item.get("field_mismatches", [])
+        ))
+        self.assertTrue(any(
+            field.get("option") == "--vanilla-matrix" and
+            field.get("reason") == "missing_option"
+            for item in stale_audit["publication_pack_source_mismatches"]
+            for field in item.get("field_mismatches", [])
+        ))
+
     def test_resource_boundary_audit_from_manifest_detects_stale_ledgers(
         self,
     ) -> None:
