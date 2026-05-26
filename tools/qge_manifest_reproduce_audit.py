@@ -157,6 +157,13 @@ def add_scalar_option_check(
     })
 
 
+def position_check(position: int, expected: Any) -> dict[str, Any]:
+    return {
+        "position": position,
+        "expected_values": [str(expected)],
+    }
+
+
 def publication_pack_option_checks(
     manifest: dict[str, Any],
 ) -> list[dict[str, Any]]:
@@ -440,6 +447,239 @@ def core_command_option_checks(
             asset_root,
             required=True,
         )
+    checks.update({
+        "tools/qge_moonlab_qae_transpile.py ": [
+            {
+                "option": "--metrics",
+                "expected_values": [
+                    "<pack_dir>/advantage/advantage_metrics.json"],
+                "required": True,
+            },
+            {
+                "option": "--abstract-circuit",
+                "expected_values": ["<pack_dir>/advantage/qae_circuit.txt"],
+                "required": True,
+            },
+            {
+                "option": "--out",
+                "expected_values": ["/tmp/qae_moonlab_payload.json"],
+                "required": True,
+            },
+            {
+                "option": "--circuit-dir",
+                "expected_values": ["/tmp/moonlab_qae_circuits"],
+                "required": True,
+            },
+            {
+                "option": "--markdown",
+                "expected_values": ["/tmp/qae_moonlab_payload.md"],
+                "required": True,
+            },
+            {
+                "option": "--icc-json",
+                "expected_values": [
+                    "/tmp/qae_moonlab_payload_icc_evidence.json"],
+                "required": True,
+            },
+        ],
+        "tools/qge_moonlab_oracle_transpile.py ": [
+            {
+                "option": "--metrics",
+                "expected_values": [
+                    "<pack_dir>/advantage/advantage_metrics.json"],
+                "required": True,
+            },
+            {
+                "option": "--oracle-scene",
+                "expected_values": ["<pack_dir>/oracle/oracle_scene.json"],
+                "required": True,
+            },
+            {
+                "option": "--out",
+                "expected_values": ["/tmp/qae_moonlab_oracle_kernel.json"],
+                "required": True,
+            },
+            {
+                "option": "--circuit",
+                "expected_values": ["/tmp/qae_moonlab_oracle_kernel.moonlab"],
+                "required": True,
+            },
+            {
+                "option": "--markdown",
+                "expected_values": ["/tmp/qae_moonlab_oracle_kernel.md"],
+                "required": True,
+            },
+            {
+                "option": "--icc-json",
+                "expected_values": [
+                    "/tmp/qae_moonlab_oracle_kernel_icc_evidence.json"],
+                "required": True,
+            },
+        ],
+        "tools/qge_moonlab_qae_observation_transpile.py ": [
+            {
+                "option": "--metrics",
+                "expected_values": [
+                    "<pack_dir>/advantage/advantage_metrics.json"],
+                "required": True,
+            },
+            {
+                "option": "--oracle-scene",
+                "expected_values": ["<pack_dir>/oracle/oracle_scene.json"],
+                "required": True,
+            },
+            {
+                "option": "--out",
+                "expected_values": [
+                    "/tmp/qae_moonlab_observation_zero.json"],
+                "required": True,
+            },
+            {
+                "option": "--circuit",
+                "expected_values": [
+                    "/tmp/qae_moonlab_observation_zero.moonlab"],
+                "required": True,
+            },
+            {
+                "option": "--markdown",
+                "expected_values": ["/tmp/qae_moonlab_observation_zero.md"],
+                "required": True,
+            },
+            {
+                "option": "--icc-json",
+                "expected_values": [
+                    "/tmp/qae_moonlab_observation_zero_icc_evidence.json"],
+                "required": True,
+            },
+        ],
+        "tools/qge_moonlab_qae_grover_plan.py ": [
+            {
+                "option": "--metrics",
+                "expected_values": [
+                    "<pack_dir>/advantage/advantage_metrics.json"],
+                "required": True,
+            },
+            {
+                "option": "--oracle-scene",
+                "expected_values": ["<pack_dir>/oracle/oracle_scene.json"],
+                "required": True,
+            },
+            {
+                "option": "--out",
+                "expected_values": [
+                    "/tmp/qae_moonlab_grover_schedule_plan.json"],
+                "required": True,
+            },
+            {
+                "option": "--markdown",
+                "expected_values": [
+                    "/tmp/qae_moonlab_grover_schedule_plan.md"],
+                "required": True,
+            },
+            {
+                "option": "--icc-json",
+                "expected_values": [
+                    "/tmp/qae_moonlab_grover_schedule_plan_icc_evidence.json"],
+                "required": True,
+            },
+        ],
+        "tools/qge_moonlab_job_runner.py ": [
+            position_check(
+                1, "<pack_dir>/resource/qge_moonlab_job_specs.json"),
+            {
+                "option": "--out",
+                "expected_values": [
+                    "/tmp/qge_moonlab_job_results.verify.json"],
+                "required": True,
+            },
+            {
+                "option": "--expect",
+                "expected_values": [
+                    "<pack_dir>/resource/qge_moonlab_job_results.json"],
+                "required": True,
+            },
+            {
+                "option": "--plan-out",
+                "expected_values": [
+                    "/tmp/qge_moonlab_replay_plan.verify.json"],
+                "required": True,
+            },
+            {
+                "option": "--submission-out",
+                "expected_values": [
+                    "/tmp/qge_moonlab_submission_packet.verify.json"],
+                "required": True,
+            },
+        ],
+        "tools/qge_moonlab_submission_bundle.py ": [
+            position_check(
+                1, "<pack_dir>/resource/qge_moonlab_submission_packet.json"),
+            {
+                "option": "--out",
+                "expected_values": ["/tmp/qge_moonlab_submission_bundle.json"],
+                "required": True,
+            },
+            {
+                "option": "--markdown",
+                "expected_values": ["/tmp/qge_moonlab_submission_bundle.md"],
+                "required": True,
+            },
+            {
+                "option": "--icc-json",
+                "expected_values": [
+                    "/tmp/qge_moonlab_submission_bundle_icc_evidence.json"],
+                "required": True,
+            },
+        ],
+        "tools/qge_moonlab_hardware_ingest.py ": [
+            position_check(
+                1, "<pack_dir>/resource/qge_moonlab_submission_packet.json"),
+            {
+                "option": "--template-out",
+                "expected_values": [
+                    "/tmp/qge_moonlab_hardware_record.template.json"],
+                "required": True,
+            },
+        ],
+        "tools/qge_moonlab_full_game_plan.py ": [
+            position_check(1, "<pack_dir>"),
+            {
+                "option": "--out",
+                "expected_values": ["/tmp/qge_moonlab_full_game_plan.json"],
+                "required": True,
+            },
+            {
+                "option": "--markdown",
+                "expected_values": ["/tmp/qge_moonlab_full_game_plan.md"],
+                "required": True,
+            },
+            {
+                "option": "--icc-json",
+                "expected_values": [
+                    "/tmp/qge_moonlab_full_game_plan_icc_evidence.json"],
+                "required": True,
+            },
+        ],
+        "tools/qge_moonlab_deployment_gate.py ": [
+            position_check(1, "<pack_dir>"),
+            {
+                "option": "--out",
+                "expected_values": ["/tmp/qge_moonlab_deployment_gate.json"],
+                "required": True,
+            },
+            {
+                "option": "--markdown",
+                "expected_values": ["/tmp/qge_moonlab_deployment_gate.md"],
+                "required": True,
+            },
+            {
+                "option": "--icc-json",
+                "expected_values": [
+                    "/tmp/qge_moonlab_deployment_gate_icc_evidence.json"],
+                "required": True,
+            },
+        ],
+    })
     return checks
 
 

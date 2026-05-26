@@ -1723,6 +1723,41 @@ class PublicationPackTests(unittest.TestCase):
                 publication_pack.oracle_export_reproduce_command(args, inputs),
             "tools/qge_advantage_benchmark.py ":
                 publication_pack.advantage_benchmark_reproduce_command(args),
+            "tools/qge_moonlab_qae_transpile.py ": (
+                "tools/qge_moonlab_qae_transpile.py "
+                "--metrics <pack_dir>/advantage/advantage_metrics.json "
+                "--abstract-circuit <pack_dir>/advantage/qae_circuit.txt "
+                "--out /tmp/qae_moonlab_payload.json "
+                "--circuit-dir /tmp/moonlab_qae_circuits "
+                "--markdown /tmp/qae_moonlab_payload.md "
+                "--icc-json /tmp/qae_moonlab_payload_icc_evidence.json"
+            ),
+            "tools/qge_moonlab_oracle_transpile.py ": (
+                "tools/qge_moonlab_oracle_transpile.py "
+                "--metrics <pack_dir>/advantage/advantage_metrics.json "
+                "--oracle-scene <pack_dir>/oracle/oracle_scene.json "
+                "--out /tmp/qae_moonlab_oracle_kernel.json "
+                "--circuit /tmp/qae_moonlab_oracle_kernel.moonlab "
+                "--markdown /tmp/qae_moonlab_oracle_kernel.md "
+                "--icc-json /tmp/qae_moonlab_oracle_kernel_icc_evidence.json"
+            ),
+            "tools/qge_moonlab_qae_observation_transpile.py ": (
+                "tools/qge_moonlab_qae_observation_transpile.py "
+                "--metrics <pack_dir>/advantage/advantage_metrics.json "
+                "--oracle-scene <pack_dir>/oracle/oracle_scene.json "
+                "--out /tmp/qae_moonlab_observation_zero.json "
+                "--circuit /tmp/qae_moonlab_observation_zero.moonlab "
+                "--markdown /tmp/qae_moonlab_observation_zero.md "
+                "--icc-json /tmp/qae_moonlab_observation_zero_icc_evidence.json"
+            ),
+            "tools/qge_moonlab_qae_grover_plan.py ": (
+                "tools/qge_moonlab_qae_grover_plan.py "
+                "--metrics <pack_dir>/advantage/advantage_metrics.json "
+                "--oracle-scene <pack_dir>/oracle/oracle_scene.json "
+                "--out /tmp/qae_moonlab_grover_schedule_plan.json "
+                "--markdown /tmp/qae_moonlab_grover_schedule_plan.md "
+                "--icc-json /tmp/qae_moonlab_grover_schedule_plan_icc_evidence.json"
+            ),
             "tools/qge_vanilla_capture_matrix.py ":
                 publication_pack.vanilla_matrix_reproduce_command(inputs),
             "tools/qge_breadth_evidence.py ":
@@ -1733,6 +1768,38 @@ class PublicationPackTests(unittest.TestCase):
                     args, "canonical_registered_quake"),
             "tools/qge_asset_requirements.py ":
                 publication_pack.asset_requirements_reproduce_command(args),
+            "tools/qge_moonlab_job_runner.py ": (
+                "tools/qge_moonlab_job_runner.py "
+                "<pack_dir>/resource/qge_moonlab_job_specs.json "
+                "--out /tmp/qge_moonlab_job_results.verify.json "
+                "--expect <pack_dir>/resource/qge_moonlab_job_results.json "
+                "--plan-out /tmp/qge_moonlab_replay_plan.verify.json "
+                "--submission-out /tmp/qge_moonlab_submission_packet.verify.json"
+            ),
+            "tools/qge_moonlab_submission_bundle.py ": (
+                "tools/qge_moonlab_submission_bundle.py "
+                "<pack_dir>/resource/qge_moonlab_submission_packet.json "
+                "--out /tmp/qge_moonlab_submission_bundle.json "
+                "--markdown /tmp/qge_moonlab_submission_bundle.md "
+                "--icc-json /tmp/qge_moonlab_submission_bundle_icc_evidence.json"
+            ),
+            "tools/qge_moonlab_hardware_ingest.py ": (
+                "tools/qge_moonlab_hardware_ingest.py "
+                "<pack_dir>/resource/qge_moonlab_submission_packet.json "
+                "--template-out /tmp/qge_moonlab_hardware_record.template.json"
+            ),
+            "tools/qge_moonlab_full_game_plan.py ": (
+                "tools/qge_moonlab_full_game_plan.py <pack_dir> "
+                "--out /tmp/qge_moonlab_full_game_plan.json "
+                "--markdown /tmp/qge_moonlab_full_game_plan.md "
+                "--icc-json /tmp/qge_moonlab_full_game_plan_icc_evidence.json"
+            ),
+            "tools/qge_moonlab_deployment_gate.py ": (
+                "tools/qge_moonlab_deployment_gate.py <pack_dir> "
+                "--out /tmp/qge_moonlab_deployment_gate.json "
+                "--markdown /tmp/qge_moonlab_deployment_gate.md "
+                "--icc-json /tmp/qge_moonlab_deployment_gate_icc_evidence.json"
+            ),
         }
         commands = [
             exact_commands.get(prefix, f"{prefix}<arg>")
@@ -1802,6 +1869,8 @@ class PublicationPackTests(unittest.TestCase):
             "tools/qge_oracle_export.py stale --claims docs/claims/qge_claims.json")
         mixed_manifest["reproduce_commands"].append(
             "tools/qge_advantage_benchmark.py stale --outdir stale --seed 99")
+        mixed_manifest["reproduce_commands"].append(
+            "tools/qge_moonlab_qae_transpile.py --metrics stale")
         mixed_manifest["reproduce_commands"].append(
             "tools/qge_breadth_evidence.py --matrix stale --min-runs 1 --min-maps 1")
         mixed_manifest["reproduce_commands"].append(
