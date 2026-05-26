@@ -2561,12 +2561,16 @@ def build_icc_evidence(manifest: dict[str, Any],
             reproduce_audit.get("missing_postpack_commands", [])),
         "manifest_reproduce_unexpected_command_count": len(
             reproduce_audit.get("unexpected_commands", [])),
+        "manifest_reproduce_unsafe_command_count": len(
+            reproduce_audit.get("unsafe_commands", [])),
         "manifest_reproduce_missing_required_commands": (
             reproduce_audit.get("missing_required_commands")),
         "manifest_reproduce_missing_postpack_commands": (
             reproduce_audit.get("missing_postpack_commands")),
         "manifest_reproduce_unexpected_commands": (
             reproduce_audit.get("unexpected_commands")),
+        "manifest_reproduce_unsafe_commands": (
+            reproduce_audit.get("unsafe_commands")),
         "oracle_scene_file": artifacts["oracle"]["oracle_scene"]["path"],
         "claims_evidence_file": artifacts["oracle"]["claims_evidence"]["path"],
         "advantage_metrics_file": artifacts["advantage"]["metrics"]["path"],
