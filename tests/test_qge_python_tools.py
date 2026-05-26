@@ -1676,6 +1676,7 @@ class PublicationPackTests(unittest.TestCase):
             audit["postpack_command_count"],
             len(manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES),
         )
+        self.assertEqual(audit["unexpected_commands"], [])
 
         stale_manifest = json.loads(json.dumps(manifest))
         stale_manifest["reproduce_commands"] = [
@@ -1686,6 +1687,8 @@ class PublicationPackTests(unittest.TestCase):
         stale_manifest["reproduce_commands"].append(commands[0])
         stale_manifest["reproduce_commands"].append(commands[0])
         stale_manifest["reproduce_commands"].append("rm -rf /tmp/qge")
+        stale_manifest["reproduce_commands"].append(
+            "tools/qge_unexpected_audit.py --out /tmp/qge_unexpected.json")
         stale_manifest["reproduce_commands"].append(None)
         stale_audit = manifest_reproduce_audit.manifest_reproduce_audit(
             stale_manifest)
@@ -1704,6 +1707,10 @@ class PublicationPackTests(unittest.TestCase):
             "non_tools_command" in item.get("reasons", [])
             for item in stale_audit["unsafe_commands"]
         ))
+        self.assertIn(
+            "tools/qge_unexpected_audit.py --out /tmp/qge_unexpected.json",
+            stale_audit["unexpected_commands"],
+        )
         self.assertTrue(stale_audit["malformed_commands"])
 
     def test_manifest_reproduce_audit_checks_publication_pack_sources(
@@ -1878,6 +1885,7 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(audit["core_command_source_mismatches"], [])
         self.assertEqual(audit["postpack_command_source_mismatches"], [])
         self.assertEqual(audit["publication_pack_source_mismatches"], [])
+        self.assertEqual(audit["unexpected_commands"], [])
 
         with self.assertRaisesRegex(ValueError, "capture_dir"):
             publication_pack.oracle_export_reproduce_command(args, {})

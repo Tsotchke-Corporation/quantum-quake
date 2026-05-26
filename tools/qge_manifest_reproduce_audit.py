@@ -89,8 +89,23 @@ def command_matches(commands: list[str], prefix: str) -> bool:
     return any(command.startswith(prefix) for command in commands)
 
 
+def expected_reproduce_command_prefixes() -> tuple[str, ...]:
+    return (
+        REQUIRED_REPRODUCE_COMMAND_PREFIXES +
+        POSTPACK_REPRODUCE_COMMAND_PREFIXES
+    )
+
+
 def commands_with_prefix(commands: list[str], prefix: str) -> list[str]:
     return [command for command in commands if command.startswith(prefix)]
+
+
+def unexpected_reproduce_commands(commands: list[str]) -> list[str]:
+    expected_prefixes = expected_reproduce_command_prefixes()
+    return [
+        command for command in commands
+        if not any(command.startswith(prefix) for prefix in expected_prefixes)
+    ]
 
 
 def duplicate_commands(commands: list[str]) -> list[str]:
@@ -903,6 +918,7 @@ def manifest_reproduce_audit(
             "missing_required_commands": [],
             "missing_postpack_commands": [],
             "missing_optional_postpack_commands": [],
+            "unexpected_commands": [],
             "duplicate_commands": [],
             "unsafe_commands": [],
             "malformed_commands": [],
@@ -922,6 +938,7 @@ def manifest_reproduce_audit(
         prefix for prefix in POSTPACK_REPRODUCE_COMMAND_PREFIXES
         if not command_matches(string_commands, prefix)
     ]
+    unexpected_commands = unexpected_reproduce_commands(string_commands)
     duplicates = duplicate_commands(string_commands)
     unsafe_commands = [
         {
@@ -953,6 +970,7 @@ def manifest_reproduce_audit(
     mismatch_count = (
         len(missing_required) +
         len(missing_postpack) +
+        len(unexpected_commands) +
         len(duplicates) +
         len(unsafe_commands) +
         len(malformed_commands) +
@@ -972,6 +990,7 @@ def manifest_reproduce_audit(
         "missing_required_commands": missing_required,
         "missing_postpack_commands": missing_postpack,
         "missing_optional_postpack_commands": missing_postpack,
+        "unexpected_commands": unexpected_commands,
         "duplicate_commands": duplicates,
         "unsafe_commands": unsafe_commands,
         "malformed_commands": malformed_commands,
