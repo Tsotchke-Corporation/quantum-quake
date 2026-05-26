@@ -2250,6 +2250,20 @@ class PublicationPackTests(unittest.TestCase):
 
             self.assertFalse(audit["passed"])
             self.assertEqual(audit["audit_count"], 2)
+            self.assertEqual(audit["requested_child_audit_count"], 2)
+            self.assertEqual(
+                audit["manifest_postpack_command_count"],
+                len(manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES),
+            )
+            self.assertEqual(
+                audit["default_child_audit_count"],
+                len(postpack_audit.POSTPACK_AUDIT_TOOLS),
+            )
+            self.assertEqual(
+                audit["skipped_self_audit_tool"],
+                postpack_audit.POSTPACK_SELF_AUDIT_TOOL,
+            )
+            self.assertEqual(audit["skipped_self_audit_count"], 1)
             self.assertEqual(audit["passed_count"], 1)
             self.assertEqual(audit["failed_count"], 1)
             self.assertEqual(audit["returncode_failure_count"], 1)
@@ -2295,6 +2309,20 @@ class PublicationPackTests(unittest.TestCase):
             )
 
             self.assertFalse(audit["passed"])
+            self.assertEqual(audit["requested_child_audit_count"], 1)
+            self.assertEqual(
+                audit["manifest_postpack_command_count"],
+                len(manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES),
+            )
+            self.assertEqual(
+                audit["default_child_audit_count"],
+                len(postpack_audit.POSTPACK_AUDIT_TOOLS),
+            )
+            self.assertEqual(
+                audit["skipped_self_audit_tool"],
+                postpack_audit.POSTPACK_SELF_AUDIT_TOOL,
+            )
+            self.assertEqual(audit["skipped_self_audit_count"], 1)
             self.assertEqual(audit["failed_tools"], ["tools/stale_audit.py"])
             self.assertEqual(audit["returncode_failure_count"], 0)
             self.assertEqual(audit["payload_failure_count"], 1)

@@ -18,10 +18,11 @@ if str(SCRIPT_DIR) not in sys.path:
 import qge_manifest_reproduce_audit  # noqa: E402
 
 
+POSTPACK_SELF_AUDIT_TOOL = "tools/qge_postpack_audit.py"
 POSTPACK_AUDIT_TOOLS = tuple(
     prefix.strip()
     for prefix in qge_manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES
-    if prefix.strip() != "tools/qge_postpack_audit.py"
+    if prefix.strip() != POSTPACK_SELF_AUDIT_TOOL
 )
 
 
@@ -180,6 +181,14 @@ def postpack_audit(
         "pack_dir": str(pack_dir),
         "outdir": str(outdir),
         "audit_count": len(results),
+        "requested_child_audit_count": len(audit_tools),
+        "manifest_postpack_command_count": len(
+            qge_manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES),
+        "default_child_audit_count": len(POSTPACK_AUDIT_TOOLS),
+        "skipped_self_audit_tool": POSTPACK_SELF_AUDIT_TOOL,
+        "skipped_self_audit_count": (
+            len(qge_manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES)
+            - len(POSTPACK_AUDIT_TOOLS)),
         "passed_count": len(results) - len(failed),
         "failed_count": len(failed),
         "returncode_failure_count": sum(
