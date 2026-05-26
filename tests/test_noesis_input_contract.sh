@@ -285,6 +285,8 @@ grep -q 'core_command_source_mismatches' "$repo_root/tools/qge_manifest_reproduc
 grep -q 'publication_pack_source_mismatches' "$repo_root/tools/qge_manifest_reproduce_audit.py"
 grep -q 'missing_expected_value' "$repo_root/tools/qge_manifest_reproduce_audit.py"
 grep -q 'missing_expected_values' "$repo_root/tools/qge_manifest_reproduce_audit.py"
+grep -q 'missing_source_inputs' "$repo_root/tools/qge_manifest_reproduce_audit.py"
+grep -q 'manifest_reproduce_missing_source_inputs' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'manifest_reproduce_optional_postpack_command_count' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'oracle_export_reproduce_command' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'ADVANTAGE_REPLAY_OUTDIR' "$repo_root/tools/qge_publication_pack.py"

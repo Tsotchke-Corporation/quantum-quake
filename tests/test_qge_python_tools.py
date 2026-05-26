@@ -1665,9 +1665,21 @@ class PublicationPackTests(unittest.TestCase):
             "reproduce_commands": commands,
         }
 
-        audit = manifest_reproduce_audit.manifest_reproduce_audit(manifest)
+        required_audit = manifest_reproduce_audit.manifest_reproduce_audit(
+            manifest)
+        self.assertFalse(required_audit["passed"])
+        self.assertFalse(required_audit["source_inputs_recorded"])
+        self.assertTrue(required_audit["missing_source_inputs"])
+        self.assertEqual(required_audit["mismatch_count"], 1)
+
+        audit = manifest_reproduce_audit.manifest_reproduce_audit(
+            manifest,
+            required=False,
+        )
         self.assertTrue(audit["passed"])
         self.assertEqual(audit["mismatch_count"], 0)
+        self.assertFalse(audit["source_inputs_recorded"])
+        self.assertFalse(audit["missing_source_inputs"])
         self.assertEqual(
             audit["required_command_count"],
             len(manifest_reproduce_audit.REQUIRED_REPRODUCE_COMMAND_PREFIXES),
@@ -1888,6 +1900,8 @@ class PublicationPackTests(unittest.TestCase):
         audit = manifest_reproduce_audit.manifest_reproduce_audit(manifest)
         self.assertTrue(audit["passed"], audit)
         self.assertEqual(audit["mismatch_count"], 0)
+        self.assertTrue(audit["source_inputs_recorded"])
+        self.assertFalse(audit["missing_source_inputs"])
         self.assertEqual(audit["publication_pack_command_count"], 1)
         self.assertEqual(audit["core_command_source_mismatches"], [])
         self.assertEqual(audit["postpack_command_source_mismatches"], [])
@@ -4721,6 +4735,162 @@ class PublicationPackTests(unittest.TestCase):
                 "breadth_evidence_ok": True,
             },
         }
+        reproduce_args = SimpleNamespace(
+            asset_root=Path("assets/id1"),
+            registered_asset_candidate=[],
+            registered_asset_discover_root=[],
+            registered_asset_discover_common=False,
+            registered_asset_discover_max_depth=5,
+            claims=Path("docs/claims/qge_claims.json"),
+            seed=1337,
+            trials=3,
+            samples=[16, 32, 64, 128],
+            qae_levels=4,
+            qae_shots=96,
+            qae_grid_steps=2048,
+            contribution_bits=8,
+        )
+        reproduce_inputs = {
+            "capture_dir": Path("diagnostics/quake_stream/run"),
+            "vanilla_matrix": Path(
+                "diagnostics/quake_graphics/run/vanilla_capture_matrix.json"),
+            "graphics_capture_dir": Path("diagnostics/quake_graphics/run"),
+            "agent_stream_dir": Path("diagnostics/agent_stream/run"),
+            "breadth_evidence": Path(
+                "diagnostics/breadth/run/breadth_evidence.json"),
+        }
+        manifest["source_inputs"] = {
+            "capture_dir": str(reproduce_inputs["capture_dir"]),
+            "vanilla_matrix": str(reproduce_inputs["vanilla_matrix"]),
+            "graphics_capture_dir": str(
+                reproduce_inputs["graphics_capture_dir"]),
+            "agent_stream_dir": str(reproduce_inputs["agent_stream_dir"]),
+            "breadth_evidence": str(reproduce_inputs["breadth_evidence"]),
+            "publication_pack_reproduction": {
+                "outdir": publication_pack.PUBLICATION_PACK_REPLAY_OUTDIR,
+            },
+            "breadth_evidence_reproduction": (
+                publication_pack.breadth_evidence_reproduction_inputs(
+                    reproduce_inputs)),
+            "claims_ledger": str(reproduce_args.claims),
+            "asset_root": str(reproduce_args.asset_root),
+            "registered_asset_intake_reproduction": (
+                publication_pack.registered_asset_intake_reproduction_inputs(
+                    reproduce_args, "canonical_registered_quake")),
+            "registered_asset_candidates": [],
+            "registered_asset_discover_roots": [],
+            "registered_asset_discover_common": False,
+            "registered_asset_discover_max_depth": 5,
+            "advantage_benchmark": {
+                "oracle_scene": publication_pack.PACK_ORACLE_SCENE,
+                "outdir": publication_pack.ADVANTAGE_REPLAY_OUTDIR,
+                "seed": reproduce_args.seed,
+                "trials": reproduce_args.trials,
+                "samples": reproduce_args.samples,
+                "qae_levels": reproduce_args.qae_levels,
+                "qae_shots": reproduce_args.qae_shots,
+                "qae_grid_steps": reproduce_args.qae_grid_steps,
+                "contribution_bits": reproduce_args.contribution_bits,
+            },
+        }
+        exact_commands = {
+            "tools/qge_oracle_export.py ": (
+                publication_pack.oracle_export_reproduce_command(
+                    reproduce_args, reproduce_inputs)),
+            "tools/qge_advantage_benchmark.py ": (
+                publication_pack.advantage_benchmark_reproduce_command(
+                    reproduce_args)),
+            "tools/qge_moonlab_qae_transpile.py ": (
+                "tools/qge_moonlab_qae_transpile.py "
+                "--metrics <pack_dir>/advantage/advantage_metrics.json "
+                "--abstract-circuit <pack_dir>/advantage/qae_circuit.txt "
+                "--out /tmp/qae_moonlab_payload.json "
+                "--circuit-dir /tmp/moonlab_qae_circuits "
+                "--markdown /tmp/qae_moonlab_payload.md "
+                "--icc-json /tmp/qae_moonlab_payload_icc_evidence.json"
+            ),
+            "tools/qge_moonlab_oracle_transpile.py ": (
+                "tools/qge_moonlab_oracle_transpile.py "
+                "--metrics <pack_dir>/advantage/advantage_metrics.json "
+                "--oracle-scene <pack_dir>/oracle/oracle_scene.json "
+                "--out /tmp/qae_moonlab_oracle_kernel.json "
+                "--circuit /tmp/qae_moonlab_oracle_kernel.moonlab "
+                "--markdown /tmp/qae_moonlab_oracle_kernel.md "
+                "--icc-json /tmp/qae_moonlab_oracle_kernel_icc_evidence.json"
+            ),
+            "tools/qge_moonlab_qae_observation_transpile.py ": (
+                "tools/qge_moonlab_qae_observation_transpile.py "
+                "--metrics <pack_dir>/advantage/advantage_metrics.json "
+                "--oracle-scene <pack_dir>/oracle/oracle_scene.json "
+                "--out /tmp/qae_moonlab_observation_zero.json "
+                "--circuit /tmp/qae_moonlab_observation_zero.moonlab "
+                "--markdown /tmp/qae_moonlab_observation_zero.md "
+                "--icc-json /tmp/qae_moonlab_observation_zero_icc_evidence.json"
+            ),
+            "tools/qge_moonlab_qae_grover_plan.py ": (
+                "tools/qge_moonlab_qae_grover_plan.py "
+                "--metrics <pack_dir>/advantage/advantage_metrics.json "
+                "--oracle-scene <pack_dir>/oracle/oracle_scene.json "
+                "--out /tmp/qae_moonlab_grover_schedule_plan.json "
+                "--markdown /tmp/qae_moonlab_grover_schedule_plan.md "
+                "--icc-json /tmp/qae_moonlab_grover_schedule_plan_icc_evidence.json"
+            ),
+            "tools/qge_vanilla_capture_matrix.py ": (
+                publication_pack.vanilla_matrix_reproduce_command(
+                    reproduce_inputs)),
+            "tools/qge_breadth_evidence.py ": (
+                publication_pack.breadth_evidence_reproduce_command(
+                    reproduce_inputs)),
+            "tools/qge_publication_pack.py ": (
+                publication_pack.publication_pack_reproduce_command(
+                    reproduce_args, reproduce_inputs)),
+            "tools/qge_registered_asset_intake.py ": (
+                publication_pack.registered_asset_intake_reproduce_command(
+                    reproduce_args, "canonical_registered_quake")),
+            "tools/qge_asset_requirements.py ": (
+                publication_pack.asset_requirements_reproduce_command(
+                    reproduce_args)),
+            "tools/qge_moonlab_job_runner.py ": (
+                "tools/qge_moonlab_job_runner.py "
+                "<pack_dir>/resource/qge_moonlab_job_specs.json "
+                "--out /tmp/qge_moonlab_job_results.verify.json "
+                "--expect <pack_dir>/resource/qge_moonlab_job_results.json "
+                "--plan-out /tmp/qge_moonlab_replay_plan.verify.json "
+                "--submission-out /tmp/qge_moonlab_submission_packet.verify.json"
+            ),
+            "tools/qge_moonlab_submission_bundle.py ": (
+                "tools/qge_moonlab_submission_bundle.py "
+                "<pack_dir>/resource/qge_moonlab_submission_packet.json "
+                "--out /tmp/qge_moonlab_submission_bundle.json "
+                "--markdown /tmp/qge_moonlab_submission_bundle.md "
+                "--icc-json /tmp/qge_moonlab_submission_bundle_icc_evidence.json"
+            ),
+            "tools/qge_moonlab_hardware_ingest.py ": (
+                "tools/qge_moonlab_hardware_ingest.py "
+                "<pack_dir>/resource/qge_moonlab_submission_packet.json "
+                "--template-out /tmp/qge_moonlab_hardware_record.template.json"
+            ),
+            "tools/qge_moonlab_full_game_plan.py ": (
+                "tools/qge_moonlab_full_game_plan.py <pack_dir> "
+                "--out /tmp/qge_moonlab_full_game_plan.json "
+                "--markdown /tmp/qge_moonlab_full_game_plan.md "
+                "--icc-json /tmp/qge_moonlab_full_game_plan_icc_evidence.json"
+            ),
+            "tools/qge_moonlab_deployment_gate.py ": (
+                "tools/qge_moonlab_deployment_gate.py <pack_dir> "
+                "--out /tmp/qge_moonlab_deployment_gate.json "
+                "--markdown /tmp/qge_moonlab_deployment_gate.md "
+                "--icc-json /tmp/qge_moonlab_deployment_gate_icc_evidence.json"
+            ),
+        }
+        for prefix in manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES:
+            exact_commands[prefix] = exact_postpack_reproduce_command(prefix)
+        manifest["reproduce_commands"] = [
+            exact_commands[prefix]
+            for prefix in (
+                manifest_reproduce_audit.REQUIRED_REPRODUCE_COMMAND_PREFIXES +
+                manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES)
+        ]
         icc = publication_pack.build_icc_evidence(
             manifest,
             Path("publication_manifest.json"),
@@ -4758,6 +4928,8 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(icc["completion_reason"], "qge_publication_artifact_pack_complete")
         self.assertTrue(icc["manifest_reproduce_audit_passed"])
         self.assertTrue(icc["manifest_reproduce_recorded"])
+        self.assertTrue(icc["manifest_reproduce_source_inputs_recorded"])
+        self.assertFalse(icc["manifest_reproduce_missing_source_inputs"])
         self.assertEqual(icc["manifest_reproduce_mismatch_count"], 0)
         self.assertEqual(
             icc["manifest_reproduce_required_command_count"],

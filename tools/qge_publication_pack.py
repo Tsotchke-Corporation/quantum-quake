@@ -2554,6 +2554,10 @@ def build_icc_evidence(manifest: dict[str, Any],
         "publication_pack_dir": manifest["pack_dir"],
         "manifest_reproduce_audit_passed": reproduce_audit.get("passed"),
         "manifest_reproduce_recorded": reproduce_audit.get("recorded"),
+        "manifest_reproduce_source_inputs_recorded": (
+            reproduce_audit.get("source_inputs_recorded")),
+        "manifest_reproduce_missing_source_inputs": (
+            reproduce_audit.get("missing_source_inputs")),
         "manifest_reproduce_command_count": (
             reproduce_audit.get("command_count")),
         "manifest_reproduce_required_command_count": (

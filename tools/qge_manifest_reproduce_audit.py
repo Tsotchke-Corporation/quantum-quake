@@ -941,6 +941,9 @@ def manifest_reproduce_audit(
     required: bool = True,
 ) -> dict[str, Any]:
     manifest_data = dict_or_empty(manifest)
+    source_inputs_recorded = bool(dict_or_empty(
+        manifest_data.get("source_inputs")))
+    missing_source_inputs = required and not source_inputs_recorded
     raw_commands = manifest_data.get("reproduce_commands")
     commands = raw_commands if isinstance(raw_commands, list) else []
     string_commands = [
@@ -958,6 +961,8 @@ def manifest_reproduce_audit(
             "required": required,
             "recorded": False,
             "command_count": 0,
+            "source_inputs_recorded": source_inputs_recorded,
+            "missing_source_inputs": False,
             "required_command_count": len(REQUIRED_REPRODUCE_COMMAND_PREFIXES),
             "postpack_command_count": len(POSTPACK_REPRODUCE_COMMAND_PREFIXES),
             "missing_required_commands": [],
@@ -1018,6 +1023,7 @@ def manifest_reproduce_audit(
         for item in postpack_source_mismatches
     )
     mismatch_count = (
+        (1 if missing_source_inputs else 0) +
         len(missing_required) +
         len(missing_postpack) +
         len(unexpected_commands) +
@@ -1034,6 +1040,8 @@ def manifest_reproduce_audit(
         "required": required,
         "recorded": recorded,
         "command_count": len(string_commands),
+        "source_inputs_recorded": source_inputs_recorded,
+        "missing_source_inputs": missing_source_inputs,
         "required_command_count": len(REQUIRED_REPRODUCE_COMMAND_PREFIXES),
         "postpack_command_count": len(POSTPACK_REPRODUCE_COMMAND_PREFIXES),
         "optional_postpack_command_count": (
