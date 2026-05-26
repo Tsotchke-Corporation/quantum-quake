@@ -36,6 +36,7 @@ import qge_moonlab_deployment_gate as moonlab_deployment_gate  # noqa: E402
 import qge_moonlab_full_game_plan as moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest as moonlab_hardware_ingest  # noqa: E402
 import qge_moonlab_hardware_result_audit as moonlab_hardware_result_audit  # noqa: E402
+import qge_moonlab_job_plan_audit as moonlab_job_plan_audit  # noqa: E402
 import qge_moonlab_job_runner as moonlab_job_runner  # noqa: E402
 import qge_moonlab_circuit_file_audit as moonlab_circuit_file_audit  # noqa: E402
 import qge_moonlab_oracle_transpile as moonlab_oracle_transpile  # noqa: E402
@@ -3389,6 +3390,102 @@ class PublicationPackTests(unittest.TestCase):
                 ["moonlab_submission_contract"]
                 ["submission_mode"],
                 "moonlab_hardware_backend_handoff")
+            resource_envelope_path = jobs_tmp / "qge_resource_envelope.json"
+            publication_pack.write_json(
+                resource_envelope_path, resource_envelope)
+            job_manifest_path = jobs_tmp / "publication_manifest.json"
+            job_manifest = {
+                "schema": "qge.publication_pack.v0",
+                "artifacts": {
+                    "oracle": {
+                        "oracle_scene": {"path": str(oracle_scene_path)},
+                    },
+                    "advantage": {
+                        "metrics": {"path": str(advantage_metrics_path)},
+                        "qae_circuit": {"path": str(qae_circuit_path)},
+                        "qae_moonlab_payload": {
+                            "path": str(qae_moonlab_payload_path),
+                        },
+                        "qae_moonlab_oracle_kernel": {
+                            "path": str(qae_oracle_kernel_path),
+                        },
+                        "qae_moonlab_observation_zero": {
+                            "path": str(qae_observation_path),
+                        },
+                        "qae_moonlab_grover_schedule_plan": {
+                            "path": str(qae_grover_plan_path),
+                        },
+                    },
+                    "capture": {
+                        "trace": {"path": str(trace_path)},
+                        "frame": {"path": str(frame_path)},
+                        "performance_summary": {
+                            "path": str(performance_path),
+                        },
+                    },
+                    "vanilla": {
+                        "matrix": {"path": str(vanilla_matrix_path)},
+                    },
+                    "breadth": {
+                        "evidence": {"path": str(breadth_path)},
+                    },
+                    "resource": {
+                        "envelope": {"path": str(resource_envelope_path)},
+                        "full_game_map_coverage": {
+                            "path": str(full_game_path),
+                        },
+                        "asset_inventory": {
+                            "path": str(asset_inventory_path),
+                        },
+                        "asset_requirements": {
+                            "path": str(asset_requirements_path),
+                        },
+                        "registered_asset_intake": {
+                            "path": str(registered_asset_intake_path),
+                        },
+                        "moonlab_job_specs": {
+                            "path": str(moonlab_specs_path),
+                        },
+                        "moonlab_job_results": {
+                            "path": str(moonlab_results_path),
+                        },
+                        "moonlab_replay_plan": {
+                            "path": str(moonlab_replay_plan_path),
+                        },
+                        "moonlab_submission_packet": {
+                            "path": str(moonlab_submission_packet_path),
+                        },
+                    },
+                },
+            }
+            publication_pack.write_json(job_manifest_path, job_manifest)
+            job_plan_audit = moonlab_job_plan_audit.moonlab_job_plan_audit(
+                job_manifest,
+                manifest_path=job_manifest_path,
+            )
+            self.assertTrue(job_plan_audit["passed"], job_plan_audit)
+            self.assertEqual(job_plan_audit["mismatch_count"], 0)
+
+            stale_results = publication_pack.load_json(moonlab_results_path)
+            stale_results["completed_simulator_job_count"] = 0
+            stale_results["jobs"][1]["claim_posture"][
+                "hardware_quantum_advantage_claimed"] = True
+            publication_pack.write_json(moonlab_results_path, stale_results)
+            stale_job_plan_audit = (
+                moonlab_job_plan_audit.moonlab_job_plan_audit(
+                    job_manifest,
+                    manifest_path=job_manifest_path,
+                )
+            )
+            self.assertFalse(stale_job_plan_audit["passed"])
+            self.assertIn(
+                "completed_simulator_job_count",
+                stale_job_plan_audit["job_results_mismatches"],
+            )
+            self.assertTrue(any(
+                flag.get("flag") == "hardware_quantum_advantage_claimed"
+                for flag in stale_job_plan_audit["overclaim_flags"]
+            ))
 
         manifest = {
             "pack_dir": "pack",
