@@ -468,6 +468,8 @@ assert icc["manifest_reproduce_unsafe_command_count"] == 0
 assert icc["manifest_reproduce_unsafe_commands"] == []
 assert icc["manifest_reproduce_duplicate_command_count"] == 0
 assert icc["manifest_reproduce_duplicate_commands"] == []
+assert icc["manifest_reproduce_duplicate_command_prefix_count"] == 0
+assert icc["manifest_reproduce_duplicate_command_prefixes"] == []
 assert icc["manifest_reproduce_malformed_command_count"] == 0
 assert icc["manifest_reproduce_malformed_commands"] == []
 assert icc["manifest_reproduce_publication_pack_source_mismatch_count"] == 0

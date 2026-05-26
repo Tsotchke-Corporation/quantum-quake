@@ -2571,6 +2571,8 @@ def build_icc_evidence(manifest: dict[str, Any],
             reproduce_audit.get("unsafe_commands", [])),
         "manifest_reproduce_duplicate_command_count": len(
             reproduce_audit.get("duplicate_commands", [])),
+        "manifest_reproduce_duplicate_command_prefix_count": len(
+            reproduce_audit.get("duplicate_command_prefixes", [])),
         "manifest_reproduce_malformed_command_count": len(
             reproduce_audit.get("malformed_commands", [])),
         "manifest_reproduce_publication_pack_source_mismatch_count": sum(
@@ -2592,6 +2594,8 @@ def build_icc_evidence(manifest: dict[str, Any],
             reproduce_audit.get("unsafe_commands")),
         "manifest_reproduce_duplicate_commands": (
             reproduce_audit.get("duplicate_commands")),
+        "manifest_reproduce_duplicate_command_prefixes": (
+            reproduce_audit.get("duplicate_command_prefixes")),
         "manifest_reproduce_malformed_commands": (
             reproduce_audit.get("malformed_commands")),
         "manifest_reproduce_publication_pack_source_mismatches": (

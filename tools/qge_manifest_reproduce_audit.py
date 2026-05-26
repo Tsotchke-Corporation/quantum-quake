@@ -118,6 +118,18 @@ def duplicate_commands(commands: list[str]) -> list[str]:
     return duplicates
 
 
+def duplicate_command_prefixes(commands: list[str]) -> list[dict[str, Any]]:
+    duplicates = []
+    for prefix in expected_reproduce_command_prefixes():
+        matching_commands = commands_with_prefix(commands, prefix)
+        if len(matching_commands) > 1:
+            duplicates.append({
+                "prefix": prefix,
+                "commands": matching_commands,
+            })
+    return duplicates
+
+
 def unsafe_command_reasons(command: str) -> list[str]:
     reasons = [
         f"shell_fragment:{fragment}"
@@ -920,6 +932,7 @@ def manifest_reproduce_audit(
             "missing_optional_postpack_commands": [],
             "unexpected_commands": [],
             "duplicate_commands": [],
+            "duplicate_command_prefixes": [],
             "unsafe_commands": [],
             "malformed_commands": [],
             "core_command_source_mismatches": [],
@@ -940,6 +953,7 @@ def manifest_reproduce_audit(
     ]
     unexpected_commands = unexpected_reproduce_commands(string_commands)
     duplicates = duplicate_commands(string_commands)
+    duplicate_prefixes = duplicate_command_prefixes(string_commands)
     unsafe_commands = [
         {
             "command": command,
@@ -972,6 +986,7 @@ def manifest_reproduce_audit(
         len(missing_postpack) +
         len(unexpected_commands) +
         len(duplicates) +
+        len(duplicate_prefixes) +
         len(unsafe_commands) +
         len(malformed_commands) +
         pack_source_mismatch_count +
@@ -992,6 +1007,7 @@ def manifest_reproduce_audit(
         "missing_optional_postpack_commands": missing_postpack,
         "unexpected_commands": unexpected_commands,
         "duplicate_commands": duplicates,
+        "duplicate_command_prefixes": duplicate_prefixes,
         "unsafe_commands": unsafe_commands,
         "malformed_commands": malformed_commands,
         "core_command_source_mismatches": core_source_mismatches,

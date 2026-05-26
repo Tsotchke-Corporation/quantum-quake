@@ -1703,6 +1703,10 @@ class PublicationPackTests(unittest.TestCase):
         )
         self.assertIn(commands[0], stale_audit["duplicate_commands"])
         self.assertTrue(any(
+            item.get("prefix") == "tools/qge_oracle_export.py "
+            for item in stale_audit["duplicate_command_prefixes"]
+        ))
+        self.assertTrue(any(
             item.get("command") == "rm -rf /tmp/qge" and
             "non_tools_command" in item.get("reasons", [])
             for item in stale_audit["unsafe_commands"]
@@ -1886,6 +1890,24 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(audit["postpack_command_source_mismatches"], [])
         self.assertEqual(audit["publication_pack_source_mismatches"], [])
         self.assertEqual(audit["unexpected_commands"], [])
+
+        semantic_duplicate_manifest = json.loads(json.dumps(manifest))
+        semantic_duplicate_manifest["reproduce_commands"].append(
+            commands[0].replace(
+                str(inputs["capture_dir"]),
+                f"'{inputs['capture_dir']}'",
+                1,
+            ))
+        semantic_duplicate_audit = (
+            manifest_reproduce_audit.manifest_reproduce_audit(
+                semantic_duplicate_manifest))
+        self.assertFalse(semantic_duplicate_audit["passed"])
+        self.assertEqual(semantic_duplicate_audit["duplicate_commands"], [])
+        self.assertTrue(any(
+            item.get("prefix") == "tools/qge_oracle_export.py "
+            for item in semantic_duplicate_audit[
+                "duplicate_command_prefixes"]
+        ))
 
         with self.assertRaisesRegex(ValueError, "capture_dir"):
             publication_pack.oracle_export_reproduce_command(args, {})
@@ -4548,6 +4570,10 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(icc["manifest_reproduce_unsafe_commands"], [])
         self.assertEqual(icc["manifest_reproduce_duplicate_command_count"], 0)
         self.assertEqual(icc["manifest_reproduce_duplicate_commands"], [])
+        self.assertEqual(
+            icc["manifest_reproduce_duplicate_command_prefix_count"], 0)
+        self.assertEqual(
+            icc["manifest_reproduce_duplicate_command_prefixes"], [])
         self.assertEqual(icc["manifest_reproduce_malformed_command_count"], 0)
         self.assertEqual(icc["manifest_reproduce_malformed_commands"], [])
         self.assertEqual(
