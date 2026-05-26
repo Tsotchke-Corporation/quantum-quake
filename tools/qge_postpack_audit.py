@@ -59,6 +59,16 @@ def audit_command(tool: str, pack_dir: Path, out_path: Path) -> list[str]:
     ]
 
 
+def duplicate_audit_tools(audit_tools: tuple[str, ...]) -> list[str]:
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for tool in audit_tools:
+        if tool in seen and tool not in duplicates:
+            duplicates.append(tool)
+        seen.add(tool)
+    return duplicates
+
+
 def prepare_audit_output(out_path: Path) -> dict[str, Any]:
     if not out_path.exists() and not out_path.is_symlink():
         return {
@@ -175,20 +185,46 @@ def postpack_audit(
         ))
 
     failed = [item for item in results if not item.get("passed")]
-    passed = not failed and bool(results)
+    manifest_postpack_count = len(
+        qge_manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES)
+    default_child_count = len(POSTPACK_AUDIT_TOOLS)
+    skipped_self_count = manifest_postpack_count - default_child_count
+    missing_child_tools = [
+        tool for tool in POSTPACK_AUDIT_TOOLS
+        if tool not in audit_tools
+    ]
+    unexpected_child_tools = [
+        tool for tool in audit_tools
+        if tool not in POSTPACK_AUDIT_TOOLS
+    ]
+    duplicate_child_tools = duplicate_audit_tools(audit_tools)
+    coverage_failures = []
+    if skipped_self_count != 1:
+        coverage_failures.append("self_audit_exclusion_count_mismatch")
+    if missing_child_tools:
+        coverage_failures.append("missing_default_child_audit_tools")
+    if unexpected_child_tools:
+        coverage_failures.append("unexpected_child_audit_tools")
+    if duplicate_child_tools:
+        coverage_failures.append("duplicate_child_audit_tools")
+    child_coverage_passed = not coverage_failures
+    passed = child_coverage_passed and not failed and bool(results)
     return {
         "schema": "qge.postpack_audit.v0",
         "pack_dir": str(pack_dir),
         "outdir": str(outdir),
         "audit_count": len(results),
         "requested_child_audit_count": len(audit_tools),
-        "manifest_postpack_command_count": len(
-            qge_manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES),
-        "default_child_audit_count": len(POSTPACK_AUDIT_TOOLS),
+        "manifest_postpack_command_count": manifest_postpack_count,
+        "default_child_audit_count": default_child_count,
         "skipped_self_audit_tool": POSTPACK_SELF_AUDIT_TOOL,
-        "skipped_self_audit_count": (
-            len(qge_manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES)
-            - len(POSTPACK_AUDIT_TOOLS)),
+        "skipped_self_audit_count": skipped_self_count,
+        "missing_child_audit_tools": missing_child_tools,
+        "unexpected_child_audit_tools": unexpected_child_tools,
+        "duplicate_child_audit_tools": duplicate_child_tools,
+        "child_audit_coverage_passed": child_coverage_passed,
+        "coverage_failure_count": len(coverage_failures),
+        "coverage_failures": coverage_failures,
         "passed_count": len(results) - len(failed),
         "failed_count": len(failed),
         "returncode_failure_count": sum(

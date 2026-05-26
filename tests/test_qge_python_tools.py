@@ -2264,6 +2264,25 @@ class PublicationPackTests(unittest.TestCase):
                 postpack_audit.POSTPACK_SELF_AUDIT_TOOL,
             )
             self.assertEqual(audit["skipped_self_audit_count"], 1)
+            self.assertFalse(audit["child_audit_coverage_passed"])
+            self.assertEqual(audit["coverage_failure_count"], 2)
+            self.assertIn(
+                "missing_default_child_audit_tools",
+                audit["coverage_failures"],
+            )
+            self.assertIn(
+                "unexpected_child_audit_tools",
+                audit["coverage_failures"],
+            )
+            self.assertIn(
+                "tools/qge_oracle_scene_audit.py",
+                audit["missing_child_audit_tools"],
+            )
+            self.assertEqual(
+                audit["unexpected_child_audit_tools"],
+                ["tools/pass_audit.py", "tools/fail_audit.py"],
+            )
+            self.assertEqual(audit["duplicate_child_audit_tools"], [])
             self.assertEqual(audit["passed_count"], 1)
             self.assertEqual(audit["failed_count"], 1)
             self.assertEqual(audit["returncode_failure_count"], 1)
@@ -2323,6 +2342,20 @@ class PublicationPackTests(unittest.TestCase):
                 postpack_audit.POSTPACK_SELF_AUDIT_TOOL,
             )
             self.assertEqual(audit["skipped_self_audit_count"], 1)
+            self.assertFalse(audit["child_audit_coverage_passed"])
+            self.assertIn(
+                "missing_default_child_audit_tools",
+                audit["coverage_failures"],
+            )
+            self.assertIn(
+                "unexpected_child_audit_tools",
+                audit["coverage_failures"],
+            )
+            self.assertEqual(
+                audit["unexpected_child_audit_tools"],
+                ["tools/stale_audit.py"],
+            )
+            self.assertEqual(audit["duplicate_child_audit_tools"], [])
             self.assertEqual(audit["failed_tools"], ["tools/stale_audit.py"])
             self.assertEqual(audit["returncode_failure_count"], 0)
             self.assertEqual(audit["payload_failure_count"], 1)
@@ -2336,6 +2369,51 @@ class PublicationPackTests(unittest.TestCase):
                 audit["audits"][0]["load_error"],
                 "audit_output_missing",
             )
+
+    def test_postpack_audit_rejects_incomplete_child_coverage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            pack_dir = tmpdir / "pack"
+            outdir = tmpdir / "audits"
+            pack_dir.mkdir()
+
+            def passing_runner(command: list[str]) -> SimpleNamespace:
+                out_path = Path(command[command.index("--out") + 1])
+                out_path.write_text(
+                    json.dumps({
+                        "passed": True,
+                        "mismatch_count": 0,
+                    }, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            audit = postpack_audit.postpack_audit(
+                pack_dir,
+                outdir=outdir,
+                audit_tools=(
+                    "tools/qge_oracle_scene_audit.py",
+                    "tools/qge_oracle_scene_audit.py",
+                ),
+                runner=passing_runner,
+            )
+
+            self.assertFalse(audit["passed"])
+            self.assertEqual(audit["failed_count"], 0)
+            self.assertEqual(audit["passed_count"], 2)
+            self.assertFalse(audit["child_audit_coverage_passed"])
+            self.assertEqual(audit["duplicate_child_audit_tools"], [
+                "tools/qge_oracle_scene_audit.py",
+            ])
+            self.assertIn(
+                "missing_default_child_audit_tools",
+                audit["coverage_failures"],
+            )
+            self.assertIn(
+                "duplicate_child_audit_tools",
+                audit["coverage_failures"],
+            )
+            self.assertEqual(audit["coverage_failure_count"], 2)
 
     def test_manifest_markdown_audit_detects_stale_report(
         self,
