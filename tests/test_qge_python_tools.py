@@ -1116,10 +1116,15 @@ class PublicationPackTests(unittest.TestCase):
             source_stream = tmpdir / "source" / "agent_stream"
             source_capture = tmpdir / "source" / "quake_stream"
             packed_stream = tmpdir / "pack" / "agent_stream"
+            packed_capture = tmpdir / "pack" / "capture"
             packed_stream.mkdir(parents=True)
+            packed_capture.mkdir(parents=True)
 
             def source_path(relative: str) -> str:
                 return str(source_stream / relative)
+
+            def capture_path(relative: str) -> str:
+                return str(source_capture / relative)
 
             def write_packed(relative: str, text: str = "") -> None:
                 path = packed_stream / relative
@@ -1146,6 +1151,7 @@ class PublicationPackTests(unittest.TestCase):
                 "video/latest_frame.txt",
                 source_path("video/frames/frame_003.png") + "\n",
             )
+            (packed_capture / "qge_trace.bin").write_bytes(b"x" * 64)
             for index in range(1, 4):
                 write_packed(f"video/frames/frame_{index:03d}.png", "png")
 
@@ -1157,6 +1163,9 @@ class PublicationPackTests(unittest.TestCase):
                 "frames_requested": 3,
                 "frames_captured": 3,
                 "trace_requested": 1,
+                "trace": capture_path("qge_trace.bin"),
+                "trace_status": "complete",
+                "trace_bytes": 64,
                 "icc_evidence": source_path(
                     "qge_agent_stream_icc_evidence.jsonl"),
                 "run": {
@@ -1220,6 +1229,7 @@ class PublicationPackTests(unittest.TestCase):
                 agent_stream_manifest_audit.audit_agent_stream_manifest(
                     manifest,
                     packed_stream,
+                    packed_capture_dir=packed_capture,
                 )
             )
             self.assertTrue(audit["passed"])
@@ -1232,6 +1242,7 @@ class PublicationPackTests(unittest.TestCase):
                 agent_stream_manifest_audit.audit_agent_stream_manifest(
                     manifest,
                     packed_stream,
+                    packed_capture_dir=packed_capture,
                 )
             )
             self.assertFalse(stale_frame_sequence_audit["passed"])
@@ -1242,6 +1253,21 @@ class PublicationPackTests(unittest.TestCase):
             (packed_stream / "video/frames/frame_000.png").unlink()
             write_packed("video/frames/frame_001.png", "png")
 
+            stale_trace_manifest = json.loads(json.dumps(manifest))
+            stale_trace_manifest["trace_bytes"] = 63
+            stale_trace_audit = (
+                agent_stream_manifest_audit.audit_agent_stream_manifest(
+                    stale_trace_manifest,
+                    packed_stream,
+                    packed_capture_dir=packed_capture,
+                )
+            )
+            self.assertFalse(stale_trace_audit["passed"])
+            self.assertTrue(any(
+                item.get("name") == "agent_trace_bytes"
+                for item in stale_trace_audit["value_mismatches"]
+            ))
+
             stale_manifest = json.loads(json.dumps(manifest))
             stale_manifest["hardware_quantum_advantage_claimed"] = True
             write_packed("video/frame_count.txt", "2\n")
@@ -1251,6 +1277,7 @@ class PublicationPackTests(unittest.TestCase):
                 agent_stream_manifest_audit.audit_agent_stream_manifest(
                     stale_manifest,
                     packed_stream,
+                    packed_capture_dir=packed_capture,
                 )
             )
             self.assertFalse(stale_audit["passed"])

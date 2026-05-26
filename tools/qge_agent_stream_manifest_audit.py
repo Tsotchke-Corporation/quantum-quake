@@ -97,6 +97,33 @@ def packed_stream_path(
     return packed_stream_dir / relative
 
 
+def capture_relative_path(
+    manifest: dict[str, Any],
+    raw_path: Any,
+) -> Path | None:
+    raw = optional_str(raw_path)
+    capture_root = optional_str(manifest.get("capture_dir"))
+    if raw is None or capture_root is None:
+        return None
+    try:
+        return Path(raw).relative_to(Path(capture_root))
+    except ValueError:
+        return None
+
+
+def packed_capture_path(
+    manifest: dict[str, Any],
+    packed_capture_dir: Path | None,
+    raw_path: Any,
+) -> Path | None:
+    if packed_capture_dir is None:
+        return None
+    relative = capture_relative_path(manifest, raw_path)
+    if relative is None:
+        return None
+    return packed_capture_dir / relative
+
+
 def recursive_forbidden_flags(
     prefix: str,
     value: Any,
@@ -280,10 +307,38 @@ def audit_audio_files(
         )
 
 
+def audit_trace_files(
+    manifest: dict[str, Any],
+    packed_capture_dir: Path | None,
+    missing_files: list[dict[str, Any]],
+    value_mismatches: list[dict[str, Any]],
+) -> None:
+    trace_complete = (
+        truthy(manifest.get("trace_requested")) and
+        manifest.get("trace_status") == "complete"
+    )
+    if not trace_complete:
+        return
+    trace_path = packed_capture_path(
+        manifest,
+        packed_capture_dir,
+        manifest.get("trace"),
+    )
+    add_missing_file(missing_files, "agent_trace_file", trace_path)
+    if trace_path is not None and trace_path.is_file():
+        add_value_mismatch(
+            value_mismatches,
+            "agent_trace_bytes",
+            int_value(manifest.get("trace_bytes")),
+            trace_path.stat().st_size,
+        )
+
+
 def audit_agent_stream_manifest(
     agent_manifest: dict[str, Any] | None,
     packed_stream_dir: Path | None,
     *,
+    packed_capture_dir: Path | None = None,
     required: bool = True,
 ) -> dict[str, Any]:
     manifest = dict_or_empty(agent_manifest)
@@ -365,6 +420,8 @@ def audit_agent_stream_manifest(
     audit_video_files(manifest, packed_stream_dir, missing_files,
                       value_mismatches)
     audit_audio_files(manifest, packed_stream_dir, missing_files,
+                      value_mismatches)
+    audit_trace_files(manifest, packed_capture_dir, missing_files,
                       value_mismatches)
 
     if value_at(manifest, "performance", "status") == "complete":
@@ -463,6 +520,16 @@ def artifact_stream_directory(manifest: dict[str, Any]) -> str | None:
     return path if isinstance(path, str) and path else None
 
 
+def artifact_capture_trace(manifest: dict[str, Any]) -> str | None:
+    entry = dict_or_empty(
+        dict_or_empty(dict_or_empty(manifest.get("artifacts")).get(
+            "capture")).get("trace")
+    )
+    packed = dict_or_empty(entry.get("packed"))
+    path = packed.get("path") or entry.get("path")
+    return path if isinstance(path, str) and path else None
+
+
 def resolve_path(raw_path: str | None, *, base_dir: Path | None = None) -> Path | None:
     if not isinstance(raw_path, str) or not raw_path:
         return None
@@ -483,6 +550,10 @@ def audit_from_publication_manifest(
         artifact_stream_directory(manifest),
         base_dir=base_dir,
     )
+    capture_trace_path = resolve_path(
+        artifact_capture_trace(manifest),
+        base_dir=base_dir,
+    )
     agent_manifest_path = (
         stream_dir / "manifest.json" if stream_dir is not None else None
     )
@@ -494,6 +565,9 @@ def audit_from_publication_manifest(
     return audit_agent_stream_manifest(
         agent_manifest,
         stream_dir,
+        packed_capture_dir=(
+            capture_trace_path.parent
+            if capture_trace_path is not None else None),
         required=True,
     )
 

@@ -765,10 +765,10 @@ Known current visual state:
   (`qae_curve.csv`, `qae_circuit.txt`, and scaling summaries) are regenerated
   from `advantage_metrics.json` before they are treated as current. The packed
   agent-stream manifest is checked against packed frame files including the
-  exact `frame_001.png` through `frame_N.png` sequence, log, input,
-  trace-summary, performance, audio-byte, and Noesis files before stream status
-  evidence is accepted. The agent-stream ICC JSONL is rebuilt from that packed
-  agent manifest. The packed trace summary is regenerated from
+  exact `frame_001.png` through `frame_N.png` sequence, log, input, trace binary
+  byte count, trace-summary, performance, audio-byte, and Noesis files before
+  stream status evidence is accepted. The agent-stream ICC JSONL is rebuilt from
+  that packed agent manifest. The packed trace summary is regenerated from
   `capture/qge_trace.bin` before trace-derived runtime evidence is accepted.
   The primary packed vanilla matrix is rebuilt from its recorded capture
   directory before its conformance counters are accepted. Packed breadth

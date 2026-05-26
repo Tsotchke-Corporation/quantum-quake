@@ -160,6 +160,7 @@ grep -q 'qge_agent_stream_icc_audit.py <pack_dir>' "$repo_root/tools/qge_publica
 grep -q 'agent_stream_manifest_audit' "$repo_root/tools/qge_agent_stream_manifest_audit.py"
 grep -q 'video_frame_count_file_value' "$repo_root/tools/qge_agent_stream_manifest_audit.py"
 grep -q 'video_frame_sequence' "$repo_root/tools/qge_agent_stream_manifest_audit.py"
+grep -q 'agent_trace_bytes' "$repo_root/tools/qge_agent_stream_manifest_audit.py"
 grep -q 'qge_agent_stream_manifest_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'verify_sha256' "$repo_root/tools/qge_registered_asset_intake.py"
 grep -q 'qge_full_game_capture_queue.py' "$repo_root/tools/qge_registered_asset_intake.py"
