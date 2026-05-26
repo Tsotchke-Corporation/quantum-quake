@@ -4541,6 +4541,9 @@ class PublicationPackTests(unittest.TestCase):
             icc["manifest_reproduce_missing_required_command_count"], 0)
         self.assertEqual(
             icc["manifest_reproduce_missing_postpack_command_count"], 0)
+        self.assertEqual(
+            icc["manifest_reproduce_unexpected_command_count"], 0)
+        self.assertEqual(icc["manifest_reproduce_unexpected_commands"], [])
         self.assertTrue(icc["publication_ready_for_complete_claim"])
         self.assertEqual(
             icc["vanilla_icc_evidence_file"],

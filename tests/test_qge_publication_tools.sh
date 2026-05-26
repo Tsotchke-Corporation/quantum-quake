@@ -462,6 +462,8 @@ assert manifest["artifacts"]["vanilla"]["icc_evidence"]["packed"]["exists"] is T
 assert icc["completion_reason"] == "qge_publication_artifact_pack_complete"
 assert icc["runtime_backend"] == "qge_publication_pack"
 assert icc["publication_ready_for_complete_claim"] is True
+assert icc["manifest_reproduce_unexpected_command_count"] == 0
+assert icc["manifest_reproduce_unexpected_commands"] == []
 assert icc["resource_envelope_file"].endswith("resource/qge_resource_envelope.json")
 assert icc["full_game_map_coverage_file"].endswith("resource/qge_full_game_map_coverage.json")
 assert icc["full_game_map_coverage_status"] == "partial"
