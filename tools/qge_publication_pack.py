@@ -2184,6 +2184,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_agent_stream_icc_audit.py <pack_dir> --out /tmp/qge_agent_stream_icc_audit.json --fail-on-mismatch",
             "tools/qge_trace_summary_audit.py <pack_dir> --out /tmp/qge_trace_summary_audit.json --fail-on-mismatch",
             "tools/qge_breadth_evidence_audit.py <pack_dir> --out /tmp/qge_breadth_evidence_audit.json --fail-on-mismatch",
+            "tools/qge_asset_resource_audit.py <pack_dir> --out /tmp/qge_asset_resource_audit.json --fail-on-mismatch",
             "tools/qge_resource_boundary_audit.py <pack_dir> --out /tmp/qge_resource_boundary_audit.json --fail-on-mismatch",
             "tools/qge_moonlab_deployment_gate_audit.py <pack_dir> --out /tmp/qge_moonlab_deployment_gate_audit.json --fail-on-mismatch",
             "tools/qge_moonlab_job_plan_audit.py <pack_dir> --out /tmp/qge_moonlab_job_plan_audit.json --fail-on-mismatch",

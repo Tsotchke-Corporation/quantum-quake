@@ -26,6 +26,7 @@ import qge_agent_stream_icc_audit as agent_stream_icc_audit  # noqa: E402
 import qge_agent_stream_manifest_audit as agent_stream_manifest_audit  # noqa: E402
 import qge_asset_inventory as asset_inventory  # noqa: E402
 import qge_asset_requirements as asset_requirements  # noqa: E402
+import qge_asset_resource_audit as asset_resource_audit  # noqa: E402
 import qge_breadth_evidence as breadth_evidence  # noqa: E402
 import qge_breadth_evidence_audit as breadth_evidence_audit  # noqa: E402
 import qge_full_game_capture_queue as full_game_capture_queue  # noqa: E402
@@ -7819,6 +7820,123 @@ class BreadthEvidenceTests(unittest.TestCase):
                 "qge_registered_asset_intake.py",
                 cli_icc["candidate_discovery_command"],
             )
+
+    def test_asset_resource_audit_rebuilds_asset_ledgers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            pack_dir = tmpdir / "publication-pack"
+            resource_dir = pack_dir / "resource"
+            asset_root = tmpdir / "current-id1"
+            resource_dir.mkdir(parents=True)
+            asset_root.mkdir()
+            write_pak(asset_root / "pak0.pak", [
+                "maps/start.bsp",
+                "maps/e1m1.bsp",
+            ])
+            coverage = breadth_evidence.build_full_game_map_coverage([
+                "start",
+                "e1m1",
+            ])
+            inventory = asset_inventory.build_inventory(
+                asset_root,
+                map_set=coverage["map_set"],
+            )
+            requirements = asset_requirements.build_requirements(
+                inventory,
+                map_set=coverage["map_set"],
+            )
+            intake = registered_asset_intake.build_intake(
+                asset_root,
+                [],
+                map_set=coverage["map_set"],
+                publication_pack_dir=pack_dir,
+            )
+            coverage_path = resource_dir / "qge_full_game_map_coverage.json"
+            inventory_path = resource_dir / "qge_asset_inventory.json"
+            inventory_icc_path = (
+                resource_dir / "qge_asset_inventory_icc_evidence.json")
+            requirements_path = resource_dir / "qge_asset_requirements.json"
+            requirements_icc_path = (
+                resource_dir / "qge_asset_requirements_icc_evidence.json")
+            intake_path = resource_dir / "qge_registered_asset_intake.json"
+            intake_icc_path = (
+                resource_dir / "qge_registered_asset_intake_icc_evidence.json")
+            publication_pack.write_json(coverage_path, coverage)
+            publication_pack.write_json(inventory_path, inventory)
+            inventory_icc = asset_inventory.build_icc_evidence(inventory)
+            inventory_icc["asset_inventory_file"] = str(inventory_path)
+            publication_pack.write_json(inventory_icc_path, inventory_icc)
+            publication_pack.write_json(requirements_path, requirements)
+            publication_pack.write_json(
+                requirements_icc_path,
+                asset_requirements.build_icc_evidence(
+                    requirements,
+                    out_path=requirements_path,
+                ),
+            )
+            publication_pack.write_json(intake_path, intake)
+            publication_pack.write_json(
+                intake_icc_path,
+                registered_asset_intake.build_icc_evidence(
+                    intake,
+                    out_path=intake_path,
+                ),
+            )
+            manifest = {
+                "schema": "qge.publication_pack.v0",
+                "artifacts": {
+                    "resource": {
+                        "full_game_map_coverage": {
+                            "path": str(coverage_path),
+                        },
+                        "asset_inventory": {"path": str(inventory_path)},
+                        "asset_inventory_icc_evidence": {
+                            "path": str(inventory_icc_path),
+                        },
+                        "asset_requirements": {
+                            "path": str(requirements_path),
+                        },
+                        "asset_requirements_icc_evidence": {
+                            "path": str(requirements_icc_path),
+                        },
+                        "registered_asset_intake": {
+                            "path": str(intake_path),
+                        },
+                        "registered_asset_intake_icc_evidence": {
+                            "path": str(intake_icc_path),
+                        },
+                    },
+                },
+            }
+            manifest_path = pack_dir / "publication_manifest.json"
+            publication_pack.write_json(manifest_path, manifest)
+            audit = asset_resource_audit.asset_resource_audit(
+                manifest,
+                manifest_path=manifest_path,
+            )
+            self.assertTrue(audit["passed"], audit)
+            self.assertEqual(audit["recorded_artifact_count"], 6)
+            self.assertEqual(audit["mismatch_count"], 0)
+
+            stale_requirements = publication_pack.load_json(requirements_path)
+            stale_requirements["missing_map_count"] = 0
+            stale_requirements["claim_posture"][
+                "whole_game_hardware_execution_claimed"] = True
+            publication_pack.write_json(requirements_path, stale_requirements)
+            stale_audit = asset_resource_audit.asset_resource_audit(
+                manifest,
+                manifest_path=manifest_path,
+            )
+            self.assertFalse(stale_audit["passed"])
+            self.assertTrue(any(
+                item.get("artifact") == "resource.asset_requirements"
+                and "missing_map_count" in item.get("fields", [])
+                for item in stale_audit["artifact_mismatches"]
+            ))
+            self.assertTrue(any(
+                flag.get("flag") == "whole_game_hardware_execution_claimed"
+                for flag in stale_audit["overclaim_flags"]
+            ))
 
     def test_registered_asset_intake_discovers_candidate_roots(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
