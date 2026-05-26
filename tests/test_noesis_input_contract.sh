@@ -147,6 +147,7 @@ grep -q 'blocked_candidate_copy_plan' "$repo_root/tools/qge_registered_asset_int
 grep -q 'post_install_verification' "$repo_root/tools/qge_registered_asset_intake.py"
 grep -q 'registered_asset_script_audit' "$repo_root/tools/qge_registered_asset_script_audit.py"
 grep -q 'script_content_mismatch' "$repo_root/tools/qge_registered_asset_script_audit.py"
+grep -q 'script_not_executable' "$repo_root/tools/qge_registered_asset_script_audit.py"
 grep -q 'qge_registered_asset_script_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'moonlab_circuit_file_audit' "$repo_root/tools/qge_moonlab_circuit_file_audit.py"
 grep -q 'circuit_mismatches' "$repo_root/tools/qge_moonlab_circuit_file_audit.py"

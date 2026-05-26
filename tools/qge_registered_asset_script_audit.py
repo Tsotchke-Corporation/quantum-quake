@@ -61,6 +61,7 @@ def registered_asset_script_audit(
     script_text: str | None,
     *,
     script_path: str | None = None,
+    script_executable: bool | None = None,
     required: bool = True,
 ) -> dict[str, Any]:
     intake_data = dict_or_empty(intake)
@@ -70,6 +71,7 @@ def registered_asset_script_audit(
             "required": required,
             "recorded": False,
             "script_path": script_path,
+            "script_executable": script_executable,
             "expected_line_count": 0,
             "actual_line_count": 0,
             "mismatches": [],
@@ -90,11 +92,14 @@ def registered_asset_script_audit(
             "actual_sha256": sha256_text(actual),
             "first_line_mismatch": first_line_mismatch(expected, actual),
         })
+    if isinstance(script_text, str) and script_executable is False:
+        mismatches.append({"kind": "script_not_executable"})
     mismatch_count = len(mismatches)
     return {
         "required": required,
         "recorded": recorded,
         "script_path": script_path,
+        "script_executable": script_executable,
         "expected_line_count": len(expected.splitlines()),
         "actual_line_count": len(actual.splitlines()),
         "mismatches": mismatches,
@@ -151,10 +156,15 @@ def audit_from_manifest(
         script_path.read_text(encoding="utf-8")
         if script_path and script_path.is_file() else None
     )
+    script_executable = (
+        bool(script_path.stat().st_mode & 0o111)
+        if script_path and script_path.is_file() else None
+    )
     return registered_asset_script_audit(
         intake,
         script_text,
         script_path=str(script_path) if script_path is not None else None,
+        script_executable=script_executable,
         required=True,
     )
 

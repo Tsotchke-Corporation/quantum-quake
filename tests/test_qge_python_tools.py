@@ -1943,10 +1943,25 @@ class PublicationPackTests(unittest.TestCase):
                 intake,
                 script,
                 script_path="resource/install_registered_assets.sh",
+                script_executable=True,
             )
         )
         self.assertTrue(audit["passed"])
         self.assertEqual(audit["mismatch_count"], 0)
+
+        non_executable_audit = (
+            registered_asset_script_audit.registered_asset_script_audit(
+                intake,
+                script,
+                script_path="resource/install_registered_assets.sh",
+                script_executable=False,
+            )
+        )
+        self.assertFalse(non_executable_audit["passed"])
+        self.assertEqual(
+            non_executable_audit["mismatches"][0]["kind"],
+            "script_not_executable",
+        )
 
         stale_audit = (
             registered_asset_script_audit.registered_asset_script_audit(

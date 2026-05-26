@@ -339,7 +339,8 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      stay consistent with the blocked deployment-gate claim flags. The manifest
      reproduction command list must keep core command coverage and avoid unsafe
      shell fragments, and the registered-asset install script must rebuild
-     from the packed intake ledger. Packed Markdown evidence reports must
+     from the packed intake ledger while retaining executable permissions.
+     Packed Markdown evidence reports must
      regenerate from their source JSON ledgers, and Moonlab `.moonlab` circuit
      body files must match the size and SHA-256 recorded by their JSON ledgers.
      Generated advantage files (`qae_curve.csv`, `qae_circuit.txt`, and
