@@ -43,6 +43,7 @@ POSTPACK_REPRODUCE_COMMAND_PREFIXES = (
     "tools/qge_asset_resource_audit.py ",
     "tools/qge_registered_asset_script_audit.py ",
     "tools/qge_resource_boundary_audit.py ",
+    "tools/qge_moonlab_full_game_plan_audit.py ",
     "tools/qge_moonlab_deployment_gate_audit.py ",
     "tools/qge_moonlab_job_plan_audit.py ",
     "tools/qge_moonlab_handoff_audit.py ",

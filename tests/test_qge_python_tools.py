@@ -35,6 +35,7 @@ import qge_moonlab_advantage_icc_audit as moonlab_advantage_icc_audit  # noqa: E
 import qge_moonlab_deployment_gate_audit as moonlab_deployment_gate_audit  # noqa: E402
 import qge_moonlab_deployment_gate as moonlab_deployment_gate  # noqa: E402
 import qge_moonlab_full_game_plan as moonlab_full_game_plan  # noqa: E402
+import qge_moonlab_full_game_plan_audit as moonlab_full_game_plan_audit  # noqa: E402
 import qge_moonlab_handoff_audit as moonlab_handoff_audit  # noqa: E402
 import qge_moonlab_hardware_ingest as moonlab_hardware_ingest  # noqa: E402
 import qge_moonlab_hardware_result_audit as moonlab_hardware_result_audit  # noqa: E402
@@ -3440,8 +3441,34 @@ class PublicationPackTests(unittest.TestCase):
                     out_path=hardware_scope_path,
                 ),
             )
+            full_game_plan_path = (
+                jobs_tmp / "qge_moonlab_full_game_plan.json")
+            full_game_plan_icc_path = (
+                jobs_tmp / "qge_moonlab_full_game_plan_icc_evidence.json")
+            full_game_plan = moonlab_full_game_plan.build_plan(
+                publication_pack.load_json(full_game_path),
+                publication_pack.load_json(asset_inventory_path),
+                source_path=job_manifest_path,
+                breadth_evidence=publication_pack.load_json(breadth_path),
+                moonlab_job_results=moonlab_cli_results,
+                submission_packet=moonlab_submission_packet,
+                hardware_record_template=hardware_template,
+                registered_asset_intake=publication_pack.load_json(
+                    registered_asset_intake_path),
+            )
+            publication_pack.write_json(full_game_plan_path, full_game_plan)
+            publication_pack.write_json(
+                full_game_plan_icc_path,
+                moonlab_full_game_plan.build_icc_evidence(
+                    full_game_plan,
+                    out_path=full_game_plan_path,
+                ),
+            )
             job_manifest = {
                 "schema": "qge.publication_pack.v0",
+                "source_inputs": {
+                    "breadth_evidence": str(breadth_path),
+                },
                 "artifacts": {
                     "oracle": {
                         "oracle_scene": {"path": str(oracle_scene_path)},
@@ -3489,6 +3516,12 @@ class PublicationPackTests(unittest.TestCase):
                         "registered_asset_intake": {
                             "path": str(registered_asset_intake_path),
                         },
+                        "moonlab_full_game_plan": {
+                            "path": str(full_game_plan_path),
+                        },
+                        "moonlab_full_game_plan_icc_evidence": {
+                            "path": str(full_game_plan_icc_path),
+                        },
                         "moonlab_job_specs": {
                             "path": str(moonlab_specs_path),
                         },
@@ -3520,6 +3553,40 @@ class PublicationPackTests(unittest.TestCase):
                 },
             }
             publication_pack.write_json(job_manifest_path, job_manifest)
+            full_game_plan_audit = (
+                moonlab_full_game_plan_audit.full_game_plan_artifact_audit(
+                    job_manifest,
+                    manifest_path=job_manifest_path,
+                )
+            )
+            self.assertTrue(full_game_plan_audit["passed"],
+                            full_game_plan_audit)
+            self.assertEqual(full_game_plan_audit["mismatch_count"], 0)
+
+            stale_full_game_plan = publication_pack.load_json(
+                full_game_plan_path)
+            stale_full_game_plan["capture_required_map_count"] = 999
+            stale_full_game_plan["claim_posture"][
+                "whole_game_moonlab_deployment_claimed"] = True
+            publication_pack.write_json(full_game_plan_path,
+                                        stale_full_game_plan)
+            stale_full_game_plan_audit = (
+                moonlab_full_game_plan_audit.full_game_plan_artifact_audit(
+                    job_manifest,
+                    manifest_path=job_manifest_path,
+                )
+            )
+            self.assertFalse(stale_full_game_plan_audit["passed"])
+            self.assertIn(
+                "capture_required_map_count",
+                stale_full_game_plan_audit["plan_mismatches"],
+            )
+            self.assertTrue(any(
+                flag.get("flag") == "whole_game_moonlab_deployment_claimed"
+                for flag in stale_full_game_plan_audit["overclaim_flags"]
+            ))
+            publication_pack.write_json(full_game_plan_path, full_game_plan)
+
             handoff_audit = moonlab_handoff_audit.moonlab_handoff_audit(
                 job_manifest,
                 manifest_path=job_manifest_path,
