@@ -274,6 +274,7 @@ grep -q 'qge_manifest_claim_policy_audit.py <pack_dir>' "$repo_root/tools/qge_pu
 grep -q 'manifest_reproduce_audit' "$repo_root/tools/qge_manifest_reproduce_audit.py"
 grep -q 'REQUIRED_REPRODUCE_COMMAND_PREFIXES' "$repo_root/tools/qge_manifest_reproduce_audit.py"
 grep -q 'duplicate_command_prefixes' "$repo_root/tools/qge_manifest_reproduce_audit.py"
+grep -q 'duplicate_command_prefix_extra_count' "$repo_root/tools/qge_manifest_reproduce_audit.py"
 grep -q 'core_command_source_mismatches' "$repo_root/tools/qge_manifest_reproduce_audit.py"
 grep -q 'publication_pack_source_mismatches' "$repo_root/tools/qge_manifest_reproduce_audit.py"
 grep -q 'manifest_reproduce_optional_postpack_command_count' "$repo_root/tools/qge_publication_pack.py"

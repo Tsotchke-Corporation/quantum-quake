@@ -130,6 +130,17 @@ def duplicate_command_prefixes(commands: list[str]) -> list[dict[str, Any]]:
     return duplicates
 
 
+def duplicate_command_prefix_extra_count(
+    duplicate_prefixes: list[dict[str, Any]],
+) -> int:
+    extra_count = 0
+    for duplicate_prefix in duplicate_prefixes:
+        commands = duplicate_prefix.get("commands", [])
+        if isinstance(commands, list):
+            extra_count += max(0, len(commands) - 1)
+    return extra_count
+
+
 def unsafe_command_reasons(command: str) -> list[str]:
     reasons = [
         f"shell_fragment:{fragment}"
@@ -933,6 +944,7 @@ def manifest_reproduce_audit(
             "unexpected_commands": [],
             "duplicate_commands": [],
             "duplicate_command_prefixes": [],
+            "duplicate_command_prefix_extra_count": 0,
             "unsafe_commands": [],
             "malformed_commands": [],
             "core_command_source_mismatches": [],
@@ -954,6 +966,8 @@ def manifest_reproduce_audit(
     unexpected_commands = unexpected_reproduce_commands(string_commands)
     duplicates = duplicate_commands(string_commands)
     duplicate_prefixes = duplicate_command_prefixes(string_commands)
+    duplicate_prefix_extra_count = duplicate_command_prefix_extra_count(
+        duplicate_prefixes)
     unsafe_commands = [
         {
             "command": command,
@@ -1008,6 +1022,7 @@ def manifest_reproduce_audit(
         "unexpected_commands": unexpected_commands,
         "duplicate_commands": duplicates,
         "duplicate_command_prefixes": duplicate_prefixes,
+        "duplicate_command_prefix_extra_count": duplicate_prefix_extra_count,
         "unsafe_commands": unsafe_commands,
         "malformed_commands": malformed_commands,
         "core_command_source_mismatches": core_source_mismatches,

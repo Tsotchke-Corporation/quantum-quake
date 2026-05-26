@@ -1677,6 +1677,7 @@ class PublicationPackTests(unittest.TestCase):
             len(manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES),
         )
         self.assertEqual(audit["unexpected_commands"], [])
+        self.assertEqual(audit["duplicate_command_prefix_extra_count"], 0)
 
         stale_manifest = json.loads(json.dumps(manifest))
         stale_manifest["reproduce_commands"] = [
@@ -1706,6 +1707,8 @@ class PublicationPackTests(unittest.TestCase):
             item.get("prefix") == "tools/qge_oracle_export.py "
             for item in stale_audit["duplicate_command_prefixes"]
         ))
+        self.assertEqual(
+            stale_audit["duplicate_command_prefix_extra_count"], 2)
         self.assertTrue(any(
             item.get("command") == "rm -rf /tmp/qge" and
             "non_tools_command" in item.get("reasons", [])
@@ -4584,6 +4587,8 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(icc["manifest_reproduce_duplicate_commands"], [])
         self.assertEqual(
             icc["manifest_reproduce_duplicate_command_prefix_count"], 0)
+        self.assertEqual(
+            icc["manifest_reproduce_duplicate_command_prefix_extra_count"], 0)
         self.assertEqual(
             icc["manifest_reproduce_duplicate_command_prefixes"], [])
         self.assertEqual(icc["manifest_reproduce_malformed_command_count"], 0)

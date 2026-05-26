@@ -2580,6 +2580,8 @@ def build_icc_evidence(manifest: dict[str, Any],
             reproduce_audit.get("duplicate_commands", [])),
         "manifest_reproduce_duplicate_command_prefix_count": len(
             reproduce_audit.get("duplicate_command_prefixes", [])),
+        "manifest_reproduce_duplicate_command_prefix_extra_count": (
+            reproduce_audit.get("duplicate_command_prefix_extra_count")),
         "manifest_reproduce_malformed_command_count": len(
             reproduce_audit.get("malformed_commands", [])),
         "manifest_reproduce_publication_pack_source_mismatch_count": sum(
