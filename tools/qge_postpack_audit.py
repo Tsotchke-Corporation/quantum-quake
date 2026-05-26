@@ -122,6 +122,11 @@ def summarize_result(
     }
 
 
+def numeric_mismatch_count(result: dict[str, Any]) -> int:
+    mismatch_count = result.get("mismatch_count")
+    return mismatch_count if isinstance(mismatch_count, int) else 0
+
+
 Runner = Callable[
     [list[str]],
     subprocess.CompletedProcess[str],
@@ -177,6 +182,25 @@ def postpack_audit(
         "audit_count": len(results),
         "passed_count": len(results) - len(failed),
         "failed_count": len(failed),
+        "returncode_failure_count": sum(
+            1 for item in results
+            if item.get("returncode") != 0),
+        "payload_failure_count": sum(
+            1 for item in results
+            if not item.get("payload_passed")),
+        "load_error_count": sum(
+            1 for item in results
+            if item.get("load_error") is not None),
+        "stale_output_removed_count": sum(
+            1 for item in results
+            if item.get("stale_output_removed")),
+        "stale_output_error_count": sum(
+            1 for item in results
+            if item.get("stale_output_error") is not None),
+        "mismatch_count_total": sum(
+            numeric_mismatch_count(item) for item in results),
+        "failed_mismatch_count_total": sum(
+            numeric_mismatch_count(item) for item in failed),
         "failed_tools": [item["tool"] for item in failed],
         "audits": results,
         "passed": passed,

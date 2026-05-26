@@ -2252,6 +2252,13 @@ class PublicationPackTests(unittest.TestCase):
             self.assertEqual(audit["audit_count"], 2)
             self.assertEqual(audit["passed_count"], 1)
             self.assertEqual(audit["failed_count"], 1)
+            self.assertEqual(audit["returncode_failure_count"], 1)
+            self.assertEqual(audit["payload_failure_count"], 1)
+            self.assertEqual(audit["load_error_count"], 0)
+            self.assertEqual(audit["stale_output_removed_count"], 0)
+            self.assertEqual(audit["stale_output_error_count"], 0)
+            self.assertEqual(audit["mismatch_count_total"], 2)
+            self.assertEqual(audit["failed_mismatch_count_total"], 2)
             self.assertEqual(audit["failed_tools"], ["tools/fail_audit.py"])
             self.assertEqual(len(calls), 2)
             self.assertIn("--fail-on-mismatch", calls[0])
@@ -2289,6 +2296,13 @@ class PublicationPackTests(unittest.TestCase):
 
             self.assertFalse(audit["passed"])
             self.assertEqual(audit["failed_tools"], ["tools/stale_audit.py"])
+            self.assertEqual(audit["returncode_failure_count"], 0)
+            self.assertEqual(audit["payload_failure_count"], 1)
+            self.assertEqual(audit["load_error_count"], 1)
+            self.assertEqual(audit["stale_output_removed_count"], 1)
+            self.assertEqual(audit["stale_output_error_count"], 0)
+            self.assertEqual(audit["mismatch_count_total"], 0)
+            self.assertEqual(audit["failed_mismatch_count_total"], 0)
             self.assertTrue(audit["audits"][0]["stale_output_removed"])
             self.assertEqual(
                 audit["audits"][0]["load_error"],
