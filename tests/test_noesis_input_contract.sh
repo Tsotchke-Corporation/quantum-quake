@@ -276,6 +276,8 @@ grep -q 'REQUIRED_REPRODUCE_COMMAND_PREFIXES' "$repo_root/tools/qge_manifest_rep
 grep -q 'core_command_source_mismatches' "$repo_root/tools/qge_manifest_reproduce_audit.py"
 grep -q 'publication_pack_source_mismatches' "$repo_root/tools/qge_manifest_reproduce_audit.py"
 grep -q 'oracle_export_reproduce_command' "$repo_root/tools/qge_publication_pack.py"
+grep -q 'ADVANTAGE_REPLAY_OUTDIR' "$repo_root/tools/qge_publication_pack.py"
+grep -q 'PACK_ORACLE_SCENE' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'vanilla_matrix_reproduce_command' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'breadth_evidence_reproduce_command' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'command_required_arg' "$repo_root/tools/qge_publication_pack.py"

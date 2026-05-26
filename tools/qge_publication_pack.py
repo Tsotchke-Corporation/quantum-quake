@@ -46,6 +46,8 @@ import qge_resource_boundary_audit  # noqa: E402
 import qge_registered_asset_intake  # noqa: E402
 
 DEFAULT_SAMPLE_COUNTS = [16, 32, 64, 128]
+ADVANTAGE_REPLAY_OUTDIR = "/tmp/qge_advantage_benchmark"
+PACK_ORACLE_SCENE = "<pack_dir>/oracle/oracle_scene.json"
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -63,22 +65,20 @@ def write_json(path: Path, data: dict[str, Any]) -> None:
 
 
 def advantage_benchmark_reproduce_command(args: argparse.Namespace) -> str:
-    samples = " ".join(
-        f"--samples {sample}"
-        for sample in qge_advantage_benchmark.sample_counts(args)
-    )
-    return (
-        "tools/qge_advantage_benchmark.py "
-        "<pack_dir>/oracle/oracle_scene.json "
-        "--outdir <outdir> "
-        f"--seed {args.seed} "
-        f"--trials {args.trials} "
-        f"{samples} "
-        f"--qae-levels {args.qae_levels} "
-        f"--qae-shots {args.qae_shots} "
-        f"--qae-grid-steps {args.qae_grid_steps} "
-        f"--contribution-bits {args.contribution_bits}"
-    )
+    parts = [
+        "tools/qge_advantage_benchmark.py",
+        PACK_ORACLE_SCENE,
+    ]
+    append_command_option(parts, "--outdir", ADVANTAGE_REPLAY_OUTDIR)
+    append_command_option(parts, "--seed", args.seed)
+    append_command_option(parts, "--trials", args.trials)
+    for sample in qge_advantage_benchmark.sample_counts(args):
+        append_command_option(parts, "--samples", sample)
+    append_command_option(parts, "--qae-levels", args.qae_levels)
+    append_command_option(parts, "--qae-shots", args.qae_shots)
+    append_command_option(parts, "--qae-grid-steps", args.qae_grid_steps)
+    append_command_option(parts, "--contribution-bits", args.contribution_bits)
+    return " ".join(parts)
 
 
 def oracle_export_reproduce_command(
@@ -1828,6 +1828,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "registered_asset_discover_max_depth": (
                 args.registered_asset_discover_max_depth),
             "advantage_benchmark": {
+                "oracle_scene": PACK_ORACLE_SCENE,
+                "outdir": ADVANTAGE_REPLAY_OUTDIR,
                 "seed": args.seed,
                 "trials": args.trials,
                 "samples": qge_advantage_benchmark.sample_counts(args),

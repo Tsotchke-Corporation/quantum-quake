@@ -600,6 +600,21 @@ assert any(
     for command in manifest["reproduce_commands"]
 )
 source_inputs = manifest["source_inputs"]
+advantage_commands = [
+    command for command in manifest["reproduce_commands"]
+    if command.startswith("tools/qge_advantage_benchmark.py ")
+]
+assert len(advantage_commands) == 1
+advantage_tokens = shlex.split(advantage_commands[0])
+advantage_plan = source_inputs["advantage_benchmark"]
+assert advantage_tokens[1] == advantage_plan["oracle_scene"]
+assert advantage_tokens[advantage_tokens.index("--outdir") + 1] == advantage_plan["outdir"]
+assert [
+    advantage_tokens[index + 1]
+    for index, token in enumerate(advantage_tokens)
+    if token == "--samples"
+] == [str(value) for value in advantage_plan["samples"]]
+assert "<outdir>" not in advantage_commands[0]
 oracle_commands = [
     command for command in manifest["reproduce_commands"]
     if command.startswith("tools/qge_oracle_export.py ")

@@ -322,6 +322,14 @@ def core_command_option_checks(
     benchmark = dict_or_empty(source_inputs.get("advantage_benchmark"))
     if benchmark:
         benchmark_checks: list[dict[str, Any]] = []
+        if benchmark.get("oracle_scene") is not None:
+            benchmark_checks.append({
+                "position": 1,
+                "expected_values": [str(benchmark.get("oracle_scene"))],
+            })
+        add_scalar_option_check(
+            benchmark_checks, "--outdir", benchmark.get("outdir"),
+            required=True)
         for option, field in (
             ("--seed", "seed"),
             ("--trials", "trials"),

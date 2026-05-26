@@ -1764,6 +1764,8 @@ class PublicationPackTests(unittest.TestCase):
                 "registered_asset_discover_common": True,
                 "registered_asset_discover_max_depth": 7,
                 "advantage_benchmark": {
+                    "oracle_scene": publication_pack.PACK_ORACLE_SCENE,
+                    "outdir": publication_pack.ADVANTAGE_REPLAY_OUTDIR,
                     "seed": args.seed,
                     "trials": args.trials,
                     "samples": args.samples,
@@ -1795,6 +1797,8 @@ class PublicationPackTests(unittest.TestCase):
             "tools/qge_publication_pack.py --capture-dir stale")
         mixed_manifest["reproduce_commands"].append(
             "tools/qge_oracle_export.py stale --claims docs/claims/qge_claims.json")
+        mixed_manifest["reproduce_commands"].append(
+            "tools/qge_advantage_benchmark.py stale --outdir stale --seed 99")
         mixed_manifest["reproduce_commands"].append(
             "tools/qge_breadth_evidence.py --matrix stale --min-runs 1 --min-maps 1")
         mixed_manifest["reproduce_commands"].append(
