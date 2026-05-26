@@ -617,6 +617,23 @@ assert len(vanilla_commands) == 1
 vanilla_tokens = shlex.split(vanilla_commands[0])
 assert vanilla_tokens[1] == source_inputs["vanilla_matrix"].rsplit("/", 1)[0]
 assert "<graphics_capture_dir>" not in vanilla_commands[0]
+breadth_commands = [
+    command for command in manifest["reproduce_commands"]
+    if command.startswith("tools/qge_breadth_evidence.py ")
+]
+assert len(breadth_commands) == 1
+breadth_tokens = shlex.split(breadth_commands[0])
+breadth_plan = source_inputs["breadth_evidence_reproduction"]
+assert [
+    breadth_tokens[index + 1]
+    for index, token in enumerate(breadth_tokens)
+    if token == "--matrix"
+] == breadth_plan["matrices"]
+assert breadth_tokens[breadth_tokens.index("--min-runs") + 1] == str(breadth_plan["min_runs"])
+assert breadth_tokens[breadth_tokens.index("--min-maps") + 1] == str(breadth_plan["min_maps"])
+assert breadth_tokens[breadth_tokens.index("--map-set") + 1] == breadth_plan["map_set"]
+assert "<graphics_capture_dir>" not in breadth_commands[0]
+assert " N" not in breadth_commands[0]
 pack_commands = [
     command for command in manifest["reproduce_commands"]
     if command.startswith("tools/qge_publication_pack.py ")

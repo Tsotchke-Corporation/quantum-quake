@@ -276,6 +276,8 @@ grep -q 'core_command_source_mismatches' "$repo_root/tools/qge_manifest_reproduc
 grep -q 'publication_pack_source_mismatches' "$repo_root/tools/qge_manifest_reproduce_audit.py"
 grep -q 'oracle_export_reproduce_command' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'vanilla_matrix_reproduce_command' "$repo_root/tools/qge_publication_pack.py"
+grep -q 'breadth_evidence_reproduce_command' "$repo_root/tools/qge_publication_pack.py"
+grep -q 'breadth_evidence_reproduction' "$repo_root/tools/qge_manifest_reproduce_audit.py"
 grep -q 'publication_pack_reproduce_command' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'qge_manifest_reproduce_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'manifest_markdown_audit' "$repo_root/tools/qge_manifest_markdown_audit.py"

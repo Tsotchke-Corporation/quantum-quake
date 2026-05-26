@@ -131,6 +131,66 @@ def append_command_option(parts: list[str], option: str, value: Any) -> None:
     parts.extend([option, command_arg(value)])
 
 
+def breadth_evidence_reproduction_inputs(
+    inputs: dict[str, Any],
+) -> dict[str, Any]:
+    matrices: list[str] = []
+    min_runs = 1
+    min_maps = 1
+    map_set = qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
+    breadth_path = inputs.get("breadth_evidence")
+    if breadth_path is not None:
+        try:
+            breadth_data = load_json(Path(breadth_path))
+        except (OSError, ValueError, TypeError):
+            breadth_data = {}
+        if isinstance(breadth_data.get("min_matrix_runs"), int):
+            min_runs = breadth_data["min_matrix_runs"]
+        if isinstance(breadth_data.get("min_maps"), int):
+            min_maps = breadth_data["min_maps"]
+        aggregate = dict_or_empty(breadth_data.get("aggregate"))
+        full_game_coverage = dict_or_empty(aggregate.get("full_game_coverage"))
+        map_set = (
+            aggregate.get("full_game_map_set") or
+            full_game_coverage.get("map_set") or
+            map_set
+        )
+        for run in list_or_empty(breadth_data.get("matrix_runs")):
+            matrix_file = dict_or_empty(run).get("matrix_file")
+            if isinstance(matrix_file, str) and matrix_file:
+                matrices.append(matrix_file)
+    if not matrices:
+        source = inputs.get("graphics_capture_dir")
+        if source is None:
+            source = inputs.get("vanilla_matrix")
+        if source is not None:
+            matrices.append(str(source))
+    return {
+        "matrices": list(dict.fromkeys(matrices)),
+        "min_runs": min_runs,
+        "min_maps": min_maps,
+        "map_set": map_set,
+    }
+
+
+def breadth_evidence_reproduce_command(inputs: dict[str, Any]) -> str:
+    plan = breadth_evidence_reproduction_inputs(inputs)
+    parts = ["tools/qge_breadth_evidence.py"]
+    matrices = list_or_empty(plan.get("matrices"))
+    if matrices:
+        for matrix in matrices:
+            append_command_option(parts, "--matrix", matrix)
+    else:
+        append_command_option(parts, "--matrix", "<graphics_capture_dir>")
+    append_command_option(parts, "--min-runs", plan.get("min_runs"))
+    append_command_option(parts, "--min-maps", plan.get("min_maps"))
+    append_command_option(parts, "--map-set", plan.get("map_set"))
+    append_command_option(parts, "--out", "/tmp/breadth_evidence.json")
+    append_command_option(parts, "--icc-out",
+                          "/tmp/qge_breadth_icc_evidence.json")
+    return " ".join(parts)
+
+
 def publication_pack_reproduce_command(
     args: argparse.Namespace,
     inputs: dict[str, Any],
@@ -1677,6 +1737,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "agent_stream_dir": str(agent_stream_dir) if agent_stream_dir else None,
             "breadth_evidence": str(breadth_evidence)
             if breadth_evidence is not None else None,
+            "breadth_evidence_reproduction": (
+                breadth_evidence_reproduction_inputs(inputs)),
             "claims_ledger": str(claims_path),
             "asset_root": str(args.asset_root),
             "registered_asset_candidates": [
@@ -2304,7 +2366,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_moonlab_qae_observation_transpile.py --metrics <pack_dir>/advantage/advantage_metrics.json --oracle-scene <pack_dir>/oracle/oracle_scene.json --out /tmp/qae_moonlab_observation_zero.json --circuit /tmp/qae_moonlab_observation_zero.moonlab --markdown /tmp/qae_moonlab_observation_zero.md --icc-json /tmp/qae_moonlab_observation_zero_icc_evidence.json",
             "tools/qge_moonlab_qae_grover_plan.py --metrics <pack_dir>/advantage/advantage_metrics.json --oracle-scene <pack_dir>/oracle/oracle_scene.json --out /tmp/qae_moonlab_grover_schedule_plan.json --markdown /tmp/qae_moonlab_grover_schedule_plan.md --icc-json /tmp/qae_moonlab_grover_schedule_plan_icc_evidence.json",
             vanilla_matrix_reproduce_command(inputs),
-            "tools/qge_breadth_evidence.py --matrix <graphics_capture_dir> --min-maps N",
+            breadth_evidence_reproduce_command(inputs),
             publication_pack_reproduce_command(args, inputs),
             "tools/qge_registered_asset_intake.py --current-root <asset_root> --candidate <quake_install_or_pak> --discover-common --json /tmp/qge_registered_asset_intake.json --markdown /tmp/qge_registered_asset_intake.md --script-out /tmp/install_registered_assets.sh --icc-json /tmp/qge_registered_asset_intake_icc_evidence.json",
             "tools/qge_registered_asset_script_audit.py <pack_dir> --out /tmp/qge_registered_asset_script_audit.json --fail-on-mismatch",

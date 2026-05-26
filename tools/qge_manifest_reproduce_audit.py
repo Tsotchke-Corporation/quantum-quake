@@ -351,6 +351,29 @@ def core_command_option_checks(
             "expected_values": [str(vanilla_source)],
         }]
 
+    breadth_plan = dict_or_empty(
+        source_inputs.get("breadth_evidence_reproduction"))
+    breadth_matrices = [
+        str(value) for value in list_or_empty(breadth_plan.get("matrices"))
+    ]
+    if breadth_plan:
+        breadth_checks: list[dict[str, Any]] = []
+        breadth_checks.append({
+            "option": "--matrix",
+            "expected_values": breadth_matrices,
+            "required": True,
+        })
+        add_scalar_option_check(
+            breadth_checks, "--min-runs",
+            breadth_plan.get("min_runs"), required=True)
+        add_scalar_option_check(
+            breadth_checks, "--min-maps",
+            breadth_plan.get("min_maps"), required=True)
+        add_scalar_option_check(
+            breadth_checks, "--map-set",
+            breadth_plan.get("map_set"), required=True)
+        checks["tools/qge_breadth_evidence.py "] = breadth_checks
+
     asset_root = source_inputs.get("asset_root")
     if asset_root is not None:
         checks["tools/qge_asset_requirements.py "] = []

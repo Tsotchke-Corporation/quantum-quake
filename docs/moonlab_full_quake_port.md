@@ -123,7 +123,8 @@ provenance, packed source-copy artifacts are byte-compared back to those
 sources, and the manifest claim posture is checked against the blocked
 deployment-gate claim flags before it is treated as safe publication wording.
 The manifest reproduction command list is checked for core and postpack audit
-coverage, unsafe shell fragments, and exact core source flags; the
+coverage, unsafe shell fragments, and exact core source and breadth aggregation
+flags; the
 registered-asset install script is rebuilt from the packed intake ledger with
 its executable bit intact. A single postpack audit runner executes
 the advertised verifier set before signoff, clearing each child audit output

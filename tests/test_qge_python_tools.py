@@ -1725,6 +1725,8 @@ class PublicationPackTests(unittest.TestCase):
                 publication_pack.advantage_benchmark_reproduce_command(args),
             "tools/qge_vanilla_capture_matrix.py ":
                 publication_pack.vanilla_matrix_reproduce_command(inputs),
+            "tools/qge_breadth_evidence.py ":
+                publication_pack.breadth_evidence_reproduce_command(inputs),
             "tools/qge_publication_pack.py ": pack_command,
             "tools/qge_asset_requirements.py ":
                 publication_pack.asset_requirements_reproduce_command(args),
@@ -1742,6 +1744,9 @@ class PublicationPackTests(unittest.TestCase):
                 "graphics_capture_dir": str(inputs["graphics_capture_dir"]),
                 "agent_stream_dir": str(inputs["agent_stream_dir"]),
                 "breadth_evidence": str(inputs["breadth_evidence"]),
+                "breadth_evidence_reproduction": (
+                    publication_pack.breadth_evidence_reproduction_inputs(
+                        inputs)),
                 "claims_ledger": str(args.claims),
                 "asset_root": str(args.asset_root),
                 "registered_asset_candidates": [
@@ -1777,6 +1782,8 @@ class PublicationPackTests(unittest.TestCase):
             "tools/qge_publication_pack.py --capture-dir stale")
         mixed_manifest["reproduce_commands"].append(
             "tools/qge_oracle_export.py stale --claims docs/claims/qge_claims.json")
+        mixed_manifest["reproduce_commands"].append(
+            "tools/qge_breadth_evidence.py --matrix stale --min-runs 1 --min-maps 1")
         mixed_audit = manifest_reproduce_audit.manifest_reproduce_audit(
             mixed_manifest)
         self.assertFalse(mixed_audit["passed"])
