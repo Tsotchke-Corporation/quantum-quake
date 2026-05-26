@@ -4546,6 +4546,10 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(icc["manifest_reproduce_unexpected_commands"], [])
         self.assertEqual(icc["manifest_reproduce_unsafe_command_count"], 0)
         self.assertEqual(icc["manifest_reproduce_unsafe_commands"], [])
+        self.assertEqual(icc["manifest_reproduce_duplicate_command_count"], 0)
+        self.assertEqual(icc["manifest_reproduce_duplicate_commands"], [])
+        self.assertEqual(icc["manifest_reproduce_malformed_command_count"], 0)
+        self.assertEqual(icc["manifest_reproduce_malformed_commands"], [])
         self.assertTrue(icc["publication_ready_for_complete_claim"])
         self.assertEqual(
             icc["vanilla_icc_evidence_file"],
