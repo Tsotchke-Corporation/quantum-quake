@@ -22,6 +22,7 @@ if str(TOOLS_DIR) not in sys.path:
 
 import qge_advantage_benchmark as advantage  # noqa: E402
 import qge_advantage_generated_file_audit as advantage_generated_file_audit  # noqa: E402
+import qge_advantage_metrics_audit as advantage_metrics_audit  # noqa: E402
 import qge_agent_stream_icc_audit as agent_stream_icc_audit  # noqa: E402
 import qge_agent_stream_manifest_audit as agent_stream_manifest_audit  # noqa: E402
 import qge_asset_inventory as asset_inventory  # noqa: E402
@@ -728,6 +729,7 @@ class AdvantageBenchmarkTests(unittest.TestCase):
             circuit_path = outdir / "qae_circuit.txt"
             scaling_path = outdir / "scaling_summary.json"
             scaling_csv_path = outdir / "scaling_summary.csv"
+            metrics["source_oracle_scene"] = str(oracle_scene_path)
             advantage.write_json(oracle_scene_path, oracle_scene)
             advantage.write_json(metrics_path, metrics)
             advantage.write_curve_csv(curve_path, metrics)
@@ -1025,6 +1027,35 @@ class AdvantageBenchmarkTests(unittest.TestCase):
                 },
             }
             advantage.write_json(manifest_path, manifest)
+            metrics_audit = advantage_metrics_audit.advantage_metrics_audit(
+                manifest,
+                manifest_path=manifest_path,
+            )
+            self.assertTrue(metrics_audit["passed"], metrics_audit)
+            self.assertEqual(metrics_audit["mismatch_count"], 0)
+
+            stale_metrics = publication_pack.load_json(metrics_path)
+            stale_metrics["reference"]["value"] = 0.0
+            stale_metrics["claim_posture"][
+                "hardware_quantum_advantage_claimed"] = True
+            publication_pack.write_json(metrics_path, stale_metrics)
+            stale_metrics_audit = (
+                advantage_metrics_audit.advantage_metrics_audit(
+                    manifest,
+                    manifest_path=manifest_path,
+                )
+            )
+            self.assertFalse(stale_metrics_audit["passed"])
+            self.assertIn(
+                "reference.value",
+                stale_metrics_audit["metrics_mismatches"],
+            )
+            self.assertTrue(any(
+                flag.get("flag") == "hardware_quantum_advantage_claimed"
+                for flag in stale_metrics_audit["overclaim_flags"]
+            ))
+            publication_pack.write_json(metrics_path, metrics)
+
             advantage_artifact_audit = (
                 moonlab_advantage_artifact_audit
                 .moonlab_advantage_artifact_audit(

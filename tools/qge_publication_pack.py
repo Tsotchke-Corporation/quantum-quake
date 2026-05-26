@@ -61,6 +61,25 @@ def write_json(path: Path, data: dict[str, Any]) -> None:
                     encoding="utf-8")
 
 
+def advantage_benchmark_reproduce_command(args: argparse.Namespace) -> str:
+    samples = " ".join(
+        f"--samples {sample}"
+        for sample in qge_advantage_benchmark.sample_counts(args)
+    )
+    return (
+        "tools/qge_advantage_benchmark.py "
+        "<pack_dir>/oracle/oracle_scene.json "
+        "--outdir <outdir> "
+        f"--seed {args.seed} "
+        f"--trials {args.trials} "
+        f"{samples} "
+        f"--qae-levels {args.qae_levels} "
+        f"--qae-shots {args.qae_shots} "
+        f"--qae-grid-steps {args.qae_grid_steps} "
+        f"--contribution-bits {args.contribution_bits}"
+    )
+
+
 def sha256_file(path: Path) -> str | None:
     if not path.is_file():
         return None
@@ -2161,7 +2180,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_oracle_scene_audit.py <pack_dir> --out /tmp/qge_oracle_scene_audit.json --fail-on-mismatch",
             "tools/qge_oracle_claims_audit.py <pack_dir> --out /tmp/qge_oracle_claims_audit.json --fail-on-mismatch",
             "tools/qge_oracle_icc_audit.py <pack_dir> --out /tmp/qge_oracle_icc_audit.json --fail-on-mismatch",
-            "tools/qge_advantage_benchmark.py <oracle_scene.json> --outdir <outdir>",
+            "tools/qge_advantage_metrics_audit.py <pack_dir> --out /tmp/qge_advantage_metrics_audit.json --fail-on-mismatch",
+            advantage_benchmark_reproduce_command(args),
             "tools/qge_moonlab_qae_transpile.py --metrics <pack_dir>/advantage/advantage_metrics.json --abstract-circuit <pack_dir>/advantage/qae_circuit.txt --out /tmp/qae_moonlab_payload.json --circuit-dir /tmp/moonlab_qae_circuits --markdown /tmp/qae_moonlab_payload.md --icc-json /tmp/qae_moonlab_payload_icc_evidence.json",
             "tools/qge_moonlab_oracle_transpile.py --metrics <pack_dir>/advantage/advantage_metrics.json --oracle-scene <pack_dir>/oracle/oracle_scene.json --out /tmp/qae_moonlab_oracle_kernel.json --circuit /tmp/qae_moonlab_oracle_kernel.moonlab --markdown /tmp/qae_moonlab_oracle_kernel.md --icc-json /tmp/qae_moonlab_oracle_kernel_icc_evidence.json",
             "tools/qge_moonlab_qae_observation_transpile.py --metrics <pack_dir>/advantage/advantage_metrics.json --oracle-scene <pack_dir>/oracle/oracle_scene.json --out /tmp/qae_moonlab_observation_zero.json --circuit /tmp/qae_moonlab_observation_zero.moonlab --markdown /tmp/qae_moonlab_observation_zero.md --icc-json /tmp/qae_moonlab_observation_zero_icc_evidence.json",

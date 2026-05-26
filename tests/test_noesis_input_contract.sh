@@ -234,6 +234,8 @@ grep -q 'qge_moonlab_job_plan_audit.py <pack_dir>' "$repo_root/tools/qge_publica
 grep -q 'QGE_MOONLAB_JOB_PLAN_AUDIT' "$repo_root/tools/qge_moonlab_job_plan_audit.py"
 grep -q 'qge_moonlab_handoff_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'QGE_MOONLAB_HANDOFF_AUDIT' "$repo_root/tools/qge_moonlab_handoff_audit.py"
+grep -q 'qge_advantage_metrics_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
+grep -q 'QGE_ADVANTAGE_METRICS_AUDIT' "$repo_root/tools/qge_advantage_metrics_audit.py"
 grep -q 'qge_moonlab_advantage_artifact_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'QGE_MOONLAB_ADVANTAGE_ARTIFACT_AUDIT' "$repo_root/tools/qge_moonlab_advantage_artifact_audit.py"
 grep -q 'qge_oracle_export' "$repo_root/tools/qge_oracle_scene_audit.py"

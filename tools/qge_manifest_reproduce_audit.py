@@ -33,6 +33,7 @@ POSTPACK_REPRODUCE_COMMAND_PREFIXES = (
     "tools/qge_oracle_scene_audit.py ",
     "tools/qge_oracle_claims_audit.py ",
     "tools/qge_oracle_icc_audit.py ",
+    "tools/qge_advantage_metrics_audit.py ",
     "tools/qge_runtime_icc_audit.py ",
     "tools/qge_publication_icc_audit.py ",
     "tools/qge_vanilla_matrix_audit.py ",

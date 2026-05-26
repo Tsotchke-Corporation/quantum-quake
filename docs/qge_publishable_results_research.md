@@ -340,9 +340,9 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      reproduction command list must keep core command coverage and avoid unsafe
      shell fragments, and the registered-asset install script must rebuild
      from the packed intake ledger while retaining executable permissions.
-     Packed asset-resource ledgers, resource boundary ledgers, Moonlab
-     full-game plan artifacts, Moonlab job plan artifacts, Moonlab
-     advantage/control-plane artifacts, hardware handoff artifacts, and
+     Packed advantage metrics, asset-resource ledgers, resource boundary
+     ledgers, Moonlab full-game plan artifacts, Moonlab job plan artifacts,
+     Moonlab advantage/control-plane artifacts, hardware handoff artifacts, and
      deployment-gate JSON/ICC artifacts must recompute from their source
      artifacts. Packed Markdown evidence reports must regenerate from their
      source JSON ledgers, and Moonlab `.moonlab` circuit body files must match
