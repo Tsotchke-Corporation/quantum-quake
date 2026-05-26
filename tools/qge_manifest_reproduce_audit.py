@@ -374,6 +374,51 @@ def core_command_option_checks(
             breadth_plan.get("map_set"), required=True)
         checks["tools/qge_breadth_evidence.py "] = breadth_checks
 
+    intake_plan = dict_or_empty(
+        source_inputs.get("registered_asset_intake_reproduction"))
+    if intake_plan:
+        intake_checks: list[dict[str, Any]] = []
+        add_scalar_option_check(
+            intake_checks, "--current-root",
+            intake_plan.get("current_root"), required=True)
+        intake_checks.append({
+            "option": "--candidate",
+            "expected_values": [
+                str(value)
+                for value in list_or_empty(intake_plan.get("candidates"))
+            ],
+            "required": False,
+        })
+        intake_checks.append({
+            "option": "--discover-root",
+            "expected_values": [
+                str(value)
+                for value in list_or_empty(intake_plan.get("discover_roots"))
+            ],
+            "required": False,
+        })
+        intake_checks.append({
+            "option": "--discover-common",
+            "expected_present": bool(intake_plan.get("discover_common")),
+            "boolean": True,
+        })
+        intake_checks.append({
+            "option": "--allow-empty-candidates",
+            "expected_present": bool(
+                intake_plan.get("allow_empty_candidates")),
+            "boolean": True,
+        })
+        add_scalar_option_check(
+            intake_checks, "--discover-max-depth",
+            intake_plan.get("discover_max_depth"), required=True)
+        add_scalar_option_check(
+            intake_checks, "--publication-pack",
+            intake_plan.get("publication_pack"), required=True)
+        add_scalar_option_check(
+            intake_checks, "--map-set",
+            intake_plan.get("map_set"), required=True)
+        checks["tools/qge_registered_asset_intake.py "] = intake_checks
+
     asset_root = source_inputs.get("asset_root")
     if asset_root is not None:
         checks["tools/qge_asset_requirements.py "] = []

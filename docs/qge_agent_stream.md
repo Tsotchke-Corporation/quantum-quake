@@ -508,9 +508,10 @@ recorded source inputs are checked against copied artifact `source_path`
 provenance, packed source-copy artifacts are byte-compared back to those
 sources, and the manifest claim posture is checked against the blocked
 deployment-gate claim flags. The manifest reproduction command list is checked
-for core and postpack audit coverage, unsafe shell fragments, and exact core
-source and breadth aggregation flags; the registered-asset install script is
-rebuilt from the packed intake ledger with its executable bit intact. A single postpack
+for core and postpack audit coverage, unsafe shell fragments, exact core source
+flags, breadth aggregation flags, and registered-asset intake flags; the
+registered-asset install script is rebuilt from the packed intake ledger with
+its executable bit intact. A single postpack
 audit runner executes the
 advertised verifier set before
 signoff, clearing each child audit output path first so stale verifier JSON
@@ -558,8 +559,10 @@ the repo. The intake evidence records `candidate_scan_target_count`, exact scan
 targets, `copy_plan_unblocked_map_count`, and blocked copy-plan maps so
 direct-root handoffs are auditable and maps are not treated as after-plan
 available unless the copy plan can actually install or verify them.
-`--discover-root` and `--discover-common` add bounded local discovery for
-candidate installs when the exact registered asset path is unknown;
+`--allow-empty-candidates` records the current no-licensed-candidate ledger
+without pretending a registered asset path exists. `--discover-root` and
+`--discover-common` add bounded local discovery for candidate installs when the
+exact registered asset path is unknown;
 `--discover-common` also derives Steam Quake roots from `libraryfolders.vdf`
 and `appmanifest_2310.acf`, plus GOG/Heroic-style local roots. The
 publication pack records this intake ledger, Markdown, ICC evidence, and safe

@@ -191,6 +191,66 @@ def breadth_evidence_reproduce_command(inputs: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
+def registered_asset_intake_reproduction_inputs(
+    args: argparse.Namespace,
+    map_set: str,
+) -> dict[str, Any]:
+    candidates = [
+        str(path)
+        for path in getattr(args, "registered_asset_candidate", []) or []
+    ]
+    discover_roots = [
+        str(path)
+        for path in getattr(args, "registered_asset_discover_root", []) or []
+    ]
+    discover_common = bool(
+        getattr(args, "registered_asset_discover_common", False))
+    return {
+        "current_root": str(args.asset_root),
+        "candidates": candidates,
+        "discover_roots": discover_roots,
+        "discover_common": discover_common,
+        "discover_max_depth": args.registered_asset_discover_max_depth,
+        "allow_empty_candidates": (
+            not candidates and not discover_roots and not discover_common
+        ),
+        "publication_pack": "<pack_dir>",
+        "map_set": map_set,
+    }
+
+
+def registered_asset_intake_reproduce_command(
+    args: argparse.Namespace,
+    map_set: str,
+) -> str:
+    plan = registered_asset_intake_reproduction_inputs(args, map_set)
+    parts = ["tools/qge_registered_asset_intake.py"]
+    append_command_option(parts, "--current-root", plan.get("current_root"))
+    for candidate in list_or_empty(plan.get("candidates")):
+        append_command_option(parts, "--candidate", candidate)
+    for root in list_or_empty(plan.get("discover_roots")):
+        append_command_option(parts, "--discover-root", root)
+    if plan.get("discover_common"):
+        parts.append("--discover-common")
+    if plan.get("allow_empty_candidates"):
+        parts.append("--allow-empty-candidates")
+    append_command_option(
+        parts, "--discover-max-depth", plan.get("discover_max_depth"))
+    append_command_option(parts, "--publication-pack",
+                          plan.get("publication_pack"))
+    append_command_option(parts, "--map-set", plan.get("map_set"))
+    append_command_option(parts, "--json",
+                          "/tmp/qge_registered_asset_intake.json")
+    append_command_option(parts, "--markdown",
+                          "/tmp/qge_registered_asset_intake.md")
+    append_command_option(parts, "--script-out",
+                          "/tmp/install_registered_assets.sh")
+    append_command_option(
+        parts, "--icc-json",
+        "/tmp/qge_registered_asset_intake_icc_evidence.json")
+    return " ".join(parts)
+
+
 def publication_pack_reproduce_command(
     args: argparse.Namespace,
     inputs: dict[str, Any],
@@ -1741,6 +1801,13 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 breadth_evidence_reproduction_inputs(inputs)),
             "claims_ledger": str(claims_path),
             "asset_root": str(args.asset_root),
+            "registered_asset_intake_reproduction": (
+                registered_asset_intake_reproduction_inputs(
+                    args,
+                    str(full_game_map_coverage.get("map_set") or
+                        qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET),
+                )
+            ),
             "registered_asset_candidates": [
                 str(path)
                 for path in getattr(args, "registered_asset_candidate", []) or []
@@ -2368,7 +2435,11 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             vanilla_matrix_reproduce_command(inputs),
             breadth_evidence_reproduce_command(inputs),
             publication_pack_reproduce_command(args, inputs),
-            "tools/qge_registered_asset_intake.py --current-root <asset_root> --candidate <quake_install_or_pak> --discover-common --json /tmp/qge_registered_asset_intake.json --markdown /tmp/qge_registered_asset_intake.md --script-out /tmp/install_registered_assets.sh --icc-json /tmp/qge_registered_asset_intake_icc_evidence.json",
+            registered_asset_intake_reproduce_command(
+                args,
+                str(full_game_map_coverage.get("map_set") or
+                    qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET),
+            ),
             "tools/qge_registered_asset_script_audit.py <pack_dir> --out /tmp/qge_registered_asset_script_audit.json --fail-on-mismatch",
             asset_requirements_reproduce_command(args),
             "tools/qge_moonlab_job_runner.py <pack_dir>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack_dir>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json --submission-out /tmp/qge_moonlab_submission_packet.verify.json",

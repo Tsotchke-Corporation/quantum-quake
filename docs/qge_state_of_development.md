@@ -759,7 +759,7 @@ Known current visual state:
   child audit output path first so
   stale verifier JSON cannot satisfy the run; the top-level publication ICC
   sidecar records the reproduce/postpack audit verdict, including exact core
-  source and breadth aggregation flag checks. Packed advantage
+  source, breadth aggregation, and registered-asset intake flag checks. Packed advantage
   metrics, asset-resource ledgers, resource boundary ledgers, Moonlab full-game
   plan artifacts, Moonlab job plan artifacts, Moonlab advantage/control-plane
   artifacts, hardware handoff artifacts, and deployment-gate JSON/ICC artifacts

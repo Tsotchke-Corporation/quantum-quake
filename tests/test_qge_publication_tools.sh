@@ -658,6 +658,31 @@ for option, expected in (
 assert pack_tokens.count("--samples") == 1
 assert pack_tokens[pack_tokens.index("--samples") + 1] == "4"
 assert "<trace_capture_dir>" not in pack_commands[0]
+registered_asset_commands = [
+    command for command in manifest["reproduce_commands"]
+    if command.startswith("tools/qge_registered_asset_intake.py ")
+]
+assert len(registered_asset_commands) == 1
+registered_asset_tokens = shlex.split(registered_asset_commands[0])
+registered_asset_plan = source_inputs["registered_asset_intake_reproduction"]
+assert registered_asset_tokens[registered_asset_tokens.index("--current-root") + 1] == registered_asset_plan["current_root"]
+assert [
+    registered_asset_tokens[index + 1]
+    for index, token in enumerate(registered_asset_tokens)
+    if token == "--candidate"
+] == registered_asset_plan["candidates"]
+assert [
+    registered_asset_tokens[index + 1]
+    for index, token in enumerate(registered_asset_tokens)
+    if token == "--discover-root"
+] == registered_asset_plan["discover_roots"]
+assert ("--discover-common" in registered_asset_tokens) is registered_asset_plan["discover_common"]
+assert ("--allow-empty-candidates" in registered_asset_tokens) is registered_asset_plan["allow_empty_candidates"]
+assert registered_asset_tokens[registered_asset_tokens.index("--discover-max-depth") + 1] == str(registered_asset_plan["discover_max_depth"])
+assert registered_asset_tokens[registered_asset_tokens.index("--publication-pack") + 1] == registered_asset_plan["publication_pack"]
+assert registered_asset_tokens[registered_asset_tokens.index("--map-set") + 1] == registered_asset_plan["map_set"]
+assert "<asset_root>" not in registered_asset_commands[0]
+assert "<quake_install_or_pak>" not in registered_asset_commands[0]
 asset_requirement_commands = [
     command for command in manifest["reproduce_commands"]
     if command.startswith("tools/qge_asset_requirements.py ")

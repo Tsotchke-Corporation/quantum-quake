@@ -1728,6 +1728,9 @@ class PublicationPackTests(unittest.TestCase):
             "tools/qge_breadth_evidence.py ":
                 publication_pack.breadth_evidence_reproduce_command(inputs),
             "tools/qge_publication_pack.py ": pack_command,
+            "tools/qge_registered_asset_intake.py ":
+                publication_pack.registered_asset_intake_reproduce_command(
+                    args, "canonical_registered_quake"),
             "tools/qge_asset_requirements.py ":
                 publication_pack.asset_requirements_reproduce_command(args),
         }
@@ -1749,6 +1752,9 @@ class PublicationPackTests(unittest.TestCase):
                         inputs)),
                 "claims_ledger": str(args.claims),
                 "asset_root": str(args.asset_root),
+                "registered_asset_intake_reproduction": (
+                    publication_pack.registered_asset_intake_reproduction_inputs(
+                        args, "canonical_registered_quake")),
                 "registered_asset_candidates": [
                     str(path) for path in args.registered_asset_candidate
                 ],
@@ -1784,6 +1790,8 @@ class PublicationPackTests(unittest.TestCase):
             "tools/qge_oracle_export.py stale --claims docs/claims/qge_claims.json")
         mixed_manifest["reproduce_commands"].append(
             "tools/qge_breadth_evidence.py --matrix stale --min-runs 1 --min-maps 1")
+        mixed_manifest["reproduce_commands"].append(
+            "tools/qge_registered_asset_intake.py --current-root stale --candidate stale")
         mixed_audit = manifest_reproduce_audit.manifest_reproduce_audit(
             mixed_manifest)
         self.assertFalse(mixed_audit["passed"])
@@ -8384,6 +8392,28 @@ class BreadthEvidenceTests(unittest.TestCase):
             )
             self.assertTrue(empty_icc["no_candidate_asset_copy_plan"])
             self.assertEqual(empty_icc["candidate_scan_target_count"], 0)
+
+            no_candidate_path = tmpdir / "no_candidate_intake.json"
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(
+                    registered_asset_intake.main([
+                        "--current-root",
+                        str(current_root),
+                        "--allow-empty-candidates",
+                        "--json",
+                        str(no_candidate_path),
+                    ]),
+                    0,
+                )
+            self.assertIn(
+                "QGE_REGISTERED_ASSET_INTAKE", stdout.getvalue())
+            no_candidate_intake = publication_pack.load_json(
+                no_candidate_path)
+            self.assertEqual(
+                no_candidate_intake["status"],
+                "blocked_no_candidate_assets")
+            self.assertEqual(no_candidate_intake["candidate_inputs"], [])
 
             enhanced_root = tmpdir / "QuakeEnhanced"
             enhanced_id1 = enhanced_root / "rerelease" / "id1"

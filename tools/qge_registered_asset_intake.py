@@ -1408,6 +1408,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
                         default=False,
                         help="Scan bounded common Quake install locations")
     parser.add_argument("--discover-max-depth", type=int, default=5)
+    parser.add_argument("--allow-empty-candidates",
+                        action=argparse.BooleanOptionalAction,
+                        default=False,
+                        help="Record an explicit no-candidate intake ledger")
     parser.add_argument("--publication-pack", type=Path,
                         help="Optional publication pack used to generate a post-install capture queue command")
     parser.add_argument("--map-set",
@@ -1439,9 +1443,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for entry in list_or_empty(discovery.get("found_candidates"))
                 if isinstance(entry, dict) and isinstance(entry.get("path"), str)
             )
-        if not candidates and not discovery_roots:
+        if not candidates and not discovery_roots and not args.allow_empty_candidates:
             raise ValueError(
-                "provide --candidate, --discover-root, or --discover-common")
+                "provide --candidate, --discover-root, --discover-common, "
+                "or --allow-empty-candidates")
         intake = build_intake(
             args.current_root,
             candidates,

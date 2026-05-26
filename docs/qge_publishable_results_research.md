@@ -290,9 +290,11 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      counts, and the exact available/missing map ledger. The current local
      inventory is one `pak0.pak`, 9/32 canonical maps available, 23 missing,
      zero invalid BSP entries, and no whole-game Moonlab coverage claim.
-   - Use `tools/qge_registered_asset_intake.py --current-root assets/id1 --candidate <quake_install_or_pak> --discover-common --json /tmp/qge_registered_asset_intake.json --markdown /tmp/qge_registered_asset_intake.md --script-out /tmp/install_registered_assets.sh --icc-json /tmp/qge_registered_asset_intake_icc_evidence.json`
-     to validate external registered asset candidates and produce a
-     non-destructive copy plan. Direct install-root candidates now derive
+   - Use `tools/qge_registered_asset_intake.py --current-root assets/id1 --allow-empty-candidates --discover-max-depth 5 --publication-pack <pack_dir> --map-set quake_registered_single_player --json /tmp/qge_registered_asset_intake.json --markdown /tmp/qge_registered_asset_intake.md --script-out /tmp/install_registered_assets.sh --icc-json /tmp/qge_registered_asset_intake_icc_evidence.json`
+     to reproduce the current no-candidate intake ledger, or add explicit
+     `--candidate`, `--discover-root`, or `--discover-common` inputs to validate
+     external registered asset candidates and produce a non-destructive copy
+     plan. Direct install-root candidates now derive
      nested `id1` and `rerelease/id1` scan targets and record
      `candidate_scan_target_count` plus the exact target paths. The after-plan
      missing-map ledger is based on actionable copy-plan entries, with blocked
@@ -337,9 +339,9 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      artifact `source_path` provenance, packed source-copy artifacts must
      byte-compare back to those sources, and the manifest claim posture must
      stay consistent with the blocked deployment-gate claim flags. The manifest
-     reproduction command list must keep core command coverage, exact source
-     and breadth aggregation flags for core commands, and avoid unsafe shell
-     fragments; the
+     reproduction command list must keep core command coverage, exact source,
+     breadth aggregation, and registered-asset intake flags for core commands,
+     and avoid unsafe shell fragments; the
      registered-asset install script must rebuild from the packed intake ledger
      while retaining executable permissions.
      Packed advantage metrics, asset-resource ledgers, resource boundary
