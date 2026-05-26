@@ -63,6 +63,8 @@ POSTPACK_REPRODUCE_COMMAND_PREFIXES = (
 OPTIONAL_POSTPACK_REPRODUCE_COMMAND_PREFIXES = (
     POSTPACK_REPRODUCE_COMMAND_PREFIXES)
 FORBIDDEN_SHELL_FRAGMENTS = (";", "&&", "||", "|", "`", "$(")
+PACK_DIR_PLACEHOLDER = "<pack_dir>"
+POSTPACK_AUDIT_OUTDIR = "/tmp/qge_postpack_audits"
 
 
 def dict_or_empty(value: Any) -> dict[str, Any]:
@@ -162,6 +164,22 @@ def position_check(position: int, expected: Any) -> dict[str, Any]:
         "position": position,
         "expected_values": [str(expected)],
     }
+
+
+def boolean_option_check(
+    option: str,
+    *,
+    expected_present: bool = True,
+) -> dict[str, Any]:
+    return {
+        "option": option,
+        "expected_present": expected_present,
+        "boolean": True,
+    }
+
+
+def postpack_audit_output_for_prefix(prefix: str) -> str:
+    return f"/tmp/{Path(prefix.strip()).stem}.json"
 
 
 def publication_pack_option_checks(
@@ -701,6 +719,45 @@ def core_command_source_mismatches(
     return mismatches
 
 
+def postpack_command_option_checks() -> dict[str, list[dict[str, Any]]]:
+    checks: dict[str, list[dict[str, Any]]] = {}
+    for prefix in POSTPACK_REPRODUCE_COMMAND_PREFIXES:
+        command_checks = [
+            position_check(1, PACK_DIR_PLACEHOLDER),
+            {
+                "option": "--out",
+                "expected_values": [postpack_audit_output_for_prefix(prefix)],
+                "required": True,
+            },
+            boolean_option_check("--fail-on-mismatch"),
+        ]
+        if prefix == "tools/qge_postpack_audit.py ":
+            command_checks.insert(2, {
+                "option": "--outdir",
+                "expected_values": [POSTPACK_AUDIT_OUTDIR],
+                "required": True,
+            })
+        checks[prefix] = command_checks
+    return checks
+
+
+def postpack_command_source_mismatches(
+    commands: list[str],
+) -> list[dict[str, Any]]:
+    mismatches = []
+    for prefix, checks in postpack_command_option_checks().items():
+        for command in commands_with_prefix(commands, prefix):
+            field_mismatches = publication_pack_command_field_mismatches(
+                command, checks)
+            if field_mismatches:
+                mismatches.append({
+                    "prefix": prefix,
+                    "command": command,
+                    "field_mismatches": field_mismatches,
+                })
+    return mismatches
+
+
 def publication_pack_source_mismatches(
     manifest: dict[str, Any],
     commands: list[str],
@@ -758,6 +815,7 @@ def manifest_reproduce_audit(
             "unsafe_commands": [],
             "malformed_commands": [],
             "core_command_source_mismatches": [],
+            "postpack_command_source_mismatches": [],
             "publication_pack_command_count": 0,
             "publication_pack_source_mismatches": [],
             "mismatch_count": 0,
@@ -786,6 +844,8 @@ def manifest_reproduce_audit(
         manifest_data, string_commands)
     core_source_mismatches = core_command_source_mismatches(
         manifest_data, string_commands)
+    postpack_source_mismatches = postpack_command_source_mismatches(
+        string_commands)
     pack_source_mismatch_count = sum(
         len(item.get("field_mismatches", []))
         for item in pack_source_mismatches
@@ -794,6 +854,10 @@ def manifest_reproduce_audit(
         len(item.get("field_mismatches", []))
         for item in core_source_mismatches
     )
+    postpack_source_mismatch_count = sum(
+        len(item.get("field_mismatches", []))
+        for item in postpack_source_mismatches
+    )
     mismatch_count = (
         len(missing_required) +
         len(missing_postpack) +
@@ -801,7 +865,8 @@ def manifest_reproduce_audit(
         len(unsafe_commands) +
         len(malformed_commands) +
         pack_source_mismatch_count +
-        core_source_mismatch_count
+        core_source_mismatch_count +
+        postpack_source_mismatch_count
     )
     passed = mismatch_count == 0 and (recorded or not required)
     return {
@@ -819,6 +884,7 @@ def manifest_reproduce_audit(
         "unsafe_commands": unsafe_commands,
         "malformed_commands": malformed_commands,
         "core_command_source_mismatches": core_source_mismatches,
+        "postpack_command_source_mismatches": postpack_source_mismatches,
         "publication_pack_command_count": len(commands_with_prefix(
             string_commands, "tools/qge_publication_pack.py ")),
         "publication_pack_source_mismatches": pack_source_mismatches,

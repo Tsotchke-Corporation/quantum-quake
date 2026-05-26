@@ -76,6 +76,28 @@ import qge_vanilla_matrix_audit as vanilla_matrix_audit  # noqa: E402
 import qge_world_frame_metrics as world_frame_metrics  # noqa: E402
 
 
+def exact_postpack_reproduce_command(prefix: str) -> str:
+    if prefix == "tools/qge_postpack_audit.py ":
+        return (
+            f"{prefix}<pack_dir> "
+            f"--outdir {manifest_reproduce_audit.POSTPACK_AUDIT_OUTDIR} "
+            f"--out {manifest_reproduce_audit.postpack_audit_output_for_prefix(prefix)} "
+            "--fail-on-mismatch"
+        )
+    return (
+        f"{prefix}<pack_dir> "
+        f"--out {manifest_reproduce_audit.postpack_audit_output_for_prefix(prefix)} "
+        "--fail-on-mismatch"
+    )
+
+
+def exact_postpack_reproduce_commands() -> list[str]:
+    return [
+        exact_postpack_reproduce_command(prefix)
+        for prefix in manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES
+    ]
+
+
 def write_rgb_png(path: Path, rows: list[list[tuple[int, int, int]]]) -> None:
     height = len(rows)
     width = len(rows[0]) if rows else 0
@@ -1637,9 +1659,8 @@ class PublicationPackTests(unittest.TestCase):
         commands = [
             f"{prefix}<arg>"
             for prefix in (
-                manifest_reproduce_audit.REQUIRED_REPRODUCE_COMMAND_PREFIXES +
-                manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES)
-        ]
+                manifest_reproduce_audit.REQUIRED_REPRODUCE_COMMAND_PREFIXES)
+        ] + exact_postpack_reproduce_commands()
         manifest = {
             "reproduce_commands": commands,
         }
@@ -1801,6 +1822,8 @@ class PublicationPackTests(unittest.TestCase):
                 "--icc-json /tmp/qge_moonlab_deployment_gate_icc_evidence.json"
             ),
         }
+        for prefix in manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES:
+            exact_commands[prefix] = exact_postpack_reproduce_command(prefix)
         commands = [
             exact_commands.get(prefix, f"{prefix}<arg>")
             for prefix in (
@@ -1853,6 +1876,7 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(audit["mismatch_count"], 0)
         self.assertEqual(audit["publication_pack_command_count"], 1)
         self.assertEqual(audit["core_command_source_mismatches"], [])
+        self.assertEqual(audit["postpack_command_source_mismatches"], [])
         self.assertEqual(audit["publication_pack_source_mismatches"], [])
 
         with self.assertRaisesRegex(ValueError, "capture_dir"):
@@ -1875,12 +1899,15 @@ class PublicationPackTests(unittest.TestCase):
             "tools/qge_breadth_evidence.py --matrix stale --min-runs 1 --min-maps 1")
         mixed_manifest["reproduce_commands"].append(
             "tools/qge_registered_asset_intake.py --current-root stale --candidate stale")
+        mixed_manifest["reproduce_commands"].append(
+            "tools/qge_manifest_file_audit.py stale --out /tmp/stale.json")
         mixed_audit = manifest_reproduce_audit.manifest_reproduce_audit(
             mixed_manifest)
         self.assertFalse(mixed_audit["passed"])
         self.assertEqual(mixed_audit["publication_pack_command_count"], 2)
         self.assertTrue(mixed_audit["publication_pack_source_mismatches"])
         self.assertTrue(mixed_audit["core_command_source_mismatches"])
+        self.assertTrue(mixed_audit["postpack_command_source_mismatches"])
 
         stale_manifest = json.loads(json.dumps(manifest))
         stale_manifest["reproduce_commands"] = [
@@ -1904,6 +1931,36 @@ class PublicationPackTests(unittest.TestCase):
             field.get("option") == "--vanilla-matrix" and
             field.get("reason") == "missing_option"
             for item in stale_audit["publication_pack_source_mismatches"]
+            for field in item.get("field_mismatches", [])
+        ))
+
+        stale_postpack_manifest = json.loads(json.dumps(manifest))
+        stale_postpack_manifest["reproduce_commands"] = [
+            (
+                "tools/qge_postpack_audit.py stale "
+                "--outdir /tmp/stale_audits "
+                "--out /tmp/stale_postpack.json"
+                if command.startswith("tools/qge_postpack_audit.py ")
+                else command
+            )
+            for command in stale_postpack_manifest["reproduce_commands"]
+        ]
+        stale_postpack_audit = (
+            manifest_reproduce_audit.manifest_reproduce_audit(
+                stale_postpack_manifest))
+        self.assertFalse(stale_postpack_audit["passed"])
+        self.assertTrue(any(
+            field.get("position") == 1 and
+            field.get("reason") == "value_mismatch"
+            for item in stale_postpack_audit[
+                "postpack_command_source_mismatches"]
+            for field in item.get("field_mismatches", [])
+        ))
+        self.assertTrue(any(
+            field.get("option") == "--fail-on-mismatch" and
+            field.get("reason") == "presence_mismatch"
+            for item in stale_postpack_audit[
+                "postpack_command_source_mismatches"]
             for field in item.get("field_mismatches", [])
         ))
 
@@ -3993,13 +4050,14 @@ class PublicationPackTests(unittest.TestCase):
 
         manifest = {
             "pack_dir": "pack",
-            "reproduce_commands": [
-                f"{prefix}<arg>"
-                for prefix in (
-                    manifest_reproduce_audit
-                    .REQUIRED_REPRODUCE_COMMAND_PREFIXES +
-                    manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES)
-            ],
+            "reproduce_commands": (
+                [
+                    f"{prefix}<arg>"
+                    for prefix in (
+                        manifest_reproduce_audit
+                        .REQUIRED_REPRODUCE_COMMAND_PREFIXES)
+                ] + exact_postpack_reproduce_commands()
+            ),
             "artifacts": {
                 "oracle": {
                     "oracle_scene": {"path": "oracle_scene.json"},
