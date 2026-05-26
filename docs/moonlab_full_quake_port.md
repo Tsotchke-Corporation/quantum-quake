@@ -130,9 +130,10 @@ the advertised verifier set before signoff, clearing each child audit output
 path first so stale verifier JSON cannot satisfy the run; the top-level
 publication ICC sidecar records the reproduce/postpack audit verdict. Packed
 asset-resource ledgers, resource boundary ledgers, Moonlab full-game plan
-artifacts, Moonlab job plan artifacts, hardware handoff artifacts, and
-deployment-gate JSON/ICC artifacts are recomputed from their source artifacts
-before the postpack audit accepts them.
+artifacts, Moonlab job plan artifacts, Moonlab advantage/control-plane
+artifacts, hardware handoff artifacts, and deployment-gate JSON/ICC artifacts
+are recomputed from their source artifacts before the postpack audit accepts
+them.
 Packed Markdown evidence reports are regenerated from their source JSON ledgers
 before they are treated as current.
 Moonlab `.moonlab` circuit body files are hashed against their JSON records

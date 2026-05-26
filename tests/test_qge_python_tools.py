@@ -32,6 +32,7 @@ import qge_breadth_evidence_audit as breadth_evidence_audit  # noqa: E402
 import qge_full_game_capture_queue as full_game_capture_queue  # noqa: E402
 import qge_image_metrics as image_metrics  # noqa: E402
 import qge_moonlab_advantage_icc_audit as moonlab_advantage_icc_audit  # noqa: E402
+import qge_moonlab_advantage_artifact_audit as moonlab_advantage_artifact_audit  # noqa: E402
 import qge_moonlab_deployment_gate_audit as moonlab_deployment_gate_audit  # noqa: E402
 import qge_moonlab_deployment_gate as moonlab_deployment_gate  # noqa: E402
 import qge_moonlab_full_game_plan as moonlab_full_game_plan  # noqa: E402
@@ -721,11 +722,13 @@ class AdvantageBenchmarkTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             outdir = Path(tmp)
+            oracle_scene_path = outdir / "oracle_scene.json"
             metrics_path = outdir / "advantage_metrics.json"
             curve_path = outdir / "qae_curve.csv"
             circuit_path = outdir / "qae_circuit.txt"
             scaling_path = outdir / "scaling_summary.json"
             scaling_csv_path = outdir / "scaling_summary.csv"
+            advantage.write_json(oracle_scene_path, oracle_scene)
             advantage.write_json(metrics_path, metrics)
             advantage.write_curve_csv(curve_path, metrics)
             advantage.write_json(scaling_path, metrics["scaling_summary"])
@@ -800,7 +803,7 @@ class AdvantageBenchmarkTests(unittest.TestCase):
                 metrics,
                 oracle_scene,
                 metrics_path=metrics_path,
-                oracle_scene_path=Path("oracle_scene.json"),
+                oracle_scene_path=oracle_scene_path,
                 circuit_path=oracle_kernel_circuit,
             )
             moonlab_oracle_transpile.write_json(
@@ -856,7 +859,7 @@ class AdvantageBenchmarkTests(unittest.TestCase):
                 metrics,
                 oracle_scene,
                 metrics_path=metrics_path,
-                oracle_scene_path=Path("oracle_scene.json"),
+                oracle_scene_path=oracle_scene_path,
                 circuit_path=observation_circuit,
             )
             moonlab_observation_transpile.write_json(
@@ -916,11 +919,14 @@ class AdvantageBenchmarkTests(unittest.TestCase):
                 outdir / "qae_moonlab_grover_schedule_plan.md")
             grover_plan_icc_path = (
                 outdir / "qae_moonlab_grover_schedule_plan_icc.json")
+            grover_circuit_dir = (
+                outdir / "qae_moonlab_grover_circuits")
             grover_plan = moonlab_grover_plan.build_schedule_plan(
                 metrics,
                 oracle_scene,
                 metrics_path=metrics_path,
-                oracle_scene_path=Path("oracle_scene.json"),
+                oracle_scene_path=oracle_scene_path,
+                circuit_dir=grover_circuit_dir,
             )
             moonlab_grover_plan.write_json(grover_plan_path, grover_plan)
             grover_plan_md.write_text(
@@ -963,6 +969,95 @@ class AdvantageBenchmarkTests(unittest.TestCase):
             self.assertEqual(
                 grover_plan_icc["runtime_backend"],
                 "qge_moonlab_qae_grover_plan")
+
+            advantage_icc_path = outdir / "qge_advantage_icc_evidence.json"
+            advantage.write_json(advantage_icc_path, icc)
+            manifest_path = outdir / "publication_manifest.json"
+            manifest = {
+                "schema": "qge.publication_pack.v0",
+                "artifacts": {
+                    "oracle": {
+                        "oracle_scene": {"path": str(oracle_scene_path)},
+                    },
+                    "advantage": {
+                        "metrics": {"path": str(metrics_path)},
+                        "qae_curve": {"path": str(curve_path)},
+                        "qae_circuit": {"path": str(circuit_path)},
+                        "scaling_summary": {"path": str(scaling_path)},
+                        "icc_evidence": {"path": str(advantage_icc_path)},
+                        "qae_moonlab_payload": {
+                            "path": str(payload_path),
+                        },
+                        "qae_moonlab_payload_icc_evidence": {
+                            "path": str(payload_icc_path),
+                        },
+                        "qae_moonlab_circuits": {
+                            "path": str(circuit_dir),
+                        },
+                        "qae_moonlab_oracle_kernel": {
+                            "path": str(oracle_kernel_path),
+                        },
+                        "qae_moonlab_oracle_kernel_circuit": {
+                            "path": str(oracle_kernel_circuit),
+                        },
+                        "qae_moonlab_oracle_kernel_icc_evidence": {
+                            "path": str(oracle_kernel_icc_path),
+                        },
+                        "qae_moonlab_observation_zero": {
+                            "path": str(observation_path),
+                        },
+                        "qae_moonlab_observation_zero_circuit": {
+                            "path": str(observation_circuit),
+                        },
+                        "qae_moonlab_observation_zero_icc_evidence": {
+                            "path": str(observation_icc_path),
+                        },
+                        "qae_moonlab_grover_schedule_plan": {
+                            "path": str(grover_plan_path),
+                        },
+                        "qae_moonlab_grover_schedule_plan_icc_evidence": {
+                            "path": str(grover_plan_icc_path),
+                        },
+                        "qae_moonlab_grover_circuits": {
+                            "path": str(grover_circuit_dir),
+                        },
+                    },
+                },
+            }
+            advantage.write_json(manifest_path, manifest)
+            advantage_artifact_audit = (
+                moonlab_advantage_artifact_audit
+                .moonlab_advantage_artifact_audit(
+                    manifest,
+                    manifest_path=manifest_path,
+                )
+            )
+            self.assertTrue(advantage_artifact_audit["passed"],
+                            advantage_artifact_audit)
+            self.assertEqual(advantage_artifact_audit["mismatch_count"], 0)
+
+            stale_payload = publication_pack.load_json(payload_path)
+            stale_payload["payload_resource_estimate"]["total_shots"] = 0
+            stale_payload["claim_posture"]["hardware_result_claimed"] = True
+            publication_pack.write_json(payload_path, stale_payload)
+            stale_advantage_audit = (
+                moonlab_advantage_artifact_audit
+                .moonlab_advantage_artifact_audit(
+                    manifest,
+                    manifest_path=manifest_path,
+                )
+            )
+            self.assertFalse(stale_advantage_audit["passed"])
+            self.assertTrue(any(
+                item.get("artifact") == "advantage.qae_moonlab_payload"
+                and "payload_resource_estimate.total_shots" in
+                item.get("fields", [])
+                for item in stale_advantage_audit["json_mismatches"]
+            ))
+            self.assertTrue(any(
+                flag.get("flag") == "hardware_result_claimed"
+                for flag in stale_advantage_audit["overclaim_flags"]
+            ))
 
 
 class PublicationPackTests(unittest.TestCase):

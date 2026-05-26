@@ -341,11 +341,12 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      shell fragments, and the registered-asset install script must rebuild
      from the packed intake ledger while retaining executable permissions.
      Packed asset-resource ledgers, resource boundary ledgers, Moonlab
-     full-game plan artifacts, Moonlab job plan artifacts, hardware handoff
-     artifacts, and deployment-gate JSON/ICC artifacts must recompute from their
-     source artifacts. Packed Markdown evidence reports must regenerate from
-     their source JSON ledgers, and Moonlab `.moonlab` circuit body files must
-     match the size and SHA-256 recorded by their JSON ledgers.
+     full-game plan artifacts, Moonlab job plan artifacts, Moonlab
+     advantage/control-plane artifacts, hardware handoff artifacts, and
+     deployment-gate JSON/ICC artifacts must recompute from their source
+     artifacts. Packed Markdown evidence reports must regenerate from their
+     source JSON ledgers, and Moonlab `.moonlab` circuit body files must match
+     the size and SHA-256 recorded by their JSON ledgers.
      Generated advantage files (`qae_curve.csv`, `qae_circuit.txt`, and
      scaling summaries) must regenerate from `advantage_metrics.json`.
      The packed agent-stream manifest must match the packed frame files,
