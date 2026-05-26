@@ -2980,6 +2980,23 @@ class PublicationPackTests(unittest.TestCase):
                 for item in stale_audit["mismatches"]
             ))
 
+            missing_both_manifest = json.loads(json.dumps(manifest))
+            del missing_both_manifest["source_inputs"]["vanilla_matrix"]
+            del missing_both_manifest["artifacts"]["vanilla"]["matrix"][
+                "source_path"]
+            missing_both_audit = (
+                manifest_source_input_audit.manifest_source_input_audit(
+                    missing_both_manifest)
+            )
+            self.assertFalse(missing_both_audit["passed"])
+            self.assertTrue(any(
+                item.get("source_input") == "vanilla_matrix" and
+                item.get("artifact") == "vanilla.matrix" and
+                item.get("reason") ==
+                "missing_source_input_and_artifact_source_path"
+                for item in missing_both_audit["mismatches"]
+            ))
+
     def test_manifest_summary_audit_detects_stale_mirrors(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmpdir = Path(tmp)

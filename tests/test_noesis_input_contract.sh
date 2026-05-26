@@ -264,6 +264,7 @@ grep -q 'expected_runtime_summary' "$repo_root/tools/qge_manifest_summary_audit.
 grep -q 'qge_manifest_summary_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'manifest_source_input_audit' "$repo_root/tools/qge_manifest_source_input_audit.py"
 grep -q 'EXACT_SOURCE_CHECKS' "$repo_root/tools/qge_manifest_source_input_audit.py"
+grep -q 'missing_source_input_and_artifact_source_path' "$repo_root/tools/qge_manifest_source_input_audit.py"
 grep -q 'qge_manifest_source_input_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'manifest_source_copy_audit' "$repo_root/tools/qge_manifest_source_copy_audit.py"
 grep -q 'directory_copy_mismatch' "$repo_root/tools/qge_manifest_source_copy_audit.py"

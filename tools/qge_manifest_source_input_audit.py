@@ -104,6 +104,17 @@ def compare_source(
         source_norm = normalized_parent(source_value)
     else:
         artifact_compare = artifact_norm
+    if source_norm is None and artifact_compare is None:
+        return {
+            "source_input": input_name,
+            "artifact": f"{section}.{artifact_name}",
+            "relation": relation,
+            "reason": "missing_source_input_and_artifact_source_path",
+            "source_input_path": source_value,
+            "artifact_source_path": artifact_value,
+            "source_input_normalized": source_norm,
+            "artifact_compare_normalized": artifact_compare,
+        }
     if source_norm == artifact_compare:
         return None
     reason = "value_mismatch"
