@@ -223,6 +223,8 @@ grep -q 'moonlab_advantage_icc_evidence_consistent' "$repo_root/tools/qge_moonla
 grep -q 'qge_resource_boundary_audit' "$repo_root/tools/qge_moonlab_deployment_gate.py"
 grep -q 'resource_boundary_audit' "$repo_root/tools/qge_resource_boundary_audit.py"
 grep -q 'resource_boundary_ledgers_consistent' "$repo_root/tools/qge_moonlab_deployment_gate.py"
+grep -q 'qge_resource_boundary_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
+grep -q 'QGE_RESOURCE_BOUNDARY_AUDIT' "$repo_root/tools/qge_resource_boundary_audit.py"
 grep -q 'qge_oracle_export' "$repo_root/tools/qge_oracle_scene_audit.py"
 grep -q 'oracle_scene_source_audit' "$repo_root/tools/qge_oracle_scene_audit.py"
 grep -q 'qge_oracle_scene_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"

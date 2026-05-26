@@ -41,6 +41,7 @@ POSTPACK_REPRODUCE_COMMAND_PREFIXES = (
     "tools/qge_trace_summary_audit.py ",
     "tools/qge_breadth_evidence_audit.py ",
     "tools/qge_registered_asset_script_audit.py ",
+    "tools/qge_resource_boundary_audit.py ",
     "tools/qge_moonlab_circuit_file_audit.py ",
     "tools/qge_advantage_generated_file_audit.py ",
     "tools/qge_manifest_file_audit.py ",

@@ -1554,6 +1554,182 @@ class PublicationPackTests(unittest.TestCase):
         ))
         self.assertTrue(stale_audit["malformed_commands"])
 
+    def test_resource_boundary_audit_from_manifest_detects_stale_ledgers(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            pack_dir = tmpdir / "pack"
+            manifest_path = pack_dir / "publication_manifest.json"
+            paths = {
+                "oracle_scene": pack_dir / "oracle" / "oracle_scene.json",
+                "metrics": pack_dir / "advantage" /
+                "advantage_metrics.json",
+                "vanilla_matrix": pack_dir / "vanilla" /
+                "vanilla_capture_matrix.json",
+                "performance_summary": pack_dir / "capture" /
+                "qge_perf_summary.json",
+                "breadth_evidence": pack_dir / "breadth" /
+                "breadth_evidence.json",
+                "envelope": pack_dir / "resource" /
+                "qge_resource_envelope.json",
+                "native_boundary": pack_dir / "resource" /
+                "qge_native_backend_boundary.json",
+            }
+            probe_proofs = {
+                target: {
+                    "event_count": 1,
+                    "backends": ["Metal"],
+                    "paths": ["native_sparse_dwt_render_bridge"],
+                    "results": [
+                        perf_summary.RUNTIME_BACKEND_BOUNDARY_SOURCES[
+                            target]["required_results"][0]
+                    ],
+                    "phases": ["create"],
+                    "native_bridge_evidence": True,
+                    "active_evidence": True,
+                    "latest_event": {"target": target},
+                }
+                for target in perf_summary.REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS
+            }
+            coverage = breadth_evidence.build_full_game_map_coverage(
+                ["start", "e1m1"])
+            source_artifacts = {
+                "oracle_scene": {
+                    "cost_model": {"candidate_count": 234, "shots": 64},
+                    "sample_space": {
+                        "candidate_count": 234,
+                        "register_bits": 8,
+                    },
+                    "snapshot": {
+                        "render": {
+                            "shots": 64,
+                            "gates": 26,
+                            "idwt_path": (
+                                "native_sparse_dwt_render_bridge"),
+                            "idwt_backend": "native",
+                            "cpu_idwt": 0,
+                        },
+                    },
+                },
+                "advantage_metrics": {
+                    "comparison": {
+                        "best_qae": {"shots": 384},
+                    },
+                    "resource_estimate": {
+                        "logical_qubits": 19,
+                        "candidate_index_bits": 8,
+                        "contribution_threshold_bits": 8,
+                        "controlled_oracle_calls": 1728,
+                        "one_qubit_gates": 34560,
+                        "two_qubit_gates": 27648,
+                        "circuit_depth": 1350,
+                    },
+                },
+                "vanilla_matrix": {
+                    "conformance_summary": {
+                        "ready_for_complete_claim": True,
+                        "fallback_count": 0,
+                        "qge_surface_surrogates": 0,
+                    },
+                },
+                "performance_summary": {
+                    "status": "pass",
+                    "aggregate": {
+                        "runtime_backend_probe_proofs": probe_proofs,
+                        "runtime_backend_probe_missing_targets": [],
+                        "runtime_backend_probe_native_targets": list(
+                            probe_proofs),
+                        "runtime_backend_probe_resolved": True,
+                    },
+                },
+                "breadth_evidence": {
+                    "status": "pass",
+                    "aggregate": {
+                        "breadth_ready_for_complete_claim": False,
+                        "map_count": 2,
+                        "maps": ["start", "e1m1"],
+                        "full_game_coverage": coverage,
+                        "total_fallback_count": 0,
+                        "total_surrogate_count": 0,
+                        "total_cpu_idwt_count": 0,
+                        "total_native_bridge_count": 12,
+                        "runtime_backend_probe_missing_targets": [],
+                        "runtime_backend_probe_native_targets": list(
+                            probe_proofs),
+                    },
+                },
+            }
+            ledgers = resource_boundary_audit.expected_resource_boundary_ledgers(
+                source_artifacts)
+            artifacts = {
+                "oracle": {"oracle_scene": {"path": str(paths["oracle_scene"])}},
+                "advantage": {"metrics": {"path": str(paths["metrics"])}},
+                "vanilla": {"matrix": {"path": str(paths["vanilla_matrix"])}},
+                "capture": {
+                    "performance_summary": {
+                        "path": str(paths["performance_summary"]),
+                    },
+                },
+                "breadth": {
+                    "evidence": {"path": str(paths["breadth_evidence"])},
+                },
+                "resource": {
+                    "envelope": {"path": str(paths["envelope"])},
+                    "native_backend_boundary": {
+                        "path": str(paths["native_boundary"]),
+                    },
+                },
+            }
+            for key, source_key in (
+                ("oracle_scene", "oracle_scene"),
+                ("metrics", "advantage_metrics"),
+                ("vanilla_matrix", "vanilla_matrix"),
+                ("performance_summary", "performance_summary"),
+                ("breadth_evidence", "breadth_evidence"),
+            ):
+                publication_pack.write_json(paths[key],
+                                            source_artifacts[source_key])
+            publication_pack.write_json(paths["envelope"],
+                                        ledgers["resource_envelope"])
+            publication_pack.write_json(paths["native_boundary"],
+                                        ledgers["native_backend_boundary"])
+            manifest = {"artifacts": artifacts}
+            publication_pack.write_json(manifest_path, manifest)
+
+            audit = (
+                resource_boundary_audit.resource_boundary_audit_from_manifest(
+                    manifest,
+                    manifest_path=manifest_path,
+                )
+            )
+            self.assertTrue(audit["passed"], audit)
+            self.assertEqual(audit["recorded_ledger_count"], 2)
+
+            stale_envelope = json.loads(json.dumps(
+                ledgers["resource_envelope"]))
+            stale_envelope[
+                "posture"
+            ]["hardware_quantum_advantage_claimed"] = True
+            publication_pack.write_json(paths["envelope"], stale_envelope)
+            stale_audit = (
+                resource_boundary_audit.resource_boundary_audit_from_manifest(
+                    manifest,
+                    manifest_path=manifest_path,
+                )
+            )
+            self.assertFalse(stale_audit["passed"])
+            self.assertTrue(any(
+                item.get("ledger") == "resource_envelope" and
+                "posture.hardware_quantum_advantage_claimed" in
+                item.get("fields", [])
+                for item in stale_audit["ledger_mismatches"]
+            ))
+            self.assertTrue(any(
+                flag.get("flag") == "hardware_quantum_advantage_claimed"
+                for flag in stale_audit["overclaim_flags"]
+            ))
+
     def test_postpack_audit_runner_summarizes_child_failures(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmpdir = Path(tmp)

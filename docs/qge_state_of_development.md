@@ -758,10 +758,12 @@ Known current visual state:
   runner executes the advertised verifier set before signoff, clearing each
   child audit output path first so
   stale verifier JSON cannot satisfy the run; the top-level publication ICC
-  sidecar records the reproduce/postpack audit verdict. Packed Markdown
-  evidence reports are regenerated from their source JSON ledgers before they
-  are treated as current, and Moonlab `.moonlab` circuit body files are hashed
-  against their JSON records before control-plane payload evidence is accepted.
+  sidecar records the reproduce/postpack audit verdict. Packed resource
+  boundary ledgers are recomputed from their source artifacts before the
+  postpack audit accepts them. Packed Markdown evidence reports are regenerated
+  from their source JSON ledgers before they are treated as current, and
+  Moonlab `.moonlab` circuit body files are hashed against their JSON records
+  before control-plane payload evidence is accepted.
   Generated advantage files
   (`qae_curve.csv`, `qae_circuit.txt`, and scaling summaries) are regenerated
   from `advantage_metrics.json` before they are treated as current. The packed
