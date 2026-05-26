@@ -34,6 +34,7 @@ import qge_moonlab_advantage_icc_audit as moonlab_advantage_icc_audit  # noqa: E
 import qge_moonlab_deployment_gate_audit as moonlab_deployment_gate_audit  # noqa: E402
 import qge_moonlab_deployment_gate as moonlab_deployment_gate  # noqa: E402
 import qge_moonlab_full_game_plan as moonlab_full_game_plan  # noqa: E402
+import qge_moonlab_handoff_audit as moonlab_handoff_audit  # noqa: E402
 import qge_moonlab_hardware_ingest as moonlab_hardware_ingest  # noqa: E402
 import qge_moonlab_hardware_result_audit as moonlab_hardware_result_audit  # noqa: E402
 import qge_moonlab_job_plan_audit as moonlab_job_plan_audit  # noqa: E402
@@ -3394,6 +3395,50 @@ class PublicationPackTests(unittest.TestCase):
             publication_pack.write_json(
                 resource_envelope_path, resource_envelope)
             job_manifest_path = jobs_tmp / "publication_manifest.json"
+            submission_bundle_path = (
+                jobs_tmp / "qge_moonlab_submission_bundle.json")
+            submission_bundle_icc_path = (
+                jobs_tmp / "qge_moonlab_submission_bundle_icc_evidence.json")
+            hardware_template_path = (
+                jobs_tmp / "qge_moonlab_hardware_record_template.json")
+            hardware_scope_path = (
+                jobs_tmp / "qge_moonlab_hardware_submission_scope.json")
+            hardware_scope_icc_path = (
+                jobs_tmp /
+                "qge_moonlab_hardware_submission_scope_icc_evidence.json")
+            publication_pack.write_json(submission_bundle_path,
+                                        submission_bundle)
+            publication_pack.write_json(
+                submission_bundle_icc_path,
+                moonlab_submission_bundle.build_icc_evidence(
+                    submission_bundle,
+                    out_path=submission_bundle_path,
+                ),
+            )
+            hardware_template = (
+                moonlab_hardware_ingest.build_hardware_record_template(
+                    moonlab_submission_packet)
+            )
+            publication_pack.write_json(hardware_template_path,
+                                        hardware_template)
+            hardware_scope = (
+                moonlab_submission_bundle.build_hardware_submission_scope(
+                    moonlab_submission_packet,
+                    submission_bundle,
+                    hardware_template,
+                    packet_path=moonlab_submission_packet_path,
+                    bundle_path=submission_bundle_path,
+                    hardware_template_path=hardware_template_path,
+                )
+            )
+            publication_pack.write_json(hardware_scope_path, hardware_scope)
+            publication_pack.write_json(
+                hardware_scope_icc_path,
+                moonlab_submission_bundle.build_scope_icc_evidence(
+                    hardware_scope,
+                    out_path=hardware_scope_path,
+                ),
+            )
             job_manifest = {
                 "schema": "qge.publication_pack.v0",
                 "artifacts": {
@@ -3455,10 +3500,53 @@ class PublicationPackTests(unittest.TestCase):
                         "moonlab_submission_packet": {
                             "path": str(moonlab_submission_packet_path),
                         },
+                        "moonlab_submission_bundle": {
+                            "path": str(submission_bundle_path),
+                        },
+                        "moonlab_submission_bundle_icc_evidence": {
+                            "path": str(submission_bundle_icc_path),
+                        },
+                        "moonlab_hardware_record_template": {
+                            "path": str(hardware_template_path),
+                        },
+                        "moonlab_hardware_submission_scope": {
+                            "path": str(hardware_scope_path),
+                        },
+                        "moonlab_hardware_submission_scope_icc_evidence": {
+                            "path": str(hardware_scope_icc_path),
+                        },
                     },
                 },
             }
             publication_pack.write_json(job_manifest_path, job_manifest)
+            handoff_audit = moonlab_handoff_audit.moonlab_handoff_audit(
+                job_manifest,
+                manifest_path=job_manifest_path,
+            )
+            self.assertTrue(handoff_audit["passed"], handoff_audit)
+            self.assertEqual(handoff_audit["mismatch_count"], 0)
+
+            stale_scope = publication_pack.load_json(hardware_scope_path)
+            stale_scope["passing_check_count"] = 0
+            stale_scope["claim_posture"]["hardware_result_claimed"] = True
+            publication_pack.write_json(hardware_scope_path, stale_scope)
+            stale_handoff_audit = moonlab_handoff_audit.moonlab_handoff_audit(
+                job_manifest,
+                manifest_path=job_manifest_path,
+            )
+            self.assertFalse(stale_handoff_audit["passed"])
+            self.assertTrue(any(
+                item.get("artifact") ==
+                "resource.moonlab_hardware_submission_scope"
+                and "passing_check_count" in item.get("fields", [])
+                for item in stale_handoff_audit["artifact_mismatches"]
+            ))
+            self.assertTrue(any(
+                flag.get("flag") == "hardware_result_claimed"
+                for flag in stale_handoff_audit["overclaim_flags"]
+            ))
+            publication_pack.write_json(hardware_scope_path, hardware_scope)
+
             job_plan_audit = moonlab_job_plan_audit.moonlab_job_plan_audit(
                 job_manifest,
                 manifest_path=job_manifest_path,
