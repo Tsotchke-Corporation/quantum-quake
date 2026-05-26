@@ -227,6 +227,12 @@ def add_scalar_option_check(
         })
         return
     if expected is None:
+        checks.append({
+            "option": option,
+            "expected_values": [],
+            "required": True,
+            "expected_missing": True,
+        })
         return
     checks.append({
         "option": option,
@@ -388,6 +394,22 @@ def publication_pack_command_field_mismatches(
             str(value) for value in list_or_empty(check.get("expected_values"))
         ]
         actual_values = option_values(tokens, option)
+        if check.get("required") and check.get("expected_missing"):
+            mismatches.append({
+                "option": option,
+                "reason": "missing_expected_value",
+                "expected_values": expected_values,
+                "actual_values": actual_values,
+            })
+            continue
+        if check.get("required") and not expected_values:
+            mismatches.append({
+                "option": option,
+                "reason": "missing_expected_values",
+                "expected_values": expected_values,
+                "actual_values": actual_values,
+            })
+            continue
         if expected_values == actual_values:
             continue
         reason = "value_mismatch"

@@ -1894,6 +1894,30 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(audit["publication_pack_source_mismatches"], [])
         self.assertEqual(audit["unexpected_commands"], [])
 
+        missing_expected_manifest = json.loads(json.dumps(manifest))
+        del missing_expected_manifest["source_inputs"][
+            "publication_pack_reproduction"]["outdir"]
+        missing_expected_manifest["source_inputs"][
+            "advantage_benchmark"]["samples"] = []
+        missing_expected_audit = (
+            manifest_reproduce_audit.manifest_reproduce_audit(
+                missing_expected_manifest))
+        self.assertFalse(missing_expected_audit["passed"])
+        self.assertTrue(any(
+            field.get("option") == "--outdir" and
+            field.get("reason") == "missing_expected_value"
+            for item in missing_expected_audit[
+                "publication_pack_source_mismatches"]
+            for field in item.get("field_mismatches", [])
+        ))
+        self.assertTrue(any(
+            field.get("option") == "--samples" and
+            field.get("reason") == "missing_expected_values"
+            for item in missing_expected_audit[
+                "core_command_source_mismatches"]
+            for field in item.get("field_mismatches", [])
+        ))
+
         semantic_duplicate_manifest = json.loads(json.dumps(manifest))
         semantic_duplicate_manifest["reproduce_commands"].append(
             commands[0].replace(
