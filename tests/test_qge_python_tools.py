@@ -2265,13 +2265,17 @@ class PublicationPackTests(unittest.TestCase):
             )
             self.assertEqual(audit["skipped_self_audit_count"], 1)
             self.assertFalse(audit["child_audit_coverage_passed"])
-            self.assertEqual(audit["coverage_failure_count"], 2)
+            self.assertEqual(audit["coverage_failure_count"], 3)
             self.assertIn(
                 "missing_default_child_audit_tools",
                 audit["coverage_failures"],
             )
             self.assertIn(
                 "unexpected_child_audit_tools",
+                audit["coverage_failures"],
+            )
+            self.assertIn(
+                "child_audit_order_mismatch",
                 audit["coverage_failures"],
             )
             self.assertIn(
@@ -2283,6 +2287,9 @@ class PublicationPackTests(unittest.TestCase):
                 ["tools/pass_audit.py", "tools/fail_audit.py"],
             )
             self.assertEqual(audit["duplicate_child_audit_tools"], [])
+            self.assertFalse(audit["child_audit_order_passed"])
+            self.assertGreater(
+                audit["child_audit_order_mismatch_count"], 0)
             self.assertEqual(audit["passed_count"], 1)
             self.assertEqual(audit["failed_count"], 1)
             self.assertEqual(audit["returncode_failure_count"], 1)
@@ -2351,11 +2358,18 @@ class PublicationPackTests(unittest.TestCase):
                 "unexpected_child_audit_tools",
                 audit["coverage_failures"],
             )
+            self.assertIn(
+                "child_audit_order_mismatch",
+                audit["coverage_failures"],
+            )
             self.assertEqual(
                 audit["unexpected_child_audit_tools"],
                 ["tools/stale_audit.py"],
             )
             self.assertEqual(audit["duplicate_child_audit_tools"], [])
+            self.assertFalse(audit["child_audit_order_passed"])
+            self.assertGreater(
+                audit["child_audit_order_mismatch_count"], 0)
             self.assertEqual(audit["failed_tools"], ["tools/stale_audit.py"])
             self.assertEqual(audit["returncode_failure_count"], 0)
             self.assertEqual(audit["payload_failure_count"], 1)
@@ -2413,7 +2427,53 @@ class PublicationPackTests(unittest.TestCase):
                 "duplicate_child_audit_tools",
                 audit["coverage_failures"],
             )
-            self.assertEqual(audit["coverage_failure_count"], 2)
+            self.assertIn(
+                "child_audit_order_mismatch",
+                audit["coverage_failures"],
+            )
+            self.assertFalse(audit["child_audit_order_passed"])
+            self.assertGreater(
+                audit["child_audit_order_mismatch_count"], 0)
+            self.assertEqual(audit["coverage_failure_count"], 3)
+
+    def test_postpack_audit_rejects_reordered_child_coverage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            pack_dir = tmpdir / "pack"
+            outdir = tmpdir / "audits"
+            pack_dir.mkdir()
+
+            def passing_runner(command: list[str]) -> SimpleNamespace:
+                out_path = Path(command[command.index("--out") + 1])
+                out_path.write_text(
+                    json.dumps({
+                        "passed": True,
+                        "mismatch_count": 0,
+                    }, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            audit = postpack_audit.postpack_audit(
+                pack_dir,
+                outdir=outdir,
+                audit_tools=tuple(reversed(postpack_audit.POSTPACK_AUDIT_TOOLS)),
+                runner=passing_runner,
+            )
+
+            self.assertFalse(audit["passed"])
+            self.assertEqual(audit["failed_count"], 0)
+            self.assertFalse(audit["child_audit_coverage_passed"])
+            self.assertFalse(audit["child_audit_order_passed"])
+            self.assertEqual(audit["missing_child_audit_tools"], [])
+            self.assertEqual(audit["unexpected_child_audit_tools"], [])
+            self.assertEqual(audit["duplicate_child_audit_tools"], [])
+            self.assertEqual(
+                audit["coverage_failures"],
+                ["child_audit_order_mismatch"],
+            )
+            self.assertGreater(
+                audit["child_audit_order_mismatch_count"], 0)
 
     def test_manifest_markdown_audit_detects_stale_report(
         self,

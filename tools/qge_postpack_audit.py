@@ -69,6 +69,25 @@ def duplicate_audit_tools(audit_tools: tuple[str, ...]) -> list[str]:
     return duplicates
 
 
+def audit_tool_order_mismatches(
+    audit_tools: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    mismatches = []
+    for index in range(max(len(audit_tools), len(POSTPACK_AUDIT_TOOLS))):
+        expected = (
+            POSTPACK_AUDIT_TOOLS[index]
+            if index < len(POSTPACK_AUDIT_TOOLS) else None
+        )
+        actual = audit_tools[index] if index < len(audit_tools) else None
+        if expected != actual:
+            mismatches.append({
+                "position": index,
+                "expected": expected,
+                "actual": actual,
+            })
+    return mismatches
+
+
 def prepare_audit_output(out_path: Path) -> dict[str, Any]:
     if not out_path.exists() and not out_path.is_symlink():
         return {
@@ -198,6 +217,7 @@ def postpack_audit(
         if tool not in POSTPACK_AUDIT_TOOLS
     ]
     duplicate_child_tools = duplicate_audit_tools(audit_tools)
+    child_order_mismatches = audit_tool_order_mismatches(audit_tools)
     coverage_failures = []
     if skipped_self_count != 1:
         coverage_failures.append("self_audit_exclusion_count_mismatch")
@@ -207,7 +227,10 @@ def postpack_audit(
         coverage_failures.append("unexpected_child_audit_tools")
     if duplicate_child_tools:
         coverage_failures.append("duplicate_child_audit_tools")
+    if child_order_mismatches:
+        coverage_failures.append("child_audit_order_mismatch")
     child_coverage_passed = not coverage_failures
+    child_order_passed = not child_order_mismatches
     passed = child_coverage_passed and not failed and bool(results)
     return {
         "schema": "qge.postpack_audit.v0",
@@ -222,6 +245,9 @@ def postpack_audit(
         "missing_child_audit_tools": missing_child_tools,
         "unexpected_child_audit_tools": unexpected_child_tools,
         "duplicate_child_audit_tools": duplicate_child_tools,
+        "child_audit_order_passed": child_order_passed,
+        "child_audit_order_mismatch_count": len(child_order_mismatches),
+        "child_audit_order_mismatches": child_order_mismatches,
         "child_audit_coverage_passed": child_coverage_passed,
         "coverage_failure_count": len(coverage_failures),
         "coverage_failures": coverage_failures,

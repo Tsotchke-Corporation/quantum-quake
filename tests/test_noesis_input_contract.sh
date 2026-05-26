@@ -274,6 +274,7 @@ grep -q 'qge_manifest_claim_policy_audit.py <pack_dir>' "$repo_root/tools/qge_pu
 grep -q 'POSTPACK_SELF_AUDIT_TOOL' "$repo_root/tools/qge_postpack_audit.py"
 grep -q 'manifest_postpack_command_count' "$repo_root/tools/qge_postpack_audit.py"
 grep -q 'child_audit_coverage_passed' "$repo_root/tools/qge_postpack_audit.py"
+grep -q 'child_audit_order_passed' "$repo_root/tools/qge_postpack_audit.py"
 grep -q 'duplicate_child_audit_tools' "$repo_root/tools/qge_postpack_audit.py"
 grep -q 'failed_mismatch_count_total' "$repo_root/tools/qge_postpack_audit.py"
 grep -q 'manifest_reproduce_audit' "$repo_root/tools/qge_manifest_reproduce_audit.py"
