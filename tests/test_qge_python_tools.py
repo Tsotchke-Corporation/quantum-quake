@@ -1783,6 +1783,13 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(audit["core_command_source_mismatches"], [])
         self.assertEqual(audit["publication_pack_source_mismatches"], [])
 
+        with self.assertRaisesRegex(ValueError, "capture_dir"):
+            publication_pack.oracle_export_reproduce_command(args, {})
+        with self.assertRaisesRegex(ValueError, "graphics_capture_dir"):
+            publication_pack.vanilla_matrix_reproduce_command({})
+        with self.assertRaisesRegex(ValueError, "breadth matrix"):
+            publication_pack.breadth_evidence_reproduce_command({})
+
         mixed_manifest = json.loads(json.dumps(manifest))
         mixed_manifest["reproduce_commands"].append(
             "tools/qge_publication_pack.py --capture-dir stale")

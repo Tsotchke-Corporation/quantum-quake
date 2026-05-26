@@ -87,7 +87,7 @@ def oracle_export_reproduce_command(
 ) -> str:
     parts = [
         "tools/qge_oracle_export.py",
-        command_arg(inputs.get("capture_dir") or "<capture_dir>"),
+        command_required_arg(inputs.get("capture_dir"), "capture_dir"),
     ]
     append_command_option(parts, "--claims", args.claims)
     append_command_option(parts, "--oracle-out", "/tmp/oracle_scene.json")
@@ -102,7 +102,7 @@ def vanilla_matrix_reproduce_command(inputs: dict[str, Any]) -> str:
         source = Path(inputs["vanilla_matrix"]).parent
     parts = [
         "tools/qge_vanilla_capture_matrix.py",
-        command_arg(source or "<graphics_capture_dir>"),
+        command_required_arg(source, "graphics_capture_dir"),
     ]
     append_command_option(parts, "--out", "/tmp/vanilla_capture_matrix.json")
     append_command_option(parts, "--icc-out",
@@ -123,6 +123,12 @@ def asset_requirements_reproduce_command(args: argparse.Namespace) -> str:
 
 def command_arg(value: Any) -> str:
     return shlex.quote(str(value))
+
+
+def command_required_arg(value: Any, label: str) -> str:
+    if value is None:
+        raise ValueError(f"missing required reproduction input: {label}")
+    return command_arg(value)
 
 
 def append_command_option(parts: list[str], option: str, value: Any) -> None:
@@ -181,7 +187,7 @@ def breadth_evidence_reproduce_command(inputs: dict[str, Any]) -> str:
         for matrix in matrices:
             append_command_option(parts, "--matrix", matrix)
     else:
-        append_command_option(parts, "--matrix", "<graphics_capture_dir>")
+        raise ValueError("missing required reproduction input: breadth matrix")
     append_command_option(parts, "--min-runs", plan.get("min_runs"))
     append_command_option(parts, "--min-maps", plan.get("min_maps"))
     append_command_option(parts, "--map-set", plan.get("map_set"))
