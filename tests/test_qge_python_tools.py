@@ -31,6 +31,7 @@ import qge_breadth_evidence_audit as breadth_evidence_audit  # noqa: E402
 import qge_full_game_capture_queue as full_game_capture_queue  # noqa: E402
 import qge_image_metrics as image_metrics  # noqa: E402
 import qge_moonlab_advantage_icc_audit as moonlab_advantage_icc_audit  # noqa: E402
+import qge_moonlab_deployment_gate_audit as moonlab_deployment_gate_audit  # noqa: E402
 import qge_moonlab_deployment_gate as moonlab_deployment_gate  # noqa: E402
 import qge_moonlab_full_game_plan as moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest as moonlab_hardware_ingest  # noqa: E402
@@ -7229,6 +7230,44 @@ class PublicationPackTests(unittest.TestCase):
                 "qge_registered_asset_intake.py",
                 cli_icc["registered_asset_discovery_command"],
             )
+            manifest["artifacts"]["resource"]["moonlab_deployment_gate"] = {
+                "path": str(out_path),
+            }
+            manifest["artifacts"]["resource"][
+                "moonlab_deployment_gate_icc_evidence"
+            ] = {
+                "path": str(icc_path),
+            }
+            publication_pack.write_json(
+                tmpdir / "publication_manifest.json", manifest)
+            gate_audit = (
+                moonlab_deployment_gate_audit
+                .deployment_gate_artifact_audit(
+                    manifest,
+                    manifest_path=tmpdir / "publication_manifest.json",
+                )
+            )
+            self.assertTrue(gate_audit["passed"], gate_audit)
+            self.assertEqual(gate_audit["mismatch_count"], 0)
+
+            stale_gate = publication_pack.load_json(out_path)
+            stale_gate["blocker_count"] = 0
+            stale_gate["whole_game_hardware_execution_claimed"] = True
+            publication_pack.write_json(out_path, stale_gate)
+            stale_gate_audit = (
+                moonlab_deployment_gate_audit
+                .deployment_gate_artifact_audit(
+                    manifest,
+                    manifest_path=tmpdir / "publication_manifest.json",
+                )
+            )
+            self.assertFalse(stale_gate_audit["passed"])
+            self.assertIn("blocker_count",
+                          stale_gate_audit["gate_mismatches"])
+            self.assertTrue(any(
+                flag.get("flag") == "whole_game_hardware_execution_claimed"
+                for flag in stale_gate_audit["overclaim_flags"]
+            ))
 
 
 class BreadthEvidenceTests(unittest.TestCase):

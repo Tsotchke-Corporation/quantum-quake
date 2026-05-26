@@ -340,10 +340,11 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      reproduction command list must keep core command coverage and avoid unsafe
      shell fragments, and the registered-asset install script must rebuild
      from the packed intake ledger while retaining executable permissions.
-     Packed resource boundary ledgers must recompute from their source
-     artifacts. Packed Markdown evidence reports must regenerate from their
-     source JSON ledgers, and Moonlab `.moonlab` circuit body files must match
-     the size and SHA-256 recorded by their JSON ledgers.
+     Packed resource boundary ledgers and deployment-gate JSON/ICC artifacts
+     must recompute from their source artifacts. Packed Markdown evidence
+     reports must regenerate from their source JSON ledgers, and Moonlab
+     `.moonlab` circuit body files must match the size and SHA-256 recorded by
+     their JSON ledgers.
      Generated advantage files (`qae_curve.csv`, `qae_circuit.txt`, and
      scaling summaries) must regenerate from `advantage_metrics.json`.
      The packed agent-stream manifest must match the packed frame files,
