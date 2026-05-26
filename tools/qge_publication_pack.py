@@ -2553,18 +2553,25 @@ def build_icc_evidence(manifest: dict[str, Any],
         "publication_icc_evidence_file": str(icc_path),
         "publication_pack_dir": manifest["pack_dir"],
         "manifest_reproduce_audit_passed": reproduce_audit.get("passed"),
+        "manifest_reproduce_recorded": reproduce_audit.get("recorded"),
         "manifest_reproduce_command_count": (
             reproduce_audit.get("command_count")),
         "manifest_reproduce_required_command_count": (
             reproduce_audit.get("required_command_count")),
         "manifest_reproduce_postpack_command_count": (
             reproduce_audit.get("postpack_command_count")),
+        "manifest_reproduce_optional_postpack_command_count": (
+            reproduce_audit.get("optional_postpack_command_count")),
+        "manifest_reproduce_publication_pack_command_count": (
+            reproduce_audit.get("publication_pack_command_count")),
         "manifest_reproduce_mismatch_count": (
             reproduce_audit.get("mismatch_count")),
         "manifest_reproduce_missing_required_command_count": len(
             reproduce_audit.get("missing_required_commands", [])),
         "manifest_reproduce_missing_postpack_command_count": len(
             reproduce_audit.get("missing_postpack_commands", [])),
+        "manifest_reproduce_missing_optional_postpack_command_count": len(
+            reproduce_audit.get("missing_optional_postpack_commands", [])),
         "manifest_reproduce_unexpected_command_count": len(
             reproduce_audit.get("unexpected_commands", [])),
         "manifest_reproduce_unsafe_command_count": len(
@@ -2588,6 +2595,8 @@ def build_icc_evidence(manifest: dict[str, Any],
             reproduce_audit.get("missing_required_commands")),
         "manifest_reproduce_missing_postpack_commands": (
             reproduce_audit.get("missing_postpack_commands")),
+        "manifest_reproduce_missing_optional_postpack_commands": (
+            reproduce_audit.get("missing_optional_postpack_commands")),
         "manifest_reproduce_unexpected_commands": (
             reproduce_audit.get("unexpected_commands")),
         "manifest_reproduce_unsafe_commands": (

@@ -462,6 +462,11 @@ assert manifest["artifacts"]["vanilla"]["icc_evidence"]["packed"]["exists"] is T
 assert icc["completion_reason"] == "qge_publication_artifact_pack_complete"
 assert icc["runtime_backend"] == "qge_publication_pack"
 assert icc["publication_ready_for_complete_claim"] is True
+assert icc["manifest_reproduce_recorded"] is True
+assert icc["manifest_reproduce_optional_postpack_command_count"] == 29
+assert icc["manifest_reproduce_publication_pack_command_count"] == 1
+assert icc["manifest_reproduce_missing_optional_postpack_command_count"] == 0
+assert icc["manifest_reproduce_missing_optional_postpack_commands"] == []
 assert icc["manifest_reproduce_unexpected_command_count"] == 0
 assert icc["manifest_reproduce_unexpected_commands"] == []
 assert icc["manifest_reproduce_unsafe_command_count"] == 0

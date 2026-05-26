@@ -4550,6 +4550,7 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(icc["runtime_backend"], "qge_publication_pack")
         self.assertEqual(icc["completion_reason"], "qge_publication_artifact_pack_complete")
         self.assertTrue(icc["manifest_reproduce_audit_passed"])
+        self.assertTrue(icc["manifest_reproduce_recorded"])
         self.assertEqual(icc["manifest_reproduce_mismatch_count"], 0)
         self.assertEqual(
             icc["manifest_reproduce_required_command_count"],
@@ -4560,9 +4561,20 @@ class PublicationPackTests(unittest.TestCase):
             len(manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES),
         )
         self.assertEqual(
+            icc["manifest_reproduce_optional_postpack_command_count"],
+            len(manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES),
+        )
+        self.assertEqual(
+            icc["manifest_reproduce_publication_pack_command_count"], 1)
+        self.assertEqual(
             icc["manifest_reproduce_missing_required_command_count"], 0)
         self.assertEqual(
             icc["manifest_reproduce_missing_postpack_command_count"], 0)
+        self.assertEqual(
+            icc["manifest_reproduce_missing_optional_postpack_command_count"],
+            0)
+        self.assertEqual(
+            icc["manifest_reproduce_missing_optional_postpack_commands"], [])
         self.assertEqual(
             icc["manifest_reproduce_unexpected_command_count"], 0)
         self.assertEqual(icc["manifest_reproduce_unexpected_commands"], [])
