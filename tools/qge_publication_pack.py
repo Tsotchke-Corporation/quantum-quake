@@ -2535,6 +2535,12 @@ def build_icc_evidence(manifest: dict[str, Any],
         manifest,
         required=True,
     )
+    publication_pack_source_mismatches = (
+        reproduce_audit.get("publication_pack_source_mismatches", []))
+    core_command_source_mismatches = (
+        reproduce_audit.get("core_command_source_mismatches", []))
+    postpack_command_source_mismatches = (
+        reproduce_audit.get("postpack_command_source_mismatches", []))
     ready = bool(runtime.get("publication_ready_for_complete_claim"))
     return {
         "schema": "qge.icc_evidence.v0",
@@ -2567,6 +2573,15 @@ def build_icc_evidence(manifest: dict[str, Any],
             reproduce_audit.get("duplicate_commands", [])),
         "manifest_reproduce_malformed_command_count": len(
             reproduce_audit.get("malformed_commands", [])),
+        "manifest_reproduce_publication_pack_source_mismatch_count": sum(
+            len(item.get("field_mismatches", []))
+            for item in publication_pack_source_mismatches),
+        "manifest_reproduce_core_command_source_mismatch_count": sum(
+            len(item.get("field_mismatches", []))
+            for item in core_command_source_mismatches),
+        "manifest_reproduce_postpack_command_source_mismatch_count": sum(
+            len(item.get("field_mismatches", []))
+            for item in postpack_command_source_mismatches),
         "manifest_reproduce_missing_required_commands": (
             reproduce_audit.get("missing_required_commands")),
         "manifest_reproduce_missing_postpack_commands": (
@@ -2579,6 +2594,12 @@ def build_icc_evidence(manifest: dict[str, Any],
             reproduce_audit.get("duplicate_commands")),
         "manifest_reproduce_malformed_commands": (
             reproduce_audit.get("malformed_commands")),
+        "manifest_reproduce_publication_pack_source_mismatches": (
+            publication_pack_source_mismatches),
+        "manifest_reproduce_core_command_source_mismatches": (
+            core_command_source_mismatches),
+        "manifest_reproduce_postpack_command_source_mismatches": (
+            postpack_command_source_mismatches),
         "oracle_scene_file": artifacts["oracle"]["oracle_scene"]["path"],
         "claims_evidence_file": artifacts["oracle"]["claims_evidence"]["path"],
         "advantage_metrics_file": artifacts["advantage"]["metrics"]["path"],

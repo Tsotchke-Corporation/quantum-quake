@@ -4550,6 +4550,20 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(icc["manifest_reproduce_duplicate_commands"], [])
         self.assertEqual(icc["manifest_reproduce_malformed_command_count"], 0)
         self.assertEqual(icc["manifest_reproduce_malformed_commands"], [])
+        self.assertEqual(
+            icc["manifest_reproduce_publication_pack_source_mismatch_count"],
+            0)
+        self.assertEqual(
+            icc["manifest_reproduce_publication_pack_source_mismatches"], [])
+        self.assertEqual(
+            icc["manifest_reproduce_core_command_source_mismatch_count"], 0)
+        self.assertEqual(
+            icc["manifest_reproduce_core_command_source_mismatches"], [])
+        self.assertEqual(
+            icc["manifest_reproduce_postpack_command_source_mismatch_count"],
+            0)
+        self.assertEqual(
+            icc["manifest_reproduce_postpack_command_source_mismatches"], [])
         self.assertTrue(icc["publication_ready_for_complete_claim"])
         self.assertEqual(
             icc["vanilla_icc_evidence_file"],
