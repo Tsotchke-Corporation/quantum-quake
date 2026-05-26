@@ -1747,6 +1747,9 @@ class PublicationPackTests(unittest.TestCase):
                 "graphics_capture_dir": str(inputs["graphics_capture_dir"]),
                 "agent_stream_dir": str(inputs["agent_stream_dir"]),
                 "breadth_evidence": str(inputs["breadth_evidence"]),
+                "publication_pack_reproduction": {
+                    "outdir": publication_pack.PUBLICATION_PACK_REPLAY_OUTDIR,
+                },
                 "breadth_evidence_reproduction": (
                     publication_pack.breadth_evidence_reproduction_inputs(
                         inputs)),

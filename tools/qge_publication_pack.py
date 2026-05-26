@@ -47,6 +47,7 @@ import qge_registered_asset_intake  # noqa: E402
 
 DEFAULT_SAMPLE_COUNTS = [16, 32, 64, 128]
 ADVANTAGE_REPLAY_OUTDIR = "/tmp/qge_advantage_benchmark"
+PUBLICATION_PACK_REPLAY_OUTDIR = "/tmp/qge_publication_pack_replay"
 PACK_ORACLE_SCENE = "<pack_dir>/oracle/oracle_scene.json"
 
 
@@ -264,7 +265,7 @@ def publication_pack_reproduce_command(
     parts = [
         "tools/qge_publication_pack.py",
         "--outdir",
-        "<outdir>",
+        PUBLICATION_PACK_REPLAY_OUTDIR,
     ]
     append_command_option(parts, "--capture-dir", inputs.get("capture_dir"))
     append_command_option(parts, "--vanilla-matrix",
@@ -1800,6 +1801,9 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 str(graphics_capture_dir) if graphics_capture_dir else None),
             "publication_performance_source": perf_source,
             "publication_performance_summary": str(perf_summary_path),
+            "publication_pack_reproduction": {
+                "outdir": PUBLICATION_PACK_REPLAY_OUTDIR,
+            },
             "agent_stream_dir": str(agent_stream_dir) if agent_stream_dir else None,
             "breadth_evidence": str(breadth_evidence)
             if breadth_evidence is not None else None,

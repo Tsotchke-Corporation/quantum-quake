@@ -164,6 +164,10 @@ def publication_pack_option_checks(
     if not source_inputs:
         return []
     checks: list[dict[str, Any]] = []
+    pack_reproduction = dict_or_empty(
+        source_inputs.get("publication_pack_reproduction"))
+    add_scalar_option_check(
+        checks, "--outdir", pack_reproduction.get("outdir"), required=True)
     add_scalar_option_check(
         checks, "--capture-dir", source_inputs.get("capture_dir"),
         required=True)

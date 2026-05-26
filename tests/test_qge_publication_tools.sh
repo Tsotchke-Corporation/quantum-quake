@@ -655,6 +655,8 @@ pack_commands = [
 ]
 assert len(pack_commands) == 1
 pack_tokens = shlex.split(pack_commands[0])
+pack_replay = source_inputs["publication_pack_reproduction"]
+assert pack_tokens[pack_tokens.index("--outdir") + 1] == pack_replay["outdir"]
 for option, expected in (
     ("--capture-dir", source_inputs["capture_dir"]),
     ("--vanilla-matrix", source_inputs["vanilla_matrix"]),
@@ -672,6 +674,7 @@ for option, expected in (
     assert pack_tokens[index + 1] == str(expected)
 assert pack_tokens.count("--samples") == 1
 assert pack_tokens[pack_tokens.index("--samples") + 1] == "4"
+assert "<outdir>" not in pack_commands[0]
 assert "<trace_capture_dir>" not in pack_commands[0]
 registered_asset_commands = [
     command for command in manifest["reproduce_commands"]
