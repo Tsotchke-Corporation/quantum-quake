@@ -1718,12 +1718,19 @@ class PublicationPackTests(unittest.TestCase):
         }
         pack_command = publication_pack.publication_pack_reproduce_command(
             args, inputs)
+        exact_commands = {
+            "tools/qge_oracle_export.py ":
+                publication_pack.oracle_export_reproduce_command(args, inputs),
+            "tools/qge_advantage_benchmark.py ":
+                publication_pack.advantage_benchmark_reproduce_command(args),
+            "tools/qge_vanilla_capture_matrix.py ":
+                publication_pack.vanilla_matrix_reproduce_command(inputs),
+            "tools/qge_publication_pack.py ": pack_command,
+            "tools/qge_asset_requirements.py ":
+                publication_pack.asset_requirements_reproduce_command(args),
+        }
         commands = [
-            (
-                pack_command
-                if prefix == "tools/qge_publication_pack.py "
-                else f"{prefix}<arg>"
-            )
+            exact_commands.get(prefix, f"{prefix}<arg>")
             for prefix in (
                 manifest_reproduce_audit.REQUIRED_REPRODUCE_COMMAND_PREFIXES +
                 manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES)
@@ -1762,16 +1769,20 @@ class PublicationPackTests(unittest.TestCase):
         self.assertTrue(audit["passed"], audit)
         self.assertEqual(audit["mismatch_count"], 0)
         self.assertEqual(audit["publication_pack_command_count"], 1)
+        self.assertEqual(audit["core_command_source_mismatches"], [])
         self.assertEqual(audit["publication_pack_source_mismatches"], [])
 
         mixed_manifest = json.loads(json.dumps(manifest))
         mixed_manifest["reproduce_commands"].append(
             "tools/qge_publication_pack.py --capture-dir stale")
+        mixed_manifest["reproduce_commands"].append(
+            "tools/qge_oracle_export.py stale --claims docs/claims/qge_claims.json")
         mixed_audit = manifest_reproduce_audit.manifest_reproduce_audit(
             mixed_manifest)
         self.assertFalse(mixed_audit["passed"])
         self.assertEqual(mixed_audit["publication_pack_command_count"], 2)
         self.assertTrue(mixed_audit["publication_pack_source_mismatches"])
+        self.assertTrue(mixed_audit["core_command_source_mismatches"])
 
         stale_manifest = json.loads(json.dumps(manifest))
         stale_manifest["reproduce_commands"] = [

@@ -81,6 +81,46 @@ def advantage_benchmark_reproduce_command(args: argparse.Namespace) -> str:
     )
 
 
+def oracle_export_reproduce_command(
+    args: argparse.Namespace,
+    inputs: dict[str, Any],
+) -> str:
+    parts = [
+        "tools/qge_oracle_export.py",
+        command_arg(inputs.get("capture_dir") or "<capture_dir>"),
+    ]
+    append_command_option(parts, "--claims", args.claims)
+    append_command_option(parts, "--oracle-out", "/tmp/oracle_scene.json")
+    append_command_option(parts, "--claims-out", "/tmp/claims_evidence.json")
+    append_command_option(parts, "--icc-out", "/tmp/qge_icc_evidence.json")
+    return " ".join(parts)
+
+
+def vanilla_matrix_reproduce_command(inputs: dict[str, Any]) -> str:
+    source = inputs.get("graphics_capture_dir")
+    if source is None and inputs.get("vanilla_matrix") is not None:
+        source = Path(inputs["vanilla_matrix"]).parent
+    parts = [
+        "tools/qge_vanilla_capture_matrix.py",
+        command_arg(source or "<graphics_capture_dir>"),
+    ]
+    append_command_option(parts, "--out", "/tmp/vanilla_capture_matrix.json")
+    append_command_option(parts, "--icc-out",
+                          "/tmp/qge_vanilla_icc_evidence.json")
+    return " ".join(parts)
+
+
+def asset_requirements_reproduce_command(args: argparse.Namespace) -> str:
+    parts = ["tools/qge_asset_requirements.py"]
+    append_command_option(parts, "--asset-root", args.asset_root)
+    append_command_option(parts, "--json", "/tmp/qge_asset_requirements.json")
+    append_command_option(parts, "--markdown",
+                          "/tmp/qge_asset_requirements.md")
+    append_command_option(parts, "--icc-json",
+                          "/tmp/qge_asset_requirements_icc_evidence.json")
+    return " ".join(parts)
+
+
 def command_arg(value: Any) -> str:
     return shlex.quote(str(value))
 
@@ -2253,7 +2293,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             ),
         },
         "reproduce_commands": [
-            "tools/qge_oracle_export.py <capture_dir>",
+            oracle_export_reproduce_command(args, inputs),
             "tools/qge_oracle_scene_audit.py <pack_dir> --out /tmp/qge_oracle_scene_audit.json --fail-on-mismatch",
             "tools/qge_oracle_claims_audit.py <pack_dir> --out /tmp/qge_oracle_claims_audit.json --fail-on-mismatch",
             "tools/qge_oracle_icc_audit.py <pack_dir> --out /tmp/qge_oracle_icc_audit.json --fail-on-mismatch",
@@ -2263,12 +2303,12 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_moonlab_oracle_transpile.py --metrics <pack_dir>/advantage/advantage_metrics.json --oracle-scene <pack_dir>/oracle/oracle_scene.json --out /tmp/qae_moonlab_oracle_kernel.json --circuit /tmp/qae_moonlab_oracle_kernel.moonlab --markdown /tmp/qae_moonlab_oracle_kernel.md --icc-json /tmp/qae_moonlab_oracle_kernel_icc_evidence.json",
             "tools/qge_moonlab_qae_observation_transpile.py --metrics <pack_dir>/advantage/advantage_metrics.json --oracle-scene <pack_dir>/oracle/oracle_scene.json --out /tmp/qae_moonlab_observation_zero.json --circuit /tmp/qae_moonlab_observation_zero.moonlab --markdown /tmp/qae_moonlab_observation_zero.md --icc-json /tmp/qae_moonlab_observation_zero_icc_evidence.json",
             "tools/qge_moonlab_qae_grover_plan.py --metrics <pack_dir>/advantage/advantage_metrics.json --oracle-scene <pack_dir>/oracle/oracle_scene.json --out /tmp/qae_moonlab_grover_schedule_plan.json --markdown /tmp/qae_moonlab_grover_schedule_plan.md --icc-json /tmp/qae_moonlab_grover_schedule_plan_icc_evidence.json",
-            "tools/qge_vanilla_capture_matrix.py <graphics_capture_dir>",
+            vanilla_matrix_reproduce_command(inputs),
             "tools/qge_breadth_evidence.py --matrix <graphics_capture_dir> --min-maps N",
             publication_pack_reproduce_command(args, inputs),
             "tools/qge_registered_asset_intake.py --current-root <asset_root> --candidate <quake_install_or_pak> --discover-common --json /tmp/qge_registered_asset_intake.json --markdown /tmp/qge_registered_asset_intake.md --script-out /tmp/install_registered_assets.sh --icc-json /tmp/qge_registered_asset_intake_icc_evidence.json",
             "tools/qge_registered_asset_script_audit.py <pack_dir> --out /tmp/qge_registered_asset_script_audit.json --fail-on-mismatch",
-            "tools/qge_asset_requirements.py --asset-root <asset_root> --json /tmp/qge_asset_requirements.json --markdown /tmp/qge_asset_requirements.md --icc-json /tmp/qge_asset_requirements_icc_evidence.json",
+            asset_requirements_reproduce_command(args),
             "tools/qge_moonlab_job_runner.py <pack_dir>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack_dir>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json --submission-out /tmp/qge_moonlab_submission_packet.verify.json",
             "tools/qge_moonlab_submission_bundle.py <pack_dir>/resource/qge_moonlab_submission_packet.json --out /tmp/qge_moonlab_submission_bundle.json --markdown /tmp/qge_moonlab_submission_bundle.md --icc-json /tmp/qge_moonlab_submission_bundle_icc_evidence.json",
             "tools/qge_moonlab_hardware_ingest.py <pack_dir>/resource/qge_moonlab_submission_packet.json --template-out /tmp/qge_moonlab_hardware_record.template.json",

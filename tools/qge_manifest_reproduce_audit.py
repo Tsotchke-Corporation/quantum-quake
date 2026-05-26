@@ -244,6 +244,29 @@ def publication_pack_command_field_mismatches(
         }]
     mismatches = []
     for check in checks:
+        if "position" in check:
+            expected_values = [
+                str(value)
+                for value in list_or_empty(check.get("expected_values"))
+            ]
+            position = int(check["position"])
+            actual_values = (
+                [tokens[position]] if len(tokens) > position else []
+            )
+            if expected_values == actual_values:
+                continue
+            reason = "value_mismatch"
+            if expected_values and not actual_values:
+                reason = "missing_argument"
+            elif not expected_values and actual_values:
+                reason = "unexpected_argument"
+            mismatches.append({
+                "position": position,
+                "reason": reason,
+                "expected_values": expected_values,
+                "actual_values": actual_values,
+            })
+            continue
         option = check["option"]
         if check.get("boolean"):
             expected_present = bool(check.get("expected_present"))
@@ -273,6 +296,88 @@ def publication_pack_command_field_mismatches(
             "expected_values": expected_values,
             "actual_values": actual_values,
         })
+    return mismatches
+
+
+def core_command_option_checks(
+    manifest: dict[str, Any],
+) -> dict[str, list[dict[str, Any]]]:
+    source_inputs = dict_or_empty(manifest.get("source_inputs"))
+    if not source_inputs:
+        return {}
+    checks: dict[str, list[dict[str, Any]]] = {}
+    claims_ledger = source_inputs.get("claims_ledger")
+    capture_dir = source_inputs.get("capture_dir")
+    if capture_dir is not None or claims_ledger is not None:
+        command_checks: list[dict[str, Any]] = []
+        if capture_dir is not None:
+            command_checks.append({
+                "position": 1,
+                "expected_values": [str(capture_dir)],
+            })
+        add_scalar_option_check(
+            command_checks, "--claims", claims_ledger, required=True)
+        checks["tools/qge_oracle_export.py "] = command_checks
+
+    benchmark = dict_or_empty(source_inputs.get("advantage_benchmark"))
+    if benchmark:
+        benchmark_checks: list[dict[str, Any]] = []
+        for option, field in (
+            ("--seed", "seed"),
+            ("--trials", "trials"),
+            ("--qae-levels", "qae_levels"),
+            ("--qae-shots", "qae_shots"),
+            ("--qae-grid-steps", "qae_grid_steps"),
+            ("--contribution-bits", "contribution_bits"),
+        ):
+            add_scalar_option_check(
+                benchmark_checks, option, benchmark.get(field), required=True)
+        benchmark_checks.append({
+            "option": "--samples",
+            "expected_values": [
+                str(value) for value in list_or_empty(
+                    benchmark.get("samples"))
+            ],
+            "required": True,
+        })
+        checks["tools/qge_advantage_benchmark.py "] = benchmark_checks
+
+    vanilla_source = source_inputs.get("graphics_capture_dir")
+    if vanilla_source is None and source_inputs.get("vanilla_matrix"):
+        vanilla_source = str(Path(str(source_inputs["vanilla_matrix"])).parent)
+    if vanilla_source is not None:
+        checks["tools/qge_vanilla_capture_matrix.py "] = [{
+            "position": 1,
+            "expected_values": [str(vanilla_source)],
+        }]
+
+    asset_root = source_inputs.get("asset_root")
+    if asset_root is not None:
+        checks["tools/qge_asset_requirements.py "] = []
+        add_scalar_option_check(
+            checks["tools/qge_asset_requirements.py "],
+            "--asset-root",
+            asset_root,
+            required=True,
+        )
+    return checks
+
+
+def core_command_source_mismatches(
+    manifest: dict[str, Any],
+    commands: list[str],
+) -> list[dict[str, Any]]:
+    mismatches = []
+    for prefix, checks in core_command_option_checks(manifest).items():
+        for command in commands_with_prefix(commands, prefix):
+            field_mismatches = publication_pack_command_field_mismatches(
+                command, checks)
+            if field_mismatches:
+                mismatches.append({
+                    "prefix": prefix,
+                    "command": command,
+                    "field_mismatches": field_mismatches,
+                })
     return mismatches
 
 
@@ -332,6 +437,7 @@ def manifest_reproduce_audit(
             "duplicate_commands": [],
             "unsafe_commands": [],
             "malformed_commands": [],
+            "core_command_source_mismatches": [],
             "publication_pack_command_count": 0,
             "publication_pack_source_mismatches": [],
             "mismatch_count": 0,
@@ -358,9 +464,15 @@ def manifest_reproduce_audit(
     ]
     pack_source_mismatches = publication_pack_source_mismatches(
         manifest_data, string_commands)
+    core_source_mismatches = core_command_source_mismatches(
+        manifest_data, string_commands)
     pack_source_mismatch_count = sum(
         len(item.get("field_mismatches", []))
         for item in pack_source_mismatches
+    )
+    core_source_mismatch_count = sum(
+        len(item.get("field_mismatches", []))
+        for item in core_source_mismatches
     )
     mismatch_count = (
         len(missing_required) +
@@ -368,7 +480,8 @@ def manifest_reproduce_audit(
         len(duplicates) +
         len(unsafe_commands) +
         len(malformed_commands) +
-        pack_source_mismatch_count
+        pack_source_mismatch_count +
+        core_source_mismatch_count
     )
     passed = mismatch_count == 0 and (recorded or not required)
     return {
@@ -385,6 +498,7 @@ def manifest_reproduce_audit(
         "duplicate_commands": duplicates,
         "unsafe_commands": unsafe_commands,
         "malformed_commands": malformed_commands,
+        "core_command_source_mismatches": core_source_mismatches,
         "publication_pack_command_count": len(commands_with_prefix(
             string_commands, "tools/qge_publication_pack.py ")),
         "publication_pack_source_mismatches": pack_source_mismatches,

@@ -599,13 +599,30 @@ assert any(
     "qge_postpack_audit.py" in command
     for command in manifest["reproduce_commands"]
 )
+source_inputs = manifest["source_inputs"]
+oracle_commands = [
+    command for command in manifest["reproduce_commands"]
+    if command.startswith("tools/qge_oracle_export.py ")
+]
+assert len(oracle_commands) == 1
+oracle_tokens = shlex.split(oracle_commands[0])
+assert oracle_tokens[1] == source_inputs["capture_dir"]
+assert oracle_tokens[oracle_tokens.index("--claims") + 1] == source_inputs["claims_ledger"]
+assert "<capture_dir>" not in oracle_commands[0]
+vanilla_commands = [
+    command for command in manifest["reproduce_commands"]
+    if command.startswith("tools/qge_vanilla_capture_matrix.py ")
+]
+assert len(vanilla_commands) == 1
+vanilla_tokens = shlex.split(vanilla_commands[0])
+assert vanilla_tokens[1] == source_inputs["vanilla_matrix"].rsplit("/", 1)[0]
+assert "<graphics_capture_dir>" not in vanilla_commands[0]
 pack_commands = [
     command for command in manifest["reproduce_commands"]
     if command.startswith("tools/qge_publication_pack.py ")
 ]
 assert len(pack_commands) == 1
 pack_tokens = shlex.split(pack_commands[0])
-source_inputs = manifest["source_inputs"]
 for option, expected in (
     ("--capture-dir", source_inputs["capture_dir"]),
     ("--vanilla-matrix", source_inputs["vanilla_matrix"]),
@@ -624,6 +641,14 @@ for option, expected in (
 assert pack_tokens.count("--samples") == 1
 assert pack_tokens[pack_tokens.index("--samples") + 1] == "4"
 assert "<trace_capture_dir>" not in pack_commands[0]
+asset_requirement_commands = [
+    command for command in manifest["reproduce_commands"]
+    if command.startswith("tools/qge_asset_requirements.py ")
+]
+assert len(asset_requirement_commands) == 1
+asset_tokens = shlex.split(asset_requirement_commands[0])
+assert asset_tokens[asset_tokens.index("--asset-root") + 1] == source_inputs["asset_root"]
+assert "<asset_root>" not in asset_requirement_commands[0]
 PY
 
 python3 "$repo_root/tools/qge_publication_icc_audit.py" "$pack_dir" \
