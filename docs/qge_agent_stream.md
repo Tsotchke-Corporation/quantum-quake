@@ -473,6 +473,9 @@ view as `qge_registered_full_game_progress_report`, distinct from
 gate. Publication packs now carry this progress JSON, Markdown, and ICC
 sidecar in `resource/`, and the postpack audit suite reruns the progress audit
 so a shareware pack still states the registered whole-game blocker precisely.
+The capture queue also accepts that progress JSON as input, which keeps a
+future registered-asset install pointed at newly available whole-game captures
+instead of the smaller shareware coverage ledger.
 Each covered matrix is audited against its route contract's required authority
 domains. Shareware Episode 1 contracts use the `shareware_combat` map class for
 the E1 combat maps while the registered/full-game path keeps
@@ -486,7 +489,8 @@ generic failure-status fields.
 Use `--min-maps` when the artifact needs to prove breadth across distinct maps
 instead of repeated captures of one map.
 `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>` turns
-that ledger into `qge.full_game_capture_queue.v0` plus a runnable
+coverage or the packed registered progress report into
+`qge.full_game_capture_queue.v0` plus a runnable
 `run_missing_maps.sh` script. The queue inventories loose `maps/*.bsp` files
 and `pak*.pak` directories before it writes jobs, skips maps whose BSP is
 absent unless `--include-unavailable-assets` is set, and records the

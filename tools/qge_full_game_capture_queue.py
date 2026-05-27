@@ -61,6 +61,7 @@ START_HUB_ROUTE_ENV = {
 BASE_AUTHORITY_DOMAINS = qge_full_game_route_contracts.BASE_AUTHORITY_DOMAINS
 ROUTE_CONTRACT_SCHEMA = qge_full_game_route_contracts.ROUTE_CONTRACT_SCHEMA
 DEFAULT_ASSET_ROOT = REPO_ROOT / "assets" / "id1"
+REGISTERED_FULL_GAME_PROGRESS_SCHEMA = "qge.registered_full_game_progress.v0"
 QUAKE_BSP_VERSION = 29
 BSP_LUMP_COUNT = 15
 BSP_HEADER_SIZE = 4 + BSP_LUMP_COUNT * 8
@@ -234,6 +235,17 @@ def available_bsp_maps(asset_root: Path) -> set[str]:
 
 def existing_matrix_sources(data: dict[str, Any]) -> list[str]:
     schema = data.get("schema")
+    if schema == REGISTERED_FULL_GAME_PROGRESS_SCHEMA:
+        sources = []
+        for row in list_or_empty(data.get("target_map_progress")):
+            if not isinstance(row, dict):
+                continue
+            if row.get("status") != "ready":
+                continue
+            source = row.get("selected_matrix_file")
+            if isinstance(source, str) and source:
+                sources.append(source)
+        return sources
     if schema == "qge.breadth_evidence.v0":
         sources = []
         for run in list_or_empty(data.get("matrix_runs")):
@@ -260,10 +272,62 @@ def existing_matrix_sources(data: dict[str, Any]) -> list[str]:
     return []
 
 
+def coverage_from_registered_progress(data: dict[str, Any]) -> dict[str, Any]:
+    map_set = str(
+        data.get("map_set") or qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
+    )
+    rows = [
+        row for row in list_or_empty(data.get("target_map_progress"))
+        if isinstance(row, dict) and row.get("map")
+    ]
+    ready_maps = [
+        str(row["map"]) for row in rows if row.get("status") == "ready"
+    ]
+    missing_rows = [row for row in rows if row.get("status") != "ready"]
+    missing_maps = [str(row["map"]) for row in missing_rows]
+    target_maps = qge_map_sets.map_targets_for_set(map_set)
+    target_map_count = int(
+        data.get("target_map_count") or len(target_maps)
+    )
+    return {
+        "schema": "qge.full_game_map_coverage.v0",
+        "status": "complete" if not missing_maps else "partial",
+        "map_set": map_set,
+        "map_scope": (
+            data.get("map_scope") or qge_map_sets.map_set_scope_label(map_set)
+        ),
+        "registered_full_game_scope": (
+            qge_map_sets.is_registered_full_game_map_set(map_set)
+        ),
+        "shareware_episode_one_scope": (
+            qge_map_sets.is_shareware_episode_one_map_set(map_set)
+        ),
+        "target_map_count": target_map_count,
+        "covered_map_count": len(ready_maps),
+        "missing_map_count": len(missing_maps),
+        "covered_maps": ready_maps,
+        "missing_maps": missing_maps,
+        "source_progress_schema": data.get("schema"),
+        "source_progress_status": data.get("status"),
+        "source_progress_next_blocker": data.get("next_blocker"),
+        "source_progress_ready_map_count": data.get("ready_map_count"),
+        "source_progress_asset_missing_map_count": (
+            data.get("asset_missing_map_count")),
+        "source_progress_capture_needed_map_count": (
+            data.get("capture_needed_map_count")),
+        "source_progress_asset_blocked_maps": (
+            data.get("asset_blocked_maps", [])),
+        "source_progress_capture_needed_maps": (
+            data.get("capture_needed_maps", [])),
+    }
+
+
 def coverage_from_data(data: dict[str, Any]) -> dict[str, Any]:
     schema = data.get("schema")
     if schema == "qge.full_game_map_coverage.v0":
         return data
+    if schema == REGISTERED_FULL_GAME_PROGRESS_SCHEMA:
+        return coverage_from_registered_progress(data)
     if schema == "qge.breadth_evidence.v0":
         coverage = data.get("full_game_coverage")
         if not isinstance(coverage, dict):
@@ -493,6 +557,13 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
         "asset_unavailable_missing_maps": asset_unavailable_missing_maps,
         "asset_unavailable_missing_count": len(asset_unavailable_missing_maps),
         "coverage_before": coverage,
+        "source_progress_status": coverage.get("source_progress_status"),
+        "source_progress_next_blocker": coverage.get(
+            "source_progress_next_blocker"),
+        "source_progress_capture_needed_maps": coverage.get(
+            "source_progress_capture_needed_maps", []),
+        "source_progress_asset_blocked_maps": coverage.get(
+            "source_progress_asset_blocked_maps", []),
         "existing_matrix_sources": existing_sources,
         "queue_job_count": len(jobs),
         "target_map_count": target_map_count,
@@ -643,10 +714,20 @@ def markdown_report(queue: dict[str, Any]) -> str:
             f"Route contracts: {queue.get('route_contract_map_count')} "
             f"(complete={queue.get('route_contracts_complete')})"
         ),
+    ]
+    if queue.get("source_progress_status") is not None:
+        lines.extend([
+            (
+                f"Registered progress source: "
+                f"{queue.get('source_progress_status')} "
+                f"(next={queue.get('source_progress_next_blocker')})"
+            ),
+        ])
+    lines.extend([
         "",
         "| # | Map | Route Profile | Route Class | Command |",
         "| ---: | --- | --- | --- | --- |",
-    ]
+    ])
     for job in list_or_empty(queue.get("jobs")):
         if not isinstance(job, dict):
             continue
@@ -678,7 +759,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path,
-                        help="Coverage JSON, breadth evidence, or publication pack")
+                        help=(
+                            "Coverage JSON, breadth evidence, registered "
+                            "full-game progress JSON, or publication pack"
+                        ))
     parser.add_argument("--out", type=Path, default=default_out)
     parser.add_argument("--script-out", type=Path)
     parser.add_argument("--markdown", type=Path)

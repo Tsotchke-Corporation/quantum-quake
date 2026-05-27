@@ -674,6 +674,9 @@ Known current visual state:
   ledger and deployment gate. Publication packs now carry the progress JSON,
   Markdown, and ICC sidecar under `resource/`, with postpack audit coverage, so
   shareware checkpoints still publish the registered whole-game blocker ledger.
+  The capture queue can consume that progress JSON directly, letting a future
+  registered asset install queue newly available whole-game captures without
+  mistaking shareware coverage for registered full-game readiness.
   `tools/qge_full_game_capture_queue.py`
   turns the registered ledger
   into `qge.full_game_capture_queue.v0` and a runnable

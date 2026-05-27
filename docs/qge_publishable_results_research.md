@@ -312,7 +312,10 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      ledger and the deployment readiness target. Publication packs include the
      progress JSON, Markdown, and ICC sidecar under `resource/`, and postpack
      audits rerun the progress audit so first-episode evidence still carries a
-     precise registered whole-game blocker report.
+     precise registered whole-game blocker report. The capture queue accepts
+     that progress JSON directly, so post-install registered assets can be
+     turned into queued whole-game captures without reusing the shareware
+     coverage ledger as a full-game claim.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for

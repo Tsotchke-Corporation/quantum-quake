@@ -9163,6 +9163,45 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertTrue(audit["passed"], audit)
             self.assertEqual(audit["mismatch_count"], 0)
 
+            queue = full_game_capture_queue.build_queue(SimpleNamespace(
+                source=progress_json,
+                limit=3,
+                frames=3,
+                wait_frames=12,
+                trace=True,
+                special_maps_last=True,
+                authority_smoke=True,
+                force_world_metrics=True,
+                asset_root=asset_root,
+                include_unavailable_assets=False,
+                env=[],
+            ))
+            self.assertEqual(
+                queue["source_schema"],
+                "qge.registered_full_game_progress.v0",
+            )
+            self.assertEqual(
+                queue["source_progress_next_blocker"],
+                "registered_assets_missing",
+            )
+            self.assertEqual(queue["queue_job_count"], 2)
+            self.assertEqual(queue["status"], "pending_partial_asset_blocked")
+            self.assertEqual([job["map"] for job in queue["jobs"]],
+                             ["e2m1", "e2m2"])
+            self.assertEqual(queue["covered_map_count_before"], 9)
+            self.assertEqual(queue["covered_map_count_after_queue"], 11)
+            self.assertEqual(queue["post_capture"]["breadth_min_runs"], 11)
+            self.assertEqual(queue["post_capture"]["breadth_min_maps"], 11)
+            self.assertEqual(len(queue["existing_matrix_sources"]), 9)
+            self.assertIn("e3m1", queue["asset_unavailable_missing_maps"])
+            self.assertIn("e2m1", queue["asset_available_missing_maps"])
+            queue_markdown = full_game_capture_queue.markdown_report(queue)
+            self.assertIn(
+                "Registered progress source: partial "
+                "(next=registered_assets_missing)",
+                queue_markdown,
+            )
+
             stale = publication_pack.load_json(progress_json)
             stale["ready_map_count"] = 10
             registered_progress.write_json(progress_json, stale)
@@ -9669,10 +9708,19 @@ class BreadthEvidenceTests(unittest.TestCase):
             )
             (candidate_maps / "e3m2.bsp").write_bytes(minimal_bsp_bytes())
 
+            publication_pack_dir = tmpdir / "publication-pack"
+            progress_source = (
+                publication_pack_dir / "resource" /
+                "qge_registered_full_game_progress.json"
+            )
+            progress_source.parent.mkdir(parents=True)
+            publication_pack.write_json(progress_source, {
+                "schema": "qge.registered_full_game_progress.v0",
+            })
             intake = registered_asset_intake.build_intake(
                 current_root,
                 [candidate_root],
-                publication_pack_dir=tmpdir / "publication-pack",
+                publication_pack_dir=publication_pack_dir,
             )
             self.assertEqual(
                 intake["schema"], "qge.registered_asset_intake.v0")
@@ -9729,6 +9777,20 @@ class BreadthEvidenceTests(unittest.TestCase):
                 for command in
                 intake["post_install_verification"]["commands"]
             ))
+            capture_command = next(
+                command
+                for command in
+                intake["post_install_verification"]["commands"]
+                if command["kind"] == "capture_queue"
+            )
+            self.assertEqual(
+                capture_command["source_kind"],
+                "registered_full_game_progress",
+            )
+            self.assertIn(
+                "resource/qge_registered_full_game_progress.json",
+                capture_command["shell_command"],
+            )
             inventory_command = next(
                 command["shell_command"]
                 for command in
@@ -9960,6 +10022,20 @@ class BreadthEvidenceTests(unittest.TestCase):
             progress_icc["registered_full_game_progress_file"] = str(
                 progress_path)
             publication_pack.write_json(progress_icc_path, progress_icc)
+            intake = registered_asset_intake.build_intake(
+                asset_root,
+                [],
+                map_set=coverage["map_set"],
+                publication_pack_dir=pack_dir,
+            )
+            publication_pack.write_json(intake_path, intake)
+            publication_pack.write_json(
+                intake_icc_path,
+                registered_asset_intake.build_icc_evidence(
+                    intake,
+                    out_path=intake_path,
+                ),
+            )
             manifest = {
                 "schema": "qge.publication_pack.v0",
                 "artifacts": {

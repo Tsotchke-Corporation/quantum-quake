@@ -48,6 +48,7 @@ COMMON_DISCOVERY_PATHS = [
     Path("~/Downloads/Quake"),
     Path("/Applications/Quake.app/Contents/Resources/id1"),
 ]
+REGISTERED_FULL_GAME_PROGRESS_FILENAME = "qge_registered_full_game_progress.json"
 
 
 def write_json(path: Path, data: dict[str, Any]) -> None:
@@ -749,14 +750,31 @@ def build_post_install_verification(
         },
     ]
     if publication_pack_dir is not None:
+        progress_source = (
+            publication_pack_dir / "resource" /
+            REGISTERED_FULL_GAME_PROGRESS_FILENAME
+        )
+        use_progress_source = qge_map_sets.is_registered_full_game_map_set(
+            map_set)
+        queue_source = (
+            progress_source if use_progress_source
+            else publication_pack_dir
+        )
         queue_json = Path("/tmp/qge_full_game_capture_queue.after_intake.json")
         queue_script = Path("/tmp/run_missing_maps.after_intake.sh")
         queue_markdown = Path("/tmp/qge_full_game_capture_queue.after_intake.md")
         commands.append({
             "kind": "capture_queue",
+            "source": str(queue_source),
+            "source_kind": (
+                "registered_full_game_progress"
+                if use_progress_source
+                else "publication_pack"
+            ),
+            "source_exists_at_generation": queue_source.exists(),
             "shell_command": (
                 "python3 tools/qge_full_game_capture_queue.py "
-                f"{shell_quote(publication_pack_dir)} "
+                f"{shell_quote(queue_source)} "
                 f"--asset-root {shell_quote(current_root)} "
                 f"--out {shell_quote(queue_json)} "
                 f"--script-out {shell_quote(queue_script)} "
