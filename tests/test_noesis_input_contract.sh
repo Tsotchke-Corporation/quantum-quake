@@ -151,6 +151,8 @@ grep -q 'candidate_scan_target_count' "$repo_root/tools/qge_registered_asset_int
 grep -q 'copy_plan_unblocked_map_count' "$repo_root/tools/qge_registered_asset_intake.py"
 grep -q 'blocked_candidate_copy_plan' "$repo_root/tools/qge_registered_asset_intake.py"
 grep -q 'post_install_verification' "$repo_root/tools/qge_registered_asset_intake.py"
+grep -q 'build_post_install_verification' "$repo_root/tools/qge_registered_asset_intake.py"
+grep -q -- '--map-set' "$repo_root/tools/qge_registered_asset_intake.py"
 grep -q 'registered_asset_script_audit' "$repo_root/tools/qge_registered_asset_script_audit.py"
 grep -q 'script_content_mismatch' "$repo_root/tools/qge_registered_asset_script_audit.py"
 grep -q 'script_not_executable' "$repo_root/tools/qge_registered_asset_script_audit.py"

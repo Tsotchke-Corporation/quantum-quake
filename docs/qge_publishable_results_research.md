@@ -291,8 +291,10 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      evidence, so shareware Episode 1 queues remain `quake_shareware_episode1`.
      Publication packs also record the asset-requirements reproduction map set,
      and the reproduce command includes `--map-set`, so shareware requirements
-     do not replay as registered full-game requirements. It also emits a route
-     contract for every selected target map, and the
+     do not replay as registered full-game requirements. Registered-asset
+     intake post-install inventory and candidate-discovery refresh commands
+     also preserve that selected `--map-set`. It also emits a route contract
+     for every selected target map, and the
      Moonlab deployment plan/gate require the registered full-game ledger for
      whole-game claims, so post-asset jobs carry route class, episode/slot,
      combat/special-route requirements, and authority domains before they run.

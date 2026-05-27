@@ -462,7 +462,10 @@ scope. Map-set names and target lists live in `tools/qge_map_sets.py`, with
 `qge_breadth_evidence.py` re-exporting the legacy names for existing tools.
 Publication-pack reproduce metadata also carries the selected map set for
 `qge_asset_requirements.py`, so shareware packs replay requirements under
-`quake_shareware_episode1` instead of the registered default.
+`quake_shareware_episode1` instead of the registered default. Registered-asset
+intake post-install inventory and candidate-discovery refresh commands preserve
+the same `--map-set` value, so follow-up checks do not drift back to registered
+full-game scope.
 Queues with no runnable jobs but remaining asset-unavailable maps are
 marked `blocked_asset_unavailable`, not complete. BSP assets must pass the
 dependency-free Quake BSP29 header/lump validation before they are accepted as

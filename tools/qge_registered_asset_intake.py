@@ -730,6 +730,7 @@ def build_post_install_verification(
     current_root: Path,
     *,
     publication_pack_dir: Path | None = None,
+    map_set: str = qge_map_sets.DEFAULT_FULL_GAME_MAP_SET,
 ) -> dict[str, Any]:
     inventory_json = Path("/tmp/qge_asset_inventory.after_intake.json")
     inventory_markdown = Path("/tmp/qge_asset_inventory.after_intake.md")
@@ -739,6 +740,7 @@ def build_post_install_verification(
             "shell_command": (
                 "python3 tools/qge_asset_inventory.py "
                 f"--asset-root {shell_quote(current_root)} "
+                f"--map-set {shell_quote(map_set)} "
                 f"--json {shell_quote(inventory_json)} "
                 f"--markdown {shell_quote(inventory_markdown)}"
             ),
@@ -769,6 +771,7 @@ def build_post_install_verification(
             str(publication_pack_dir) if publication_pack_dir is not None
             else None
         ),
+        "map_set": map_set,
         "command_count": len(commands),
         "commands": commands,
     }
@@ -778,6 +781,7 @@ def build_candidate_discovery_command(
     current_root: Path,
     *,
     publication_pack_dir: Path | None = None,
+    map_set: str = qge_map_sets.DEFAULT_FULL_GAME_MAP_SET,
     discover_max_depth: int = 5,
 ) -> dict[str, Any]:
     intake_json = Path("/tmp/qge_registered_asset_intake.after_discovery.json")
@@ -790,6 +794,7 @@ def build_candidate_discovery_command(
         f"--current-root {shell_quote(current_root)} "
         "--discover-common "
         f"--discover-max-depth {discover_max_depth} "
+        f"--map-set {shell_quote(map_set)} "
     )
     if publication_pack_dir is not None:
         command += f"--publication-pack {shell_quote(publication_pack_dir)} "
@@ -804,6 +809,7 @@ def build_candidate_discovery_command(
         "shell_command": command,
         "discover_common": True,
         "discover_max_depth": discover_max_depth,
+        "map_set": map_set,
         "publication_pack": (
             str(publication_pack_dir) if publication_pack_dir is not None
             else None
@@ -915,10 +921,12 @@ def build_intake(
     post_install_verification = build_post_install_verification(
         current_root,
         publication_pack_dir=publication_pack_dir,
+        map_set=map_set,
     )
     candidate_discovery = build_candidate_discovery_command(
         current_root,
         publication_pack_dir=publication_pack_dir,
+        map_set=map_set,
     )
     newly_available_maps = [
         map_name for map_name in missing_maps

@@ -8880,6 +8880,34 @@ class BreadthEvidenceTests(unittest.TestCase):
                 "keep_existing_shareware_asset",
             )
 
+            intake = registered_asset_intake.build_intake(
+                asset_root,
+                [],
+                map_set=breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+                publication_pack_dir=Path(tmp) / "pack",
+            )
+            self.assertEqual(
+                intake["post_install_verification"]["map_set"],
+                breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            )
+            self.assertEqual(
+                intake["candidate_discovery"]["map_set"],
+                breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            )
+            post_install_commands = [
+                command["shell_command"]
+                for command in intake["post_install_verification"]["commands"]
+            ]
+            self.assertTrue(any(
+                "--map-set quake_shareware_episode1" in command
+                for command in post_install_commands
+                if "qge_asset_inventory.py" in command
+            ))
+            self.assertIn(
+                "--map-set quake_shareware_episode1",
+                intake["candidate_discovery_command"],
+            )
+
             breadth = {
                 "schema": "qge.breadth_evidence.v0",
                 "matrix_runs": [
@@ -9165,11 +9193,25 @@ class BreadthEvidenceTests(unittest.TestCase):
                 "--discover-common",
                 intake["candidate_discovery_command"],
             )
+            self.assertIn(
+                "--map-set quake_registered_single_player",
+                intake["candidate_discovery_command"],
+            )
             self.assertTrue(any(
                 command["kind"] == "capture_queue"
                 for command in
                 intake["post_install_verification"]["commands"]
             ))
+            inventory_command = next(
+                command["shell_command"]
+                for command in
+                intake["post_install_verification"]["commands"]
+                if command["kind"] == "asset_inventory"
+            )
+            self.assertIn(
+                "--map-set quake_registered_single_player",
+                inventory_command,
+            )
             loose_plan = next(
                 item for item in intake["copy_plan"]
                 if item["kind"] == "copy_loose_bsp")
