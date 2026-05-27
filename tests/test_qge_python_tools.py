@@ -1597,6 +1597,25 @@ class PublicationPackTests(unittest.TestCase):
                 for item in stale_audit["directory_mismatches"]
             ))
 
+            malformed_manifest = json.loads(json.dumps(manifest))
+            malformed_manifest["artifacts"]["sample"]["file"]["packed"] = {
+                "path": str(outdir / "artifact.txt"),
+            }
+            malformed_audit = (
+                manifest_source_copy_audit.manifest_source_copy_audit(
+                    malformed_manifest,
+                    required=True,
+                )
+            )
+            self.assertFalse(malformed_audit["passed"])
+            self.assertEqual(
+                malformed_audit["malformed_source_copy_record_count"], 1)
+            self.assertTrue(any(
+                item.get("source") == "artifacts.sample.file" and
+                "packed" in item.get("fields", [])
+                for item in malformed_audit["malformed_source_copy_records"]
+            ))
+
     def test_manifest_claim_policy_audit_blocks_overclaim_wording(
         self,
     ) -> None:

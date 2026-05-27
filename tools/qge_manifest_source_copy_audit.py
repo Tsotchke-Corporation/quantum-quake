@@ -64,6 +64,10 @@ def is_directory_record(value: dict[str, Any]) -> bool:
     )
 
 
+def is_artifact_source_copy_prefix(prefix: str) -> bool:
+    return prefix == "artifacts" or prefix.startswith("artifacts.")
+
+
 def iter_source_copy_records(
     value: Any,
     prefix: str = "",
@@ -82,6 +86,13 @@ def iter_source_copy_records(
             elif is_directory_record(packed):
                 records.append({
                     "kind": "directory",
+                    "source": prefix,
+                    "source_path": value.get("source_path"),
+                    "packed": packed,
+                })
+            elif is_artifact_source_copy_prefix(prefix):
+                records.append({
+                    "kind": "malformed",
                     "source": prefix,
                     "source_path": value.get("source_path"),
                     "packed": packed,
@@ -237,6 +248,8 @@ def manifest_source_copy_audit(
             "source_copy_record_count": 0,
             "file_copy_record_count": 0,
             "directory_copy_record_count": 0,
+            "malformed_source_copy_record_count": 0,
+            "malformed_source_copy_records": [],
             "missing_source_paths": [],
             "missing_packed_paths": [],
             "file_mismatches": [],
@@ -247,9 +260,17 @@ def manifest_source_copy_audit(
 
     missing_source_paths = []
     missing_packed_paths = []
+    malformed_source_copy_records = []
     file_mismatches = []
     directory_mismatches = []
     for record in records:
+        if record.get("kind") == "malformed":
+            malformed_source_copy_records.append({
+                "source": record.get("source"),
+                "source_path": record.get("source_path"),
+                "fields": ["packed"],
+            })
+            continue
         mismatch = (
             file_copy_mismatch(record)
             if record.get("kind") == "file"
@@ -268,25 +289,35 @@ def manifest_source_copy_audit(
             directory_mismatches.append(mismatch)
 
     mismatch_count = (
+        len(malformed_source_copy_records) +
         len(missing_source_paths) +
         len(missing_packed_paths) +
         len(file_mismatches) +
         len(directory_mismatches)
     )
+    valid_records = [
+        record for record in records
+        if record.get("kind") in {"file", "directory"}
+    ]
     return {
         "required": required,
-        "recorded": bool(records),
-        "source_copy_record_count": len(records),
+        "recorded": bool(valid_records),
+        "source_copy_record_count": len(valid_records),
         "file_copy_record_count": sum(
-            1 for record in records if record.get("kind") == "file"),
+            1 for record in valid_records if record.get("kind") == "file"),
         "directory_copy_record_count": sum(
-            1 for record in records if record.get("kind") == "directory"),
+            1 for record in valid_records
+            if record.get("kind") == "directory"),
+        "malformed_source_copy_record_count": len(
+            malformed_source_copy_records),
+        "malformed_source_copy_records": malformed_source_copy_records,
         "missing_source_paths": missing_source_paths,
         "missing_packed_paths": missing_packed_paths,
         "file_mismatches": file_mismatches,
         "directory_mismatches": directory_mismatches,
         "mismatch_count": mismatch_count,
-        "passed": mismatch_count == 0 and (bool(records) or not required),
+        "passed": (
+            mismatch_count == 0 and (bool(valid_records) or not required)),
     }
 
 
