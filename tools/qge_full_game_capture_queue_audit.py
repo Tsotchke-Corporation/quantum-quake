@@ -172,6 +172,8 @@ def capture_queue_audit(
     resolved_script_path = optional_path(script_path)
     script_mismatch = False
     script_error = None
+    script_executable = None
+    script_executable_mismatch = False
     if resolved_script_path is not None:
         try:
             expected_script = "\n".join(
@@ -179,9 +181,14 @@ def capture_queue_audit(
             recorded_script = resolved_script_path.read_text(
                 encoding="utf-8")
             script_mismatch = recorded_script != expected_script
+            script_executable = bool(
+                resolved_script_path.stat().st_mode & 0o111)
+            script_executable_mismatch = not script_executable
         except OSError as exc:
             script_error = str(exc)
             script_mismatch = True
+            script_executable = False
+            script_executable_mismatch = True
 
     resolved_markdown_path = optional_path(markdown_path)
     markdown_mismatch = False
@@ -201,6 +208,7 @@ def capture_queue_audit(
     mismatch_count = (
         len(queue_field_mismatches) +
         int(script_mismatch) +
+        int(script_executable_mismatch) +
         int(markdown_mismatch) +
         len(build_errors)
     )
@@ -219,6 +227,8 @@ def capture_queue_audit(
         "queue_field_mismatches": queue_field_mismatches,
         "script_mismatch": script_mismatch,
         "script_error": script_error,
+        "script_executable": script_executable,
+        "script_executable_mismatch": script_executable_mismatch,
         "markdown_mismatch": markdown_mismatch,
         "markdown_error": markdown_error,
         "build_errors": build_errors,

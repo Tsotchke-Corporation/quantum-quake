@@ -10900,6 +10900,7 @@ class BreadthEvidenceTests(unittest.TestCase):
                 "\n".join(full_game_capture_queue.script_lines(queue)),
                 encoding="utf-8",
             )
+            script_path.chmod(script_path.stat().st_mode | 0o111)
             markdown_path.write_text(markdown, encoding="utf-8")
             audit = capture_queue_audit.capture_queue_audit(
                 queue_path,
@@ -10939,6 +10940,7 @@ class BreadthEvidenceTests(unittest.TestCase):
                 "\n".join(full_game_capture_queue.script_lines(pack_queue)),
                 encoding="utf-8",
             )
+            pack_script_path.chmod(pack_script_path.stat().st_mode | 0o111)
             pack_markdown_path.write_text(
                 full_game_capture_queue.markdown_report(pack_queue),
                 encoding="utf-8",
@@ -10952,6 +10954,12 @@ class BreadthEvidenceTests(unittest.TestCase):
                 pack_audit["script_file"], str(pack_script_path))
             self.assertEqual(
                 pack_audit["markdown_file"], str(pack_markdown_path))
+            self.assertTrue(pack_audit["script_executable"])
+
+            pack_script_path.chmod(0o644)
+            nonexec_audit = capture_queue_audit.capture_queue_audit(pack_dir)
+            self.assertFalse(nonexec_audit["passed"])
+            self.assertTrue(nonexec_audit["script_executable_mismatch"])
 
             stale = publication_pack.load_json(queue_path)
             stale["queue_job_count"] = 1
