@@ -509,6 +509,64 @@ class ICCProfileTests(unittest.TestCase):
             "hardware-deployment evidence",
         )
 
+    def test_registered_full_game_coverage_oracle_is_not_deployment(self) -> None:
+        profile = json.loads(
+            (REPO_ROOT / ".icc" / "completion-oracles.json")
+            .read_text(encoding="utf-8")
+        )
+        oracle = next(
+            item for item in profile["oracles"]
+            if item["name"] == "qge_registered_full_game_coverage_ledger"
+        )
+        self.assertEqual(
+            oracle["target"],
+            "Registered Quake full-game Moonlab coverage status ledger",
+        )
+        self.assertIn(
+            "registered quake moonlab progress ledger",
+            oracle["aliases"],
+        )
+
+        requirements = {item["id"]: item for item in oracle["requires"]}
+        self.assertEqual(
+            requirements["qge_registered_full_game_coverage_backend"][
+                "event_values"],
+            ["qge_breadth_evidence"],
+        )
+        self.assertEqual(
+            requirements["qge_registered_full_game_coverage_recorded"][
+                "event_values"],
+            [
+                "qge_breadth_evidence_pack_evidence_only",
+                "qge_breadth_evidence_pack_complete",
+            ],
+        )
+        self.assertEqual(
+            requirements["qge_registered_full_game_coverage_map_set"][
+                "event_names"],
+            ["runtime_backend_scope_map_set"],
+        )
+        self.assertEqual(
+            requirements["qge_registered_full_game_coverage_map_set"][
+                "event_values"],
+            ["quake_registered_single_player"],
+        )
+        self.assertEqual(
+            requirements["qge_registered_full_game_coverage_status"][
+                "event_names"],
+            ["runtime_backend_scope_coverage_status"],
+        )
+        self.assertEqual(
+            requirements["qge_registered_full_game_coverage_status"][
+                "event_values"],
+            ["partial", "complete"],
+        )
+        self.assertNotEqual(
+            oracle["target"],
+            "Full Quake running in Moonlab with publishable "
+            "hardware-deployment evidence",
+        )
+
     def test_moonlab_hardware_submission_oracle_is_scoped(self) -> None:
         profile = json.loads(
             (REPO_ROOT / ".icc" / "completion-oracles.json")
@@ -8862,6 +8920,12 @@ class BreadthEvidenceTests(unittest.TestCase):
             )
             self.assertEqual(
                 icc["runtime_backend_scope_coverage_status"], "partial")
+            self.assertEqual(
+                icc["runtime_backend_scope_target_map_count"], 32)
+            self.assertEqual(
+                icc["runtime_backend_scope_covered_map_count"], 9)
+            self.assertEqual(
+                icc["runtime_backend_scope_missing_map_count"], 23)
 
             audit = map_set_evidence_audit.map_set_evidence_audit(
                 outdir,
@@ -10216,6 +10280,12 @@ class BreadthEvidenceTests(unittest.TestCase):
             )
             self.assertEqual(
                 icc["runtime_backend_scope_coverage_status"], "partial")
+            self.assertEqual(
+                icc["runtime_backend_scope_target_map_count"], 32)
+            self.assertEqual(
+                icc["runtime_backend_scope_covered_map_count"], 2)
+            self.assertEqual(
+                icc["runtime_backend_scope_missing_map_count"], 30)
             self.assertEqual(icc["full_game_map_target_count"], 32)
             self.assertEqual(icc["full_game_map_covered_count"], 2)
             self.assertEqual(icc["full_game_map_missing_count"], 30)

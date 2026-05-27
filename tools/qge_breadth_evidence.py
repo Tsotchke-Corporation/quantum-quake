@@ -747,6 +747,14 @@ def build_icc_evidence(manifest: dict[str, Any],
             "full_game_map_coverage_status"),
         "runtime_backend_scope_coverage_status": aggregate.get(
             "full_game_map_coverage_status"),
+        "runtime_backend_scope_target_map_count": aggregate.get(
+            "full_game_map_target_count"),
+        "runtime_backend_scope_covered_map_count": aggregate.get(
+            "full_game_map_covered_count"),
+        "runtime_backend_scope_missing_map_count": aggregate.get(
+            "full_game_map_missing_count"),
+        "runtime_backend_scope_missing_maps": aggregate.get(
+            "full_game_map_missing_maps"),
         "full_game_map_target_count": aggregate.get(
             "full_game_map_target_count"),
         "full_game_map_covered_count": aggregate.get(

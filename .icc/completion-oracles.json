@@ -528,6 +528,97 @@
       ]
     },
     {
+      "name": "qge_registered_full_game_coverage_ledger",
+      "target": "Registered Quake full-game Moonlab coverage status ledger",
+      "aliases": [
+        "qge_registered_full_game_coverage_ledger",
+        "registered full game coverage ledger",
+        "registered quake moonlab progress ledger",
+        "full game map coverage status"
+      ],
+      "requires": [
+        {
+          "id": "qge_registered_full_game_coverage_backend",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_breadth_evidence"
+          ],
+          "severity": "high",
+          "label": "Registered full-game coverage backend evidence is present",
+          "action": "run_qge_registered_full_game_breadth_status"
+        },
+        {
+          "id": "qge_registered_full_game_coverage_recorded",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_breadth_evidence_pack_evidence_only",
+            "qge_breadth_evidence_pack_complete"
+          ],
+          "severity": "high",
+          "label": "Registered full-game coverage status is recorded",
+          "action": "emit_registered_full_game_breadth_status"
+        },
+        {
+          "id": "qge_registered_full_game_coverage_map_set",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend_scope_map_set"
+          ],
+          "event_values": [
+            "quake_registered_single_player"
+          ],
+          "severity": "high",
+          "label": "Breadth evidence is scoped to the registered full-game map set",
+          "action": "set_breadth_map_set_to_quake_registered_single_player"
+        },
+        {
+          "id": "qge_registered_full_game_coverage_status",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend_scope_coverage_status"
+          ],
+          "event_values": [
+            "partial",
+            "complete"
+          ],
+          "severity": "high",
+          "label": "Registered full-game coverage status is explicit",
+          "action": "record_registered_full_game_coverage_status"
+        },
+        {
+          "id": "qge_registered_full_game_coverage_artifact",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "breadth_evidence_file"
+          ],
+          "severity": "high",
+          "label": "Registered full-game breadth artifact is visible to ICC",
+          "action": "write_registered_full_game_breadth_evidence_json"
+        }
+      ]
+    },
+    {
       "name": "qge_moonlab_full_game_deployment",
       "target": "Full Quake running in Moonlab with publishable hardware-deployment evidence",
       "aliases": [

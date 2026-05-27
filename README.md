@@ -156,6 +156,9 @@ Important known limitations:
   is expected to remain partial until the licensed registered maps are present
   and captured. `make qge_registered_full_game_breadth_status_audit` rejects a
   stale registered status ledger without turning it into a completion claim.
+  ICC tracks that progress-only ledger through
+  `qge_registered_full_game_coverage_ledger`, separate from the deployment
+  readiness target.
   `tools/qge_asset_inventory.py --map-set quake_registered_single_player`
   emits the companion
   hash-backed asset audit and rejects placeholder BSPs unless they pass the

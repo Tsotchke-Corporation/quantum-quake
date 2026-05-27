@@ -293,7 +293,9 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      `quake_registered_single_player` with `--allow-partial`, so it can record
      the current registered 9/32 progress ledger and missing-map list without
      becoming a completion claim. Check that ledger with
-     `make qge_registered_full_game_breadth_status_audit`.
+     `make qge_registered_full_game_breadth_status_audit`. ICC exposes the same
+     non-deployment status view as
+     `qge_registered_full_game_coverage_ledger`.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for
