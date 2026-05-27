@@ -209,6 +209,10 @@ def expected_plan_status(
     expected_capture_required_maps: Sequence[str],
     expected_asset_unavailable_maps: Sequence[str],
 ) -> str:
+    if not qge_breadth_evidence.is_registered_full_game_map_set(
+        coverage.get("map_set")
+    ):
+        return "blocked_non_registered_map_set"
     if coverage.get("status") == "complete":
         return "map_coverage_complete"
     if expected_asset_unavailable_maps:

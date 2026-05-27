@@ -8781,6 +8781,16 @@ class BreadthEvidenceTests(unittest.TestCase):
             )
             self.assertEqual(
                 plan["status"], "blocked_non_registered_map_set")
+            plan_audit = moonlab_full_game_plan_audit.full_game_plan_ledger_audit(
+                shareware_coverage,
+                inventory,
+                plan,
+            )
+            self.assertEqual(
+                plan_audit["expected_status"],
+                "blocked_non_registered_map_set",
+            )
+            self.assertEqual(plan_audit["mismatch_count"], 0)
             criteria = moonlab_deployment_gate.build_criteria(
                 coverage=shareware_coverage,
                 inventory=inventory,
