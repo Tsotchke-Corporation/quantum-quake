@@ -3,14 +3,22 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 from typing import Any
 
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import qge_map_sets  # noqa: E402
 
 ROUTE_CONTRACT_SCHEMA = "qge.full_game_capture_route_contract.v0"
 ROUTE_CONTRACT_AUTHORITY_SCHEMA = (
     "qge.full_game_route_contract_authority.v0"
 )
-SHAREWARE_EPISODE_ONE_MAP_SET = "quake_shareware_episode1"
+SHAREWARE_EPISODE_ONE_MAP_SET = qge_map_sets.SHAREWARE_EPISODE_ONE_MAP_SET
 SPECIAL_ROUTE_MAPS = {"end"}
 START_HUB_ROUTE_MAPS = {"start"}
 DEFERRED_ROUTE_MAPS = SPECIAL_ROUTE_MAPS | START_HUB_ROUTE_MAPS

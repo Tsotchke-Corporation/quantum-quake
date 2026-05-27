@@ -458,7 +458,9 @@ absent unless `--include-unavailable-assets` is set, and records the
 asset-unavailable missing maps in JSON/Markdown. The generated script preserves
 the source ledger's map set when it rebuilds breadth evidence, so
 `quake_shareware_episode1` queues do not fall back to registered full-game
-scope. Queues with no runnable jobs but remaining asset-unavailable maps are
+scope. Map-set names and target lists live in `tools/qge_map_sets.py`, with
+`qge_breadth_evidence.py` re-exporting the legacy names for existing tools.
+Queues with no runnable jobs but remaining asset-unavailable maps are
 marked `blocked_asset_unavailable`, not complete. BSP assets must pass the
 dependency-free Quake BSP29 header/lump validation before they are accepted as
 available or turned into capture jobs. The generated script runs

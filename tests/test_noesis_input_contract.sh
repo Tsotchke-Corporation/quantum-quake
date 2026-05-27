@@ -128,6 +128,8 @@ grep -q 'qge.full_game_map_coverage.v0' "$repo_root/tools/qge_breadth_evidence.p
 grep -q 'QUAKE_REGISTERED_SINGLE_PLAYER_MAPS' "$repo_root/tools/qge_breadth_evidence.py"
 grep -q 'QUAKE_SHAREWARE_EPISODE_ONE_MAPS' "$repo_root/tools/qge_breadth_evidence.py"
 grep -q 'SHAREWARE_EPISODE_ONE_MAP_SET' "$repo_root/tools/qge_breadth_evidence.py"
+grep -q 'MAP_SETS' "$repo_root/tools/qge_map_sets.py"
+grep -q 'quake_shareware_episode1' "$repo_root/tools/qge_map_sets.py"
 grep -q 'qge_full_game_route_contracts' "$repo_root/tools/qge_breadth_evidence.py"
 grep -q 'route_contract_authority_ready_run_count' "$repo_root/tools/qge_breadth_evidence.py"
 grep -q 'route_contract_authority_not_ready' "$repo_root/tools/qge_breadth_evidence.py"

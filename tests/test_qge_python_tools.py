@@ -31,6 +31,7 @@ import qge_asset_resource_audit as asset_resource_audit  # noqa: E402
 import qge_breadth_evidence as breadth_evidence  # noqa: E402
 import qge_breadth_evidence_audit as breadth_evidence_audit  # noqa: E402
 import qge_full_game_capture_queue as full_game_capture_queue  # noqa: E402
+import qge_map_sets as map_sets  # noqa: E402
 import qge_image_metrics as image_metrics  # noqa: E402
 import qge_moonlab_advantage_icc_audit as moonlab_advantage_icc_audit  # noqa: E402
 import qge_moonlab_advantage_artifact_audit as moonlab_advantage_artifact_audit  # noqa: E402
@@ -8687,6 +8688,35 @@ class PublicationPackTests(unittest.TestCase):
 
 
 class BreadthEvidenceTests(unittest.TestCase):
+    def test_map_set_registry_is_shared_by_breadth_evidence(self) -> None:
+        self.assertEqual(
+            breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+            map_sets.DEFAULT_FULL_GAME_MAP_SET,
+        )
+        self.assertEqual(
+            breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            map_sets.SHAREWARE_EPISODE_ONE_MAP_SET,
+        )
+        self.assertEqual(
+            breadth_evidence.QUAKE_REGISTERED_SINGLE_PLAYER_MAPS,
+            map_sets.QUAKE_REGISTERED_SINGLE_PLAYER_MAPS,
+        )
+        self.assertEqual(
+            breadth_evidence.QUAKE_SHAREWARE_EPISODE_ONE_MAPS,
+            map_sets.QUAKE_SHAREWARE_EPISODE_ONE_MAPS,
+        )
+        self.assertEqual(
+            breadth_evidence.map_targets_for_set(
+                breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET),
+            map_sets.map_targets_for_set(
+                map_sets.SHAREWARE_EPISODE_ONE_MAP_SET),
+        )
+        self.assertEqual(
+            breadth_evidence.map_set_scope_label(
+                breadth_evidence.DEFAULT_FULL_GAME_MAP_SET),
+            "registered_single_player_full_game",
+        )
+
     def test_shareware_breadth_route_authority_uses_shareware_contract(
         self,
     ) -> None:

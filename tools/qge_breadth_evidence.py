@@ -17,63 +17,20 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import qge_full_game_route_contracts  # noqa: E402
+import qge_map_sets  # noqa: E402
 
 REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS = [
     "qge_context_get_or_create_render_acceleration",
     "qge_dwt_render",
     "qge_metal_init_common",
 ]
-DEFAULT_FULL_GAME_MAP_SET = "quake_registered_single_player"
-SHAREWARE_EPISODE_ONE_MAP_SET = "quake_shareware_episode1"
-QUAKE_REGISTERED_SINGLE_PLAYER_MAPS = [
-    "start",
-    "e1m1",
-    "e1m2",
-    "e1m3",
-    "e1m4",
-    "e1m5",
-    "e1m6",
-    "e1m7",
-    "e1m8",
-    "e2m1",
-    "e2m2",
-    "e2m3",
-    "e2m4",
-    "e2m5",
-    "e2m6",
-    "e2m7",
-    "e3m1",
-    "e3m2",
-    "e3m3",
-    "e3m4",
-    "e3m5",
-    "e3m6",
-    "e3m7",
-    "e4m1",
-    "e4m2",
-    "e4m3",
-    "e4m4",
-    "e4m5",
-    "e4m6",
-    "e4m7",
-    "e4m8",
-    "end",
-]
-QUAKE_SHAREWARE_EPISODE_ONE_MAPS = [
-    "start",
-    "e1m1",
-    "e1m2",
-    "e1m3",
-    "e1m4",
-    "e1m5",
-    "e1m6",
-    "e1m7",
-    "e1m8",
-]
-FULL_GAME_MAP_SETS = {
-    DEFAULT_FULL_GAME_MAP_SET: QUAKE_REGISTERED_SINGLE_PLAYER_MAPS,
-    SHAREWARE_EPISODE_ONE_MAP_SET: QUAKE_SHAREWARE_EPISODE_ONE_MAPS,
-}
+DEFAULT_FULL_GAME_MAP_SET = qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
+SHAREWARE_EPISODE_ONE_MAP_SET = qge_map_sets.SHAREWARE_EPISODE_ONE_MAP_SET
+QUAKE_REGISTERED_SINGLE_PLAYER_MAPS = (
+    qge_map_sets.QUAKE_REGISTERED_SINGLE_PLAYER_MAPS)
+QUAKE_SHAREWARE_EPISODE_ONE_MAPS = (
+    qge_map_sets.QUAKE_SHAREWARE_EPISODE_ONE_MAPS)
+FULL_GAME_MAP_SETS = qge_map_sets.MAP_SETS
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -391,29 +348,19 @@ def canonical_map_name(value: Any) -> str | None:
 
 
 def map_targets_for_set(name: str) -> list[str]:
-    try:
-        return list(FULL_GAME_MAP_SETS[name])
-    except KeyError as exc:
-        choices = ", ".join(sorted(FULL_GAME_MAP_SETS))
-        raise ValueError(
-            f"unknown QGE map set {name!r}; expected one of: {choices}"
-        ) from exc
+    return qge_map_sets.map_targets_for_set(name)
 
 
 def is_registered_full_game_map_set(name: Any) -> bool:
-    return name == DEFAULT_FULL_GAME_MAP_SET
+    return qge_map_sets.is_registered_full_game_map_set(name)
 
 
 def is_shareware_episode_one_map_set(name: Any) -> bool:
-    return name == SHAREWARE_EPISODE_ONE_MAP_SET
+    return qge_map_sets.is_shareware_episode_one_map_set(name)
 
 
 def map_set_scope_label(name: Any) -> str:
-    if is_registered_full_game_map_set(name):
-        return "registered_single_player_full_game"
-    if is_shareware_episode_one_map_set(name):
-        return "shareware_episode_one"
-    return "custom_map_set"
+    return qge_map_sets.map_set_scope_label(name)
 
 
 def build_full_game_map_coverage(
