@@ -295,7 +295,9 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      becoming a completion claim. Check that ledger with
      `make qge_registered_full_game_breadth_status_audit`. ICC exposes the same
      non-deployment status view as
-     `qge_registered_full_game_coverage_ledger`.
+     `qge_registered_full_game_coverage_ledger`. The selection JSON also
+     records per-map `target_map_status` rows, so a missing registered map is
+     distinguished from a map with a present but non-ready capture attempt.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for

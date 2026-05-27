@@ -8857,6 +8857,11 @@ class BreadthEvidenceTests(unittest.TestCase):
                     matrix_root / f"20260523-{index:06d}-{map_name}",
                     map_name=map_name,
                 )
+            self.write_matrix(
+                matrix_root / "20260523-999997-e2m1-not-ready",
+                map_name="e2m1",
+                ready=False,
+            )
 
             selection = map_set_evidence.scan_ready_map_set_runs(
                 matrix_root,
@@ -8870,6 +8875,18 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(selection["selected_matrix_count"], 9)
             self.assertEqual(selection["missing_ready_map_count"], 23)
             self.assertIn("e2m1", selection["missing_ready_maps"])
+            self.assertEqual(selection["ready_target_map_count"], 9)
+            self.assertEqual(selection["blocked_not_ready_map_count"], 1)
+            self.assertEqual(selection["missing_matrix_map_count"], 22)
+            map_status = {
+                item["map"]: item for item in selection["target_map_status"]
+            }
+            self.assertEqual(map_status["e1m1"]["status"], "ready")
+            self.assertEqual(
+                map_status["e2m1"]["status"], "blocked_not_ready")
+            self.assertEqual(
+                map_status["e2m1"]["rejected_reasons"], ["not_ready"])
+            self.assertEqual(map_status["e3m1"]["status"], "missing_matrix")
 
             outdir = tmpdir / "breadth" / "registered_single_player_status"
             with self.assertRaisesRegex(
@@ -8975,6 +8992,9 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(selection["selected_matrix_count"], 9)
             self.assertEqual(selection["missing_ready_maps"], [])
             self.assertEqual(selection["map_scope"], "shareware_episode_one")
+            self.assertEqual(selection["ready_target_map_count"], 9)
+            self.assertEqual(selection["blocked_not_ready_map_count"], 0)
+            self.assertEqual(selection["missing_matrix_map_count"], 0)
             selected_by_map = {
                 row["map"]: row["matrix_file"]
                 for row in selection["selected_runs"]

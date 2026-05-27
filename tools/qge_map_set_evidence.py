@@ -86,6 +86,9 @@ def scan_ready_map_set_runs(
     candidates_by_map: dict[str, list[dict[str, Any]]] = {
         name: [] for name in target_maps
     }
+    rejected_by_map: dict[str, list[dict[str, Any]]] = {
+        name: [] for name in target_maps
+    }
     rejected: list[dict[str, Any]] = []
     scanned_count = 0
 
@@ -123,6 +126,7 @@ def scan_ready_map_set_runs(
             continue
         if summary.get("ready") is not True:
             record["reason"] = "not_ready"
+            rejected_by_map[map_name].append(record)
             rejected.append(record)
             continue
         candidates_by_map[map_name].append(record)
@@ -139,6 +143,29 @@ def scan_ready_map_set_runs(
     missing_ready_maps = [
         name for name in target_maps if name not in selected_by_map
     ]
+    target_map_status = []
+    for map_name in target_maps:
+        selected = selected_by_map.get(map_name)
+        rejected_candidates = rejected_by_map[map_name]
+        if selected:
+            status = "ready"
+        elif rejected_candidates:
+            status = "blocked_not_ready"
+        else:
+            status = "missing_matrix"
+        target_map_status.append({
+            "map": map_name,
+            "status": status,
+            "selected_matrix_file": (
+                selected.get("matrix_file") if selected else None),
+            "ready_candidate_count": len(candidates_by_map[map_name]),
+            "rejected_candidate_count": len(rejected_candidates),
+            "rejected_reasons": sorted({
+                str(item.get("reason"))
+                for item in rejected_candidates
+                if item.get("reason")
+            }),
+        })
     return {
         "schema": selection_schema,
         "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -158,6 +185,16 @@ def scan_ready_map_set_runs(
         "selected_matrix_count": len(selected_by_map),
         "missing_ready_maps": missing_ready_maps,
         "missing_ready_map_count": len(missing_ready_maps),
+        "target_map_status": target_map_status,
+        "ready_target_map_count": sum(
+            1 for item in target_map_status
+            if item["status"] == "ready"),
+        "blocked_not_ready_map_count": sum(
+            1 for item in target_map_status
+            if item["status"] == "blocked_not_ready"),
+        "missing_matrix_map_count": sum(
+            1 for item in target_map_status
+            if item["status"] == "missing_matrix"),
         "selection_policy": (
             "select lexicographically latest ready vanilla_capture_matrix.json "
             f"per {map_set} target map"

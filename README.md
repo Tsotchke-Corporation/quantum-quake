@@ -156,6 +156,8 @@ Important known limitations:
   is expected to remain partial until the licensed registered maps are present
   and captured. `make qge_registered_full_game_breadth_status_audit` rejects a
   stale registered status ledger without turning it into a completion claim.
+  The selection JSON includes per-map `target_map_status` rows so missing maps
+  are distinguished from maps that have non-ready capture attempts.
   ICC tracks that progress-only ledger through
   `qge_registered_full_game_coverage_ledger`, separate from the deployment
   readiness target.

@@ -453,7 +453,9 @@ runs it for `quake_registered_single_player` with `--allow-partial` so the
 eventual whole-game port has an auditable 32-map progress ledger without
 pretending the current nine-map checkpoint is complete. The paired
 `make qge_registered_full_game_breadth_status_audit` target rejects stale
-registered status evidence. ICC exposes the progress-only view as
+registered status evidence. Its selection JSON includes `target_map_status`
+rows that separate ready, non-ready, and not-yet-captured maps. ICC exposes the
+progress-only view as
 `qge_registered_full_game_coverage_ledger`; deployment readiness still uses the
 separate full-game gate target.
 Each covered matrix is audited against its route contract's required authority
