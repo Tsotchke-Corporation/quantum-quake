@@ -146,7 +146,9 @@ Important known limitations:
   by scanning ready `diagnostics/quake_graphics/**/vanilla_capture_matrix.json`
   captures for `quake_shareware_episode1`; that ICC sidecar is the stable input
   for the shareware readiness target and is still not a registered/full-game
-  deployment claim.
+  deployment claim. `make qge_shareware_episode1_breadth_audit` rescans those
+  diagnostics and recomputes the breadth/ICC sidecars to reject stale local
+  shareware evidence.
   `tools/qge_asset_inventory.py --map-set quake_registered_single_player`
   emits the companion
   hash-backed asset audit and rejects placeholder BSPs unless they pass the

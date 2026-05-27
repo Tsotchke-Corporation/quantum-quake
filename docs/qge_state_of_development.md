@@ -653,7 +653,9 @@ Known current visual state:
   regenerates the stable shareware sidecar under
   `diagnostics/breadth_evidence/shareware_episode1/` by selecting one ready
   matrix for each first-episode target map from
-  `diagnostics/quake_graphics/**/vanilla_capture_matrix.json`.
+  `diagnostics/quake_graphics/**/vanilla_capture_matrix.json`, and
+  `make qge_shareware_episode1_breadth_audit` rejects stale local selection,
+  breadth, or ICC sidecar content.
   `tools/qge_full_game_capture_queue.py`
   turns the registered ledger
   into `qge.full_game_capture_queue.v0` and a runnable

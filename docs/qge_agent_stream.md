@@ -443,7 +443,10 @@ entry point for that smaller scope: it scans
 `diagnostics/quake_graphics/**/vanilla_capture_matrix.json`, selects one ready
 matrix for each `quake_shareware_episode1` target map, and writes
 `diagnostics/breadth_evidence/shareware_episode1/qge_breadth_icc_evidence.json`
-with the canonical ICC sidecar filename.
+with the canonical ICC sidecar filename. The paired
+`make qge_shareware_episode1_breadth_audit` target rescans the matrices,
+rebuilds the selected breadth evidence, and recomputes the ICC sidecar before
+accepting the local shareware evidence.
 Each covered matrix is audited against its route contract's required authority
 domains. Shareware Episode 1 contracts use the `shareware_combat` map class for
 the E1 combat maps while the registered/full-game path keeps

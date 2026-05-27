@@ -102,7 +102,7 @@ QGE_OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(QGE_SRCS))
 QGE_OBJS += $(patsubst %.mm,$(BUILD_DIR)/%.o,$(QGE_OBJC_SRCS))
 
 # Targets
-.PHONY: all clean test moonlab qge dirs demo demo-sdl quake run-quake qge_shareware_episode1_breadth_evidence test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools test_qge_python_tools test_snd_quantum_source_contract test_qge_audio_authority_smoke
+.PHONY: all clean test moonlab qge dirs demo demo-sdl quake run-quake qge_shareware_episode1_breadth_evidence qge_shareware_episode1_breadth_audit test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools test_qge_python_tools test_snd_quantum_source_contract test_qge_audio_authority_smoke
 
 QGE_SHAREWARE_MATRIX_ROOT ?= diagnostics/quake_graphics
 QGE_SHAREWARE_EVIDENCE_OUT ?= diagnostics/breadth_evidence/shareware_episode1
@@ -206,6 +206,13 @@ qge_shareware_episode1_breadth_evidence:
 	@python3 tools/qge_shareware_episode_evidence.py \
 		--matrix-root $(QGE_SHAREWARE_MATRIX_ROOT) \
 		--outdir $(QGE_SHAREWARE_EVIDENCE_OUT)
+
+qge_shareware_episode1_breadth_audit:
+	@echo "Auditing QGE shareware Episode 1 breadth evidence..."
+	@python3 tools/qge_shareware_episode_evidence_audit.py \
+		$(QGE_SHAREWARE_EVIDENCE_OUT) \
+		--matrix-root $(QGE_SHAREWARE_MATRIX_ROOT) \
+		--fail-on-mismatch
 
 # Run tests
 test: test_qge test_console_contract test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools test_qge_python_tools test_snd_quantum_source_contract test_qge_audio_authority_smoke

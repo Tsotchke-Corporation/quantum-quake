@@ -70,6 +70,7 @@ import qge_resource_boundary_audit as resource_boundary_audit  # noqa: E402
 import qge_registered_asset_intake as registered_asset_intake  # noqa: E402
 import qge_registered_asset_script_audit as registered_asset_script_audit  # noqa: E402
 import qge_runtime_icc_audit as runtime_icc_audit  # noqa: E402
+import qge_shareware_episode_evidence_audit as shareware_episode_evidence_audit  # noqa: E402
 import qge_shareware_episode_evidence as shareware_episode_evidence  # noqa: E402
 import qge_trace_summary as trace_summary  # noqa: E402
 import qge_trace_summary_audit as trace_summary_audit  # noqa: E402
@@ -8878,6 +8879,40 @@ class BreadthEvidenceTests(unittest.TestCase):
             )
             self.assertTrue(
                 (cli_outdir / "qge_breadth_icc_evidence.json").is_file())
+
+            audit = (
+                shareware_episode_evidence_audit
+                .shareware_episode_evidence_audit(
+                    cli_outdir,
+                    matrix_root=matrix_root,
+                )
+            )
+            self.assertTrue(audit["passed"], audit)
+            self.assertEqual(audit["mismatch_count"], 0)
+            self.assertEqual(audit["selection_field_mismatches"], [])
+            self.assertEqual(audit["breadth_field_mismatches"], [])
+            self.assertEqual(audit["icc_field_mismatches"], [])
+
+            stale_selection_path = (
+                cli_outdir /
+                shareware_episode_evidence.SELECTION_FILENAME
+            )
+            stale_selection = publication_pack.load_json(
+                stale_selection_path)
+            stale_selection["selected_matrix_count"] = 8
+            publication_pack.write_json(stale_selection_path, stale_selection)
+            stale_audit = (
+                shareware_episode_evidence_audit
+                .shareware_episode_evidence_audit(
+                    cli_outdir,
+                    matrix_root=matrix_root,
+                )
+            )
+            self.assertFalse(stale_audit["passed"])
+            self.assertIn(
+                "selected_matrix_count",
+                stale_audit["selection_field_mismatches"],
+            )
 
     def test_default_route_authority_remains_registered_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

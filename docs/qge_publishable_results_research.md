@@ -284,7 +284,9 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      ready run for every `quake_shareware_episode1` map, and writes the
      canonical ICC sidecar at
      `diagnostics/breadth_evidence/shareware_episode1/qge_breadth_icc_evidence.json`
-     for the shareware readiness target.
+     for the shareware readiness target. Check it with
+     `make qge_shareware_episode1_breadth_audit`, which rescans the same
+     matrices and rejects stale selection, breadth, or ICC sidecar content.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for
