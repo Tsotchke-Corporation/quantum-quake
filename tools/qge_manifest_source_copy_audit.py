@@ -277,6 +277,7 @@ def manifest_source_copy_audit(
             "source_copy_record_count": 0,
             "file_copy_record_count": 0,
             "directory_copy_record_count": 0,
+            "missing_pack_dir": False,
             "malformed_source_copy_record_count": 0,
             "malformed_source_copy_records": [],
             "packed_path_membership_mismatches": [],
@@ -295,6 +296,7 @@ def manifest_source_copy_audit(
     file_mismatches = []
     directory_mismatches = []
     pack_root = path_from_record(manifest_data.get("pack_dir"))
+    missing_pack_dir = required and bool(records) and pack_root is None
     for record in records:
         if record.get("kind") == "malformed":
             malformed_source_copy_records.append({
@@ -324,6 +326,7 @@ def manifest_source_copy_audit(
             directory_mismatches.append(mismatch)
 
     mismatch_count = (
+        int(missing_pack_dir) +
         len(malformed_source_copy_records) +
         len(packed_path_membership_mismatches) +
         len(missing_source_paths) +
@@ -344,6 +347,7 @@ def manifest_source_copy_audit(
         "directory_copy_record_count": sum(
             1 for record in valid_records
             if record.get("kind") == "directory"),
+        "missing_pack_dir": missing_pack_dir,
         "malformed_source_copy_record_count": len(
             malformed_source_copy_records),
         "malformed_source_copy_records": malformed_source_copy_records,

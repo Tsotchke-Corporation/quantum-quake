@@ -1552,7 +1552,20 @@ class PublicationPackTests(unittest.TestCase):
             self.assertEqual(audit["source_copy_record_count"], 2)
             self.assertEqual(audit["file_copy_record_count"], 1)
             self.assertEqual(audit["directory_copy_record_count"], 1)
+            self.assertFalse(audit["missing_pack_dir"])
             self.assertEqual(audit["packed_path_membership_mismatches"], [])
+
+            missing_pack_dir_manifest = json.loads(json.dumps(manifest))
+            missing_pack_dir_manifest.pop("pack_dir")
+            missing_pack_dir_audit = (
+                manifest_source_copy_audit.manifest_source_copy_audit(
+                    missing_pack_dir_manifest,
+                    required=True,
+                )
+            )
+            self.assertFalse(missing_pack_dir_audit["passed"])
+            self.assertTrue(missing_pack_dir_audit["missing_pack_dir"])
+            self.assertEqual(missing_pack_dir_audit["mismatch_count"], 1)
 
             outside_pack_manifest = json.loads(json.dumps(manifest))
             outside_pack_manifest["artifacts"]["sample"]["file"]["packed"] = (
