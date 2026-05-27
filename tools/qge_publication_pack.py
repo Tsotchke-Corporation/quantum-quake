@@ -47,6 +47,7 @@ import qge_oracle_export  # noqa: E402
 import qge_perf_summary  # noqa: E402
 import qge_resource_boundary_audit  # noqa: E402
 import qge_registered_asset_intake  # noqa: E402
+import qge_registered_full_game_progress  # noqa: E402
 
 DEFAULT_SAMPLE_COUNTS = [16, 32, 64, 128]
 ADVANTAGE_REPLAY_OUTDIR = "/tmp/qge_advantage_benchmark"
@@ -137,6 +138,41 @@ def asset_requirements_reproduce_command(
                           "/tmp/qge_asset_requirements.md")
     append_command_option(parts, "--icc-json",
                           "/tmp/qge_asset_requirements_icc_evidence.json")
+    return " ".join(parts)
+
+
+def registered_full_game_progress_reproduction_inputs(
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    return {
+        "selection": str(qge_registered_full_game_progress.DEFAULT_SELECTION),
+        "matrix_root": str(
+            qge_registered_full_game_progress
+            .qge_map_set_evidence.DEFAULT_MATRIX_ROOT
+        ),
+        "asset_root": str(args.asset_root),
+        "map_set": qge_map_sets.DEFAULT_FULL_GAME_MAP_SET,
+    }
+
+
+def registered_full_game_progress_reproduce_command(
+    args: argparse.Namespace,
+) -> str:
+    plan = registered_full_game_progress_reproduction_inputs(args)
+    parts = ["tools/qge_registered_full_game_progress.py"]
+    append_command_option(parts, "--selection", plan.get("selection"))
+    append_command_option(parts, "--matrix-root", plan.get("matrix_root"))
+    append_command_option(parts, "--asset-root", plan.get("asset_root"))
+    append_command_option(parts, "--map-set", plan.get("map_set"))
+    append_command_option(
+        parts, "--json", "/tmp/qge_registered_full_game_progress.json")
+    append_command_option(
+        parts, "--markdown", "/tmp/qge_registered_full_game_progress.md")
+    append_command_option(
+        parts,
+        "--icc-json",
+        "/tmp/qge_registered_full_game_progress_icc_evidence.json",
+    )
     return " ".join(parts)
 
 
@@ -837,6 +873,14 @@ def build_moonlab_job_specs(
                 "asset_requirements": artifact_paths.get("asset_requirements"),
                 "registered_asset_intake": artifact_paths.get(
                     "registered_asset_intake"),
+                **(
+                    {
+                        "registered_full_game_progress": artifact_paths.get(
+                            "registered_full_game_progress"),
+                    }
+                    if artifact_paths.get("registered_full_game_progress")
+                    else {}
+                ),
             },
             "fallback_policy": (
                 "ledger remains partial until every target map has a ready "
@@ -1456,6 +1500,44 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "qge_registered_asset_intake_icc_evidence.json"
     )
     write_json(registered_asset_intake_icc_path, registered_asset_intake_icc)
+    registered_progress_inputs = (
+        registered_full_game_progress_reproduction_inputs(args)
+    )
+    registered_full_game_progress = (
+        qge_registered_full_game_progress.build_progress(
+            selection_path=Path(registered_progress_inputs["selection"]),
+            matrix_root=Path(registered_progress_inputs["matrix_root"]),
+            asset_root=Path(registered_progress_inputs["asset_root"]),
+            map_set=registered_progress_inputs["map_set"],
+        )
+    )
+    registered_full_game_progress_path = (
+        args.outdir / "resource" / "qge_registered_full_game_progress.json"
+    )
+    write_json(registered_full_game_progress_path, registered_full_game_progress)
+    registered_full_game_progress_markdown_path = (
+        args.outdir / "resource" / "qge_registered_full_game_progress.md"
+    )
+    registered_full_game_progress_markdown_path.write_text(
+        qge_registered_full_game_progress.markdown_report(
+            registered_full_game_progress),
+        encoding="utf-8",
+    )
+    registered_full_game_progress_icc = (
+        qge_registered_full_game_progress.build_icc_evidence(
+            registered_full_game_progress)
+    )
+    registered_full_game_progress_icc[
+        "registered_full_game_progress_file"
+    ] = str(registered_full_game_progress_path)
+    registered_full_game_progress_icc_path = (
+        args.outdir / "resource" /
+        "qge_registered_full_game_progress_icc_evidence.json"
+    )
+    write_json(
+        registered_full_game_progress_icc_path,
+        registered_full_game_progress_icc,
+    )
     native_backend_boundary = (
         qge_resource_boundary_audit.expected_native_backend_boundary(
             capture_perf_summary)
@@ -1490,6 +1572,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "asset_inventory": str(asset_inventory_path),
             "asset_requirements": str(asset_requirements_path),
             "registered_asset_intake": str(registered_asset_intake_path),
+            "registered_full_game_progress": str(
+                registered_full_game_progress_path),
         },
     )
     moonlab_job_specs_path = (
@@ -1778,6 +1862,12 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             registered_asset_intake_script_path),
         "registered_asset_intake_icc_evidence": file_info(
             registered_asset_intake_icc_path),
+        "registered_full_game_progress": file_info(
+            registered_full_game_progress_path),
+        "registered_full_game_progress_markdown": file_info(
+            registered_full_game_progress_markdown_path),
+        "registered_full_game_progress_icc_evidence": file_info(
+            registered_full_game_progress_icc_path),
         "native_backend_boundary": file_info(native_backend_boundary_path),
         "moonlab_job_specs": file_info(moonlab_job_specs_path),
         "moonlab_job_results": file_info(moonlab_job_results_path),
@@ -1848,6 +1938,9 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                     str(full_game_map_coverage.get("map_set") or
                         qge_map_sets.DEFAULT_FULL_GAME_MAP_SET),
                 )
+            ),
+            "registered_full_game_progress_reproduction": (
+                registered_progress_inputs
             ),
             "registered_asset_candidates": [
                 str(path)
@@ -2055,6 +2148,19 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 registered_asset_intake.get("missing_map_count_after_plan")),
             "registered_asset_intake_discovered_candidate_count": (
                 registered_asset_intake.get("discovered_candidate_count", 0)),
+            "registered_full_game_progress": registered_full_game_progress,
+            "registered_full_game_progress_status": (
+                registered_full_game_progress.get("status")),
+            "registered_full_game_progress_next_blocker": (
+                registered_full_game_progress.get("next_blocker")),
+            "registered_full_game_progress_ready_map_count": (
+                registered_full_game_progress.get("ready_map_count")),
+            "registered_full_game_progress_asset_missing_map_count": (
+                registered_full_game_progress.get(
+                    "asset_missing_map_count")),
+            "registered_full_game_progress_capture_needed_map_count": (
+                registered_full_game_progress.get(
+                    "capture_needed_map_count")),
             "breadth_total_fallback_count": breadth_summary.get(
                 "total_fallback_count"),
             "breadth_total_surrogate_count": breadth_summary.get(
@@ -2260,6 +2366,23 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "asset_intake_copies_game_data": (
                     registered_asset_intake.get("claim_posture", {}).get(
                         "asset_intake_copies_game_data")),
+            },
+            "registered_full_game_progress_summary": {
+                "schema": registered_full_game_progress.get("schema"),
+                "status": registered_full_game_progress.get("status"),
+                "next_blocker": (
+                    registered_full_game_progress.get("next_blocker")),
+                "map_set": registered_full_game_progress.get("map_set"),
+                "target_map_count": (
+                    registered_full_game_progress.get("target_map_count")),
+                "ready_map_count": (
+                    registered_full_game_progress.get("ready_map_count")),
+                "asset_missing_map_count": (
+                    registered_full_game_progress.get(
+                        "asset_missing_map_count")),
+                "capture_needed_map_count": (
+                    registered_full_game_progress.get(
+                        "capture_needed_map_count")),
             },
             "native_backend_boundary_summary": {
                 "status": native_backend_boundary.get("status"),
@@ -2489,6 +2612,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 str(full_game_map_coverage.get("map_set") or
                     qge_map_sets.DEFAULT_FULL_GAME_MAP_SET),
             ),
+            registered_full_game_progress_reproduce_command(args),
             "tools/qge_moonlab_job_runner.py <pack_dir>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack_dir>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json --submission-out /tmp/qge_moonlab_submission_packet.verify.json",
             "tools/qge_moonlab_submission_bundle.py <pack_dir>/resource/qge_moonlab_submission_packet.json --out /tmp/qge_moonlab_submission_bundle.json --markdown /tmp/qge_moonlab_submission_bundle.md --icc-json /tmp/qge_moonlab_submission_bundle_icc_evidence.json",
             "tools/qge_moonlab_hardware_ingest.py <pack_dir>/resource/qge_moonlab_submission_packet.json --template-out /tmp/qge_moonlab_hardware_record.template.json",
@@ -2502,6 +2626,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_trace_summary_audit.py <pack_dir> --out /tmp/qge_trace_summary_audit.json --fail-on-mismatch",
             "tools/qge_breadth_evidence_audit.py <pack_dir> --out /tmp/qge_breadth_evidence_audit.json --fail-on-mismatch",
             "tools/qge_asset_resource_audit.py <pack_dir> --out /tmp/qge_asset_resource_audit.json --fail-on-mismatch",
+            "tools/qge_registered_full_game_progress_audit.py <pack_dir> --out /tmp/qge_registered_full_game_progress_audit.json --fail-on-mismatch",
             "tools/qge_resource_boundary_audit.py <pack_dir> --out /tmp/qge_resource_boundary_audit.json --fail-on-mismatch",
             "tools/qge_moonlab_full_game_plan_audit.py <pack_dir> --out /tmp/qge_moonlab_full_game_plan_audit.json --fail-on-mismatch",
             "tools/qge_moonlab_deployment_gate_audit.py <pack_dir> --out /tmp/qge_moonlab_deployment_gate_audit.json --fail-on-mismatch",
@@ -2566,6 +2691,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("asset_requirements_summary"))
     registered_asset_intake_summary = dict_or_empty(
         advantage_summary.get("registered_asset_intake_summary"))
+    registered_progress_summary = dict_or_empty(
+        advantage_summary.get("registered_full_game_progress_summary"))
     source_input_audit = (
         qge_manifest_source_input_audit.manifest_source_input_icc_summary(
             manifest,
@@ -2769,6 +2896,32 @@ def build_icc_evidence(manifest: dict[str, Any],
         "asset_intake_copies_game_data": (
             registered_asset_intake_summary.get(
                 "asset_intake_copies_game_data")),
+        "registered_full_game_progress_file": (
+            artifacts.get("resource", {}).get(
+                "registered_full_game_progress", {}).get("path")),
+        "registered_full_game_progress_markdown_file": (
+            artifacts.get("resource", {}).get(
+                "registered_full_game_progress_markdown", {}).get("path")),
+        "registered_full_game_progress_icc_evidence_file": (
+            artifacts.get("resource", {}).get(
+                "registered_full_game_progress_icc_evidence", {}).get(
+                    "path")),
+        "registered_full_game_progress_schema": (
+            registered_progress_summary.get("schema")),
+        "registered_full_game_progress_status": (
+            registered_progress_summary.get("status")),
+        "registered_full_game_progress_next_blocker": (
+            registered_progress_summary.get("next_blocker")),
+        "registered_full_game_progress_map_set": (
+            registered_progress_summary.get("map_set")),
+        "registered_full_game_progress_target_map_count": (
+            registered_progress_summary.get("target_map_count")),
+        "registered_full_game_progress_ready_map_count": (
+            registered_progress_summary.get("ready_map_count")),
+        "registered_full_game_progress_asset_missing_map_count": (
+            registered_progress_summary.get("asset_missing_map_count")),
+        "registered_full_game_progress_capture_needed_map_count": (
+            registered_progress_summary.get("capture_needed_map_count")),
         "native_backend_boundary_file": artifacts.get("resource", {}).get(
             "native_backend_boundary", {}).get("path"),
         "native_backend_boundary_status": native_boundary_summary.get(

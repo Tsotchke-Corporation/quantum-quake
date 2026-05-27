@@ -356,6 +356,9 @@ assert manifest["artifacts"]["resource"]["registered_asset_intake"]["exists"] is
 assert manifest["artifacts"]["resource"]["registered_asset_intake_markdown"]["exists"] is True
 assert manifest["artifacts"]["resource"]["registered_asset_intake_script"]["exists"] is True
 assert manifest["artifacts"]["resource"]["registered_asset_intake_icc_evidence"]["exists"] is True
+assert manifest["artifacts"]["resource"]["registered_full_game_progress"]["exists"] is True
+assert manifest["artifacts"]["resource"]["registered_full_game_progress_markdown"]["exists"] is True
+assert manifest["artifacts"]["resource"]["registered_full_game_progress_icc_evidence"]["exists"] is True
 assert manifest["artifacts"]["resource"]["native_backend_boundary"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_job_specs"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_job_results"]["exists"] is True
@@ -389,6 +392,14 @@ assert manifest["advantage_summary"]["registered_asset_intake_summary"]["missing
 assert manifest["advantage_summary"]["registered_asset_intake_summary"]["post_install_verification_command_count"] == 2
 assert manifest["advantage_summary"]["registered_asset_intake_summary"]["post_install_capture_queue_command_present"] is True
 assert manifest["advantage_summary"]["registered_asset_intake_summary"]["asset_intake_copies_game_data"] is False
+assert manifest["advantage_summary"]["registered_full_game_progress_summary"]["schema"] == "qge.registered_full_game_progress.v0"
+assert manifest["advantage_summary"]["registered_full_game_progress_summary"]["status"] == "partial"
+assert manifest["advantage_summary"]["registered_full_game_progress_summary"]["next_blocker"] == "registered_assets_missing"
+assert manifest["advantage_summary"]["registered_full_game_progress_summary"]["map_set"] == "quake_registered_single_player"
+assert manifest["advantage_summary"]["registered_full_game_progress_summary"]["target_map_count"] == 32
+assert manifest["advantage_summary"]["registered_full_game_progress_summary"]["ready_map_count"] == 0
+assert manifest["advantage_summary"]["registered_full_game_progress_summary"]["asset_missing_map_count"] == 32
+assert manifest["advantage_summary"]["registered_full_game_progress_summary"]["capture_needed_map_count"] == 0
 assert manifest["advantage_summary"]["native_backend_boundary_summary"]["status"] == "pass"
 assert manifest["advantage_summary"]["native_backend_boundary_summary"]["passed_target_count"] == 3
 assert manifest["advantage_summary"]["moonlab_qae_payload_summary"]["schema"] == "qge.moonlab_qae_payload.v0"
@@ -465,7 +476,7 @@ assert icc["publication_ready_for_complete_claim"] is True
 assert icc["manifest_reproduce_recorded"] is True
 assert icc["manifest_reproduce_source_inputs_recorded"] is True
 assert icc["manifest_reproduce_missing_source_inputs"] is False
-assert icc["manifest_reproduce_optional_postpack_command_count"] == 29
+assert icc["manifest_reproduce_optional_postpack_command_count"] == 30
 assert icc["manifest_reproduce_publication_pack_command_count"] == 1
 assert icc["manifest_reproduce_missing_optional_postpack_command_count"] == 0
 assert icc["manifest_reproduce_missing_optional_postpack_commands"] == []
@@ -513,6 +524,17 @@ assert icc["registered_asset_intake_missing_map_count_after_plan"] == 32
 assert icc["registered_asset_intake_post_install_verification_command_count"] == 2
 assert icc["registered_asset_intake_post_install_capture_queue_command_present"] is True
 assert icc["asset_intake_copies_game_data"] is False
+assert icc["registered_full_game_progress_file"].endswith("resource/qge_registered_full_game_progress.json")
+assert icc["registered_full_game_progress_markdown_file"].endswith("resource/qge_registered_full_game_progress.md")
+assert icc["registered_full_game_progress_icc_evidence_file"].endswith("resource/qge_registered_full_game_progress_icc_evidence.json")
+assert icc["registered_full_game_progress_schema"] == "qge.registered_full_game_progress.v0"
+assert icc["registered_full_game_progress_status"] == "partial"
+assert icc["registered_full_game_progress_next_blocker"] == "registered_assets_missing"
+assert icc["registered_full_game_progress_map_set"] == "quake_registered_single_player"
+assert icc["registered_full_game_progress_target_map_count"] == 32
+assert icc["registered_full_game_progress_ready_map_count"] == 0
+assert icc["registered_full_game_progress_asset_missing_map_count"] == 32
+assert icc["registered_full_game_progress_capture_needed_map_count"] == 0
 assert icc["native_backend_boundary_file"].endswith("resource/qge_native_backend_boundary.json")
 assert icc["native_backend_boundary_status"] == "pass"
 assert icc["moonlab_qae_payload_file"].endswith("advantage/qae_moonlab_payload.json")
@@ -759,6 +781,20 @@ assert asset_tokens[asset_tokens.index("--asset-root") + 1] == source_inputs["as
 asset_plan = source_inputs["asset_requirements_reproduction"]
 assert asset_tokens[asset_tokens.index("--map-set") + 1] == asset_plan["map_set"]
 assert "<asset_root>" not in asset_requirement_commands[0]
+progress_commands = [
+    command for command in manifest["reproduce_commands"]
+    if command.startswith("tools/qge_registered_full_game_progress.py ")
+]
+assert len(progress_commands) == 1
+progress_tokens = shlex.split(progress_commands[0])
+progress_plan = source_inputs["registered_full_game_progress_reproduction"]
+assert progress_tokens[progress_tokens.index("--selection") + 1] == progress_plan["selection"]
+assert progress_tokens[progress_tokens.index("--matrix-root") + 1] == progress_plan["matrix_root"]
+assert progress_tokens[progress_tokens.index("--asset-root") + 1] == progress_plan["asset_root"]
+assert progress_tokens[progress_tokens.index("--map-set") + 1] == progress_plan["map_set"]
+assert progress_tokens[progress_tokens.index("--json") + 1] == "/tmp/qge_registered_full_game_progress.json"
+assert progress_tokens[progress_tokens.index("--markdown") + 1] == "/tmp/qge_registered_full_game_progress.md"
+assert progress_tokens[progress_tokens.index("--icc-json") + 1] == "/tmp/qge_registered_full_game_progress_icc_evidence.json"
 PY
 
 python3 "$repo_root/tools/qge_publication_icc_audit.py" "$pack_dir" \

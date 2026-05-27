@@ -2041,6 +2041,9 @@ class PublicationPackTests(unittest.TestCase):
             "tools/qge_asset_requirements.py ":
                 publication_pack.asset_requirements_reproduce_command(
                     args, map_sets.DEFAULT_FULL_GAME_MAP_SET),
+            "tools/qge_registered_full_game_progress.py ":
+                publication_pack
+                .registered_full_game_progress_reproduce_command(args),
             "tools/qge_moonlab_job_runner.py ": (
                 "tools/qge_moonlab_job_runner.py "
                 "<pack_dir>/resource/qge_moonlab_job_specs.json "
@@ -5252,6 +5255,10 @@ class PublicationPackTests(unittest.TestCase):
             "tools/qge_asset_requirements.py ": (
                 publication_pack.asset_requirements_reproduce_command(
                     reproduce_args, map_sets.DEFAULT_FULL_GAME_MAP_SET)),
+            "tools/qge_registered_full_game_progress.py ": (
+                publication_pack
+                .registered_full_game_progress_reproduce_command(
+                    reproduce_args)),
             "tools/qge_moonlab_job_runner.py ": (
                 "tools/qge_moonlab_job_runner.py "
                 "<pack_dir>/resource/qge_moonlab_job_specs.json "
@@ -9889,6 +9896,29 @@ class BreadthEvidenceTests(unittest.TestCase):
                 map_set=coverage["map_set"],
                 publication_pack_dir=pack_dir,
             )
+            selection_path = tmpdir / "qge_map_set_selection.json"
+            selection = {
+                "schema": "qge.map_set_selection.v0",
+                "map_set": map_sets.DEFAULT_FULL_GAME_MAP_SET,
+                "status": "partial",
+                "target_map_status": [
+                    {
+                        "map": name,
+                        "status": (
+                            "ready"
+                            if name in {"start", "e1m1"}
+                            else "missing_matrix"
+                        ),
+                    }
+                    for name in map_sets.map_targets_for_set(
+                        map_sets.DEFAULT_FULL_GAME_MAP_SET)
+                ],
+            }
+            publication_pack.write_json(selection_path, selection)
+            progress = registered_progress.build_progress(
+                selection_path=selection_path,
+                asset_root=asset_root,
+            )
             coverage_path = resource_dir / "qge_full_game_map_coverage.json"
             inventory_path = resource_dir / "qge_asset_inventory.json"
             inventory_icc_path = (
@@ -9899,6 +9929,11 @@ class BreadthEvidenceTests(unittest.TestCase):
             intake_path = resource_dir / "qge_registered_asset_intake.json"
             intake_icc_path = (
                 resource_dir / "qge_registered_asset_intake_icc_evidence.json")
+            progress_path = (
+                resource_dir / "qge_registered_full_game_progress.json")
+            progress_icc_path = (
+                resource_dir /
+                "qge_registered_full_game_progress_icc_evidence.json")
             publication_pack.write_json(coverage_path, coverage)
             publication_pack.write_json(inventory_path, inventory)
             inventory_icc = asset_inventory.build_icc_evidence(inventory)
@@ -9920,6 +9955,11 @@ class BreadthEvidenceTests(unittest.TestCase):
                     out_path=intake_path,
                 ),
             )
+            publication_pack.write_json(progress_path, progress)
+            progress_icc = registered_progress.build_icc_evidence(progress)
+            progress_icc["registered_full_game_progress_file"] = str(
+                progress_path)
+            publication_pack.write_json(progress_icc_path, progress_icc)
             manifest = {
                 "schema": "qge.publication_pack.v0",
                 "artifacts": {
@@ -9943,6 +9983,12 @@ class BreadthEvidenceTests(unittest.TestCase):
                         "registered_asset_intake_icc_evidence": {
                             "path": str(intake_icc_path),
                         },
+                        "registered_full_game_progress": {
+                            "path": str(progress_path),
+                        },
+                        "registered_full_game_progress_icc_evidence": {
+                            "path": str(progress_icc_path),
+                        },
                     },
                 },
             }
@@ -9953,7 +9999,7 @@ class BreadthEvidenceTests(unittest.TestCase):
                 manifest_path=manifest_path,
             )
             self.assertTrue(audit["passed"], audit)
-            self.assertEqual(audit["recorded_artifact_count"], 6)
+            self.assertEqual(audit["recorded_artifact_count"], 8)
             self.assertEqual(audit["mismatch_count"], 0)
             self.assertEqual(
                 audit["ledger_map_sets"]["resource.full_game_map_coverage"],

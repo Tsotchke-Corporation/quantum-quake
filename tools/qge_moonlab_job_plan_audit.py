@@ -135,6 +135,8 @@ def artifact_paths_for_job_specs(manifest: dict[str, Any]) -> dict[str, Any]:
             manifest, "resource", "asset_requirements"),
         "registered_asset_intake": artifact_path_string(
             manifest, "resource", "registered_asset_intake"),
+        "registered_full_game_progress": artifact_path_string(
+            manifest, "resource", "registered_full_game_progress"),
     }
 
 

@@ -671,7 +671,9 @@ Known current visual state:
   progress audit recomputes that join so stale progress summaries cannot blur
   licensed asset intake with capture work. ICC exposes it as
   `qge_registered_full_game_progress_report`, separate from the coverage
-  ledger and deployment gate.
+  ledger and deployment gate. Publication packs now carry the progress JSON,
+  Markdown, and ICC sidecar under `resource/`, with postpack audit coverage, so
+  shareware checkpoints still publish the registered whole-game blocker ledger.
   `tools/qge_full_game_capture_queue.py`
   turns the registered ledger
   into `qge.full_game_capture_queue.v0` and a runnable

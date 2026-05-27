@@ -309,7 +309,10 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      asset/evidence join and rejects stale JSON, Markdown, or ICC output.
      ICC exposes this blocker report as
      `qge_registered_full_game_progress_report`, separate from the coverage
-     ledger and the deployment readiness target.
+     ledger and the deployment readiness target. Publication packs include the
+     progress JSON, Markdown, and ICC sidecar under `resource/`, and postpack
+     audits rerun the progress audit so first-episode evidence still carries a
+     precise registered whole-game blocker report.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for

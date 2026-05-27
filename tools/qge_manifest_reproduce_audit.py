@@ -23,6 +23,7 @@ REQUIRED_REPRODUCE_COMMAND_PREFIXES = (
     "tools/qge_publication_pack.py ",
     "tools/qge_registered_asset_intake.py ",
     "tools/qge_asset_requirements.py ",
+    "tools/qge_registered_full_game_progress.py ",
     "tools/qge_moonlab_job_runner.py ",
     "tools/qge_moonlab_submission_bundle.py ",
     "tools/qge_moonlab_hardware_ingest.py ",
@@ -42,6 +43,7 @@ POSTPACK_REPRODUCE_COMMAND_PREFIXES = (
     "tools/qge_trace_summary_audit.py ",
     "tools/qge_breadth_evidence_audit.py ",
     "tools/qge_asset_resource_audit.py ",
+    "tools/qge_registered_full_game_progress_audit.py ",
     "tools/qge_registered_asset_script_audit.py ",
     "tools/qge_resource_boundary_audit.py ",
     "tools/qge_moonlab_full_game_plan_audit.py ",
@@ -626,6 +628,52 @@ def core_command_option_checks(
             checks["tools/qge_asset_requirements.py "],
             "--icc-json",
             "/tmp/qge_asset_requirements_icc_evidence.json",
+            required=True,
+        )
+    progress_plan = dict_or_empty(
+        source_inputs.get("registered_full_game_progress_reproduction"))
+    if progress_plan:
+        checks["tools/qge_registered_full_game_progress.py "] = []
+        add_scalar_option_check(
+            checks["tools/qge_registered_full_game_progress.py "],
+            "--selection",
+            progress_plan.get("selection"),
+            required=True,
+        )
+        add_scalar_option_check(
+            checks["tools/qge_registered_full_game_progress.py "],
+            "--matrix-root",
+            progress_plan.get("matrix_root"),
+            required=True,
+        )
+        add_scalar_option_check(
+            checks["tools/qge_registered_full_game_progress.py "],
+            "--asset-root",
+            progress_plan.get("asset_root"),
+            required=True,
+        )
+        add_scalar_option_check(
+            checks["tools/qge_registered_full_game_progress.py "],
+            "--map-set",
+            progress_plan.get("map_set"),
+            required=True,
+        )
+        add_scalar_option_check(
+            checks["tools/qge_registered_full_game_progress.py "],
+            "--json",
+            "/tmp/qge_registered_full_game_progress.json",
+            required=True,
+        )
+        add_scalar_option_check(
+            checks["tools/qge_registered_full_game_progress.py "],
+            "--markdown",
+            "/tmp/qge_registered_full_game_progress.md",
+            required=True,
+        )
+        add_scalar_option_check(
+            checks["tools/qge_registered_full_game_progress.py "],
+            "--icc-json",
+            "/tmp/qge_registered_full_game_progress_icc_evidence.json",
             required=True,
         )
     checks.update({

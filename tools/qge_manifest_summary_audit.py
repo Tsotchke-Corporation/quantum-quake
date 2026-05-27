@@ -104,6 +104,26 @@ def load_artifact_json(
     return load_json(path)
 
 
+def load_optional_artifact_json(
+    manifest: dict[str, Any],
+    section: str,
+    name: str,
+    *,
+    packed: bool = False,
+    manifest_path: Path | None = None,
+) -> dict[str, Any]:
+    path = artifact_path(
+        manifest,
+        section,
+        name,
+        packed=packed,
+        manifest_path=manifest_path,
+    )
+    if path is None or not path.is_file():
+        return {}
+    return load_json(path)
+
+
 def path_join(prefix: str, key: str | int) -> str:
     if isinstance(key, int):
         return f"{prefix}[{key}]" if prefix else f"[{key}]"
@@ -211,6 +231,12 @@ def expected_runtime_summary(
         manifest,
         "resource",
         "registered_asset_intake",
+        manifest_path=manifest_path,
+    )
+    registered_full_game_progress = load_optional_artifact_json(
+        manifest,
+        "resource",
+        "registered_full_game_progress",
         manifest_path=manifest_path,
     )
     vanilla_performance_ok = (
@@ -351,6 +377,19 @@ def expected_runtime_summary(
             registered_asset_intake.get("missing_map_count_after_plan")),
         "registered_asset_intake_discovered_candidate_count": (
             registered_asset_intake.get("discovered_candidate_count", 0)),
+        **({
+            "registered_full_game_progress": registered_full_game_progress,
+            "registered_full_game_progress_status": (
+                registered_full_game_progress.get("status")),
+            "registered_full_game_progress_next_blocker": (
+                registered_full_game_progress.get("next_blocker")),
+            "registered_full_game_progress_ready_map_count": (
+                registered_full_game_progress.get("ready_map_count")),
+            "registered_full_game_progress_asset_missing_map_count": (
+                registered_full_game_progress.get("asset_missing_map_count")),
+            "registered_full_game_progress_capture_needed_map_count": (
+                registered_full_game_progress.get("capture_needed_map_count")),
+        } if registered_full_game_progress else {}),
         "breadth_total_fallback_count": breadth_summary.get(
             "total_fallback_count"),
         "breadth_total_surrogate_count": breadth_summary.get(
@@ -414,6 +453,9 @@ def expected_advantage_summary(
         manifest_path=manifest_path)
     registered_asset_intake = load_artifact_json(
         manifest, "resource", "registered_asset_intake",
+        manifest_path=manifest_path)
+    registered_full_game_progress = load_optional_artifact_json(
+        manifest, "resource", "registered_full_game_progress",
         manifest_path=manifest_path)
     native_backend_boundary = load_artifact_json(
         manifest, "resource", "native_backend_boundary",
@@ -573,6 +615,23 @@ def expected_advantage_summary(
                 registered_asset_intake.get("claim_posture")).get(
                     "asset_intake_copies_game_data"),
         },
+        **({
+            "registered_full_game_progress_summary": {
+                "schema": registered_full_game_progress.get("schema"),
+                "status": registered_full_game_progress.get("status"),
+                "next_blocker": registered_full_game_progress.get(
+                    "next_blocker"),
+                "map_set": registered_full_game_progress.get("map_set"),
+                "target_map_count": registered_full_game_progress.get(
+                    "target_map_count"),
+                "ready_map_count": registered_full_game_progress.get(
+                    "ready_map_count"),
+                "asset_missing_map_count": registered_full_game_progress.get(
+                    "asset_missing_map_count"),
+                "capture_needed_map_count": registered_full_game_progress.get(
+                    "capture_needed_map_count"),
+            },
+        } if registered_full_game_progress else {}),
         "native_backend_boundary_summary": {
             "status": native_backend_boundary.get("status"),
             "required_target_count": native_backend_boundary.get(

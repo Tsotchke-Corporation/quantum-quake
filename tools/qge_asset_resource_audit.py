@@ -19,6 +19,7 @@ import qge_map_sets  # noqa: E402
 import qge_moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_overclaim_audit  # noqa: E402
 import qge_registered_asset_intake  # noqa: E402
+import qge_registered_full_game_progress  # noqa: E402
 import qge_resource_boundary_audit  # noqa: E402
 import qge_resource_icc_audit  # noqa: E402
 
@@ -27,19 +28,23 @@ ASSET_RESOURCE_OUTPUTS = (
     "asset_inventory",
     "asset_requirements",
     "registered_asset_intake",
+    "registered_full_game_progress",
     "asset_inventory_icc_evidence",
     "asset_requirements_icc_evidence",
     "registered_asset_intake_icc_evidence",
+    "registered_full_game_progress_icc_evidence",
 )
 LEDGER_OUTPUTS = (
     "asset_inventory",
     "asset_requirements",
     "registered_asset_intake",
+    "registered_full_game_progress",
 )
 ICC_OUTPUTS = (
     "asset_inventory_icc_evidence",
     "asset_requirements_icc_evidence",
     "registered_asset_intake_icc_evidence",
+    "registered_full_game_progress_icc_evidence",
 )
 IGNORED_LEDGER_FIELDS = ("created_utc",)
 ASSET_RESOURCE_FORBIDDEN_CLAIMS = (
@@ -203,6 +208,12 @@ def expected_asset_resource_artifacts(
         manifest, "resource", "asset_requirements", base_dir=base_dir)
     recorded_intake = load_artifact_json(
         manifest, "resource", "registered_asset_intake", base_dir=base_dir)
+    recorded_progress = load_artifact_json(
+        manifest,
+        "resource",
+        "registered_full_game_progress",
+        base_dir=base_dir,
+    )
     full_game_map_coverage = load_artifact_json(
         manifest, "resource", "full_game_map_coverage", base_dir=base_dir)
     map_set = map_set_for_asset_ledgers(
@@ -239,6 +250,38 @@ def expected_asset_resource_artifacts(
         discovery=discovery,
         publication_pack_dir=manifest_path.parent,
     )
+    progress_selection_raw = recorded_progress.get("selection_file")
+    progress_selection = (
+        Path(progress_selection_raw)
+        if isinstance(progress_selection_raw, str) and progress_selection_raw
+        else qge_registered_full_game_progress.DEFAULT_SELECTION
+    )
+    progress_matrix_root_raw = recorded_progress.get("matrix_root")
+    progress_matrix_root = (
+        Path(progress_matrix_root_raw)
+        if isinstance(progress_matrix_root_raw, str) and
+        progress_matrix_root_raw else
+        qge_registered_full_game_progress
+        .qge_map_set_evidence.DEFAULT_MATRIX_ROOT
+    )
+    progress_asset_root_raw = recorded_progress.get("asset_root")
+    progress_asset_root = (
+        Path(progress_asset_root_raw)
+        if isinstance(progress_asset_root_raw, str) and
+        progress_asset_root_raw else
+        asset_root
+    )
+    progress_map_set = str(
+        recorded_progress.get("map_set") or
+        qge_registered_full_game_progress
+        .qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
+    )
+    progress = qge_registered_full_game_progress.build_progress(
+        selection_path=progress_selection,
+        matrix_root=progress_matrix_root,
+        asset_root=progress_asset_root,
+        map_set=progress_map_set,
+    )
     artifact_paths = {
         "asset_inventory": artifact_path_string(
             manifest, "resource", "asset_inventory"),
@@ -246,7 +289,14 @@ def expected_asset_resource_artifacts(
             manifest, "resource", "asset_requirements"),
         "registered_asset_intake": artifact_path_string(
             manifest, "resource", "registered_asset_intake"),
+        "registered_full_game_progress": artifact_path_string(
+            manifest, "resource", "registered_full_game_progress"),
     }
+    progress_icc = qge_registered_full_game_progress.build_icc_evidence(
+        progress)
+    progress_path = artifact_paths.get("registered_full_game_progress")
+    if isinstance(progress_path, str) and progress_path:
+        progress_icc["registered_full_game_progress_file"] = progress_path
     sidecars = qge_resource_icc_audit.expected_resource_icc_sidecars(
         inventory,
         requirements,
@@ -261,6 +311,8 @@ def expected_asset_resource_artifacts(
         "asset_inventory": inventory,
         "asset_requirements": requirements,
         "registered_asset_intake": intake,
+        "registered_full_game_progress": progress,
+        "registered_full_game_progress_icc_evidence": progress_icc,
         **sidecars,
     }
 

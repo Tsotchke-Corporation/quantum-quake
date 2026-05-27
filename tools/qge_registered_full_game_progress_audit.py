@@ -184,9 +184,18 @@ def progress_audit(
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "pack_or_progress",
+        nargs="?",
+        type=Path,
+        help=(
+            "Publication pack directory, publication_manifest.json, or "
+            "qge_registered_full_game_progress.json path."
+        ),
+    )
+    parser.add_argument(
         "--progress",
         type=Path,
-        default=progress_tool.DEFAULT_OUTDIR / progress_tool.PROGRESS_FILENAME,
+        default=None,
     )
     parser.add_argument("--selection", type=Path)
     parser.add_argument("--matrix-root", type=Path)
@@ -202,16 +211,57 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def pack_resource_path(pack_or_manifest: Path, filename: str) -> Path:
+    if pack_or_manifest.name == "publication_manifest.json":
+        return pack_or_manifest.parent / "resource" / filename
+    return pack_or_manifest / "resource" / filename
+
+
+def resolve_input_paths(
+    args: argparse.Namespace,
+) -> tuple[Path, Path | None, Path | None]:
+    progress_path = args.progress
+    markdown_path = args.markdown
+    icc_path = args.icc_json
+    pack_or_progress = args.pack_or_progress
+    if progress_path is None and pack_or_progress is not None:
+        if pack_or_progress.is_dir() or (
+            pack_or_progress.name == "publication_manifest.json"
+        ):
+            progress_path = pack_resource_path(
+                pack_or_progress,
+                progress_tool.PROGRESS_FILENAME,
+            )
+            if markdown_path is None:
+                markdown_path = pack_resource_path(
+                    pack_or_progress,
+                    progress_tool.MARKDOWN_FILENAME,
+                )
+            if icc_path is None:
+                icc_path = pack_resource_path(
+                    pack_or_progress,
+                    progress_tool.ICC_FILENAME,
+                )
+        else:
+            progress_path = pack_or_progress
+    if progress_path is None:
+        progress_path = (
+            progress_tool.DEFAULT_OUTDIR / progress_tool.PROGRESS_FILENAME
+        )
+    return progress_path, markdown_path, icc_path
+
+
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
     try:
+        progress_path, markdown_path, icc_path = resolve_input_paths(args)
         audit = progress_audit(
-            args.progress,
+            progress_path,
             selection_path=args.selection,
             matrix_root=args.matrix_root,
             asset_root=args.asset_root,
-            markdown_path=args.markdown,
-            icc_path=args.icc_json,
+            markdown_path=markdown_path,
+            icc_path=icc_path,
         )
         if args.out:
             write_json(args.out, audit)

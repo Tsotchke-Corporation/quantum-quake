@@ -470,7 +470,9 @@ intake or another strict capture. The paired
 rejects stale JSON/Markdown/ICC output. ICC exposes that asset/capture blocker
 view as `qge_registered_full_game_progress_report`, distinct from
 `qge_registered_full_game_coverage_ledger` and from the registered deployment
-gate.
+gate. Publication packs now carry this progress JSON, Markdown, and ICC
+sidecar in `resource/`, and the postpack audit suite reruns the progress audit
+so a shareware pack still states the registered whole-game blocker precisely.
 Each covered matrix is audited against its route contract's required authority
 domains. Shareware Episode 1 contracts use the `shareware_combat` map class for
 the E1 combat maps while the registered/full-game path keeps

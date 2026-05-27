@@ -166,7 +166,10 @@ Important known limitations:
   full-game progress report cannot hide whether the next blocker is licensed
   BSP intake or capture evidence. ICC exposes this report as
   `qge_registered_full_game_progress_report`, separate from both the coverage
-  ledger and the deployment gate.
+  ledger and the deployment gate. Publication packs also include the progress
+  JSON, Markdown, and ICC sidecar under `resource/`, with postpack audit
+  coverage, so every published shareware checkpoint still carries the
+  registered whole-game blocker ledger.
   ICC tracks that progress-only ledger through
   `qge_registered_full_game_coverage_ledger`, separate from the deployment
   readiness target.
