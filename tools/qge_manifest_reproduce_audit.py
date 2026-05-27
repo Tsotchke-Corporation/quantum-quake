@@ -1065,6 +1065,91 @@ def manifest_reproduce_audit(
     }
 
 
+def source_mismatch_field_count(items: Any) -> int:
+    entries = items if isinstance(items, list) else []
+    return sum(
+        len(dict_or_empty(item).get("field_mismatches", []))
+        for item in entries
+    )
+
+
+def manifest_reproduce_icc_summary(
+    manifest: dict[str, Any] | None,
+    *,
+    required: bool = True,
+) -> dict[str, Any]:
+    audit = manifest_reproduce_audit(manifest, required=required)
+    publication_pack_source_mismatches = (
+        audit.get("publication_pack_source_mismatches", []))
+    core_command_source_mismatches = (
+        audit.get("core_command_source_mismatches", []))
+    postpack_command_source_mismatches = (
+        audit.get("postpack_command_source_mismatches", []))
+    return {
+        "manifest_reproduce_audit_passed": audit.get("passed"),
+        "manifest_reproduce_recorded": audit.get("recorded"),
+        "manifest_reproduce_source_inputs_recorded": (
+            audit.get("source_inputs_recorded")),
+        "manifest_reproduce_missing_source_inputs": (
+            audit.get("missing_source_inputs")),
+        "manifest_reproduce_command_count": audit.get("command_count"),
+        "manifest_reproduce_required_command_count": (
+            audit.get("required_command_count")),
+        "manifest_reproduce_postpack_command_count": (
+            audit.get("postpack_command_count")),
+        "manifest_reproduce_optional_postpack_command_count": (
+            audit.get("optional_postpack_command_count")),
+        "manifest_reproduce_publication_pack_command_count": (
+            audit.get("publication_pack_command_count")),
+        "manifest_reproduce_mismatch_count": audit.get("mismatch_count"),
+        "manifest_reproduce_missing_required_command_count": len(
+            audit.get("missing_required_commands", [])),
+        "manifest_reproduce_missing_postpack_command_count": len(
+            audit.get("missing_postpack_commands", [])),
+        "manifest_reproduce_missing_optional_postpack_command_count": len(
+            audit.get("missing_optional_postpack_commands", [])),
+        "manifest_reproduce_unexpected_command_count": len(
+            audit.get("unexpected_commands", [])),
+        "manifest_reproduce_unsafe_command_count": len(
+            audit.get("unsafe_commands", [])),
+        "manifest_reproduce_duplicate_command_count": len(
+            audit.get("duplicate_commands", [])),
+        "manifest_reproduce_duplicate_command_prefix_count": len(
+            audit.get("duplicate_command_prefixes", [])),
+        "manifest_reproduce_duplicate_command_prefix_extra_count": (
+            audit.get("duplicate_command_prefix_extra_count")),
+        "manifest_reproduce_malformed_command_count": len(
+            audit.get("malformed_commands", [])),
+        "manifest_reproduce_publication_pack_source_mismatch_count": (
+            source_mismatch_field_count(publication_pack_source_mismatches)),
+        "manifest_reproduce_core_command_source_mismatch_count": (
+            source_mismatch_field_count(core_command_source_mismatches)),
+        "manifest_reproduce_postpack_command_source_mismatch_count": (
+            source_mismatch_field_count(postpack_command_source_mismatches)),
+        "manifest_reproduce_missing_required_commands": (
+            audit.get("missing_required_commands")),
+        "manifest_reproduce_missing_postpack_commands": (
+            audit.get("missing_postpack_commands")),
+        "manifest_reproduce_missing_optional_postpack_commands": (
+            audit.get("missing_optional_postpack_commands")),
+        "manifest_reproduce_unexpected_commands": (
+            audit.get("unexpected_commands")),
+        "manifest_reproduce_unsafe_commands": audit.get("unsafe_commands"),
+        "manifest_reproduce_duplicate_commands": (
+            audit.get("duplicate_commands")),
+        "manifest_reproduce_duplicate_command_prefixes": (
+            audit.get("duplicate_command_prefixes")),
+        "manifest_reproduce_malformed_commands": (
+            audit.get("malformed_commands")),
+        "manifest_reproduce_publication_pack_source_mismatches": (
+            publication_pack_source_mismatches),
+        "manifest_reproduce_core_command_source_mismatches": (
+            core_command_source_mismatches),
+        "manifest_reproduce_postpack_command_source_mismatches": (
+            postpack_command_source_mismatches),
+    }
+
+
 def resolve_manifest(pack_or_manifest: Path) -> Path:
     if pack_or_manifest.is_dir():
         return pack_or_manifest / "publication_manifest.json"

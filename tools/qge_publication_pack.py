@@ -2551,16 +2551,12 @@ def build_icc_evidence(manifest: dict[str, Any],
             manifest_path,
         )
     )
-    reproduce_audit = qge_manifest_reproduce_audit.manifest_reproduce_audit(
-        manifest,
-        required=True,
+    reproduce_audit = (
+        qge_manifest_reproduce_audit.manifest_reproduce_icc_summary(
+            manifest,
+            required=True,
+        )
     )
-    publication_pack_source_mismatches = (
-        reproduce_audit.get("publication_pack_source_mismatches", []))
-    core_command_source_mismatches = (
-        reproduce_audit.get("core_command_source_mismatches", []))
-    postpack_command_source_mismatches = (
-        reproduce_audit.get("postpack_command_source_mismatches", []))
     ready = bool(runtime.get("publication_ready_for_complete_claim"))
     return {
         "schema": "qge.icc_evidence.v0",
@@ -2574,73 +2570,7 @@ def build_icc_evidence(manifest: dict[str, Any],
         "publication_pack_dir": manifest["pack_dir"],
         **source_input_audit,
         **source_copy_audit,
-        "manifest_reproduce_audit_passed": reproduce_audit.get("passed"),
-        "manifest_reproduce_recorded": reproduce_audit.get("recorded"),
-        "manifest_reproduce_source_inputs_recorded": (
-            reproduce_audit.get("source_inputs_recorded")),
-        "manifest_reproduce_missing_source_inputs": (
-            reproduce_audit.get("missing_source_inputs")),
-        "manifest_reproduce_command_count": (
-            reproduce_audit.get("command_count")),
-        "manifest_reproduce_required_command_count": (
-            reproduce_audit.get("required_command_count")),
-        "manifest_reproduce_postpack_command_count": (
-            reproduce_audit.get("postpack_command_count")),
-        "manifest_reproduce_optional_postpack_command_count": (
-            reproduce_audit.get("optional_postpack_command_count")),
-        "manifest_reproduce_publication_pack_command_count": (
-            reproduce_audit.get("publication_pack_command_count")),
-        "manifest_reproduce_mismatch_count": (
-            reproduce_audit.get("mismatch_count")),
-        "manifest_reproduce_missing_required_command_count": len(
-            reproduce_audit.get("missing_required_commands", [])),
-        "manifest_reproduce_missing_postpack_command_count": len(
-            reproduce_audit.get("missing_postpack_commands", [])),
-        "manifest_reproduce_missing_optional_postpack_command_count": len(
-            reproduce_audit.get("missing_optional_postpack_commands", [])),
-        "manifest_reproduce_unexpected_command_count": len(
-            reproduce_audit.get("unexpected_commands", [])),
-        "manifest_reproduce_unsafe_command_count": len(
-            reproduce_audit.get("unsafe_commands", [])),
-        "manifest_reproduce_duplicate_command_count": len(
-            reproduce_audit.get("duplicate_commands", [])),
-        "manifest_reproduce_duplicate_command_prefix_count": len(
-            reproduce_audit.get("duplicate_command_prefixes", [])),
-        "manifest_reproduce_duplicate_command_prefix_extra_count": (
-            reproduce_audit.get("duplicate_command_prefix_extra_count")),
-        "manifest_reproduce_malformed_command_count": len(
-            reproduce_audit.get("malformed_commands", [])),
-        "manifest_reproduce_publication_pack_source_mismatch_count": sum(
-            len(item.get("field_mismatches", []))
-            for item in publication_pack_source_mismatches),
-        "manifest_reproduce_core_command_source_mismatch_count": sum(
-            len(item.get("field_mismatches", []))
-            for item in core_command_source_mismatches),
-        "manifest_reproduce_postpack_command_source_mismatch_count": sum(
-            len(item.get("field_mismatches", []))
-            for item in postpack_command_source_mismatches),
-        "manifest_reproduce_missing_required_commands": (
-            reproduce_audit.get("missing_required_commands")),
-        "manifest_reproduce_missing_postpack_commands": (
-            reproduce_audit.get("missing_postpack_commands")),
-        "manifest_reproduce_missing_optional_postpack_commands": (
-            reproduce_audit.get("missing_optional_postpack_commands")),
-        "manifest_reproduce_unexpected_commands": (
-            reproduce_audit.get("unexpected_commands")),
-        "manifest_reproduce_unsafe_commands": (
-            reproduce_audit.get("unsafe_commands")),
-        "manifest_reproduce_duplicate_commands": (
-            reproduce_audit.get("duplicate_commands")),
-        "manifest_reproduce_duplicate_command_prefixes": (
-            reproduce_audit.get("duplicate_command_prefixes")),
-        "manifest_reproduce_malformed_commands": (
-            reproduce_audit.get("malformed_commands")),
-        "manifest_reproduce_publication_pack_source_mismatches": (
-            publication_pack_source_mismatches),
-        "manifest_reproduce_core_command_source_mismatches": (
-            core_command_source_mismatches),
-        "manifest_reproduce_postpack_command_source_mismatches": (
-            postpack_command_source_mismatches),
+        **reproduce_audit,
         "oracle_scene_file": artifacts["oracle"]["oracle_scene"]["path"],
         "claims_evidence_file": artifacts["oracle"]["claims_evidence"]["path"],
         "advantage_metrics_file": artifacts["advantage"]["metrics"]["path"],
