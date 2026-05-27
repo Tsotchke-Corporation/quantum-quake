@@ -1917,7 +1917,8 @@ class PublicationPackTests(unittest.TestCase):
                 publication_pack.registered_asset_intake_reproduce_command(
                     args, "canonical_registered_quake"),
             "tools/qge_asset_requirements.py ":
-                publication_pack.asset_requirements_reproduce_command(args),
+                publication_pack.asset_requirements_reproduce_command(
+                    args, map_sets.DEFAULT_FULL_GAME_MAP_SET),
             "tools/qge_moonlab_job_runner.py ": (
                 "tools/qge_moonlab_job_runner.py "
                 "<pack_dir>/resource/qge_moonlab_job_specs.json "
@@ -1977,6 +1978,9 @@ class PublicationPackTests(unittest.TestCase):
                 "registered_asset_intake_reproduction": (
                     publication_pack.registered_asset_intake_reproduction_inputs(
                         args, "canonical_registered_quake")),
+                "asset_requirements_reproduction": (
+                    publication_pack.asset_requirements_reproduction_inputs(
+                        args, map_sets.DEFAULT_FULL_GAME_MAP_SET)),
                 "registered_asset_candidates": [
                     str(path) for path in args.registered_asset_candidate
                 ],
@@ -2032,6 +2036,29 @@ class PublicationPackTests(unittest.TestCase):
             field.get("reason") == "missing_expected_values"
             for item in missing_expected_audit[
                 "core_command_source_mismatches"]
+            for field in item.get("field_mismatches", [])
+        ))
+
+        stale_asset_manifest = json.loads(json.dumps(manifest))
+        stale_asset_manifest["reproduce_commands"] = [
+            (
+                command.replace(
+                    "--map-set quake_registered_single_player",
+                    "--map-set quake_shareware_episode1",
+                    1,
+                )
+                if command.startswith("tools/qge_asset_requirements.py ")
+                else command
+            )
+            for command in stale_asset_manifest["reproduce_commands"]
+        ]
+        stale_asset_audit = manifest_reproduce_audit.manifest_reproduce_audit(
+            stale_asset_manifest)
+        self.assertFalse(stale_asset_audit["passed"])
+        self.assertTrue(any(
+            field.get("option") == "--map-set" and
+            field.get("reason") == "value_mismatch"
+            for item in stale_asset_audit["core_command_source_mismatches"]
             for field in item.get("field_mismatches", [])
         ))
 
@@ -5027,6 +5054,9 @@ class PublicationPackTests(unittest.TestCase):
             "registered_asset_intake_reproduction": (
                 publication_pack.registered_asset_intake_reproduction_inputs(
                     reproduce_args, "canonical_registered_quake")),
+            "asset_requirements_reproduction": (
+                publication_pack.asset_requirements_reproduction_inputs(
+                    reproduce_args, map_sets.DEFAULT_FULL_GAME_MAP_SET)),
             "registered_asset_candidates": [],
             "registered_asset_discover_roots": [],
             "registered_asset_discover_common": False,
@@ -5099,7 +5129,7 @@ class PublicationPackTests(unittest.TestCase):
                     reproduce_args, "canonical_registered_quake")),
             "tools/qge_asset_requirements.py ": (
                 publication_pack.asset_requirements_reproduce_command(
-                    reproduce_args)),
+                    reproduce_args, map_sets.DEFAULT_FULL_GAME_MAP_SET)),
             "tools/qge_moonlab_job_runner.py ": (
                 "tools/qge_moonlab_job_runner.py "
                 "<pack_dir>/resource/qge_moonlab_job_specs.json "
@@ -8745,6 +8775,13 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(
                 route_authority["route_contract"]["map_class"],
                 "shareware_combat",
+            )
+            audit = breadth_evidence_audit.breadth_evidence_audit(manifest)
+            self.assertTrue(audit["passed"], audit)
+            self.assertEqual(audit["mismatch_count"], 0)
+            self.assertEqual(
+                breadth_evidence_audit.recorded_map_set(manifest),
+                breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
             )
 
     def test_default_route_authority_remains_registered_contract(self) -> None:

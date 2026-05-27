@@ -15,6 +15,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import qge_breadth_evidence  # noqa: E402
+import qge_map_sets  # noqa: E402
 import qge_moonlab_overclaim_audit  # noqa: E402
 import qge_resource_boundary_audit  # noqa: E402
 
@@ -62,6 +63,24 @@ def matrix_source_paths(breadth_evidence: dict[str, Any]) -> list[Path]:
     return paths
 
 
+def recorded_map_set(recorded_breadth_evidence: dict[str, Any]) -> str:
+    recorded = dict_or_empty(recorded_breadth_evidence)
+    aggregate = dict_or_empty(recorded.get("aggregate"))
+    coverage = (
+        dict_or_empty(recorded.get("full_game_coverage"))
+        or dict_or_empty(aggregate.get("full_game_coverage"))
+    )
+    map_set = (
+        recorded.get("full_game_map_set")
+        or aggregate.get("full_game_map_set")
+        or coverage.get("map_set")
+    )
+    return (
+        map_set if isinstance(map_set, str) and map_set
+        else qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
+    )
+
+
 def expected_breadth_evidence(
     recorded_breadth_evidence: dict[str, Any],
 ) -> dict[str, Any]:
@@ -72,10 +91,7 @@ def expected_breadth_evidence(
         publication_pack=[],
         min_runs=int(recorded.get("min_matrix_runs") or 1),
         min_maps=int(recorded.get("min_maps") or 1),
-        map_set=(
-            dict_or_empty(recorded.get("full_game_coverage")).get("map_set")
-            or qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
-        ),
+        map_set=recorded_map_set(recorded),
     )
     return qge_breadth_evidence.build_manifest(args)
 

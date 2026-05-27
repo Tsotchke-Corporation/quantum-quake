@@ -289,7 +289,10 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      BSP29 header/lump validator confirms a real Quake BSP payload. The
      generated script preserves the selected map set when it rebuilds breadth
      evidence, so shareware Episode 1 queues remain `quake_shareware_episode1`.
-     It also emits a route contract for every selected target map, and the
+     Publication packs also record the asset-requirements reproduction map set,
+     and the reproduce command includes `--map-set`, so shareware requirements
+     do not replay as registered full-game requirements. It also emits a route
+     contract for every selected target map, and the
      Moonlab deployment plan/gate require the registered full-game ledger for
      whole-game claims, so post-asset jobs carry route class, episode/slot,
      combat/special-route requirements, and authority domains before they run.

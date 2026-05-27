@@ -460,6 +460,9 @@ the source ledger's map set when it rebuilds breadth evidence, so
 `quake_shareware_episode1` queues do not fall back to registered full-game
 scope. Map-set names and target lists live in `tools/qge_map_sets.py`, with
 `qge_breadth_evidence.py` re-exporting the legacy names for existing tools.
+Publication-pack reproduce metadata also carries the selected map set for
+`qge_asset_requirements.py`, so shareware packs replay requirements under
+`quake_shareware_episode1` instead of the registered default.
 Queues with no runnable jobs but remaining asset-unavailable maps are
 marked `blocked_asset_unavailable`, not complete. BSP assets must pass the
 dependency-free Quake BSP29 header/lump validation before they are accepted as

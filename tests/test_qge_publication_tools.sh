@@ -756,6 +756,8 @@ asset_requirement_commands = [
 assert len(asset_requirement_commands) == 1
 asset_tokens = shlex.split(asset_requirement_commands[0])
 assert asset_tokens[asset_tokens.index("--asset-root") + 1] == source_inputs["asset_root"]
+asset_plan = source_inputs["asset_requirements_reproduction"]
+assert asset_tokens[asset_tokens.index("--map-set") + 1] == asset_plan["map_set"]
 assert "<asset_root>" not in asset_requirement_commands[0]
 PY
 

@@ -30,6 +30,7 @@ import qge_advantage_benchmark  # noqa: E402
 import qge_asset_inventory  # noqa: E402
 import qge_asset_requirements  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
+import qge_map_sets  # noqa: E402
 import qge_manifest_reproduce_audit  # noqa: E402
 import qge_manifest_source_copy_audit  # noqa: E402
 import qge_manifest_source_input_audit  # noqa: E402
@@ -113,9 +114,24 @@ def vanilla_matrix_reproduce_command(inputs: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
-def asset_requirements_reproduce_command(args: argparse.Namespace) -> str:
+def asset_requirements_reproduction_inputs(
+    args: argparse.Namespace,
+    map_set: str,
+) -> dict[str, Any]:
+    return {
+        "asset_root": str(args.asset_root),
+        "map_set": map_set,
+    }
+
+
+def asset_requirements_reproduce_command(
+    args: argparse.Namespace,
+    map_set: str,
+) -> str:
+    plan = asset_requirements_reproduction_inputs(args, map_set)
     parts = ["tools/qge_asset_requirements.py"]
-    append_command_option(parts, "--asset-root", args.asset_root)
+    append_command_option(parts, "--asset-root", plan.get("asset_root"))
+    append_command_option(parts, "--map-set", plan.get("map_set"))
     append_command_option(parts, "--json", "/tmp/qge_asset_requirements.json")
     append_command_option(parts, "--markdown",
                           "/tmp/qge_asset_requirements.md")
@@ -146,7 +162,7 @@ def breadth_evidence_reproduction_inputs(
     matrices: list[str] = []
     min_runs = 1
     min_maps = 1
-    map_set = qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
+    map_set = qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
     breadth_path = inputs.get("breadth_evidence")
     if breadth_path is not None:
         try:
@@ -1336,7 +1352,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         Path(getattr(args, "asset_root", qge_asset_inventory.DEFAULT_ASSET_ROOT)),
         map_set=str(
             full_game_map_coverage.get("map_set") or
-            qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
+            qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
         ),
     )
     asset_inventory_path = (
@@ -1354,7 +1370,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         asset_inventory,
         map_set=str(
             full_game_map_coverage.get("map_set") or
-            qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
+            qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
         ),
     )
     asset_requirements_path = (
@@ -1403,7 +1419,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         registered_asset_candidates,
         map_set=str(
             full_game_map_coverage.get("map_set") or
-            qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
+            qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
         ),
         discovery=registered_asset_discovery,
         publication_pack_dir=args.outdir,
@@ -1823,7 +1839,14 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 registered_asset_intake_reproduction_inputs(
                     args,
                     str(full_game_map_coverage.get("map_set") or
-                        qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET),
+                        qge_map_sets.DEFAULT_FULL_GAME_MAP_SET),
+                )
+            ),
+            "asset_requirements_reproduction": (
+                asset_requirements_reproduction_inputs(
+                    args,
+                    str(full_game_map_coverage.get("map_set") or
+                        qge_map_sets.DEFAULT_FULL_GAME_MAP_SET),
                 )
             ),
             "registered_asset_candidates": [
@@ -2458,10 +2481,14 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             registered_asset_intake_reproduce_command(
                 args,
                 str(full_game_map_coverage.get("map_set") or
-                    qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET),
+                    qge_map_sets.DEFAULT_FULL_GAME_MAP_SET),
             ),
             "tools/qge_registered_asset_script_audit.py <pack_dir> --out /tmp/qge_registered_asset_script_audit.json --fail-on-mismatch",
-            asset_requirements_reproduce_command(args),
+            asset_requirements_reproduce_command(
+                args,
+                str(full_game_map_coverage.get("map_set") or
+                    qge_map_sets.DEFAULT_FULL_GAME_MAP_SET),
+            ),
             "tools/qge_moonlab_job_runner.py <pack_dir>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack_dir>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json --submission-out /tmp/qge_moonlab_submission_packet.verify.json",
             "tools/qge_moonlab_submission_bundle.py <pack_dir>/resource/qge_moonlab_submission_packet.json --out /tmp/qge_moonlab_submission_bundle.json --markdown /tmp/qge_moonlab_submission_bundle.md --icc-json /tmp/qge_moonlab_submission_bundle_icc_evidence.json",
             "tools/qge_moonlab_hardware_ingest.py <pack_dir>/resource/qge_moonlab_submission_packet.json --template-out /tmp/qge_moonlab_hardware_record.template.json",

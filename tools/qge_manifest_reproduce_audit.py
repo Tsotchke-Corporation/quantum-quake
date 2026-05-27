@@ -590,13 +590,24 @@ def core_command_option_checks(
             required=True)
         checks["tools/qge_registered_asset_intake.py "] = intake_checks
 
-    asset_root = source_inputs.get("asset_root")
+    asset_requirements_plan = dict_or_empty(
+        source_inputs.get("asset_requirements_reproduction"))
+    asset_root = (
+        asset_requirements_plan.get("asset_root")
+        if asset_requirements_plan else source_inputs.get("asset_root")
+    )
     if asset_root is not None:
         checks["tools/qge_asset_requirements.py "] = []
         add_scalar_option_check(
             checks["tools/qge_asset_requirements.py "],
             "--asset-root",
             asset_root,
+            required=True,
+        )
+        add_scalar_option_check(
+            checks["tools/qge_asset_requirements.py "],
+            "--map-set",
+            asset_requirements_plan.get("map_set"),
             required=True,
         )
         add_scalar_option_check(
