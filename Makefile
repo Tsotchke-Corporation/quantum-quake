@@ -102,10 +102,12 @@ QGE_OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(QGE_SRCS))
 QGE_OBJS += $(patsubst %.mm,$(BUILD_DIR)/%.o,$(QGE_OBJC_SRCS))
 
 # Targets
-.PHONY: all clean test moonlab qge dirs demo demo-sdl quake run-quake qge_shareware_episode1_breadth_evidence qge_shareware_episode1_breadth_audit test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools test_qge_python_tools test_snd_quantum_source_contract test_qge_audio_authority_smoke
+.PHONY: all clean test moonlab qge dirs demo demo-sdl quake run-quake qge_shareware_episode1_breadth_evidence qge_shareware_episode1_breadth_audit qge_registered_full_game_breadth_status qge_registered_full_game_breadth_status_audit test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools test_qge_python_tools test_snd_quantum_source_contract test_qge_audio_authority_smoke
 
 QGE_SHAREWARE_MATRIX_ROOT ?= diagnostics/quake_graphics
 QGE_SHAREWARE_EVIDENCE_OUT ?= diagnostics/breadth_evidence/shareware_episode1
+QGE_REGISTERED_MATRIX_ROOT ?= diagnostics/quake_graphics
+QGE_REGISTERED_FULL_GAME_EVIDENCE_OUT ?= diagnostics/breadth_evidence/registered_single_player_status
 
 all: dirs moonlab qge test_qge
 
@@ -212,6 +214,22 @@ qge_shareware_episode1_breadth_audit:
 	@python3 tools/qge_shareware_episode_evidence_audit.py \
 		$(QGE_SHAREWARE_EVIDENCE_OUT) \
 		--matrix-root $(QGE_SHAREWARE_MATRIX_ROOT) \
+		--fail-on-mismatch
+
+qge_registered_full_game_breadth_status:
+	@echo "Regenerating QGE registered full-game breadth status..."
+	@python3 tools/qge_map_set_evidence.py \
+		--map-set quake_registered_single_player \
+		--matrix-root $(QGE_REGISTERED_MATRIX_ROOT) \
+		--outdir $(QGE_REGISTERED_FULL_GAME_EVIDENCE_OUT) \
+		--allow-partial
+
+qge_registered_full_game_breadth_status_audit:
+	@echo "Auditing QGE registered full-game breadth status..."
+	@python3 tools/qge_map_set_evidence_audit.py \
+		$(QGE_REGISTERED_FULL_GAME_EVIDENCE_OUT) \
+		--map-set quake_registered_single_player \
+		--matrix-root $(QGE_REGISTERED_MATRIX_ROOT) \
 		--fail-on-mismatch
 
 # Run tests

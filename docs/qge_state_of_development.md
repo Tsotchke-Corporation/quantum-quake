@@ -656,6 +656,10 @@ Known current visual state:
   `diagnostics/quake_graphics/**/vanilla_capture_matrix.json`, and
   `make qge_shareware_episode1_breadth_audit` rejects stale local selection,
   breadth, or ICC sidecar content.
+  `make qge_registered_full_game_breadth_status` uses the same generic map-set
+  selector for `quake_registered_single_player` with `--allow-partial`, giving
+  the future whole-game port a reproducible partial ledger and audit target
+  while the registered assets and captures are still incomplete.
   `tools/qge_full_game_capture_queue.py`
   turns the registered ledger
   into `qge.full_game_capture_queue.v0` and a runnable

@@ -149,6 +149,13 @@ Important known limitations:
   deployment claim. `make qge_shareware_episode1_breadth_audit` rescans those
   diagnostics and recomputes the breadth/ICC sidecars to reject stale local
   shareware evidence.
+  `make qge_registered_full_game_breadth_status` uses the same generic
+  map-set evidence path with `--allow-partial` to write the registered
+  full-game progress ledger under
+  `diagnostics/breadth_evidence/registered_single_player_status/`; today that
+  is expected to remain partial until the licensed registered maps are present
+  and captured. `make qge_registered_full_game_breadth_status_audit` rejects a
+  stale registered status ledger without turning it into a completion claim.
   `tools/qge_asset_inventory.py --map-set quake_registered_single_player`
   emits the companion
   hash-backed asset audit and rejects placeholder BSPs unless they pass the

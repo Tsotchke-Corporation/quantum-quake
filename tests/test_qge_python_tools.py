@@ -31,6 +31,8 @@ import qge_asset_resource_audit as asset_resource_audit  # noqa: E402
 import qge_breadth_evidence as breadth_evidence  # noqa: E402
 import qge_breadth_evidence_audit as breadth_evidence_audit  # noqa: E402
 import qge_full_game_capture_queue as full_game_capture_queue  # noqa: E402
+import qge_map_set_evidence as map_set_evidence  # noqa: E402
+import qge_map_set_evidence_audit as map_set_evidence_audit  # noqa: E402
 import qge_map_sets as map_sets  # noqa: E402
 import qge_image_metrics as image_metrics  # noqa: E402
 import qge_moonlab_advantage_icc_audit as moonlab_advantage_icc_audit  # noqa: E402
@@ -8785,6 +8787,89 @@ class BreadthEvidenceTests(unittest.TestCase):
                 breadth_evidence_audit.recorded_map_set(manifest),
                 breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
             )
+
+    def test_map_set_evidence_tool_reports_registered_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            matrix_root = tmpdir / "diagnostics" / "quake_graphics"
+            for index, map_name in enumerate(
+                breadth_evidence.QUAKE_SHAREWARE_EPISODE_ONE_MAPS
+            ):
+                self.write_matrix(
+                    matrix_root / f"20260523-{index:06d}-{map_name}",
+                    map_name=map_name,
+                )
+
+            selection = map_set_evidence.scan_ready_map_set_runs(
+                matrix_root,
+                map_set=breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+            )
+            self.assertEqual(selection["schema"], "qge.map_set_selection.v0")
+            self.assertEqual(selection["status"], "partial")
+            self.assertTrue(selection["registered_full_game_scope"])
+            self.assertFalse(selection["shareware_episode_one_scope"])
+            self.assertEqual(selection["target_map_count"], 32)
+            self.assertEqual(selection["selected_matrix_count"], 9)
+            self.assertEqual(selection["missing_ready_map_count"], 23)
+            self.assertIn("e2m1", selection["missing_ready_maps"])
+
+            outdir = tmpdir / "breadth" / "registered_single_player_status"
+            with self.assertRaisesRegex(
+                ValueError,
+                "missing ready quake_registered_single_player matrices",
+            ):
+                map_set_evidence.build_map_set_breadth_evidence(
+                    matrix_root=matrix_root,
+                    outdir=outdir,
+                    map_set=breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+                )
+
+            result = map_set_evidence.build_map_set_breadth_evidence(
+                matrix_root=matrix_root,
+                outdir=outdir,
+                map_set=breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+                require_complete=False,
+            )
+            recorded_selection = publication_pack.load_json(
+                result["selection_path"])
+            self.assertEqual(recorded_selection["status"], "partial")
+
+            manifest = publication_pack.load_json(result["breadth_path"])
+            aggregate = manifest["aggregate"]
+            self.assertFalse(aggregate["breadth_ready_for_complete_claim"])
+            self.assertEqual(
+                aggregate["full_game_map_set"],
+                breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+            )
+            self.assertEqual(
+                aggregate["full_game_map_coverage_status"], "partial")
+            self.assertEqual(aggregate["full_game_map_target_count"], 32)
+            self.assertEqual(aggregate["full_game_map_covered_count"], 9)
+            self.assertEqual(aggregate["full_game_map_missing_count"], 23)
+            self.assertEqual(
+                manifest["full_game_coverage"]["map_scope"],
+                "registered_single_player_full_game",
+            )
+
+            icc = publication_pack.load_json(result["icc_path"])
+            self.assertEqual(
+                icc["completion_reason"],
+                "qge_breadth_evidence_pack_evidence_only",
+            )
+            self.assertEqual(
+                icc["runtime_backend_scope_map_set"],
+                breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+            )
+            self.assertEqual(
+                icc["runtime_backend_scope_coverage_status"], "partial")
+
+            audit = map_set_evidence_audit.map_set_evidence_audit(
+                outdir,
+                matrix_root=matrix_root,
+                map_set=breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+            )
+            self.assertTrue(audit["passed"], audit)
+            self.assertEqual(audit["mismatch_count"], 0)
 
     def test_shareware_episode_evidence_tool_selects_complete_map_set(
         self,

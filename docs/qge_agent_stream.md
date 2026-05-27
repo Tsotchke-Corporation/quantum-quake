@@ -447,6 +447,13 @@ with the canonical ICC sidecar filename. The paired
 `make qge_shareware_episode1_breadth_audit` target rescans the matrices,
 rebuilds the selected breadth evidence, and recomputes the ICC sidecar before
 accepting the local shareware evidence.
+The same selection/regeneration logic is available as
+`tools/qge_map_set_evidence.py`; `make qge_registered_full_game_breadth_status`
+runs it for `quake_registered_single_player` with `--allow-partial` so the
+eventual whole-game port has an auditable 32-map progress ledger without
+pretending the current nine-map checkpoint is complete. The paired
+`make qge_registered_full_game_breadth_status_audit` target rejects stale
+registered status evidence.
 Each covered matrix is audited against its route contract's required authority
 domains. Shareware Episode 1 contracts use the `shareware_combat` map class for
 the E1 combat maps while the registered/full-game path keeps
