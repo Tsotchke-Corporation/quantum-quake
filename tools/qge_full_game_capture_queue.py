@@ -329,13 +329,20 @@ def map_episode_and_slot(map_name: str) -> tuple[str, int | None]:
     return qge_full_game_route_contracts.map_episode_and_slot(map_name)
 
 
-def route_contract_for_map(map_name: str) -> dict[str, Any]:
-    return qge_full_game_route_contracts.route_contract_for_map(map_name)
+def route_contract_for_map(
+    map_name: str,
+    *,
+    map_set: str | None = None,
+) -> dict[str, Any]:
+    return qge_full_game_route_contracts.route_contract_for_map(
+        map_name,
+        map_set=map_set,
+    )
 
 
 def route_contracts_for_map_set(map_set: str) -> dict[str, dict[str, Any]]:
     return {
-        map_name: route_contract_for_map(map_name)
+        map_name: route_contract_for_map(map_name, map_set=map_set)
         for map_name in qge_breadth_evidence.map_targets_for_set(map_set)
     }
 
@@ -431,10 +438,12 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
     jobs = []
     for index, map_name in enumerate(queueable_missing_maps, start=1):
         env = queue_environment(args, map_name)
-        route_contract = route_contracts.get(
-            map_name,
-            route_contract_for_map(map_name),
-        )
+        route_contract = route_contracts.get(map_name)
+        if not route_contract:
+            route_contract = route_contract_for_map(
+                map_name,
+                map_set=map_set,
+            )
         jobs.append({
             "index": index,
             "map": map_name,

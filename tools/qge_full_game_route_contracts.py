@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Route contracts for canonical full-game QGE capture jobs."""
+"""Route contracts for selected QGE capture map sets."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ ROUTE_CONTRACT_SCHEMA = "qge.full_game_capture_route_contract.v0"
 ROUTE_CONTRACT_AUTHORITY_SCHEMA = (
     "qge.full_game_route_contract_authority.v0"
 )
+SHAREWARE_EPISODE_ONE_MAP_SET = "quake_shareware_episode1"
 SPECIAL_ROUTE_MAPS = {"end"}
 START_HUB_ROUTE_MAPS = {"start"}
 DEFERRED_ROUTE_MAPS = SPECIAL_ROUTE_MAPS | START_HUB_ROUTE_MAPS
@@ -59,7 +60,11 @@ def map_episode_and_slot(map_name: str) -> tuple[str, int | None]:
     return "unknown", None
 
 
-def route_contract_for_map(map_name: str) -> dict[str, Any]:
+def route_contract_for_map(
+    map_name: str,
+    *,
+    map_set: str | None = None,
+) -> dict[str, Any]:
     episode, slot = map_episode_and_slot(map_name)
     start_hub_route = map_name in START_HUB_ROUTE_MAPS
     special_route = map_name in SPECIAL_ROUTE_MAPS
@@ -71,8 +76,15 @@ def route_contract_for_map(map_name: str) -> dict[str, Any]:
         map_class = "endgame_special"
         route_goal = "special endgame route evidence required"
     else:
-        map_class = "registered_combat"
-        route_goal = f"{episode} map {slot} route/combat authority smoke"
+        if map_set == SHAREWARE_EPISODE_ONE_MAP_SET and episode == "e1":
+            map_class = "shareware_combat"
+            route_goal = (
+                f"{episode} shareware map {slot} "
+                "route/combat authority smoke"
+            )
+        else:
+            map_class = "registered_combat"
+            route_goal = f"{episode} map {slot} route/combat authority smoke"
     authority_domains = list(BASE_AUTHORITY_DOMAINS)
     if combat_required:
         authority_domains.append("ai_authority")
@@ -106,6 +118,8 @@ def matrix_domain_for_authority_domain(authority_domain: str) -> str:
 def route_contract_authority_audit(
     map_name: str | None,
     moonlab_domain_readiness: dict[str, Any],
+    *,
+    map_set: str | None = None,
 ) -> dict[str, Any]:
     if not map_name:
         return {
@@ -115,7 +129,7 @@ def route_contract_authority_audit(
             "blockers": ["canonical_map_missing"],
             "domain_checks": [],
         }
-    contract = route_contract_for_map(map_name)
+    contract = route_contract_for_map(map_name, map_set=map_set)
     domain_checks = []
     blockers = []
     for authority_domain in contract["authority_domains"]:

@@ -185,7 +185,11 @@ def map_name_for_matrix(matrix: dict[str, Any], matrix_path: Path) -> str | None
     return None
 
 
-def build_matrix_run_summary(path: Path) -> dict[str, Any]:
+def build_matrix_run_summary(
+    path: Path,
+    *,
+    map_set: str | None = None,
+) -> dict[str, Any]:
     matrix_path = resolve_matrix_path(path)
     matrix = load_json(matrix_path)
     summary = matrix.get("conformance_summary", {})
@@ -198,6 +202,7 @@ def build_matrix_run_summary(path: Path) -> dict[str, Any]:
         qge_full_game_route_contracts.route_contract_authority_audit(
             canonical_map_name(map_name),
             domain_readiness,
+            map_set=map_set,
         )
     )
     primary = domain_evidence(summary, "qge_primary_framebuffer")
@@ -535,7 +540,11 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         elif kind == "publication":
             publication_paths.append(path)
 
-    matrix_runs = [build_matrix_run_summary(path) for path in matrix_paths]
+    map_set = getattr(args, "map_set", DEFAULT_FULL_GAME_MAP_SET)
+    matrix_runs = [
+        build_matrix_run_summary(path, map_set=map_set)
+        for path in matrix_paths
+    ]
     publication_packs = [
         publication_pack_summary(path) for path in publication_paths
     ]
@@ -552,7 +561,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     min_maps_met = len(maps) >= args.min_maps
     full_game_coverage = build_full_game_map_coverage(
         maps,
-        map_set=getattr(args, "map_set", DEFAULT_FULL_GAME_MAP_SET),
+        map_set=map_set,
     )
     total_fallback_count = sum(as_int(run.get("fallback_count")) for run in all_runs)
     total_surrogate_count = sum(as_int(run.get("surrogate_count")) for run in all_runs)

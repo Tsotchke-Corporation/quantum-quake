@@ -274,7 +274,10 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      `e1m8`. The current nine-map checkpoint is complete under that shareware
      map set, and a complete shareware ledger is intentionally not accepted by
      the registered full-game deployment gate. ICC exposes this as the separate
-     `qge_shareware_episode1_moonlab_breadth` target.
+     `qge_shareware_episode1_moonlab_breadth` target. Route contracts also
+     reflect the scope: E1 combat maps are `shareware_combat` under the
+     shareware map set and remain `registered_combat` under the registered
+     full-game map set.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for

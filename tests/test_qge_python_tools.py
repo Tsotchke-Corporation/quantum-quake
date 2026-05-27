@@ -8687,6 +8687,49 @@ class PublicationPackTests(unittest.TestCase):
 
 
 class BreadthEvidenceTests(unittest.TestCase):
+    def test_shareware_breadth_route_authority_uses_shareware_contract(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            matrix = self.write_matrix(tmpdir / "run_a", map_name="e1m1")
+            args = SimpleNamespace(
+                inputs=[],
+                matrix=[matrix],
+                publication_pack=[],
+                min_runs=1,
+                min_maps=1,
+                map_set=breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            )
+
+            manifest = breadth_evidence.build_manifest(args)
+            route_authority = (
+                manifest["matrix_runs"][0]["route_contract_authority"])
+            self.assertEqual(
+                route_authority["route_contract"]["map_class"],
+                "shareware_combat",
+            )
+
+    def test_default_route_authority_remains_registered_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            matrix = self.write_matrix(tmpdir / "run_a", map_name="e1m1")
+            args = SimpleNamespace(
+                inputs=[],
+                matrix=[matrix],
+                publication_pack=[],
+                min_runs=1,
+                min_maps=1,
+            )
+
+            manifest = breadth_evidence.build_manifest(args)
+            route_authority = (
+                manifest["matrix_runs"][0]["route_contract_authority"])
+            self.assertEqual(
+                route_authority["route_contract"]["map_class"],
+                "registered_combat",
+            )
+
     def test_shareware_episode_map_set_is_scoped_not_full_game(self) -> None:
         shareware_maps = breadth_evidence.QUAKE_SHAREWARE_EPISODE_ONE_MAPS
         self.assertEqual(
@@ -8781,6 +8824,10 @@ class BreadthEvidenceTests(unittest.TestCase):
             )
             self.assertEqual(
                 plan["status"], "blocked_non_registered_map_set")
+            self.assertEqual(
+                plan["route_contracts"]["e1m1"]["map_class"],
+                "shareware_combat",
+            )
             plan_audit = moonlab_full_game_plan_audit.full_game_plan_ledger_audit(
                 shareware_coverage,
                 inventory,
@@ -10135,6 +10182,10 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(queue["target_map_count"], 9)
             self.assertEqual(queue["route_contract_map_count"], 9)
             self.assertEqual(queue["queue_job_count"], 1)
+            self.assertEqual(
+                queue["jobs"][0]["route_contract"]["map_class"],
+                "shareware_combat",
+            )
             self.assertEqual(queue["covered_map_count_after_queue"], 3)
             self.assertEqual(
                 queue["post_capture"]["map_set"],
@@ -10145,6 +10196,10 @@ class BreadthEvidenceTests(unittest.TestCase):
 
             script = "\n".join(full_game_capture_queue.script_lines(queue))
             self.assertIn("--map-set quake_shareware_episode1", script)
+            self.assertIn(
+                "QGE_FULL_GAME_CAPTURE_ROUTE_CLASS shareware_combat",
+                script,
+            )
             self.assertNotIn("--map-set quake_registered_single_player", script)
             self.assertIn("--min-runs 3", script)
             self.assertIn("--min-maps 3", script)

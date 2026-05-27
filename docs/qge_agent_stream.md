@@ -439,9 +439,12 @@ shareware first-episode scope is explicitly `quake_shareware_episode1`
 deployment gate. ICC tracks that smaller scope through
 `qge_shareware_episode1_moonlab_breadth`.
 Each covered matrix is audited against its route contract's required authority
-domains, so the aggregate reports `route_contract_authority_ready_run_count`
-and blocks on `route_contract_authority_not_ready` if render, visibility,
-projectile, audio, route-observation, AI, or special-route evidence is missing
+domains. Shareware Episode 1 contracts use the `shareware_combat` map class for
+the E1 combat maps while the registered/full-game path keeps
+`registered_combat`, so the aggregate reports
+`route_contract_authority_ready_run_count` and blocks on
+`route_contract_authority_not_ready` if render, visibility, projectile, audio,
+route-observation, AI, or special-route evidence is missing
 for that map class. The per-domain proof rows are emitted as `domain_checks`
 so ICC runtime evidence does not mistake positive authority counters for
 generic failure-status fields.

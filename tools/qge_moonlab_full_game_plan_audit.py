@@ -361,7 +361,9 @@ def full_game_plan_ledger_audit(
         else:
             expected_deployment_status = "blocked_asset_unavailable"
         expected_contract = qge_full_game_route_contracts.route_contract_for_map(
-            map_name)
+            map_name,
+            map_set=map_set,
+        )
         expected_pairs = [
             ("coverage_status", expected_coverage_status),
             ("asset_status", expected_asset_status),
@@ -387,7 +389,10 @@ def full_game_plan_ledger_audit(
         if (
             map_name in route_contracts and
             dict_or_empty(route_contracts.get(map_name)) !=
-            qge_full_game_route_contracts.route_contract_for_map(map_name)
+            qge_full_game_route_contracts.route_contract_for_map(
+                map_name,
+                map_set=map_set,
+            )
         ):
             route_contract_entry_mismatch_maps.append(map_name)
     route_contract_mismatch_maps = sorted(set(

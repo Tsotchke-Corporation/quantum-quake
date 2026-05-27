@@ -313,7 +313,9 @@ def map_deployment_rows(
         evidence = [map_evidence_summary(run)
                     for run in runs_by_map.get(map_name, [])]
         route_contract = qge_full_game_route_contracts.route_contract_for_map(
-            map_name)
+            map_name,
+            map_set=map_set,
+        )
         is_covered = map_name in covered
         has_asset = map_name in available
         asset_handoff_status = asset_handoff_status_for_map(

@@ -180,6 +180,7 @@ grep -q 'bsp_validation_report' "$repo_root/tools/qge_full_game_capture_queue.py
 grep -q 'valid_quake_bsp29' "$repo_root/tools/qge_full_game_capture_queue.py"
 grep -q 'qge.full_game_capture_route_contract.v0' "$repo_root/tools/qge_full_game_route_contracts.py"
 grep -q 'qge.full_game_route_contract_authority.v0' "$repo_root/tools/qge_full_game_route_contracts.py"
+grep -q 'shareware_combat' "$repo_root/tools/qge_full_game_route_contracts.py"
 grep -q 'route_contract_authority_audit' "$repo_root/tools/qge_full_game_route_contracts.py"
 grep -q 'domain_checks' "$repo_root/tools/qge_full_game_route_contracts.py"
 grep -q 'route_contract_for_map' "$repo_root/tools/qge_full_game_capture_queue.py"
