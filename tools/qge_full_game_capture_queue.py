@@ -418,12 +418,12 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
     if args.limit is not None:
         queueable_missing_maps = queueable_missing_maps[:args.limit]
     existing_sources = existing_matrix_sources(data)
-    map_set = (
+    map_set = str(
         coverage.get("map_set") or
         qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
     )
-    route_contracts = route_contracts_for_map_set(str(map_set))
-    target_maps = qge_breadth_evidence.map_targets_for_set(str(map_set))
+    route_contracts = route_contracts_for_map_set(map_set)
+    target_maps = qge_breadth_evidence.map_targets_for_set(map_set)
     missing_route_contract_maps = sorted(set(
         [name for name in target_maps if name not in route_contracts] +
         [name for name in missing_maps if name not in route_contracts]
@@ -459,6 +459,8 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
         "source_path": str(source_path),
         "source_schema": data.get("schema"),
         "status": status,
+        "map_set": map_set,
+        "map_scope": qge_breadth_evidence.map_set_scope_label(map_set),
         "special_maps_last": special_maps_last,
         "special_route_maps": sorted(SPECIAL_ROUTE_MAPS),
         "start_hub_route_maps": sorted(START_HUB_ROUTE_MAPS),
@@ -474,7 +476,7 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
         ),
         "available_asset_maps": sorted(
             name for name in available_maps
-            if name in qge_breadth_evidence.QUAKE_REGISTERED_SINGLE_PLAYER_MAPS
+            if name in target_maps
         ),
         "asset_available_missing_maps": asset_available_missing_maps,
         "asset_available_missing_count": len(asset_available_missing_maps),
@@ -490,6 +492,7 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
             target_map_count - target_after_queue, 0),
         "jobs": jobs,
         "post_capture": {
+            "map_set": map_set,
             "breadth_min_runs": len(existing_sources) + len(jobs),
             "breadth_min_maps": target_after_queue,
             "command": (
@@ -518,6 +521,11 @@ def script_lines(queue: dict[str, Any]) -> list[str]:
         if isinstance(item, dict)
     ]
     post_capture = dict_or_empty(queue.get("post_capture"))
+    map_set = str(
+        post_capture.get("map_set") or
+        queue.get("map_set") or
+        qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
+    )
     lines = [
         "#!/usr/bin/env bash",
         "set -euo pipefail",
@@ -576,6 +584,7 @@ def script_lines(queue: dict[str, Any]) -> list[str]:
         'if (( ${#breadth_args[@]} > 0 )); then',
         "  python3 tools/qge_breadth_evidence.py \\",
         '    "${breadth_args[@]}" \\',
+        f"    --map-set {shlex.quote(map_set)} \\",
         f"    --min-runs {int(post_capture.get('breadth_min_runs', 1) or 1)} \\",
         f"    --min-maps {int(post_capture.get('breadth_min_maps', 1) or 1)}",
         "fi",
@@ -586,10 +595,17 @@ def script_lines(queue: dict[str, Any]) -> list[str]:
 
 def markdown_report(queue: dict[str, Any]) -> str:
     coverage = dict_or_empty(queue.get("coverage_before"))
+    map_set = str(queue.get("map_set") or coverage.get("map_set") or "")
+    map_scope = str(queue.get("map_scope") or coverage.get("map_scope") or "")
+    if qge_breadth_evidence.is_shareware_episode_one_map_set(map_set):
+        title = "# QGE Shareware Episode 1 Capture Queue"
+    else:
+        title = "# QGE Full Game Capture Queue"
     lines = [
-        "# QGE Full Game Capture Queue",
+        title,
         "",
         f"Status: {queue['status']}",
+        f"Scope: `{map_scope or qge_breadth_evidence.map_set_scope_label(map_set)}`",
         f"Source: `{queue['source_path']}`",
         "",
         "| Map Set | Covered Before | Jobs | Covered After Queue | Remaining |",

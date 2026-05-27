@@ -283,13 +283,16 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      reports zero locally queueable missing maps and 23 missing registered maps
      as asset-unavailable; those maps require additional registered BSP assets
      before capture. The queue now accepts assets only after the dependency-free
-     BSP29 header/lump validator confirms a real Quake BSP payload. It also
-     emits a route contract for every canonical registered map, and the Moonlab
-     deployment plan/gate require that complete ledger, so post-asset jobs carry
-     route class, episode/slot, combat/special-route requirements, and authority
-     domains before they run. Breadth evidence also audits every covered matrix
-     against those authority domains, and the deployment gate requires covered
-     route authority to stay complete.
+     BSP29 header/lump validator confirms a real Quake BSP payload. The
+     generated script preserves the selected map set when it rebuilds breadth
+     evidence, so shareware Episode 1 queues remain `quake_shareware_episode1`.
+     It also emits a route contract for every selected target map, and the
+     Moonlab deployment plan/gate require the registered full-game ledger for
+     whole-game claims, so post-asset jobs carry route class, episode/slot,
+     combat/special-route requirements, and authority domains before they run.
+     Breadth evidence also audits every covered matrix against those authority
+     domains, and the deployment gate requires covered route authority to stay
+     complete.
    - `tools/qge_asset_inventory.py --asset-root assets/id1` emits
      `qge.asset_inventory.v0` and `qge_registered_asset_inventory_complete`
      ICC evidence with PAK SHA-256 hashes, BSP validation status, invalid-BSP

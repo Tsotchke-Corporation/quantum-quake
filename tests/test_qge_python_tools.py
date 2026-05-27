@@ -9943,6 +9943,11 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(queue["queue_job_count"], 2)
             self.assertTrue(queue["special_maps_last"])
             self.assertTrue(queue["route_contracts_complete"])
+            self.assertEqual(queue["map_set"], "quake_registered_single_player")
+            self.assertEqual(
+                queue["post_capture"]["map_set"],
+                "quake_registered_single_player",
+            )
             self.assertEqual(queue["route_contract_map_count"], 32)
             self.assertEqual(queue["missing_route_contract_maps"], [])
             self.assertEqual(queue["jobs"][0]["map"], "e1m3")
@@ -10019,6 +10024,7 @@ class BreadthEvidenceTests(unittest.TestCase):
             )
             self.assertIn("--min-runs 4", script)
             self.assertIn("--min-maps 4", script)
+            self.assertIn("--map-set quake_registered_single_player", script)
             self.assertIn(str(matrix_a), script)
             markdown = full_game_capture_queue.markdown_report(queue)
             self.assertIn("QGE Full Game Capture Queue", markdown)
@@ -10079,6 +10085,63 @@ class BreadthEvidenceTests(unittest.TestCase):
                 ["QGE_NOESIS_MIN_LOG_PHASES"],
                 "2",
             )
+
+    def test_shareware_capture_queue_preserves_map_set(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            matrix_a = self.write_matrix(tmpdir / "run_a", map_name="e1m1")
+            matrix_b = self.write_matrix(tmpdir / "run_b", map_name="e1m2")
+            args = SimpleNamespace(
+                inputs=[],
+                matrix=[matrix_a, matrix_b],
+                publication_pack=[],
+                min_runs=2,
+                min_maps=2,
+                map_set=breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            )
+            manifest = breadth_evidence.build_manifest(args)
+            breadth_path = tmpdir / "breadth_evidence.json"
+            breadth_evidence.write_json(breadth_path, manifest)
+
+            queue = full_game_capture_queue.build_queue(SimpleNamespace(
+                source=breadth_path,
+                limit=1,
+                frames=3,
+                wait_frames=12,
+                trace=True,
+                special_maps_last=True,
+                authority_smoke=True,
+                force_world_metrics=True,
+                asset_root=tmpdir / "empty-id1",
+                include_unavailable_assets=True,
+                env=[],
+            ))
+
+            self.assertEqual(
+                queue["map_set"],
+                breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            )
+            self.assertEqual(queue["map_scope"], "shareware_episode_one")
+            self.assertEqual(queue["target_map_count"], 9)
+            self.assertEqual(queue["route_contract_map_count"], 9)
+            self.assertEqual(queue["queue_job_count"], 1)
+            self.assertEqual(queue["covered_map_count_after_queue"], 3)
+            self.assertEqual(
+                queue["post_capture"]["map_set"],
+                breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            )
+            self.assertEqual(queue["post_capture"]["breadth_min_runs"], 3)
+            self.assertEqual(queue["post_capture"]["breadth_min_maps"], 3)
+
+            script = "\n".join(full_game_capture_queue.script_lines(queue))
+            self.assertIn("--map-set quake_shareware_episode1", script)
+            self.assertNotIn("--map-set quake_registered_single_player", script)
+            self.assertIn("--min-runs 3", script)
+            self.assertIn("--min-maps 3", script)
+            markdown = full_game_capture_queue.markdown_report(queue)
+            self.assertIn("QGE Shareware Episode 1 Capture Queue", markdown)
+            self.assertIn("Scope: `shareware_episode_one`", markdown)
+            self.assertNotIn("QGE Full Game Capture Queue", markdown)
 
     def test_full_game_capture_queue_skips_unavailable_local_assets(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

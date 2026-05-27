@@ -452,9 +452,11 @@ that ledger into `qge.full_game_capture_queue.v0` plus a runnable
 `run_missing_maps.sh` script. The queue inventories loose `maps/*.bsp` files
 and `pak*.pak` directories before it writes jobs, skips maps whose BSP is
 absent unless `--include-unavailable-assets` is set, and records the
-asset-unavailable missing maps in JSON/Markdown. Queues with no runnable jobs
-but remaining asset-unavailable maps are marked `blocked_asset_unavailable`, not
-complete. BSP assets must pass the
+asset-unavailable missing maps in JSON/Markdown. The generated script preserves
+the source ledger's map set when it rebuilds breadth evidence, so
+`quake_shareware_episode1` queues do not fall back to registered full-game
+scope. Queues with no runnable jobs but remaining asset-unavailable maps are
+marked `blocked_asset_unavailable`, not complete. BSP assets must pass the
 dependency-free Quake BSP29 header/lump validation before they are accepted as
 available or turned into capture jobs. The generated script runs
 `tools/quake_graphics_harness.sh` for each missing canonical map using the
