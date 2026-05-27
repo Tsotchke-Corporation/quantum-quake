@@ -2540,7 +2540,7 @@ def build_icc_evidence(manifest: dict[str, Any],
     registered_asset_intake_summary = dict_or_empty(
         advantage_summary.get("registered_asset_intake_summary"))
     source_input_audit = (
-        qge_manifest_source_input_audit.manifest_source_input_audit(
+        qge_manifest_source_input_audit.manifest_source_input_icc_summary(
             manifest,
             required=True,
         )
@@ -2572,12 +2572,7 @@ def build_icc_evidence(manifest: dict[str, Any],
         "publication_manifest_file": str(manifest_path),
         "publication_icc_evidence_file": str(icc_path),
         "publication_pack_dir": manifest["pack_dir"],
-        "manifest_source_input_audit_passed": source_input_audit.get("passed"),
-        "manifest_source_input_recorded": source_input_audit.get("recorded"),
-        "manifest_source_input_check_count": source_input_audit.get(
-            "check_count"),
-        "manifest_source_input_mismatch_count": source_input_audit.get(
-            "mismatch_count"),
+        **source_input_audit,
         **source_copy_audit,
         "manifest_reproduce_audit_passed": reproduce_audit.get("passed"),
         "manifest_reproduce_recorded": reproduce_audit.get("recorded"),

@@ -208,6 +208,20 @@ def manifest_source_input_audit(
     }
 
 
+def manifest_source_input_icc_summary(
+    manifest: dict[str, Any] | None,
+    *,
+    required: bool = True,
+) -> dict[str, Any]:
+    audit = manifest_source_input_audit(manifest, required=required)
+    return {
+        "manifest_source_input_audit_passed": audit.get("passed"),
+        "manifest_source_input_recorded": audit.get("recorded"),
+        "manifest_source_input_check_count": audit.get("check_count"),
+        "manifest_source_input_mismatch_count": audit.get("mismatch_count"),
+    }
+
+
 def resolve_manifest(pack_or_manifest: Path) -> Path:
     if pack_or_manifest.is_dir():
         return pack_or_manifest / "publication_manifest.json"
