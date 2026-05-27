@@ -1388,10 +1388,17 @@ def build_criteria(
     resource_boundary_required: bool = False,
     asset_remediation: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
+    coverage_map_set = coverage.get("map_set")
+    inventory_map_set = inventory.get("map_set") or coverage_map_set
+    requirements_map_set = requirements.get("map_set") or coverage_map_set
+    registered_full_game_scope = (
+        qge_breadth_evidence.is_registered_full_game_map_set(coverage_map_set)
+    )
     target_count = int_or_none(coverage.get("target_map_count"))
     covered_count = int_or_none(coverage.get("covered_map_count"))
     coverage_missing = int_or_none(coverage.get("missing_map_count"))
     coverage_passed = (
+        registered_full_game_scope and
         coverage.get("schema") == "qge.full_game_map_coverage.v0" and
         coverage.get("status") == "complete" and
         target_count is not None and
@@ -1403,6 +1410,8 @@ def build_criteria(
     invalid_pak_count = int_or_none(inventory.get("invalid_pak_count"))
     invalid_bsp_count = int_or_none(inventory.get("invalid_bsp_count"))
     inventory_passed = (
+        qge_breadth_evidence.is_registered_full_game_map_set(
+            inventory_map_set) and
         inventory.get("schema") == "qge.asset_inventory.v0" and
         bool_true(inventory.get("full_game_asset_ready")) and
         inventory_missing == 0 and
@@ -1413,6 +1422,8 @@ def build_criteria(
     requirement_missing = int_or_none(requirements.get("missing_map_count"))
     requirement_posture = dict_or_empty(requirements.get("claim_posture"))
     requirements_passed = (
+        qge_breadth_evidence.is_registered_full_game_map_set(
+            requirements_map_set) and
         requirements.get("schema") == "qge.asset_requirements.v0" and
         requirements.get("status") == "complete" and
         requirement_missing == 0 and
@@ -1587,6 +1598,10 @@ def build_criteria(
             "full_game_map_coverage_complete",
             coverage_passed,
             {
+                "map_set": coverage_map_set,
+                "registered_full_game_scope": registered_full_game_scope,
+                "required_map_set": (
+                    qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET),
                 "coverage_status": coverage.get("status"),
                 "target_map_count": target_count,
                 "covered_map_count": covered_count,
@@ -1599,8 +1614,12 @@ def build_criteria(
             "registered_bsp_assets_ready",
             inventory_passed,
             {
+                "map_set": inventory_map_set,
+                "required_map_set": (
+                    qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET),
                 "asset_inventory_status": inventory.get("status"),
                 "full_game_asset_ready": inventory.get("full_game_asset_ready"),
+                "asset_scope_ready": inventory.get("asset_scope_ready"),
                 "missing_map_count": inventory_missing,
                 "missing_maps": inventory.get("missing_maps"),
                 "invalid_pak_count": invalid_pak_count,
@@ -1618,6 +1637,9 @@ def build_criteria(
             "asset_requirements_satisfied",
             requirements_passed,
             {
+                "map_set": requirements_map_set,
+                "required_map_set": (
+                    qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET),
                 "asset_requirements_status": requirements.get("status"),
                 "missing_map_count": requirement_missing,
                 "missing_maps": requirements.get("missing_maps"),
@@ -2166,9 +2188,23 @@ def next_actions_for_blockers(
                 "Install registered Quake BSP assets and rerun qge_asset_inventory.py plus qge_asset_requirements.py."
             )
     if "full_game_map_coverage_complete" in failed_ids:
-        actions.append(
-            "Capture every missing canonical map with the strict QGE/vanilla harness and rebuild breadth evidence."
+        coverage_blocker = next(
+            (
+                blocker for blocker in blockers
+                if blocker.get("id") == "full_game_map_coverage_complete"
+            ),
+            {},
         )
+        if coverage_blocker.get("map_set") != (
+            qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
+        ):
+            actions.append(
+                "This is a scoped map-set ledger, not the registered full-game map set; use a shareware/episode target for this evidence or rebuild full-game coverage with quake_registered_single_player."
+            )
+        else:
+            actions.append(
+                "Capture every missing canonical map with the strict QGE/vanilla harness and rebuild breadth evidence."
+            )
     if "asset_requirements_satisfied" in failed_ids:
         actions.append(
             "Resolve every missing maps/*.bsp entry listed by qge_asset_requirements.json before weakening no-claim posture."

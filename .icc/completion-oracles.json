@@ -439,6 +439,95 @@
       ]
     },
     {
+      "name": "qge_shareware_episode1_moonlab_breadth",
+      "target": "Shareware Episode 1 Quake running in Moonlab with publishable first-episode evidence",
+      "aliases": [
+        "qge_shareware_episode1_moonlab_breadth",
+        "shareware episode 1 moonlab",
+        "first episode shareware moonlab",
+        "pak0 shareware moonlab evidence"
+      ],
+      "requires": [
+        {
+          "id": "qge_shareware_episode1_backend",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_breadth_evidence"
+          ],
+          "severity": "high",
+          "label": "Shareware Episode 1 breadth backend evidence is present",
+          "action": "run_qge_breadth_evidence_for_shareware_episode1"
+        },
+        {
+          "id": "qge_shareware_episode1_completion",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_breadth_evidence_pack_complete"
+          ],
+          "severity": "high",
+          "label": "Shareware Episode 1 breadth completion is recorded",
+          "action": "emit_shareware_breadth_completion_reason"
+        },
+        {
+          "id": "qge_shareware_episode1_map_set",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend_scope_map_set"
+          ],
+          "event_values": [
+            "quake_shareware_episode1"
+          ],
+          "severity": "high",
+          "label": "Breadth evidence is scoped to the shareware Episode 1 map set",
+          "action": "set_breadth_map_set_to_quake_shareware_episode1"
+        },
+        {
+          "id": "qge_shareware_episode1_coverage_complete",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend_scope_coverage_status"
+          ],
+          "event_values": [
+            "complete"
+          ],
+          "severity": "high",
+          "label": "Shareware Episode 1 map coverage is complete",
+          "action": "cover_start_and_e1m1_through_e1m8"
+        },
+        {
+          "id": "qge_shareware_episode1_artifact",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "breadth_evidence_file"
+          ],
+          "severity": "high",
+          "label": "Shareware Episode 1 breadth artifact is visible to ICC",
+          "action": "write_shareware_episode1_breadth_evidence_json"
+        }
+      ]
+    },
+    {
       "name": "qge_moonlab_full_game_deployment",
       "target": "Full Quake running in Moonlab with publishable hardware-deployment evidence",
       "aliases": [

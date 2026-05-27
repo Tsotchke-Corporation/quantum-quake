@@ -215,6 +215,7 @@ def build_inventory(
         report for report in pak_files
         if report.get("status") != "ok"
     ]
+    asset_scope_ready = not missing_maps and not invalid_paks
     return {
         "schema": "qge.asset_inventory.v0",
         "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -223,7 +224,12 @@ def build_inventory(
             "present" if asset_root.is_dir() else "missing_asset_root"
         ),
         "map_set": map_set,
-        "status": "complete" if not missing_maps and not invalid_paks else "partial",
+        "map_scope": qge_breadth_evidence.map_set_scope_label(map_set),
+        "registered_full_game_scope": (
+            qge_breadth_evidence.is_registered_full_game_map_set(map_set)),
+        "shareware_episode_one_scope": (
+            qge_breadth_evidence.is_shareware_episode_one_map_set(map_set)),
+        "status": "complete" if asset_scope_ready else "partial",
         "target_map_count": len(target_maps),
         "available_map_count": len(available_target_maps),
         "missing_map_count": len(missing_maps),
@@ -245,10 +251,19 @@ def build_inventory(
         },
         "pak_files": pak_files,
         "invalid_bsp_sources": invalid_bsp_sources,
-        "full_game_asset_ready": not missing_maps and not invalid_paks,
+        "asset_scope_ready": asset_scope_ready,
+        "full_game_asset_ready": (
+            asset_scope_ready and
+            qge_breadth_evidence.is_registered_full_game_map_set(map_set)
+        ),
+        "shareware_episode_one_asset_ready": (
+            asset_scope_ready and
+            qge_breadth_evidence.is_shareware_episode_one_map_set(map_set)
+        ),
         "claim_limits": [
             "This inventory proves asset availability only, not QGE runtime coverage.",
-            "Do not claim full-game Moonlab coverage until every target map has a capture matrix and breadth evidence is complete.",
+            "Do not claim full-game Moonlab coverage from a non-registered map set.",
+            "Do not claim Moonlab coverage for any scope until every target map has a capture matrix and breadth evidence is complete.",
         ],
     }
 
@@ -271,7 +286,10 @@ def build_icc_evidence(inventory: dict[str, Any]) -> dict[str, Any]:
         "invalid_pak_count": inventory.get("invalid_pak_count"),
         "invalid_bsp_count": inventory.get("invalid_bsp_count"),
         "loose_bsp_count": inventory.get("loose_bsp_count"),
+        "asset_scope_ready": inventory.get("asset_scope_ready"),
         "full_game_asset_ready": inventory.get("full_game_asset_ready"),
+        "shareware_episode_one_asset_ready": inventory.get(
+            "shareware_episode_one_asset_ready"),
         "whole_game_moonlab_coverage_claimed": False,
     }
 
@@ -283,16 +301,18 @@ def markdown_report(inventory: dict[str, Any]) -> str:
         f"Asset root: `{inventory['asset_root']}` "
         f"({inventory['asset_root_status']})",
         "",
-        "| Map Set | Available | Missing | PAK Files | Invalid BSPs | Loose BSPs | Ready |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| Map Set | Scope | Available | Missing | PAK Files | Invalid BSPs | Loose BSPs | Scope Ready | Full Game Ready |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |",
         (
             f"| {inventory['map_set']} | "
+            f"{inventory.get('map_scope')} | "
             f"{inventory['available_map_count']} / "
             f"{inventory['target_map_count']} | "
             f"{inventory['missing_map_count']} | "
             f"{inventory['pak_count']} | "
             f"{inventory['invalid_bsp_count']} | "
             f"{inventory['loose_bsp_count']} | "
+            f"{inventory.get('asset_scope_ready')} | "
             f"{inventory['full_game_asset_ready']} |"
         ),
         "",

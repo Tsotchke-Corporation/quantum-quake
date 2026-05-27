@@ -350,6 +350,10 @@ def deployment_status(
     map_rows: list[dict[str, Any]],
     coverage: dict[str, Any],
 ) -> str:
+    if not qge_breadth_evidence.is_registered_full_game_map_set(
+        coverage.get("map_set")
+    ):
+        return "blocked_non_registered_map_set"
     if coverage.get("status") == "complete":
         return "map_coverage_complete"
     if any(row.get("deployment_status") == "blocked_asset_unavailable"

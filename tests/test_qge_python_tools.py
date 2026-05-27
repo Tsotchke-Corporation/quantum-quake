@@ -454,6 +454,56 @@ def minimal_oracle_scene() -> dict:
 
 
 class ICCProfileTests(unittest.TestCase):
+    def test_shareware_episode_oracle_is_separate_from_full_game(self) -> None:
+        profile = json.loads(
+            (REPO_ROOT / ".icc" / "completion-oracles.json")
+            .read_text(encoding="utf-8")
+        )
+        oracle = next(
+            item for item in profile["oracles"]
+            if item["name"] == "qge_shareware_episode1_moonlab_breadth"
+        )
+        self.assertEqual(
+            oracle["target"],
+            "Shareware Episode 1 Quake running in Moonlab with publishable "
+            "first-episode evidence",
+        )
+        self.assertIn("first episode shareware moonlab", oracle["aliases"])
+
+        requirements = {item["id"]: item for item in oracle["requires"]}
+        self.assertEqual(
+            requirements["qge_shareware_episode1_backend"]["event_values"],
+            ["qge_breadth_evidence"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_episode1_completion"][
+                "event_values"],
+            ["qge_breadth_evidence_pack_complete"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_episode1_map_set"]["event_names"],
+            ["runtime_backend_scope_map_set"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_episode1_map_set"]["event_values"],
+            ["quake_shareware_episode1"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_episode1_coverage_complete"][
+                "event_names"],
+            ["runtime_backend_scope_coverage_status"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_episode1_coverage_complete"][
+                "event_values"],
+            ["complete"],
+        )
+        self.assertNotEqual(
+            oracle["target"],
+            "Full Quake running in Moonlab with publishable "
+            "hardware-deployment evidence",
+        )
+
     def test_moonlab_hardware_submission_oracle_is_scoped(self) -> None:
         profile = json.loads(
             (REPO_ROOT / ".icc" / "completion-oracles.json")
@@ -8637,6 +8687,121 @@ class PublicationPackTests(unittest.TestCase):
 
 
 class BreadthEvidenceTests(unittest.TestCase):
+    def test_shareware_episode_map_set_is_scoped_not_full_game(self) -> None:
+        shareware_maps = breadth_evidence.QUAKE_SHAREWARE_EPISODE_ONE_MAPS
+        self.assertEqual(
+            shareware_maps,
+            [
+                "start",
+                "e1m1",
+                "e1m2",
+                "e1m3",
+                "e1m4",
+                "e1m5",
+                "e1m6",
+                "e1m7",
+                "e1m8",
+            ],
+        )
+
+        shareware_coverage = breadth_evidence.build_full_game_map_coverage(
+            shareware_maps,
+            map_set=breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+        )
+        self.assertEqual(shareware_coverage["status"], "complete")
+        self.assertEqual(shareware_coverage["target_map_count"], 9)
+        self.assertEqual(shareware_coverage["missing_map_count"], 0)
+        self.assertEqual(
+            shareware_coverage["map_scope"], "shareware_episode_one")
+        self.assertTrue(
+            shareware_coverage["shareware_episode_one_scope"])
+        self.assertFalse(
+            shareware_coverage["registered_full_game_scope"])
+
+        registered_coverage = breadth_evidence.build_full_game_map_coverage(
+            shareware_maps,
+        )
+        self.assertEqual(registered_coverage["status"], "partial")
+        self.assertEqual(registered_coverage["target_map_count"], 32)
+        self.assertEqual(registered_coverage["covered_map_count"], 9)
+        self.assertEqual(registered_coverage["missing_map_count"], 23)
+        self.assertTrue(registered_coverage["registered_full_game_scope"])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            asset_root = Path(tmp) / "id1"
+            asset_root.mkdir(parents=True)
+            write_pak(
+                asset_root / "pak0.pak",
+                [f"maps/{name}.bsp" for name in shareware_maps],
+            )
+            inventory = asset_inventory.build_inventory(
+                asset_root,
+                map_set=breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            )
+            self.assertEqual(inventory["status"], "complete")
+            self.assertEqual(inventory["available_map_count"], 9)
+            self.assertEqual(inventory["missing_map_count"], 0)
+            self.assertTrue(inventory["asset_scope_ready"])
+            self.assertTrue(inventory["shareware_episode_one_asset_ready"])
+            self.assertFalse(inventory["full_game_asset_ready"])
+
+            requirements = asset_requirements.build_requirements(
+                inventory,
+                map_set=breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            )
+            self.assertEqual(requirements["status"], "complete")
+            self.assertEqual(requirements["target_map_count"], 9)
+            self.assertEqual(requirements["missing_map_count"], 0)
+            self.assertTrue(
+                requirements["claim_posture"][
+                    "shareware_episode_one_requirements_satisfied"])
+            self.assertFalse(
+                requirements["claim_posture"][
+                    "whole_game_moonlab_deployment_claimed"])
+            self.assertEqual(
+                requirements["requirements"][0]["next_action"],
+                "keep_existing_shareware_asset",
+            )
+
+            breadth = {
+                "schema": "qge.breadth_evidence.v0",
+                "matrix_runs": [
+                    {
+                        "map": name,
+                        "route_contract_authority_ready": True,
+                        "route_contract_authority_blockers": [],
+                    }
+                    for name in shareware_maps
+                ],
+            }
+            plan = moonlab_full_game_plan.build_plan(
+                shareware_coverage,
+                inventory,
+                breadth_evidence=breadth,
+            )
+            self.assertEqual(
+                plan["status"], "blocked_non_registered_map_set")
+            criteria = moonlab_deployment_gate.build_criteria(
+                coverage=shareware_coverage,
+                inventory=inventory,
+                requirements=requirements,
+                full_game_plan=plan,
+                job_specs={},
+                job_results={},
+            )
+            coverage_criterion = next(
+                item for item in criteria
+                if item["id"] == "full_game_map_coverage_complete")
+            self.assertEqual(coverage_criterion["status"], "blocked")
+            self.assertEqual(
+                coverage_criterion["map_set"],
+                breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            )
+            self.assertEqual(
+                coverage_criterion["required_map_set"],
+                breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+            )
+
     def test_asset_inventory_reports_registered_map_availability(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             asset_root = Path(tmp) / "id1"
@@ -9628,6 +9793,12 @@ class BreadthEvidenceTests(unittest.TestCase):
             )
             self.assertTrue(icc["breadth_ready_for_complete_claim"])
             self.assertEqual(icc["full_game_map_coverage_status"], "partial")
+            self.assertEqual(
+                icc["runtime_backend_scope_map_set"],
+                "quake_registered_single_player",
+            )
+            self.assertEqual(
+                icc["runtime_backend_scope_coverage_status"], "partial")
             self.assertEqual(icc["full_game_map_target_count"], 32)
             self.assertEqual(icc["full_game_map_covered_count"], 2)
             self.assertEqual(icc["full_game_map_missing_count"], 30)

@@ -643,9 +643,12 @@ Known current visual state:
   resolved/missing/native target sets, and
   `resource/qge_native_backend_boundary.json` so native backend evidence is
   auditable by boundary instead of only as aggregate counts. The same breadth
-  sidecar now emits `qge.full_game_map_coverage.v0` full-game map coverage:
+  sidecar now emits `qge.full_game_map_coverage.v0` selected map-set coverage:
   the canonical registered single-player ledger is 9/32 covered, 23 missing,
-  status `partial`. `tools/qge_full_game_capture_queue.py` turns that ledger
+  status `partial`, while the first-episode/shareware scope is explicitly
+  `quake_shareware_episode1` (`start`, `e1m1` through `e1m8`) and is not a
+  registered full-game deployment claim. `tools/qge_full_game_capture_queue.py`
+  turns the registered ledger
   into `qge.full_game_capture_queue.v0` and a runnable
   `run_missing_maps.sh`; it now inventories local loose/Pak BSP assets before
   queuing. Against the current publication pack and current `assets/id1/pak0.pak`,

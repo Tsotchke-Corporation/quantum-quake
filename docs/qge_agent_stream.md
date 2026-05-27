@@ -431,8 +431,13 @@ also carries backend-gate and runtime-backend-probe counts, paths, results, and
 targets, plus per-target proof maps, missing/native target sets, and
 `runtime_backend_probe_resolved_run_count` so the native backend claims can be
 audited across every supplied run. It also emits
-`qge.full_game_map_coverage.v0`, a canonical registered single-player map
-ledger that stays `partial` until every target map has a ready QGE/Moonlab run.
+`qge.full_game_map_coverage.v0`, a selected map-set ledger. The canonical
+registered full-game scope is `quake_registered_single_player` and stays
+`partial` until every registered target map has a ready QGE/Moonlab run; the
+shareware first-episode scope is explicitly `quake_shareware_episode1`
+(`start`, `e1m1` through `e1m8`) and cannot satisfy the registered full-game
+deployment gate. ICC tracks that smaller scope through
+`qge_shareware_episode1_moonlab_breadth`.
 Each covered matrix is audited against its route contract's required authority
 domains, so the aggregate reports `route_contract_authority_ready_run_count`
 and blocks on `route_contract_authority_not_ready` if render, visibility,

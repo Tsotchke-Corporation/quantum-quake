@@ -24,6 +24,7 @@ REQUIRED_RUNTIME_BACKEND_PROBE_TARGETS = [
     "qge_metal_init_common",
 ]
 DEFAULT_FULL_GAME_MAP_SET = "quake_registered_single_player"
+SHAREWARE_EPISODE_ONE_MAP_SET = "quake_shareware_episode1"
 QUAKE_REGISTERED_SINGLE_PLAYER_MAPS = [
     "start",
     "e1m1",
@@ -58,8 +59,20 @@ QUAKE_REGISTERED_SINGLE_PLAYER_MAPS = [
     "e4m8",
     "end",
 ]
+QUAKE_SHAREWARE_EPISODE_ONE_MAPS = [
+    "start",
+    "e1m1",
+    "e1m2",
+    "e1m3",
+    "e1m4",
+    "e1m5",
+    "e1m6",
+    "e1m7",
+    "e1m8",
+]
 FULL_GAME_MAP_SETS = {
     DEFAULT_FULL_GAME_MAP_SET: QUAKE_REGISTERED_SINGLE_PLAYER_MAPS,
+    SHAREWARE_EPISODE_ONE_MAP_SET: QUAKE_SHAREWARE_EPISODE_ONE_MAPS,
 }
 
 
@@ -378,8 +391,24 @@ def map_targets_for_set(name: str) -> list[str]:
     except KeyError as exc:
         choices = ", ".join(sorted(FULL_GAME_MAP_SETS))
         raise ValueError(
-            f"unknown full-game map set {name!r}; expected one of: {choices}"
+            f"unknown QGE map set {name!r}; expected one of: {choices}"
         ) from exc
+
+
+def is_registered_full_game_map_set(name: Any) -> bool:
+    return name == DEFAULT_FULL_GAME_MAP_SET
+
+
+def is_shareware_episode_one_map_set(name: Any) -> bool:
+    return name == SHAREWARE_EPISODE_ONE_MAP_SET
+
+
+def map_set_scope_label(name: Any) -> str:
+    if is_registered_full_game_map_set(name):
+        return "registered_single_player_full_game"
+    if is_shareware_episode_one_map_set(name):
+        return "shareware_episode_one"
+    return "custom_map_set"
 
 
 def build_full_game_map_coverage(
@@ -402,6 +431,10 @@ def build_full_game_map_coverage(
         "schema": "qge.full_game_map_coverage.v0",
         "map_set": map_set,
         "status": "complete" if not missing_maps else "partial",
+        "map_scope": map_set_scope_label(map_set),
+        "registered_full_game_scope": is_registered_full_game_map_set(map_set),
+        "shareware_episode_one_scope": (
+            is_shareware_episode_one_map_set(map_set)),
         "target_map_count": target_count,
         "covered_map_count": covered_count,
         "missing_map_count": len(missing_maps),
@@ -420,12 +453,17 @@ def build_full_game_map_coverage(
         ],
         "limits": [
             (
-                "This ledger tracks canonical registered Quake single-player "
-                "map coverage only."
+                "This ledger tracks the selected QGE map set only; inspect "
+                "map_set before using it for scope claims."
             ),
             (
-                "A partial status is explicit evidence of remaining full-game "
-                "work, not a whole-game Moonlab completion claim."
+                "Only quake_registered_single_player is the canonical "
+                "registered full-game scope; quake_shareware_episode1 is a "
+                "shareware first-episode scope."
+            ),
+            (
+                "A complete non-registered map set is not a whole-game "
+                "Moonlab completion claim."
             ),
         ],
     }
@@ -748,7 +786,10 @@ def build_icc_evidence(manifest: dict[str, Any],
         "map_count": aggregate.get("map_count"),
         "maps": aggregate.get("maps"),
         "full_game_map_set": aggregate.get("full_game_map_set"),
+        "runtime_backend_scope_map_set": aggregate.get("full_game_map_set"),
         "full_game_map_coverage_status": aggregate.get(
+            "full_game_map_coverage_status"),
+        "runtime_backend_scope_coverage_status": aggregate.get(
             "full_game_map_coverage_status"),
         "full_game_map_target_count": aggregate.get(
             "full_game_map_target_count"),

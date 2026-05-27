@@ -75,11 +75,21 @@ def source_summary(sources: list[Any]) -> list[dict[str, Any]]:
 def map_requirement(
     map_name: str,
     inventory: dict[str, Any],
+    *,
+    registered_full_game_scope: bool = True,
 ) -> dict[str, Any]:
     available_sources = dict_or_empty(inventory.get("available_map_sources"))
     sources = list_or_empty(available_sources.get(map_name))
     present = bool(sources)
     required_entry = f"maps/{map_name}.bsp"
+    keep_action = (
+        "keep_existing_registered_asset"
+        if registered_full_game_scope else "keep_existing_shareware_asset"
+    )
+    provide_action = (
+        "provide_registered_bsp_asset"
+        if registered_full_game_scope else "provide_shareware_bsp_asset"
+    )
     return {
         "map": map_name,
         "required_entry": required_entry,
@@ -90,8 +100,7 @@ def map_requirement(
             f"<asset_root>/pak*.pak:{required_entry}",
         ],
         "next_action": (
-            "keep_existing_registered_asset"
-            if present else "provide_registered_bsp_asset"
+            keep_action if present else provide_action
         ),
     }
 
@@ -107,8 +116,14 @@ def build_requirements(
     if not isinstance(map_set, str) or not map_set:
         map_set = qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
     target_maps = qge_breadth_evidence.map_targets_for_set(map_set)
+    registered_full_game_scope = (
+        qge_breadth_evidence.is_registered_full_game_map_set(map_set))
     requirements = [
-        map_requirement(map_name, inventory)
+        map_requirement(
+            map_name,
+            inventory,
+            registered_full_game_scope=registered_full_game_scope,
+        )
         for map_name in target_maps
     ]
     missing = [
@@ -125,6 +140,11 @@ def build_requirements(
         "asset_root": inventory.get("asset_root"),
         "asset_root_status": inventory.get("asset_root_status"),
         "map_set": map_set,
+        "map_scope": qge_breadth_evidence.map_set_scope_label(map_set),
+        "registered_full_game_scope": (
+            registered_full_game_scope),
+        "shareware_episode_one_scope": (
+            qge_breadth_evidence.is_shareware_episode_one_map_set(map_set)),
         "target_map_count": len(target_maps),
         "present_map_count": len(present),
         "missing_map_count": len(missing),
@@ -139,13 +159,18 @@ def build_requirements(
         "present_maps": [item["map"] for item in present],
         "claim_posture": {
             "asset_requirements_satisfied": not missing,
+            "shareware_episode_one_requirements_satisfied": (
+                not missing and
+                qge_breadth_evidence.is_shareware_episode_one_map_set(map_set)
+            ),
             "whole_game_moonlab_deployment_claimed": False,
             "whole_game_hardware_execution_claimed": False,
             "hardware_quantum_advantage_claimed": False,
         },
         "limits": [
-            "This packet lists required registered BSP assets only; it contains no game asset payload.",
-            "Supplying these assets enables capture attempts, not a whole-game Moonlab completion claim by itself.",
+            "This packet lists required BSP assets only; it contains no game asset payload.",
+            "A complete shareware map-set packet is not a registered full-game asset packet.",
+            "Supplying these assets enables capture attempts, not a Moonlab completion claim by itself.",
             "Every newly available map still needs strict QGE/vanilla capture and breadth evidence.",
         ],
     }
@@ -164,10 +189,14 @@ def build_icc_evidence(
         "status": "success",
         "asset_requirement_status": requirements.get("status"),
         "map_set": requirements.get("map_set"),
+        "map_scope": requirements.get("map_scope"),
         "target_map_count": requirements.get("target_map_count"),
         "present_map_count": requirements.get("present_map_count"),
         "missing_map_count": requirements.get("missing_map_count"),
         "missing_maps": requirements.get("missing_maps"),
+        "shareware_episode_one_requirements_satisfied": (
+            dict_or_empty(requirements.get("claim_posture")).get(
+                "shareware_episode_one_requirements_satisfied")),
         "whole_game_moonlab_deployment_claimed": False,
         "whole_game_hardware_execution_claimed": False,
         "hardware_quantum_advantage_claimed": False,

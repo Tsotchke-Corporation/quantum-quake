@@ -269,6 +269,12 @@ and marks UI-only `-nolauncher` paths as intentional skips.
    - It also emits `qge.full_game_map_coverage.v0`, currently 9/32 maps
      covered and 23 missing. A full-game map claim requires this status to be
      `complete`, not merely `qge_breadth_evidence_pack_complete`.
+     For first-episode/shareware-only work, use the explicit
+     `quake_shareware_episode1` map set, which is `start` plus `e1m1` through
+     `e1m8`. The current nine-map checkpoint is complete under that shareware
+     map set, and a complete shareware ledger is intentionally not accepted by
+     the registered full-game deployment gate. ICC exposes this as the separate
+     `qge_shareware_episode1_moonlab_breadth` target.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for
