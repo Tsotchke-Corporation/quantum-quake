@@ -2495,60 +2495,6 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def manifest_source_copy_icc_summary(
-    manifest: dict[str, Any],
-    manifest_path: Path,
-) -> dict[str, Any]:
-    if not manifest_path.exists():
-        return {
-            "manifest_source_copy_audit_available": False,
-            "manifest_source_copy_audit_passed": None,
-            "manifest_source_copy_recorded": None,
-            "manifest_source_copy_record_count": 0,
-            "manifest_source_copy_file_record_count": 0,
-            "manifest_source_copy_directory_record_count": 0,
-            "manifest_source_copy_missing_pack_dir": None,
-            "manifest_source_copy_malformed_record_count": 0,
-            "manifest_source_copy_packed_path_membership_mismatch_count": 0,
-            "manifest_source_copy_missing_source_path_count": 0,
-            "manifest_source_copy_missing_packed_path_count": 0,
-            "manifest_source_copy_file_mismatch_count": 0,
-            "manifest_source_copy_directory_mismatch_count": 0,
-            "manifest_source_copy_mismatch_count": 0,
-        }
-
-    audit = qge_manifest_source_copy_audit.manifest_source_copy_audit(
-        manifest,
-        required=True,
-    )
-    return {
-        "manifest_source_copy_audit_available": True,
-        "manifest_source_copy_audit_passed": audit.get("passed"),
-        "manifest_source_copy_recorded": audit.get("recorded"),
-        "manifest_source_copy_record_count": audit.get(
-            "source_copy_record_count"),
-        "manifest_source_copy_file_record_count": audit.get(
-            "file_copy_record_count"),
-        "manifest_source_copy_directory_record_count": audit.get(
-            "directory_copy_record_count"),
-        "manifest_source_copy_missing_pack_dir": audit.get(
-            "missing_pack_dir"),
-        "manifest_source_copy_malformed_record_count": audit.get(
-            "malformed_source_copy_record_count"),
-        "manifest_source_copy_packed_path_membership_mismatch_count": len(
-            audit.get("packed_path_membership_mismatches", [])),
-        "manifest_source_copy_missing_source_path_count": len(
-            audit.get("missing_source_paths", [])),
-        "manifest_source_copy_missing_packed_path_count": len(
-            audit.get("missing_packed_paths", [])),
-        "manifest_source_copy_file_mismatch_count": len(
-            audit.get("file_mismatches", [])),
-        "manifest_source_copy_directory_mismatch_count": len(
-            audit.get("directory_mismatches", [])),
-        "manifest_source_copy_mismatch_count": audit.get("mismatch_count"),
-    }
-
-
 def build_icc_evidence(manifest: dict[str, Any],
                        manifest_path: Path,
                        icc_path: Path) -> dict[str, Any]:
@@ -2599,9 +2545,11 @@ def build_icc_evidence(manifest: dict[str, Any],
             required=True,
         )
     )
-    source_copy_audit = manifest_source_copy_icc_summary(
-        manifest,
-        manifest_path,
+    source_copy_audit = (
+        qge_manifest_source_copy_audit.manifest_source_copy_icc_summary(
+            manifest,
+            manifest_path,
+        )
     )
     reproduce_audit = qge_manifest_reproduce_audit.manifest_reproduce_audit(
         manifest,
