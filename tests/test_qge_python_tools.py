@@ -1527,6 +1527,7 @@ class PublicationPackTests(unittest.TestCase):
             nested = source_dir / "nested.txt"
             nested.write_text("source nested\n", encoding="utf-8")
             manifest = {
+                "pack_dir": str(outdir),
                 "artifacts": {
                     "sample": {
                         "file": publication_pack.pack_file(
@@ -1551,6 +1552,25 @@ class PublicationPackTests(unittest.TestCase):
             self.assertEqual(audit["source_copy_record_count"], 2)
             self.assertEqual(audit["file_copy_record_count"], 1)
             self.assertEqual(audit["directory_copy_record_count"], 1)
+            self.assertEqual(audit["packed_path_membership_mismatches"], [])
+
+            outside_pack_manifest = json.loads(json.dumps(manifest))
+            outside_pack_manifest["artifacts"]["sample"]["file"]["packed"] = (
+                publication_pack.file_info(source_file)
+            )
+            outside_pack_audit = (
+                manifest_source_copy_audit.manifest_source_copy_audit(
+                    outside_pack_manifest,
+                    required=True,
+                )
+            )
+            self.assertFalse(outside_pack_audit["passed"])
+            self.assertTrue(any(
+                item.get("source") == "artifacts.sample.file" and
+                "packed_path_membership" in item.get("fields", [])
+                for item in outside_pack_audit[
+                    "packed_path_membership_mismatches"]
+            ))
 
             stale_manifest = json.loads(json.dumps(manifest))
             packed_file = Path(

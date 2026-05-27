@@ -115,6 +115,35 @@ def path_from_record(value: Any) -> Path | None:
     return Path(value) if isinstance(value, str) and value else None
 
 
+def is_relative_to_path(path: Path, root: Path) -> bool:
+    try:
+        path.expanduser().resolve().relative_to(root.expanduser().resolve())
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def packed_membership_mismatch(
+    record: dict[str, Any],
+    pack_root: Path | None,
+) -> dict[str, Any] | None:
+    if pack_root is None:
+        return None
+    packed_record = dict_or_empty(record.get("packed"))
+    packed_path = path_from_record(packed_record.get("path"))
+    if packed_path is None:
+        return None
+    if is_relative_to_path(packed_path, pack_root):
+        return None
+    return {
+        "source": record.get("source"),
+        "source_path": record.get("source_path"),
+        "packed_path": str(packed_path),
+        "pack_dir": str(pack_root),
+        "fields": ["packed_path_membership"],
+    }
+
+
 def file_copy_mismatch(record: dict[str, Any]) -> dict[str, Any] | None:
     packed_record = dict_or_empty(record.get("packed"))
     source_path = path_from_record(record.get("source_path"))
@@ -250,6 +279,7 @@ def manifest_source_copy_audit(
             "directory_copy_record_count": 0,
             "malformed_source_copy_record_count": 0,
             "malformed_source_copy_records": [],
+            "packed_path_membership_mismatches": [],
             "missing_source_paths": [],
             "missing_packed_paths": [],
             "file_mismatches": [],
@@ -261,8 +291,10 @@ def manifest_source_copy_audit(
     missing_source_paths = []
     missing_packed_paths = []
     malformed_source_copy_records = []
+    packed_path_membership_mismatches = []
     file_mismatches = []
     directory_mismatches = []
+    pack_root = path_from_record(manifest_data.get("pack_dir"))
     for record in records:
         if record.get("kind") == "malformed":
             malformed_source_copy_records.append({
@@ -271,6 +303,9 @@ def manifest_source_copy_audit(
                 "fields": ["packed"],
             })
             continue
+        membership_mismatch = packed_membership_mismatch(record, pack_root)
+        if membership_mismatch:
+            packed_path_membership_mismatches.append(membership_mismatch)
         mismatch = (
             file_copy_mismatch(record)
             if record.get("kind") == "file"
@@ -290,6 +325,7 @@ def manifest_source_copy_audit(
 
     mismatch_count = (
         len(malformed_source_copy_records) +
+        len(packed_path_membership_mismatches) +
         len(missing_source_paths) +
         len(missing_packed_paths) +
         len(file_mismatches) +
@@ -311,6 +347,8 @@ def manifest_source_copy_audit(
         "malformed_source_copy_record_count": len(
             malformed_source_copy_records),
         "malformed_source_copy_records": malformed_source_copy_records,
+        "packed_path_membership_mismatches": (
+            packed_path_membership_mismatches),
         "missing_source_paths": missing_source_paths,
         "missing_packed_paths": missing_packed_paths,
         "file_mismatches": file_mismatches,
