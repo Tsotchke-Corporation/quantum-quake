@@ -9435,6 +9435,35 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertTrue(audit["passed"], audit)
             self.assertEqual(audit["recorded_artifact_count"], 6)
             self.assertEqual(audit["mismatch_count"], 0)
+            self.assertEqual(
+                audit["ledger_map_sets"]["resource.full_game_map_coverage"],
+                "quake_registered_single_player",
+            )
+            self.assertEqual(
+                audit["ledger_map_sets"]["resource.asset_inventory"],
+                "quake_registered_single_player",
+            )
+
+            mismatched_intake = publication_pack.load_json(intake_path)
+            mismatched_intake["map_set"] = (
+                breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET)
+            publication_pack.write_json(intake_path, mismatched_intake)
+            mismatch_audit = asset_resource_audit.asset_resource_audit(
+                manifest,
+                manifest_path=manifest_path,
+            )
+            self.assertFalse(mismatch_audit["passed"])
+            self.assertEqual(
+                mismatch_audit["map_set_mismatches"],
+                [
+                    {
+                        "artifact": "resource.registered_asset_intake",
+                        "map_set": "quake_shareware_episode1",
+                        "expected_map_set": "quake_registered_single_player",
+                    }
+                ],
+            )
+            publication_pack.write_json(intake_path, intake)
 
             stale_requirements = publication_pack.load_json(requirements_path)
             stale_requirements["missing_map_count"] = 0

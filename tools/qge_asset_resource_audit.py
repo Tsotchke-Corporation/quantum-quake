@@ -144,6 +144,45 @@ def map_set_for_asset_ledgers(
     return qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
 
 
+def asset_ledger_map_sets(
+    full_game_map_coverage: dict[str, Any],
+    inventory: dict[str, Any],
+    requirements: dict[str, Any],
+    intake: dict[str, Any],
+) -> dict[str, str]:
+    ledgers = {
+        "resource.full_game_map_coverage": full_game_map_coverage,
+        "resource.asset_inventory": inventory,
+        "resource.asset_requirements": requirements,
+        "resource.registered_asset_intake": intake,
+    }
+    result = {}
+    for name, artifact in ledgers.items():
+        value = dict_or_empty(artifact).get("map_set")
+        if isinstance(value, str) and value:
+            result[name] = value
+    return result
+
+
+def map_set_mismatches(ledger_map_sets: dict[str, str]) -> list[dict[str, str]]:
+    observed = sorted(set(ledger_map_sets.values()))
+    if len(observed) <= 1:
+        return []
+    expected = (
+        ledger_map_sets.get("resource.full_game_map_coverage")
+        or observed[0]
+    )
+    return [
+        {
+            "artifact": name,
+            "map_set": value,
+            "expected_map_set": expected,
+        }
+        for name, value in sorted(ledger_map_sets.items())
+        if value != expected
+    ]
+
+
 def candidate_paths_from_intake(intake: dict[str, Any]) -> list[Path]:
     return [
         Path(value)
@@ -244,6 +283,8 @@ def empty_audit(required: bool) -> dict[str, Any]:
         "missing_artifacts": [],
         "build_errors": [],
         "artifact_mismatches": [],
+        "ledger_map_sets": {},
+        "map_set_mismatches": [],
         "overclaim_flags": [],
         "ignored_ledger_fields": list(IGNORED_LEDGER_FIELDS),
         "mismatch_count": 0,
@@ -280,6 +321,15 @@ def asset_resource_audit(
         for name, path in paths.items()
         if path is not None and path.is_file()
     }
+    full_game_map_coverage = load_artifact_json(
+        manifest_data, "resource", "full_game_map_coverage", base_dir=base_dir)
+    ledger_map_sets = asset_ledger_map_sets(
+        full_game_map_coverage,
+        dict_or_empty(recorded.get("asset_inventory")),
+        dict_or_empty(recorded.get("asset_requirements")),
+        dict_or_empty(recorded.get("registered_asset_intake")),
+    )
+    map_set_mismatch_rows = map_set_mismatches(ledger_map_sets)
 
     build_errors: list[dict[str, str]] = []
     try:
@@ -325,6 +375,7 @@ def asset_resource_audit(
         len(missing_artifacts) +
         len(build_errors) +
         sum(len(item["fields"]) for item in artifact_mismatches) +
+        len(map_set_mismatch_rows) +
         len(overclaim_flags)
     )
     recorded_count = sum(
@@ -340,6 +391,8 @@ def asset_resource_audit(
         "missing_artifacts": missing_artifacts,
         "build_errors": build_errors,
         "artifact_mismatches": artifact_mismatches,
+        "ledger_map_sets": ledger_map_sets,
+        "map_set_mismatches": map_set_mismatch_rows,
         "overclaim_flags": overclaim_flags,
         "ignored_ledger_fields": list(IGNORED_LEDGER_FIELDS),
         "mismatch_count": mismatch_count,

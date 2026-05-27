@@ -465,7 +465,9 @@ Publication-pack reproduce metadata also carries the selected map set for
 `quake_shareware_episode1` instead of the registered default. Registered-asset
 intake post-install inventory and candidate-discovery refresh commands preserve
 the same `--map-set` value, so follow-up checks do not drift back to registered
-full-game scope.
+full-game scope. The asset-resource postpack audit reports `map_set_mismatches`
+if coverage, inventory, requirements, and intake ledgers disagree about that
+scope.
 Queues with no runnable jobs but remaining asset-unavailable maps are
 marked `blocked_asset_unavailable`, not complete. BSP assets must pass the
 dependency-free Quake BSP29 header/lump validation before they are accepted as

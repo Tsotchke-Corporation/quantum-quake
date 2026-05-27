@@ -236,6 +236,7 @@ grep -q 'resource_boundary_audit' "$repo_root/tools/qge_resource_boundary_audit.
 grep -q 'resource_boundary_ledgers_consistent' "$repo_root/tools/qge_moonlab_deployment_gate.py"
 grep -q 'qge_asset_resource_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'QGE_ASSET_RESOURCE_AUDIT' "$repo_root/tools/qge_asset_resource_audit.py"
+grep -q 'map_set_mismatches' "$repo_root/tools/qge_asset_resource_audit.py"
 grep -q 'qge_resource_boundary_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
 grep -q 'QGE_RESOURCE_BOUNDARY_AUDIT' "$repo_root/tools/qge_resource_boundary_audit.py"
 grep -q 'qge_moonlab_full_game_plan_audit.py <pack_dir>' "$repo_root/tools/qge_publication_pack.py"
