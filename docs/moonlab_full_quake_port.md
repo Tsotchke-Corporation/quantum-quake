@@ -383,10 +383,13 @@ A complete port is credible when these are true:
 1. Expand the ready matrix beyond the current 9/32 partial full-game map
    coverage ledger. Re-run the missing-map queue with
    `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260525-route-authority-gate`
-   after installing registered BSP assets. With the current `assets/id1/pak0.pak`,
+   after installing registered BSP assets; that source pack carries the
+   registered `quake_registered_single_player` map set. With the current
+   `assets/id1/pak0.pak`,
    the queue has zero locally runnable missing maps and 23 registered maps
    require additional registered BSP assets before capture. Use
-   `tools/qge_asset_inventory.py --asset-root assets/id1` to verify the PAK/BSP
+   `tools/qge_asset_inventory.py --asset-root assets/id1 --map-set quake_registered_single_player`
+   to verify the PAK/BSP
    hashes, BSP29 header/lump validity, and canonical-map availability before
    rebuilding the queue.
 2. Improve `quantum_render 2` visual fidelity without weakening ownership

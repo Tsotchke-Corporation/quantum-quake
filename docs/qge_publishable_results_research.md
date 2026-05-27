@@ -301,7 +301,7 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      Breadth evidence also audits every covered matrix against those authority
      domains, and the deployment gate requires covered route authority to stay
      complete.
-   - `tools/qge_asset_inventory.py --asset-root assets/id1` emits
+   - `tools/qge_asset_inventory.py --asset-root assets/id1 --map-set quake_registered_single_player` emits
      `qge.asset_inventory.v0` and `qge_registered_asset_inventory_complete`
      ICC evidence with PAK SHA-256 hashes, BSP validation status, invalid-BSP
      counts, and the exact available/missing map ledger. The current local
@@ -517,8 +517,8 @@ Regenerate the full-game Moonlab deployment ledger with:
 `python3 tools/qge_moonlab_full_game_plan.py <pack> --out /tmp/qge_moonlab_full_game_plan.json --markdown /tmp/qge_moonlab_full_game_plan.md --icc-json /tmp/qge_moonlab_full_game_plan_icc_evidence.json`.
 Regenerate the deployment claim gate with:
 `python3 tools/qge_moonlab_deployment_gate.py <pack> --out /tmp/qge_moonlab_deployment_gate.json --markdown /tmp/qge_moonlab_deployment_gate.md --icc-json /tmp/qge_moonlab_deployment_gate_icc_evidence.json`.
-Regenerate the asset requirements packet with:
-`python3 tools/qge_asset_requirements.py --asset-root assets/id1 --json /tmp/qge_asset_requirements.json --markdown /tmp/qge_asset_requirements.md --icc-json /tmp/qge_asset_requirements_icc_evidence.json`.
+Regenerate the registered/full-game asset requirements packet with:
+`python3 tools/qge_asset_requirements.py --asset-root assets/id1 --map-set quake_registered_single_player --json /tmp/qge_asset_requirements.json --markdown /tmp/qge_asset_requirements.md --icc-json /tmp/qge_asset_requirements_icc_evidence.json`.
 Run the complete advertised postpack verifier set with:
 `python3 tools/qge_postpack_audit.py <pack> --outdir /tmp/qge_postpack_audits --out /tmp/qge_postpack_audit.json --fail-on-mismatch`.
 The runner clears each child verifier output path before execution so stale
@@ -536,7 +536,8 @@ The next hard work is therefore:
    `tools/qge_asset_inventory.py`, then start from
    `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260525-route-authority-gate`
    so the 23 registered asset-unavailable maps become explicit capture jobs
-   rather than weakening the authority gate.
+   rather than weakening the authority gate; that source pack carries the
+   registered `quake_registered_single_player` map set.
 2. Submit the QAE hardware-candidate job through Moonlab hardware when
    available, recording backend IDs, shot schedule, readout metadata, and
    hardware-vs-simulator comparison in `qge_moonlab_job_results.json`. Use

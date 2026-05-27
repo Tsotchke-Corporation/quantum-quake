@@ -135,14 +135,17 @@ Important known limitations:
   proof, not a claim that every Quake domain is visually or hardware complete. Use
   `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-asset-gate-remediation`
   to generate the remaining harness queue and breadth rebuild script; the queue
+  reads the selected map set from that registered/full-game source ledger,
   inventories loose/Pak BSP assets, skips missing local BSPs unless
   `--include-unavailable-assets` is set, and currently reports zero locally
   queueable missing maps while 23 registered maps require additional registered
-  BSP assets before capture. `tools/qge_asset_inventory.py` emits the companion
+  BSP assets before capture.
+  `tools/qge_asset_inventory.py --map-set quake_registered_single_player`
+  emits the companion
   hash-backed asset audit and rejects placeholder BSPs unless they pass the
   Quake BSP29 header/lump gate; the current local inventory is one `pak0.pak`
   containing 9/32 canonical maps with zero invalid BSP entries.
-  `tools/qge_registered_asset_intake.py --candidate <quake_install_or_pak>`
+  `tools/qge_registered_asset_intake.py --map-set quake_registered_single_player --candidate <quake_install_or_pak>`
   scans external registered asset candidates, validates their BSP payloads,
   and emits a non-destructive copy plan/script for the missing maps without
   bundling game data or changing the no-claim posture. Use `--discover-root`

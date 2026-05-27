@@ -566,11 +566,14 @@ before each run, then rebuilds breadth evidence with the previous ready
 matrices plus the new capture directories. The `start` route is allowed to omit
 monster AI authority because the hub has no monster AI requirement, but it still
 uses rocket projectile authority so branch/writeback evidence remains required.
-`tools/qge_asset_inventory.py --asset-root assets/id1` emits the standalone
+`tools/qge_asset_inventory.py --asset-root assets/id1 --map-set quake_registered_single_player`
+emits the standalone
 `qge.asset_inventory.v0` JSON/Markdown audit with PAK SHA-256 hashes, loose BSP
 hashes, BSP validation status, available canonical maps, invalid BSP entries,
 and missing registered maps, so asset blockers can be checked before running
-the queue. `tools/qge_registered_asset_intake.py --candidate <path>` scans
+the queue.
+`tools/qge_registered_asset_intake.py --map-set quake_registered_single_player --candidate <path>`
+scans
 external Quake install roots, PAK files, or loose BSPs, validates BSP29 payloads,
 derives direct `id1` and `rerelease/id1` asset roots from install directories,
 and writes `qge.registered_asset_intake.v0` plus an optional copy script so
