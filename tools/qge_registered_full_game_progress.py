@@ -245,6 +245,9 @@ def build_icc_evidence(progress: dict[str, Any]) -> dict[str, Any]:
             "qge_registered_full_game_progress_complete"
             if complete else "qge_registered_full_game_progress_partial"
         ),
+        "runtime_backend_scope_map_set": progress.get("map_set"),
+        "runtime_backend_scope_progress_status": progress.get("status"),
+        "runtime_backend_scope_next_blocker": progress.get("next_blocker"),
         "registered_full_game_progress_file": None,
         "map_set": progress.get("map_set"),
         "next_blocker": progress.get("next_blocker"),

@@ -669,7 +669,9 @@ Known current visual state:
   `qge.registered_full_game_progress.v0`, whose `target_map_progress` rows say
   whether each remaining map is asset-blocked or capture-blocked. The paired
   progress audit recomputes that join so stale progress summaries cannot blur
-  licensed asset intake with capture work.
+  licensed asset intake with capture work. ICC exposes it as
+  `qge_registered_full_game_progress_report`, separate from the coverage
+  ledger and deployment gate.
   `tools/qge_full_game_capture_queue.py`
   turns the registered ledger
   into `qge.full_game_capture_queue.v0` and a runnable

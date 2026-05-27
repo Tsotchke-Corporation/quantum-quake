@@ -569,6 +569,64 @@ class ICCProfileTests(unittest.TestCase):
             "hardware-deployment evidence",
         )
 
+    def test_registered_full_game_progress_oracle_is_separate(self) -> None:
+        profile = json.loads(
+            (REPO_ROOT / ".icc" / "completion-oracles.json")
+            .read_text(encoding="utf-8")
+        )
+        oracle = next(
+            item for item in profile["oracles"]
+            if item["name"] == "qge_registered_full_game_progress_report"
+        )
+        self.assertEqual(
+            oracle["target"],
+            "Registered Quake full-game asset and capture progress report",
+        )
+        self.assertIn(
+            "full game asset and capture blockers",
+            oracle["aliases"],
+        )
+
+        requirements = {item["id"]: item for item in oracle["requires"]}
+        self.assertEqual(
+            requirements["qge_registered_full_game_progress_backend"][
+                "event_values"],
+            ["qge_registered_full_game_progress"],
+        )
+        self.assertEqual(
+            requirements["qge_registered_full_game_progress_recorded"][
+                "event_values"],
+            [
+                "qge_registered_full_game_progress_partial",
+                "qge_registered_full_game_progress_complete",
+            ],
+        )
+        self.assertEqual(
+            requirements["qge_registered_full_game_progress_map_set"][
+                "event_names"],
+            ["runtime_backend_scope_map_set"],
+        )
+        self.assertEqual(
+            requirements["qge_registered_full_game_progress_status"][
+                "event_names"],
+            ["runtime_backend_scope_progress_status"],
+        )
+        self.assertEqual(
+            requirements["qge_registered_full_game_progress_next_blocker"][
+                "event_names"],
+            ["runtime_backend_scope_next_blocker"],
+        )
+        self.assertIn(
+            "registered_full_game_progress_file",
+            requirements["qge_registered_full_game_progress_artifact"][
+                "event_names"],
+        )
+        self.assertNotEqual(
+            oracle["target"],
+            "Full Quake running in Moonlab with publishable "
+            "hardware-deployment evidence",
+        )
+
     def test_moonlab_hardware_submission_oracle_is_scoped(self) -> None:
         profile = json.loads(
             (REPO_ROOT / ".icc" / "completion-oracles.json")
@@ -9042,6 +9100,16 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertEqual(
                 icc["completion_reason"],
                 "qge_registered_full_game_progress_partial",
+            )
+            self.assertEqual(
+                icc["runtime_backend_scope_map_set"],
+                "quake_registered_single_player",
+            )
+            self.assertEqual(
+                icc["runtime_backend_scope_progress_status"], "partial")
+            self.assertEqual(
+                icc["runtime_backend_scope_next_blocker"],
+                "registered_assets_missing",
             )
             markdown = registered_progress.markdown_report(progress)
             self.assertIn("QGE Registered Full-Game Progress", markdown)

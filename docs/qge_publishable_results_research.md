@@ -307,6 +307,9 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      `pending_capture`. Check it with
      `make qge_registered_full_game_progress_audit`, which recomputes the
      asset/evidence join and rejects stale JSON, Markdown, or ICC output.
+     ICC exposes this blocker report as
+     `qge_registered_full_game_progress_report`, separate from the coverage
+     ledger and the deployment readiness target.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for

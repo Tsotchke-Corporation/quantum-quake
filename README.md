@@ -164,7 +164,9 @@ Important known limitations:
   target as ready, asset-blocked, or capture-needed. The matching
   `make qge_registered_full_game_progress_audit` recomputes the join so a stale
   full-game progress report cannot hide whether the next blocker is licensed
-  BSP intake or capture evidence.
+  BSP intake or capture evidence. ICC exposes this report as
+  `qge_registered_full_game_progress_report`, separate from both the coverage
+  ledger and the deployment gate.
   ICC tracks that progress-only ledger through
   `qge_registered_full_game_coverage_ledger`, separate from the deployment
   readiness target.

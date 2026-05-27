@@ -619,6 +619,116 @@
       ]
     },
     {
+      "name": "qge_registered_full_game_progress_report",
+      "target": "Registered Quake full-game asset and capture progress report",
+      "aliases": [
+        "qge_registered_full_game_progress_report",
+        "registered full game progress report",
+        "registered quake asset capture progress",
+        "full game asset and capture blockers"
+      ],
+      "requires": [
+        {
+          "id": "qge_registered_full_game_progress_backend",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_registered_full_game_progress"
+          ],
+          "severity": "high",
+          "label": "Registered full-game progress backend evidence is present",
+          "action": "run_qge_registered_full_game_progress"
+        },
+        {
+          "id": "qge_registered_full_game_progress_recorded",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_registered_full_game_progress_partial",
+            "qge_registered_full_game_progress_complete"
+          ],
+          "severity": "high",
+          "label": "Registered full-game progress status is recorded",
+          "action": "emit_registered_full_game_progress_report"
+        },
+        {
+          "id": "qge_registered_full_game_progress_map_set",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend_scope_map_set"
+          ],
+          "event_values": [
+            "quake_registered_single_player"
+          ],
+          "severity": "high",
+          "label": "Progress report is scoped to the registered full-game map set",
+          "action": "set_progress_map_set_to_quake_registered_single_player"
+        },
+        {
+          "id": "qge_registered_full_game_progress_status",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend_scope_progress_status"
+          ],
+          "event_values": [
+            "partial",
+            "complete"
+          ],
+          "severity": "high",
+          "label": "Registered full-game progress status is explicit",
+          "action": "record_registered_full_game_progress_status"
+        },
+        {
+          "id": "qge_registered_full_game_progress_next_blocker",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend_scope_next_blocker"
+          ],
+          "event_values": [
+            "registered_assets_missing",
+            "capture_attempts_not_ready",
+            "capture_evidence_missing",
+            "complete"
+          ],
+          "severity": "high",
+          "label": "Registered full-game next blocker is explicit",
+          "action": "record_registered_full_game_next_blocker"
+        },
+        {
+          "id": "qge_registered_full_game_progress_artifact",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "registered_full_game_progress_file"
+          ],
+          "severity": "high",
+          "label": "Registered full-game progress artifact is visible to ICC",
+          "action": "write_registered_full_game_progress_json"
+        }
+      ]
+    },
+    {
       "name": "qge_moonlab_full_game_deployment",
       "target": "Full Quake running in Moonlab with publishable hardware-deployment evidence",
       "aliases": [
