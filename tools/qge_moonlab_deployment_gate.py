@@ -23,8 +23,8 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import qge_asset_inventory  # noqa: E402
 import qge_asset_requirements  # noqa: E402
-import qge_breadth_evidence  # noqa: E402
 import qge_full_game_route_contracts  # noqa: E402
+import qge_map_sets  # noqa: E402
 import qge_moonlab_advantage_icc_audit  # noqa: E402
 import qge_moonlab_hardware_result_audit  # noqa: E402
 import qge_moonlab_hardware_scope_audit  # noqa: E402
@@ -1392,7 +1392,7 @@ def build_criteria(
     inventory_map_set = inventory.get("map_set") or coverage_map_set
     requirements_map_set = requirements.get("map_set") or coverage_map_set
     registered_full_game_scope = (
-        qge_breadth_evidence.is_registered_full_game_map_set(coverage_map_set)
+        qge_map_sets.is_registered_full_game_map_set(coverage_map_set)
     )
     target_count = int_or_none(coverage.get("target_map_count"))
     covered_count = int_or_none(coverage.get("covered_map_count"))
@@ -1410,7 +1410,7 @@ def build_criteria(
     invalid_pak_count = int_or_none(inventory.get("invalid_pak_count"))
     invalid_bsp_count = int_or_none(inventory.get("invalid_bsp_count"))
     inventory_passed = (
-        qge_breadth_evidence.is_registered_full_game_map_set(
+        qge_map_sets.is_registered_full_game_map_set(
             inventory_map_set) and
         inventory.get("schema") == "qge.asset_inventory.v0" and
         bool_true(inventory.get("full_game_asset_ready")) and
@@ -1422,7 +1422,7 @@ def build_criteria(
     requirement_missing = int_or_none(requirements.get("missing_map_count"))
     requirement_posture = dict_or_empty(requirements.get("claim_posture"))
     requirements_passed = (
-        qge_breadth_evidence.is_registered_full_game_map_set(
+        qge_map_sets.is_registered_full_game_map_set(
             requirements_map_set) and
         requirements.get("schema") == "qge.asset_requirements.v0" and
         requirements.get("status") == "complete" and
@@ -1601,7 +1601,7 @@ def build_criteria(
                 "map_set": coverage_map_set,
                 "registered_full_game_scope": registered_full_game_scope,
                 "required_map_set": (
-                    qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET),
+                    qge_map_sets.DEFAULT_FULL_GAME_MAP_SET),
                 "coverage_status": coverage.get("status"),
                 "target_map_count": target_count,
                 "covered_map_count": covered_count,
@@ -1616,7 +1616,7 @@ def build_criteria(
             {
                 "map_set": inventory_map_set,
                 "required_map_set": (
-                    qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET),
+                    qge_map_sets.DEFAULT_FULL_GAME_MAP_SET),
                 "asset_inventory_status": inventory.get("status"),
                 "full_game_asset_ready": inventory.get("full_game_asset_ready"),
                 "asset_scope_ready": inventory.get("asset_scope_ready"),
@@ -1639,7 +1639,7 @@ def build_criteria(
             {
                 "map_set": requirements_map_set,
                 "required_map_set": (
-                    qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET),
+                    qge_map_sets.DEFAULT_FULL_GAME_MAP_SET),
                 "asset_requirements_status": requirements.get("status"),
                 "missing_map_count": requirement_missing,
                 "missing_maps": requirements.get("missing_maps"),
@@ -2196,7 +2196,7 @@ def next_actions_for_blockers(
             {},
         )
         if coverage_blocker.get("map_set") != (
-            qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
+            qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
         ):
             actions.append(
                 "This is a scoped map-set ledger, not the registered full-game map set; use a shareware/episode target for this evidence or rebuild full-game coverage with quake_registered_single_player."
@@ -2443,7 +2443,7 @@ def build_gate_from_manifest(
         manifest_path=manifest_path,
         asset_root=asset_root,
         map_set=coverage.get("map_set")
-        or qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+        or qge_map_sets.DEFAULT_FULL_GAME_MAP_SET,
     )
     requirements = qge_moonlab_full_game_plan.load_resource_json(
         manifest, "asset_requirements", manifest_path=manifest_path)
@@ -2452,7 +2452,7 @@ def build_gate_from_manifest(
             inventory,
             map_set=str(
                 coverage.get("map_set")
-                or qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
+                or qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
             ),
         )
     full_game_plan = qge_moonlab_full_game_plan.load_resource_json(

@@ -16,8 +16,8 @@ REPO_ROOT = SCRIPT_DIR.parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-import qge_breadth_evidence  # noqa: E402
 import qge_full_game_capture_queue  # noqa: E402
+import qge_map_sets  # noqa: E402
 
 DEFAULT_ASSET_ROOT = REPO_ROOT / "assets" / "id1"
 
@@ -186,9 +186,9 @@ def pak_file_reports(
 def build_inventory(
     asset_root: Path = DEFAULT_ASSET_ROOT,
     *,
-    map_set: str = qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+    map_set: str = qge_map_sets.DEFAULT_FULL_GAME_MAP_SET,
 ) -> dict[str, Any]:
-    target_maps = qge_breadth_evidence.map_targets_for_set(map_set)
+    target_maps = qge_map_sets.map_targets_for_set(map_set)
     target_set = set(target_maps)
     invalid_bsp_sources: list[dict[str, Any]] = []
     sources_by_map = loose_bsp_sources(asset_root, invalid_bsp_sources)
@@ -224,11 +224,11 @@ def build_inventory(
             "present" if asset_root.is_dir() else "missing_asset_root"
         ),
         "map_set": map_set,
-        "map_scope": qge_breadth_evidence.map_set_scope_label(map_set),
+        "map_scope": qge_map_sets.map_set_scope_label(map_set),
         "registered_full_game_scope": (
-            qge_breadth_evidence.is_registered_full_game_map_set(map_set)),
+            qge_map_sets.is_registered_full_game_map_set(map_set)),
         "shareware_episode_one_scope": (
-            qge_breadth_evidence.is_shareware_episode_one_map_set(map_set)),
+            qge_map_sets.is_shareware_episode_one_map_set(map_set)),
         "status": "complete" if asset_scope_ready else "partial",
         "target_map_count": len(target_maps),
         "available_map_count": len(available_target_maps),
@@ -254,11 +254,11 @@ def build_inventory(
         "asset_scope_ready": asset_scope_ready,
         "full_game_asset_ready": (
             asset_scope_ready and
-            qge_breadth_evidence.is_registered_full_game_map_set(map_set)
+            qge_map_sets.is_registered_full_game_map_set(map_set)
         ),
         "shareware_episode_one_asset_ready": (
             asset_scope_ready and
-            qge_breadth_evidence.is_shareware_episode_one_map_set(map_set)
+            qge_map_sets.is_shareware_episode_one_map_set(map_set)
         ),
         "claim_limits": [
             "This inventory proves asset availability only, not QGE runtime coverage.",
@@ -349,7 +349,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--asset-root", type=Path, default=DEFAULT_ASSET_ROOT)
     parser.add_argument("--map-set",
-                        default=qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET)
+                        default=qge_map_sets.DEFAULT_FULL_GAME_MAP_SET)
     parser.add_argument("--json", type=Path)
     parser.add_argument("--markdown", type=Path)
     parser.add_argument("--icc-json", type=Path)

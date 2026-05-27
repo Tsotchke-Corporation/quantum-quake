@@ -24,6 +24,7 @@ if str(SCRIPT_DIR) not in sys.path:
 import qge_asset_inventory  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
 import qge_full_game_route_contracts  # noqa: E402
+import qge_map_sets  # noqa: E402
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -139,7 +140,7 @@ def asset_inventory_from_manifest(
     *,
     manifest_path: Path | None = None,
     asset_root: Path = qge_asset_inventory.DEFAULT_ASSET_ROOT,
-    map_set: str = qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+    map_set: str = qge_map_sets.DEFAULT_FULL_GAME_MAP_SET,
 ) -> dict[str, Any]:
     resource = load_resource_json(
         manifest, "asset_inventory", manifest_path=manifest_path)
@@ -296,8 +297,8 @@ def map_deployment_rows(
 ) -> list[dict[str, Any]]:
     map_set = coverage.get("map_set") or inventory.get("map_set")
     if not isinstance(map_set, str) or not map_set:
-        map_set = qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
-    target_maps = qge_breadth_evidence.map_targets_for_set(map_set)
+        map_set = qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
+    target_maps = qge_map_sets.map_targets_for_set(map_set)
     covered = {
         item for item in list_or_empty(coverage.get("covered_maps"))
         if isinstance(item, str)
@@ -352,7 +353,7 @@ def deployment_status(
     map_rows: list[dict[str, Any]],
     coverage: dict[str, Any],
 ) -> str:
-    if not qge_breadth_evidence.is_registered_full_game_map_set(
+    if not qge_map_sets.is_registered_full_game_map_set(
         coverage.get("map_set")
     ):
         return "blocked_non_registered_map_set"
@@ -614,7 +615,7 @@ def build_plan_from_manifest(
         manifest_path=manifest_path,
         asset_root=asset_root,
         map_set=coverage.get("map_set")
-        or qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+        or qge_map_sets.DEFAULT_FULL_GAME_MAP_SET,
     )
     breadth = load_breadth_evidence_for_manifest(
         manifest, manifest_path=manifest_path)

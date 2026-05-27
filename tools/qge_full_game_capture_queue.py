@@ -19,6 +19,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import qge_breadth_evidence  # noqa: E402
 import qge_full_game_route_contracts  # noqa: E402
+import qge_map_sets  # noqa: E402
 
 DEFAULT_ENV = {
     "QGE_HARNESS_FRAMES": "4",
@@ -343,7 +344,7 @@ def route_contract_for_map(
 def route_contracts_for_map_set(map_set: str) -> dict[str, dict[str, Any]]:
     return {
         map_name: route_contract_for_map(map_name, map_set=map_set)
-        for map_name in qge_breadth_evidence.map_targets_for_set(map_set)
+        for map_name in qge_map_sets.map_targets_for_set(map_set)
     }
 
 
@@ -427,10 +428,10 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
     existing_sources = existing_matrix_sources(data)
     map_set = str(
         coverage.get("map_set") or
-        qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
+        qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
     )
     route_contracts = route_contracts_for_map_set(map_set)
-    target_maps = qge_breadth_evidence.map_targets_for_set(map_set)
+    target_maps = qge_map_sets.map_targets_for_set(map_set)
     missing_route_contract_maps = sorted(set(
         [name for name in target_maps if name not in route_contracts] +
         [name for name in missing_maps if name not in route_contracts]
@@ -469,7 +470,7 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
         "source_schema": data.get("schema"),
         "status": status,
         "map_set": map_set,
-        "map_scope": qge_breadth_evidence.map_set_scope_label(map_set),
+        "map_scope": qge_map_sets.map_set_scope_label(map_set),
         "special_maps_last": special_maps_last,
         "special_route_maps": sorted(SPECIAL_ROUTE_MAPS),
         "start_hub_route_maps": sorted(START_HUB_ROUTE_MAPS),
@@ -533,7 +534,7 @@ def script_lines(queue: dict[str, Any]) -> list[str]:
     map_set = str(
         post_capture.get("map_set") or
         queue.get("map_set") or
-        qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
+        qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
     )
     lines = [
         "#!/usr/bin/env bash",
@@ -606,7 +607,7 @@ def markdown_report(queue: dict[str, Any]) -> str:
     coverage = dict_or_empty(queue.get("coverage_before"))
     map_set = str(queue.get("map_set") or coverage.get("map_set") or "")
     map_scope = str(queue.get("map_scope") or coverage.get("map_scope") or "")
-    if qge_breadth_evidence.is_shareware_episode_one_map_set(map_set):
+    if qge_map_sets.is_shareware_episode_one_map_set(map_set):
         title = "# QGE Shareware Episode 1 Capture Queue"
     else:
         title = "# QGE Full Game Capture Queue"
@@ -614,7 +615,7 @@ def markdown_report(queue: dict[str, Any]) -> str:
         title,
         "",
         f"Status: {queue['status']}",
-        f"Scope: `{map_scope or qge_breadth_evidence.map_set_scope_label(map_set)}`",
+        f"Scope: `{map_scope or qge_map_sets.map_set_scope_label(map_set)}`",
         f"Source: `{queue['source_path']}`",
         "",
         "| Map Set | Covered Before | Jobs | Covered After Queue | Remaining |",

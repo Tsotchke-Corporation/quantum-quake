@@ -15,7 +15,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import qge_asset_inventory  # noqa: E402
 import qge_asset_requirements  # noqa: E402
-import qge_breadth_evidence  # noqa: E402
+import qge_map_sets  # noqa: E402
 import qge_moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_overclaim_audit  # noqa: E402
 import qge_registered_asset_intake  # noqa: E402
@@ -141,7 +141,7 @@ def map_set_for_asset_ledgers(
     ):
         if isinstance(candidate, str) and candidate:
             return candidate
-    return qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
+    return qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
 
 
 def candidate_paths_from_intake(intake: dict[str, Any]) -> list[Path]:

@@ -13,8 +13,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-import qge_breadth_evidence  # noqa: E402
 import qge_full_game_route_contracts  # noqa: E402
+import qge_map_sets  # noqa: E402
 import qge_moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_overclaim_audit  # noqa: E402
 import qge_resource_boundary_audit  # noqa: E402
@@ -209,7 +209,7 @@ def expected_plan_status(
     expected_capture_required_maps: Sequence[str],
     expected_asset_unavailable_maps: Sequence[str],
 ) -> str:
-    if not qge_breadth_evidence.is_registered_full_game_map_set(
+    if not qge_map_sets.is_registered_full_game_map_set(
         coverage.get("map_set")
     ):
         return "blocked_non_registered_map_set"
@@ -254,11 +254,11 @@ def full_game_plan_ledger_audit(
         coverage.get("map_set") or
         inventory.get("map_set") or
         full_game_plan.get("map_set") or
-        qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
+        qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
     )
     if not isinstance(map_set, str) or not map_set:
-        map_set = qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
-    target_maps = qge_breadth_evidence.map_targets_for_set(map_set)
+        map_set = qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
+    target_maps = qge_map_sets.map_targets_for_set(map_set)
     target_set = set(target_maps)
     covered_maps = set(string_list(coverage.get("covered_maps")))
     available_maps = set(string_list(inventory.get("available_maps")))

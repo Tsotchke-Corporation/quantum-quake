@@ -8716,6 +8716,13 @@ class BreadthEvidenceTests(unittest.TestCase):
                 breadth_evidence.DEFAULT_FULL_GAME_MAP_SET),
             "registered_single_player_full_game",
         )
+        for tool_name in [
+            "qge_asset_inventory.py",
+            "qge_asset_requirements.py",
+        ]:
+            tool_text = (TOOLS_DIR / tool_name).read_text(encoding="utf-8")
+            self.assertIn("qge_map_sets", tool_text)
+            self.assertNotIn("import qge_breadth_evidence", tool_text)
 
     def test_shareware_breadth_route_authority_uses_shareware_contract(
         self,

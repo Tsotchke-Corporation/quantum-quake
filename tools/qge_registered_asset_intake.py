@@ -26,8 +26,8 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import qge_asset_inventory  # noqa: E402
-import qge_breadth_evidence  # noqa: E402
 import qge_full_game_capture_queue  # noqa: E402
+import qge_map_sets  # noqa: E402
 
 STEAM_QUAKE_APP_ID = "2310"
 STEAM_LIBRARYFOLDERS = [
@@ -880,7 +880,7 @@ def build_intake(
     current_root: Path,
     candidates: Sequence[Path],
     *,
-    map_set: str = qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+    map_set: str = qge_map_sets.DEFAULT_FULL_GAME_MAP_SET,
     discovery: dict[str, Any] | None = None,
     publication_pack_dir: Path | None = None,
 ) -> dict[str, Any]:
@@ -892,7 +892,7 @@ def build_intake(
         item for item in list_or_empty(current_inventory.get("missing_maps"))
         if isinstance(item, str)
     ]
-    target_maps = qge_breadth_evidence.map_targets_for_set(map_set)
+    target_maps = qge_map_sets.map_targets_for_set(map_set)
     target_set = set(target_maps)
     scan_targets = candidate_scan_targets(candidates)
     candidate_reports = [scan_target(target) for target in scan_targets]
@@ -1415,7 +1415,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--publication-pack", type=Path,
                         help="Optional publication pack used to generate a post-install capture queue command")
     parser.add_argument("--map-set",
-                        default=qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET)
+                        default=qge_map_sets.DEFAULT_FULL_GAME_MAP_SET)
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--markdown", type=Path)
     parser.add_argument("--script-out", type=Path)

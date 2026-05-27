@@ -16,7 +16,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import qge_asset_inventory  # noqa: E402
-import qge_breadth_evidence  # noqa: E402
+import qge_map_sets  # noqa: E402
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -114,10 +114,10 @@ def build_requirements(
         raise ValueError("inventory is not qge.asset_inventory.v0")
     map_set = map_set or inventory.get("map_set")
     if not isinstance(map_set, str) or not map_set:
-        map_set = qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET
-    target_maps = qge_breadth_evidence.map_targets_for_set(map_set)
+        map_set = qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
+    target_maps = qge_map_sets.map_targets_for_set(map_set)
     registered_full_game_scope = (
-        qge_breadth_evidence.is_registered_full_game_map_set(map_set))
+        qge_map_sets.is_registered_full_game_map_set(map_set))
     requirements = [
         map_requirement(
             map_name,
@@ -140,11 +140,11 @@ def build_requirements(
         "asset_root": inventory.get("asset_root"),
         "asset_root_status": inventory.get("asset_root_status"),
         "map_set": map_set,
-        "map_scope": qge_breadth_evidence.map_set_scope_label(map_set),
+        "map_scope": qge_map_sets.map_set_scope_label(map_set),
         "registered_full_game_scope": (
             registered_full_game_scope),
         "shareware_episode_one_scope": (
-            qge_breadth_evidence.is_shareware_episode_one_map_set(map_set)),
+            qge_map_sets.is_shareware_episode_one_map_set(map_set)),
         "target_map_count": len(target_maps),
         "present_map_count": len(present),
         "missing_map_count": len(missing),
@@ -161,7 +161,7 @@ def build_requirements(
             "asset_requirements_satisfied": not missing,
             "shareware_episode_one_requirements_satisfied": (
                 not missing and
-                qge_breadth_evidence.is_shareware_episode_one_map_set(map_set)
+                qge_map_sets.is_shareware_episode_one_map_set(map_set)
             ),
             "whole_game_moonlab_deployment_claimed": False,
             "whole_game_hardware_execution_claimed": False,
@@ -245,7 +245,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
                         default=qge_asset_inventory.DEFAULT_ASSET_ROOT)
     parser.add_argument("--inventory", type=Path)
     parser.add_argument("--map-set",
-                        default=qge_breadth_evidence.DEFAULT_FULL_GAME_MAP_SET)
+                        default=qge_map_sets.DEFAULT_FULL_GAME_MAP_SET)
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--markdown", type=Path)
     parser.add_argument("--icc-json", type=Path)
