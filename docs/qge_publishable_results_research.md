@@ -298,6 +298,15 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      `qge_registered_full_game_coverage_ledger`. The selection JSON also
      records per-map `target_map_status` rows, so a missing registered map is
      distinguished from a map with a present but non-ready capture attempt.
+   - Join registered asset availability with that evidence ledger using
+     `make qge_registered_full_game_progress`. It writes
+     `qge.registered_full_game_progress.v0` under
+     `diagnostics/full_game_progress/registered_single_player/`, with
+     per-map `target_map_progress` rows that separate
+     `blocked_asset_missing`, `blocked_capture_not_ready`, and
+     `pending_capture`. Check it with
+     `make qge_registered_full_game_progress_audit`, which recomputes the
+     asset/evidence join and rejects stale JSON, Markdown, or ICC output.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for

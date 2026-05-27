@@ -102,12 +102,14 @@ QGE_OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(QGE_SRCS))
 QGE_OBJS += $(patsubst %.mm,$(BUILD_DIR)/%.o,$(QGE_OBJC_SRCS))
 
 # Targets
-.PHONY: all clean test moonlab qge dirs demo demo-sdl quake run-quake qge_shareware_episode1_breadth_evidence qge_shareware_episode1_breadth_audit qge_registered_full_game_breadth_status qge_registered_full_game_breadth_status_audit test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools test_qge_python_tools test_snd_quantum_source_contract test_qge_audio_authority_smoke
+.PHONY: all clean test moonlab qge dirs demo demo-sdl quake run-quake qge_shareware_episode1_breadth_evidence qge_shareware_episode1_breadth_audit qge_registered_full_game_breadth_status qge_registered_full_game_breadth_status_audit qge_registered_full_game_progress qge_registered_full_game_progress_audit test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools test_qge_python_tools test_snd_quantum_source_contract test_qge_audio_authority_smoke
 
 QGE_SHAREWARE_MATRIX_ROOT ?= diagnostics/quake_graphics
 QGE_SHAREWARE_EVIDENCE_OUT ?= diagnostics/breadth_evidence/shareware_episode1
 QGE_REGISTERED_MATRIX_ROOT ?= diagnostics/quake_graphics
 QGE_REGISTERED_FULL_GAME_EVIDENCE_OUT ?= diagnostics/breadth_evidence/registered_single_player_status
+QGE_REGISTERED_ASSET_ROOT ?= assets/id1
+QGE_REGISTERED_FULL_GAME_PROGRESS_OUT ?= diagnostics/full_game_progress/registered_single_player
 
 all: dirs moonlab qge test_qge
 
@@ -230,6 +232,27 @@ qge_registered_full_game_breadth_status_audit:
 		$(QGE_REGISTERED_FULL_GAME_EVIDENCE_OUT) \
 		--map-set quake_registered_single_player \
 		--matrix-root $(QGE_REGISTERED_MATRIX_ROOT) \
+		--fail-on-mismatch
+
+qge_registered_full_game_progress: qge_registered_full_game_breadth_status
+	@echo "Regenerating QGE registered full-game progress report..."
+	@python3 tools/qge_registered_full_game_progress.py \
+		--selection $(QGE_REGISTERED_FULL_GAME_EVIDENCE_OUT)/qge_map_set_selection.json \
+		--matrix-root $(QGE_REGISTERED_MATRIX_ROOT) \
+		--asset-root $(QGE_REGISTERED_ASSET_ROOT) \
+		--json $(QGE_REGISTERED_FULL_GAME_PROGRESS_OUT)/qge_registered_full_game_progress.json \
+		--markdown $(QGE_REGISTERED_FULL_GAME_PROGRESS_OUT)/qge_registered_full_game_progress.md \
+		--icc-json $(QGE_REGISTERED_FULL_GAME_PROGRESS_OUT)/qge_registered_full_game_progress_icc_evidence.json
+
+qge_registered_full_game_progress_audit: qge_registered_full_game_progress
+	@echo "Auditing QGE registered full-game progress report..."
+	@python3 tools/qge_registered_full_game_progress_audit.py \
+		--progress $(QGE_REGISTERED_FULL_GAME_PROGRESS_OUT)/qge_registered_full_game_progress.json \
+		--selection $(QGE_REGISTERED_FULL_GAME_EVIDENCE_OUT)/qge_map_set_selection.json \
+		--matrix-root $(QGE_REGISTERED_MATRIX_ROOT) \
+		--asset-root $(QGE_REGISTERED_ASSET_ROOT) \
+		--markdown $(QGE_REGISTERED_FULL_GAME_PROGRESS_OUT)/qge_registered_full_game_progress.md \
+		--icc-json $(QGE_REGISTERED_FULL_GAME_PROGRESS_OUT)/qge_registered_full_game_progress_icc_evidence.json \
 		--fail-on-mismatch
 
 # Run tests

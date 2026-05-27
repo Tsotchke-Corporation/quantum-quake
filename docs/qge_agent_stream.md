@@ -458,6 +458,16 @@ rows that separate ready, non-ready, and not-yet-captured maps. ICC exposes the
 progress-only view as
 `qge_registered_full_game_coverage_ledger`; deployment readiness still uses the
 separate full-game gate target.
+`make qge_registered_full_game_progress` joins that selected 32-map evidence
+with the live `assets/id1` BSP inventory and writes
+`qge.registered_full_game_progress.v0` rows under
+`diagnostics/full_game_progress/registered_single_player/`. Those
+`target_map_progress` rows classify each map as `ready`,
+`blocked_asset_missing`, `blocked_capture_not_ready`, or `pending_capture`, so
+eventual whole-game work can see whether the next action is licensed asset
+intake or another strict capture. The paired
+`make qge_registered_full_game_progress_audit` target recomputes the join and
+rejects stale JSON/Markdown/ICC output.
 Each covered matrix is audited against its route contract's required authority
 domains. Shareware Episode 1 contracts use the `shareware_combat` map class for
 the E1 combat maps while the registered/full-game path keeps

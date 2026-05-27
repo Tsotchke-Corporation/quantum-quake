@@ -664,6 +664,12 @@ Known current visual state:
   maps with no matrix yet. ICC tracks that status ledger as
   `qge_registered_full_game_coverage_ledger`, separate from the registered
   full-game deployment readiness gate.
+  `make qge_registered_full_game_progress` joins the registered selection with
+  the live `assets/id1` inventory and emits
+  `qge.registered_full_game_progress.v0`, whose `target_map_progress` rows say
+  whether each remaining map is asset-blocked or capture-blocked. The paired
+  progress audit recomputes that join so stale progress summaries cannot blur
+  licensed asset intake with capture work.
   `tools/qge_full_game_capture_queue.py`
   turns the registered ledger
   into `qge.full_game_capture_queue.v0` and a runnable

@@ -71,6 +71,8 @@ import qge_publication_pack as publication_pack  # noqa: E402
 import qge_resource_boundary_audit as resource_boundary_audit  # noqa: E402
 import qge_registered_asset_intake as registered_asset_intake  # noqa: E402
 import qge_registered_asset_script_audit as registered_asset_script_audit  # noqa: E402
+import qge_registered_full_game_progress as registered_progress  # noqa: E402
+import qge_registered_full_game_progress_audit as registered_progress_audit  # noqa: E402
 import qge_runtime_icc_audit as runtime_icc_audit  # noqa: E402
 import qge_shareware_episode_evidence_audit as shareware_episode_evidence_audit  # noqa: E402
 import qge_shareware_episode_evidence as shareware_episode_evidence  # noqa: E402
@@ -8951,6 +8953,157 @@ class BreadthEvidenceTests(unittest.TestCase):
             )
             self.assertTrue(audit["passed"], audit)
             self.assertEqual(audit["mismatch_count"], 0)
+
+    def test_registered_full_game_progress_joins_assets_and_evidence(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            matrix_root = tmpdir / "diagnostics" / "quake_graphics"
+            for index, map_name in enumerate(
+                breadth_evidence.QUAKE_SHAREWARE_EPISODE_ONE_MAPS
+            ):
+                self.write_matrix(
+                    matrix_root / f"20260523-{index:06d}-{map_name}",
+                    map_name=map_name,
+                )
+            self.write_matrix(
+                matrix_root / "20260523-999997-e2m1-not-ready",
+                map_name="e2m1",
+                ready=False,
+            )
+
+            evidence_dir = tmpdir / "breadth"
+            selection = map_set_evidence.scan_ready_map_set_runs(
+                matrix_root,
+                map_set=breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+            )
+            selection_path = evidence_dir / "qge_map_set_selection.json"
+            registered_progress.write_json(selection_path, selection)
+
+            asset_root = tmpdir / "assets" / "id1"
+            asset_root.mkdir(parents=True)
+            shareware_maps = (
+                breadth_evidence.QUAKE_SHAREWARE_EPISODE_ONE_MAPS
+            )
+            write_pak(
+                asset_root / "pak0.pak",
+                [
+                    *[f"maps/{name}.bsp" for name in shareware_maps],
+                    "maps/e2m1.bsp",
+                    "maps/e2m2.bsp",
+                ],
+            )
+
+            progress = registered_progress.build_progress(
+                selection_path=selection_path,
+                matrix_root=matrix_root,
+                asset_root=asset_root,
+            )
+            self.assertEqual(
+                progress["schema"],
+                "qge.registered_full_game_progress.v0",
+            )
+            self.assertEqual(progress["status"], "partial")
+            self.assertEqual(progress["next_blocker"],
+                             "registered_assets_missing")
+            self.assertEqual(progress["target_map_count"], 32)
+            self.assertEqual(progress["ready_map_count"], 9)
+            self.assertEqual(progress["asset_available_map_count"], 11)
+            self.assertEqual(progress["asset_missing_map_count"], 21)
+            self.assertEqual(progress["capture_needed_map_count"], 2)
+            self.assertEqual(progress["capture_blocked_not_ready_count"], 1)
+            self.assertEqual(progress["capture_missing_matrix_count"], 1)
+
+            rows = {
+                item["map"]: item
+                for item in progress["target_map_progress"]
+            }
+            self.assertEqual(rows["e1m1"]["status"], "ready")
+            self.assertEqual(
+                rows["e1m1"]["next_action"],
+                "keep_ready_capture_evidence",
+            )
+            self.assertEqual(
+                rows["e2m1"]["status"], "blocked_capture_not_ready")
+            self.assertEqual(
+                rows["e2m1"]["next_action"], "rerun_strict_capture")
+            self.assertEqual(rows["e2m2"]["status"], "pending_capture")
+            self.assertEqual(
+                rows["e2m2"]["next_action"], "run_strict_capture")
+            self.assertEqual(
+                rows["e3m1"]["status"], "blocked_asset_missing")
+            self.assertEqual(
+                rows["e3m1"]["next_action"],
+                "install_registered_bsp_asset",
+            )
+
+            icc = registered_progress.build_icc_evidence(progress)
+            self.assertEqual(
+                icc["completion_reason"],
+                "qge_registered_full_game_progress_partial",
+            )
+            markdown = registered_progress.markdown_report(progress)
+            self.assertIn("QGE Registered Full-Game Progress", markdown)
+            self.assertIn("blocked_asset_missing", markdown)
+
+            outdir = tmpdir / "progress"
+            progress_json = (
+                outdir /
+                registered_progress.PROGRESS_FILENAME
+            )
+            progress_md = outdir / registered_progress.MARKDOWN_FILENAME
+            progress_icc = outdir / registered_progress.ICC_FILENAME
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(
+                    registered_progress.main([
+                        "--selection",
+                        str(selection_path),
+                        "--matrix-root",
+                        str(matrix_root),
+                        "--asset-root",
+                        str(asset_root),
+                        "--json",
+                        str(progress_json),
+                        "--markdown",
+                        str(progress_md),
+                        "--icc-json",
+                        str(progress_icc),
+                    ]),
+                    0,
+                )
+            self.assertIn(
+                "QGE_REGISTERED_FULL_GAME_PROGRESS",
+                stdout.getvalue(),
+            )
+            audit = registered_progress_audit.progress_audit(
+                progress_json,
+                selection_path=selection_path,
+                matrix_root=matrix_root,
+                asset_root=asset_root,
+                markdown_path=progress_md,
+                icc_path=progress_icc,
+            )
+            self.assertTrue(audit["passed"], audit)
+            self.assertEqual(audit["mismatch_count"], 0)
+
+            stale = publication_pack.load_json(progress_json)
+            stale["ready_map_count"] = 10
+            registered_progress.write_json(progress_json, stale)
+            stale_audit = registered_progress_audit.progress_audit(
+                progress_json,
+                selection_path=selection_path,
+                matrix_root=matrix_root,
+                asset_root=asset_root,
+                markdown_path=progress_md,
+                icc_path=progress_icc,
+            )
+            self.assertFalse(stale_audit["passed"])
+            self.assertTrue(any(
+                "ready_map_count" in path
+                for path in stale_audit["progress_field_mismatches"]
+            ))
 
     def test_shareware_episode_evidence_tool_selects_complete_map_set(
         self,

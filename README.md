@@ -158,6 +158,13 @@ Important known limitations:
   stale registered status ledger without turning it into a completion claim.
   The selection JSON includes per-map `target_map_status` rows so missing maps
   are distinguished from maps that have non-ready capture attempts.
+  `make qge_registered_full_game_progress` joins that selection with the live
+  `assets/id1` inventory into
+  `diagnostics/full_game_progress/registered_single_player/`, classifying each
+  target as ready, asset-blocked, or capture-needed. The matching
+  `make qge_registered_full_game_progress_audit` recomputes the join so a stale
+  full-game progress report cannot hide whether the next blocker is licensed
+  BSP intake or capture evidence.
   ICC tracks that progress-only ledger through
   `qge_registered_full_game_coverage_ledger`, separate from the deployment
   readiness target.
