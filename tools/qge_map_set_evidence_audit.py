@@ -52,6 +52,30 @@ def normalized_selection(value: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def selection_breadth_link_mismatches(
+    selection: dict[str, Any],
+    breadth: dict[str, Any],
+) -> list[str]:
+    if not selection or not breadth:
+        return []
+    expected = {
+        "map_set": selection.get("map_set"),
+        "selected_matrix_files": [
+            str(path)
+            for path in selection.get("selected_matrix_files") or []
+        ],
+    }
+    recorded = {
+        "map_set": qge_breadth_evidence_audit.recorded_map_set(breadth),
+        "selected_matrix_files": [
+            str(path)
+            for path in qge_breadth_evidence_audit.matrix_source_paths(
+                breadth)
+        ],
+    }
+    return qge_resource_boundary_audit.mismatch_paths(expected, recorded)
+
+
 def selection_path(evidence_dir: Path, filename: str) -> Path:
     return evidence_dir / filename
 
@@ -170,8 +194,13 @@ def map_set_evidence_audit(
         qge_resource_boundary_audit.mismatch_paths(expected_icc, recorded_icc)
         if expected_icc and recorded_icc else []
     )
+    selection_breadth_mismatches = selection_breadth_link_mismatches(
+        recorded_selection,
+        recorded_breadth,
+    )
     mismatch_count = (
         len(selection_field_mismatches) +
+        len(selection_breadth_mismatches) +
         int(breadth_audit.get("mismatch_count") or 0) +
         len(icc_field_mismatches) +
         len(build_errors)
@@ -185,6 +214,7 @@ def map_set_evidence_audit(
         "breadth_evidence_file": str(paths["breadth"]),
         "breadth_icc_evidence_file": str(paths["icc"]),
         "selection_field_mismatches": selection_field_mismatches,
+        "selection_breadth_mismatches": selection_breadth_mismatches,
         "breadth_field_mismatches": breadth_audit.get(
             "field_mismatches", []),
         "breadth_overclaim_flags": breadth_audit.get("overclaim_flags", []),

@@ -9025,6 +9025,33 @@ class BreadthEvidenceTests(unittest.TestCase):
             )
             self.assertTrue(audit["passed"], audit)
             self.assertEqual(audit["mismatch_count"], 0)
+            self.assertEqual(audit["selection_breadth_mismatches"], [])
+
+            self.write_matrix(
+                matrix_root / "20260523-999999-start-new",
+                map_name="start",
+            )
+            refreshed_selection = map_set_evidence.scan_ready_map_set_runs(
+                matrix_root,
+                map_set=breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+            )
+            publication_pack.write_json(
+                result["selection_path"],
+                refreshed_selection,
+            )
+            stale_breadth_audit = map_set_evidence_audit.map_set_evidence_audit(
+                outdir,
+                matrix_root=matrix_root,
+                map_set=breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+            )
+            self.assertFalse(stale_breadth_audit["passed"])
+            self.assertEqual(
+                stale_breadth_audit["selection_field_mismatches"], [])
+            self.assertTrue(any(
+                path.startswith("selected_matrix_files")
+                for path in stale_breadth_audit[
+                    "selection_breadth_mismatches"]
+            ))
 
     def test_registered_full_game_progress_joins_assets_and_evidence(
         self,
@@ -9333,8 +9360,37 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertTrue(audit["passed"], audit)
             self.assertEqual(audit["mismatch_count"], 0)
             self.assertEqual(audit["selection_field_mismatches"], [])
+            self.assertEqual(audit["selection_breadth_mismatches"], [])
             self.assertEqual(audit["breadth_field_mismatches"], [])
             self.assertEqual(audit["icc_field_mismatches"], [])
+
+            self.write_matrix(
+                matrix_root / "20260523-999999-start-new",
+                map_name="start",
+            )
+            refreshed_selection = (
+                shareware_episode_evidence.scan_ready_shareware_runs(
+                    matrix_root)
+            )
+            publication_pack.write_json(
+                cli_outdir / shareware_episode_evidence.SELECTION_FILENAME,
+                refreshed_selection,
+            )
+            stale_breadth_audit = (
+                shareware_episode_evidence_audit
+                .shareware_episode_evidence_audit(
+                    cli_outdir,
+                    matrix_root=matrix_root,
+                )
+            )
+            self.assertFalse(stale_breadth_audit["passed"])
+            self.assertEqual(
+                stale_breadth_audit["selection_field_mismatches"], [])
+            self.assertTrue(any(
+                path.startswith("selected_matrix_files")
+                for path in stale_breadth_audit[
+                    "selection_breadth_mismatches"]
+            ))
 
             stale_selection_path = (
                 cli_outdir /
