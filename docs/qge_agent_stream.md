@@ -438,6 +438,12 @@ shareware first-episode scope is explicitly `quake_shareware_episode1`
 (`start`, `e1m1` through `e1m8`) and cannot satisfy the registered full-game
 deployment gate. ICC tracks that smaller scope through
 `qge_shareware_episode1_moonlab_breadth`.
+`make qge_shareware_episode1_breadth_evidence` is the stable regeneration
+entry point for that smaller scope: it scans
+`diagnostics/quake_graphics/**/vanilla_capture_matrix.json`, selects one ready
+matrix for each `quake_shareware_episode1` target map, and writes
+`diagnostics/breadth_evidence/shareware_episode1/qge_breadth_icc_evidence.json`
+with the canonical ICC sidecar filename.
 Each covered matrix is audited against its route contract's required authority
 domains. Shareware Episode 1 contracts use the `shareware_combat` map class for
 the E1 combat maps while the registered/full-game path keeps

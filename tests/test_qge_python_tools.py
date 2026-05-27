@@ -70,6 +70,7 @@ import qge_resource_boundary_audit as resource_boundary_audit  # noqa: E402
 import qge_registered_asset_intake as registered_asset_intake  # noqa: E402
 import qge_registered_asset_script_audit as registered_asset_script_audit  # noqa: E402
 import qge_runtime_icc_audit as runtime_icc_audit  # noqa: E402
+import qge_shareware_episode_evidence as shareware_episode_evidence  # noqa: E402
 import qge_trace_summary as trace_summary  # noqa: E402
 import qge_trace_summary_audit as trace_summary_audit  # noqa: E402
 import qge_vanilla_capture_matrix as vanilla_matrix  # noqa: E402
@@ -8783,6 +8784,100 @@ class BreadthEvidenceTests(unittest.TestCase):
                 breadth_evidence_audit.recorded_map_set(manifest),
                 breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
             )
+
+    def test_shareware_episode_evidence_tool_selects_complete_map_set(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            matrix_root = tmpdir / "diagnostics" / "quake_graphics"
+            for index, map_name in enumerate(
+                breadth_evidence.QUAKE_SHAREWARE_EPISODE_ONE_MAPS
+            ):
+                self.write_matrix(
+                    matrix_root / f"20260523-{index:06d}-{map_name}",
+                    map_name=map_name,
+                )
+            self.write_matrix(
+                matrix_root / "20260523-999999-e1m1-newer",
+                map_name="e1m1",
+            )
+            self.write_matrix(
+                matrix_root / "20260523-999998-e2m1-registered",
+                map_name="e2m1",
+            )
+
+            outdir = tmpdir / "breadth" / "shareware_episode1"
+            result = (
+                shareware_episode_evidence
+                .build_shareware_breadth_evidence(
+                    matrix_root=matrix_root,
+                    outdir=outdir,
+                )
+            )
+
+            selection = publication_pack.load_json(result["selection_path"])
+            self.assertEqual(
+                selection["schema"],
+                "qge.shareware_episode1_selection.v0",
+            )
+            self.assertEqual(selection["status"], "complete")
+            self.assertEqual(selection["selected_matrix_count"], 9)
+            self.assertEqual(selection["missing_ready_maps"], [])
+            self.assertEqual(selection["map_scope"], "shareware_episode_one")
+            selected_by_map = {
+                row["map"]: row["matrix_file"]
+                for row in selection["selected_runs"]
+            }
+            self.assertIn("999999-e1m1-newer",
+                          selected_by_map["e1m1"])
+
+            manifest = publication_pack.load_json(result["breadth_path"])
+            aggregate = manifest["aggregate"]
+            self.assertTrue(aggregate["breadth_ready_for_complete_claim"])
+            self.assertEqual(
+                aggregate["full_game_map_set"],
+                breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            )
+            self.assertEqual(
+                aggregate["full_game_map_coverage_status"], "complete")
+            self.assertEqual(aggregate["full_game_map_target_count"], 9)
+            self.assertEqual(aggregate["full_game_map_missing_count"], 0)
+            self.assertEqual(
+                manifest["full_game_coverage"]["map_scope"],
+                "shareware_episode_one",
+            )
+
+            icc = publication_pack.load_json(result["icc_path"])
+            self.assertEqual(
+                icc["completion_reason"],
+                "qge_breadth_evidence_pack_complete",
+            )
+            self.assertEqual(
+                icc["runtime_backend_scope_map_set"],
+                breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            )
+            self.assertEqual(
+                icc["runtime_backend_scope_coverage_status"], "complete")
+
+            stdout = io.StringIO()
+            cli_outdir = tmpdir / "cli"
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(
+                    shareware_episode_evidence.main([
+                        "--matrix-root",
+                        str(matrix_root),
+                        "--outdir",
+                        str(cli_outdir),
+                    ]),
+                    0,
+                )
+            self.assertIn(
+                "QGE_SHAREWARE_EPISODE1_SELECTION",
+                stdout.getvalue(),
+            )
+            self.assertTrue(
+                (cli_outdir / "qge_breadth_icc_evidence.json").is_file())
 
     def test_default_route_authority_remains_registered_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

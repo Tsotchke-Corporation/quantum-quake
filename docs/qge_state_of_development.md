@@ -649,7 +649,12 @@ Known current visual state:
   `quake_shareware_episode1` (`start`, `e1m1` through `e1m8`) and is not a
   registered full-game deployment claim. Shareware Episode 1 route contracts
   use `shareware_combat` for E1 combat maps while the registered ledger keeps
-  `registered_combat`. `tools/qge_full_game_capture_queue.py`
+  `registered_combat`. `make qge_shareware_episode1_breadth_evidence`
+  regenerates the stable shareware sidecar under
+  `diagnostics/breadth_evidence/shareware_episode1/` by selecting one ready
+  matrix for each first-episode target map from
+  `diagnostics/quake_graphics/**/vanilla_capture_matrix.json`.
+  `tools/qge_full_game_capture_queue.py`
   turns the registered ledger
   into `qge.full_game_capture_queue.v0` and a runnable
   `run_missing_maps.sh`; it now inventories local loose/Pak BSP assets before

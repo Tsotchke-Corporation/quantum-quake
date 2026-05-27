@@ -102,7 +102,10 @@ QGE_OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(QGE_SRCS))
 QGE_OBJS += $(patsubst %.mm,$(BUILD_DIR)/%.o,$(QGE_OBJC_SRCS))
 
 # Targets
-.PHONY: all clean test moonlab qge dirs demo demo-sdl quake run-quake test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools test_qge_python_tools test_snd_quantum_source_contract test_qge_audio_authority_smoke
+.PHONY: all clean test moonlab qge dirs demo demo-sdl quake run-quake qge_shareware_episode1_breadth_evidence test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools test_qge_python_tools test_snd_quantum_source_contract test_qge_audio_authority_smoke
+
+QGE_SHAREWARE_MATRIX_ROOT ?= diagnostics/quake_graphics
+QGE_SHAREWARE_EVIDENCE_OUT ?= diagnostics/breadth_evidence/shareware_episode1
 
 all: dirs moonlab qge test_qge
 
@@ -197,6 +200,12 @@ test_snd_quantum_source_contract:
 test_qge_audio_authority_smoke:
 	@echo "Running QGE audio authority smoke evidence test..."
 	@bash tests/test_qge_audio_authority_smoke.sh
+
+qge_shareware_episode1_breadth_evidence:
+	@echo "Regenerating QGE shareware Episode 1 breadth evidence..."
+	@python3 tools/qge_shareware_episode_evidence.py \
+		--matrix-root $(QGE_SHAREWARE_MATRIX_ROOT) \
+		--outdir $(QGE_SHAREWARE_EVIDENCE_OUT)
 
 # Run tests
 test: test_qge test_console_contract test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools test_qge_python_tools test_snd_quantum_source_contract test_qge_audio_authority_smoke

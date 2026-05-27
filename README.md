@@ -140,6 +140,13 @@ Important known limitations:
   `--include-unavailable-assets` is set, and currently reports zero locally
   queueable missing maps while 23 registered maps require additional registered
   BSP assets before capture.
+  `make qge_shareware_episode1_breadth_evidence` regenerates the smaller
+  first-episode evidence sidecar at
+  `diagnostics/breadth_evidence/shareware_episode1/qge_breadth_icc_evidence.json`
+  by scanning ready `diagnostics/quake_graphics/**/vanilla_capture_matrix.json`
+  captures for `quake_shareware_episode1`; that ICC sidecar is the stable input
+  for the shareware readiness target and is still not a registered/full-game
+  deployment claim.
   `tools/qge_asset_inventory.py --map-set quake_registered_single_player`
   emits the companion
   hash-backed asset audit and rejects placeholder BSPs unless they pass the

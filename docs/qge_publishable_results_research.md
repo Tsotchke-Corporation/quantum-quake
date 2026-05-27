@@ -278,6 +278,13 @@ and marks UI-only `-nolauncher` paths as intentional skips.
      reflect the scope: E1 combat maps are `shareware_combat` under the
      shareware map set and remain `registered_combat` under the registered
      full-game map set.
+   - Regenerate the shareware sidecar with
+     `make qge_shareware_episode1_breadth_evidence`. The wrapper scans
+     `diagnostics/quake_graphics/**/vanilla_capture_matrix.json`, selects one
+     ready run for every `quake_shareware_episode1` map, and writes the
+     canonical ICC sidecar at
+     `diagnostics/breadth_evidence/shareware_episode1/qge_breadth_icc_evidence.json`
+     for the shareware readiness target.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. The generated queue for
