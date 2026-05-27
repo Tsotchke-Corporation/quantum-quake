@@ -457,6 +457,9 @@ def expected_advantage_summary(
     registered_full_game_progress = load_optional_artifact_json(
         manifest, "resource", "registered_full_game_progress",
         manifest_path=manifest_path)
+    full_game_capture_queue = load_optional_artifact_json(
+        manifest, "resource", "full_game_capture_queue",
+        manifest_path=manifest_path)
     native_backend_boundary = load_artifact_json(
         manifest, "resource", "native_backend_boundary",
         manifest_path=manifest_path)
@@ -632,6 +635,22 @@ def expected_advantage_summary(
                     "capture_needed_map_count"),
             },
         } if registered_full_game_progress else {}),
+        **({
+            "full_game_capture_queue_summary": {
+                "schema": full_game_capture_queue.get("schema"),
+                "status": full_game_capture_queue.get("status"),
+                "source_schema": full_game_capture_queue.get("source_schema"),
+                "map_set": full_game_capture_queue.get("map_set"),
+                "queue_job_count": full_game_capture_queue.get(
+                    "queue_job_count"),
+                "asset_unavailable_missing_count": (
+                    full_game_capture_queue.get(
+                        "asset_unavailable_missing_count")),
+                "remaining_map_count_after_queue": (
+                    full_game_capture_queue.get(
+                        "remaining_map_count_after_queue")),
+            },
+        } if full_game_capture_queue else {}),
         "native_backend_boundary_summary": {
             "status": native_backend_boundary.get("status"),
             "required_target_count": native_backend_boundary.get(

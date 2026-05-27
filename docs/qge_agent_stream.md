@@ -497,9 +497,11 @@ absent unless `--include-unavailable-assets` is set, and records the
 asset-unavailable missing maps in JSON/Markdown. The generated script preserves
 the source ledger's map set when it rebuilds breadth evidence, so
 `quake_shareware_episode1` queues do not fall back to registered full-game
-scope. `tools/qge_full_game_capture_queue_audit.py` reruns the queue
-generation from recorded reproduction inputs and rejects stale JSON, script,
-or Markdown output. Map-set names and target lists live in `tools/qge_map_sets.py`, with
+scope. Publication packs include the generated queue JSON, script, and
+Markdown under `resource/`; `tools/qge_full_game_capture_queue_audit.py`
+reruns the queue generation from recorded reproduction inputs and rejects
+stale JSON, script, or Markdown output during the aggregate postpack audit.
+Map-set names and target lists live in `tools/qge_map_sets.py`, with
 `qge_breadth_evidence.py` re-exporting the legacy names for existing tools.
 Publication-pack reproduce metadata also carries the selected map set for
 `qge_asset_requirements.py`, so shareware packs replay requirements under

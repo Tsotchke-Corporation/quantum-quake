@@ -19,6 +19,11 @@ if str(SCRIPT_DIR) not in sys.path:
 import qge_full_game_capture_queue as queue_tool  # noqa: E402
 import qge_resource_boundary_audit  # noqa: E402
 
+PACK_QUEUE_PATH = Path("resource/qge_full_game_capture_queue.json")
+PACK_SOURCE_PATH = Path("resource/qge_registered_full_game_progress.json")
+PACK_SCRIPT_PATH = Path("resource/run_missing_maps.sh")
+PACK_MARKDOWN_PATH = Path("resource/qge_full_game_capture_queue.md")
+
 
 def dict_or_empty(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
@@ -88,6 +93,32 @@ def optional_path(path: Path | None) -> Path | None:
     return resolve_existing_path(path)
 
 
+def resolved_audit_inputs(
+    target: Path,
+    *,
+    source: Path | None = None,
+    script_path: Path | None = None,
+    markdown_path: Path | None = None,
+) -> dict[str, Path | None]:
+    resolved_target = resolve_existing_path(target)
+    pack_dir = resolved_target if resolved_target.is_dir() else None
+    if pack_dir is None:
+        return {
+            "pack_dir": None,
+            "queue": resolved_target,
+            "source": source,
+            "script": script_path,
+            "markdown": markdown_path,
+        }
+    return {
+        "pack_dir": pack_dir,
+        "queue": pack_dir / PACK_QUEUE_PATH,
+        "source": source or pack_dir / PACK_SOURCE_PATH,
+        "script": script_path or pack_dir / PACK_SCRIPT_PATH,
+        "markdown": markdown_path or pack_dir / PACK_MARKDOWN_PATH,
+    }
+
+
 def capture_queue_audit(
     queue_path: Path,
     *,
@@ -96,7 +127,18 @@ def capture_queue_audit(
     script_path: Path | None = None,
     markdown_path: Path | None = None,
 ) -> dict[str, Any]:
-    queue_path = resolve_existing_path(queue_path)
+    resolved_inputs = resolved_audit_inputs(
+        queue_path,
+        source=source,
+        script_path=script_path,
+        markdown_path=markdown_path,
+    )
+    pack_dir = resolved_inputs["pack_dir"]
+    queue_path = resolved_inputs["queue"]
+    source = resolved_inputs["source"]
+    script_path = resolved_inputs["script"]
+    markdown_path = resolved_inputs["markdown"]
+    assert isinstance(queue_path, Path)
     build_errors: list[str] = []
     try:
         recorded = load_json(queue_path)
@@ -164,6 +206,7 @@ def capture_queue_audit(
     )
     return {
         "schema": "qge.full_game_capture_queue_audit.v0",
+        "pack_dir": str(pack_dir) if isinstance(pack_dir, Path) else None,
         "queue_file": str(queue_path),
         "source": str(getattr(args, "source", "")),
         "asset_root": str(getattr(args, "asset_root", "")),

@@ -30,6 +30,7 @@ import qge_advantage_benchmark  # noqa: E402
 import qge_asset_inventory  # noqa: E402
 import qge_asset_requirements  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
+import qge_full_game_capture_queue  # noqa: E402
 import qge_map_sets  # noqa: E402
 import qge_manifest_reproduce_audit  # noqa: E402
 import qge_manifest_source_copy_audit  # noqa: E402
@@ -173,6 +174,33 @@ def registered_full_game_progress_reproduce_command(
         "--icc-json",
         "/tmp/qge_registered_full_game_progress_icc_evidence.json",
     )
+    return " ".join(parts)
+
+
+def full_game_capture_queue_reproduction_inputs(
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    return {
+        "source": (
+            "<pack_dir>/resource/qge_registered_full_game_progress.json"),
+        "asset_root": str(args.asset_root),
+    }
+
+
+def full_game_capture_queue_reproduce_command(
+    args: argparse.Namespace,
+) -> str:
+    plan = full_game_capture_queue_reproduction_inputs(args)
+    parts = [
+        "tools/qge_full_game_capture_queue.py",
+        command_required_arg(plan.get("source"), "capture queue source"),
+    ]
+    append_command_option(parts, "--asset-root", plan.get("asset_root"))
+    append_command_option(
+        parts, "--out", "/tmp/qge_full_game_capture_queue.json")
+    append_command_option(parts, "--script-out", "/tmp/run_missing_maps.sh")
+    append_command_option(
+        parts, "--markdown", "/tmp/qge_full_game_capture_queue.md")
     return " ".join(parts)
 
 
@@ -1538,6 +1566,50 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         registered_full_game_progress_icc_path,
         registered_full_game_progress_icc,
     )
+    full_game_capture_queue = qge_full_game_capture_queue.build_queue(
+        SimpleNamespace(
+            source=registered_full_game_progress_path,
+            asset_root=Path(
+                getattr(
+                    args,
+                    "asset_root",
+                    qge_asset_inventory.DEFAULT_ASSET_ROOT,
+                )
+            ),
+            limit=None,
+            frames=4,
+            wait_frames=35,
+            trace=True,
+            special_maps_last=True,
+            authority_smoke=True,
+            force_world_metrics=True,
+            include_unavailable_assets=False,
+            env=[],
+        )
+    )
+    full_game_capture_queue_path = (
+        args.outdir / "resource" / "qge_full_game_capture_queue.json"
+    )
+    write_json(full_game_capture_queue_path, full_game_capture_queue)
+    full_game_capture_queue_script_path = (
+        args.outdir / "resource" / "run_missing_maps.sh"
+    )
+    full_game_capture_queue_script_path.write_text(
+        "\n".join(
+            qge_full_game_capture_queue.script_lines(
+                full_game_capture_queue)),
+        encoding="utf-8",
+    )
+    full_game_capture_queue_script_path.chmod(
+        full_game_capture_queue_script_path.stat().st_mode | 0o111)
+    full_game_capture_queue_markdown_path = (
+        args.outdir / "resource" / "qge_full_game_capture_queue.md"
+    )
+    full_game_capture_queue_markdown_path.write_text(
+        qge_full_game_capture_queue.markdown_report(
+            full_game_capture_queue),
+        encoding="utf-8",
+    )
     native_backend_boundary = (
         qge_resource_boundary_audit.expected_native_backend_boundary(
             capture_perf_summary)
@@ -1868,6 +1940,11 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             registered_full_game_progress_markdown_path),
         "registered_full_game_progress_icc_evidence": file_info(
             registered_full_game_progress_icc_path),
+        "full_game_capture_queue": file_info(full_game_capture_queue_path),
+        "full_game_capture_queue_script": file_info(
+            full_game_capture_queue_script_path),
+        "full_game_capture_queue_markdown": file_info(
+            full_game_capture_queue_markdown_path),
         "native_backend_boundary": file_info(native_backend_boundary_path),
         "moonlab_job_specs": file_info(moonlab_job_specs_path),
         "moonlab_job_results": file_info(moonlab_job_results_path),
@@ -1941,6 +2018,9 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             ),
             "registered_full_game_progress_reproduction": (
                 registered_progress_inputs
+            ),
+            "full_game_capture_queue_reproduction": (
+                full_game_capture_queue_reproduction_inputs(args)
             ),
             "registered_asset_candidates": [
                 str(path)
@@ -2384,6 +2464,20 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                     registered_full_game_progress.get(
                         "capture_needed_map_count")),
             },
+            "full_game_capture_queue_summary": {
+                "schema": full_game_capture_queue.get("schema"),
+                "status": full_game_capture_queue.get("status"),
+                "source_schema": full_game_capture_queue.get("source_schema"),
+                "map_set": full_game_capture_queue.get("map_set"),
+                "queue_job_count": (
+                    full_game_capture_queue.get("queue_job_count")),
+                "asset_unavailable_missing_count": (
+                    full_game_capture_queue.get(
+                        "asset_unavailable_missing_count")),
+                "remaining_map_count_after_queue": (
+                    full_game_capture_queue.get(
+                        "remaining_map_count_after_queue")),
+            },
             "native_backend_boundary_summary": {
                 "status": native_backend_boundary.get("status"),
                 "required_target_count": native_backend_boundary.get(
@@ -2613,6 +2707,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                     qge_map_sets.DEFAULT_FULL_GAME_MAP_SET),
             ),
             registered_full_game_progress_reproduce_command(args),
+            full_game_capture_queue_reproduce_command(args),
             "tools/qge_moonlab_job_runner.py <pack_dir>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack_dir>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json --submission-out /tmp/qge_moonlab_submission_packet.verify.json",
             "tools/qge_moonlab_submission_bundle.py <pack_dir>/resource/qge_moonlab_submission_packet.json --out /tmp/qge_moonlab_submission_bundle.json --markdown /tmp/qge_moonlab_submission_bundle.md --icc-json /tmp/qge_moonlab_submission_bundle_icc_evidence.json",
             "tools/qge_moonlab_hardware_ingest.py <pack_dir>/resource/qge_moonlab_submission_packet.json --template-out /tmp/qge_moonlab_hardware_record.template.json",
@@ -2627,6 +2722,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_breadth_evidence_audit.py <pack_dir> --out /tmp/qge_breadth_evidence_audit.json --fail-on-mismatch",
             "tools/qge_asset_resource_audit.py <pack_dir> --out /tmp/qge_asset_resource_audit.json --fail-on-mismatch",
             "tools/qge_registered_full_game_progress_audit.py <pack_dir> --out /tmp/qge_registered_full_game_progress_audit.json --fail-on-mismatch",
+            "tools/qge_full_game_capture_queue_audit.py <pack_dir> --out /tmp/qge_full_game_capture_queue_audit.json --fail-on-mismatch",
             "tools/qge_resource_boundary_audit.py <pack_dir> --out /tmp/qge_resource_boundary_audit.json --fail-on-mismatch",
             "tools/qge_moonlab_full_game_plan_audit.py <pack_dir> --out /tmp/qge_moonlab_full_game_plan_audit.json --fail-on-mismatch",
             "tools/qge_moonlab_deployment_gate_audit.py <pack_dir> --out /tmp/qge_moonlab_deployment_gate_audit.json --fail-on-mismatch",
@@ -2693,6 +2789,8 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("registered_asset_intake_summary"))
     registered_progress_summary = dict_or_empty(
         advantage_summary.get("registered_full_game_progress_summary"))
+    capture_queue_summary = dict_or_empty(
+        advantage_summary.get("full_game_capture_queue_summary"))
     source_input_audit = (
         qge_manifest_source_input_audit.manifest_source_input_icc_summary(
             manifest,
@@ -2922,6 +3020,29 @@ def build_icc_evidence(manifest: dict[str, Any],
             registered_progress_summary.get("asset_missing_map_count")),
         "registered_full_game_progress_capture_needed_map_count": (
             registered_progress_summary.get("capture_needed_map_count")),
+        "full_game_capture_queue_file": (
+            artifacts.get("resource", {}).get(
+                "full_game_capture_queue", {}).get("path")),
+        "full_game_capture_queue_script_file": (
+            artifacts.get("resource", {}).get(
+                "full_game_capture_queue_script", {}).get("path")),
+        "full_game_capture_queue_markdown_file": (
+            artifacts.get("resource", {}).get(
+                "full_game_capture_queue_markdown", {}).get("path")),
+        "full_game_capture_queue_schema": (
+            capture_queue_summary.get("schema")),
+        "full_game_capture_queue_status": (
+            capture_queue_summary.get("status")),
+        "full_game_capture_queue_source_schema": (
+            capture_queue_summary.get("source_schema")),
+        "full_game_capture_queue_map_set": (
+            capture_queue_summary.get("map_set")),
+        "full_game_capture_queue_job_count": (
+            capture_queue_summary.get("queue_job_count")),
+        "full_game_capture_queue_asset_unavailable_missing_count": (
+            capture_queue_summary.get("asset_unavailable_missing_count")),
+        "full_game_capture_queue_remaining_map_count_after_queue": (
+            capture_queue_summary.get("remaining_map_count_after_queue")),
         "native_backend_boundary_file": artifacts.get("resource", {}).get(
             "native_backend_boundary", {}).get("path"),
         "native_backend_boundary_status": native_boundary_summary.get(

@@ -2045,6 +2045,9 @@ class PublicationPackTests(unittest.TestCase):
             "tools/qge_registered_full_game_progress.py ":
                 publication_pack
                 .registered_full_game_progress_reproduce_command(args),
+            "tools/qge_full_game_capture_queue.py ":
+                publication_pack.full_game_capture_queue_reproduce_command(
+                    args),
             "tools/qge_moonlab_job_runner.py ": (
                 "tools/qge_moonlab_job_runner.py "
                 "<pack_dir>/resource/qge_moonlab_job_specs.json "
@@ -5259,6 +5262,9 @@ class PublicationPackTests(unittest.TestCase):
             "tools/qge_registered_full_game_progress.py ": (
                 publication_pack
                 .registered_full_game_progress_reproduce_command(
+                    reproduce_args)),
+            "tools/qge_full_game_capture_queue.py ": (
+                publication_pack.full_game_capture_queue_reproduce_command(
                     reproduce_args)),
             "tools/qge_moonlab_job_runner.py ": (
                 "tools/qge_moonlab_job_runner.py "
@@ -10902,6 +10908,50 @@ class BreadthEvidenceTests(unittest.TestCase):
             )
             self.assertTrue(audit["passed"], audit)
             self.assertEqual(audit["mismatch_count"], 0)
+
+            pack_dir = tmpdir / "pack"
+            resource_dir = pack_dir / "resource"
+            resource_dir.mkdir(parents=True)
+            pack_source = (
+                resource_dir / "qge_registered_full_game_progress.json"
+            )
+            breadth_evidence.write_json(pack_source, manifest)
+            pack_queue = full_game_capture_queue.build_queue(SimpleNamespace(
+                source=pack_source,
+                limit=2,
+                frames=3,
+                wait_frames=12,
+                trace=True,
+                special_maps_last=True,
+                authority_smoke=True,
+                force_world_metrics=True,
+                env=["QGE_STREAM_LAUNCH=open"],
+            ))
+            pack_queue_path = (
+                resource_dir / "qge_full_game_capture_queue.json"
+            )
+            pack_script_path = resource_dir / "run_missing_maps.sh"
+            pack_markdown_path = (
+                resource_dir / "qge_full_game_capture_queue.md"
+            )
+            full_game_capture_queue.write_json(pack_queue_path, pack_queue)
+            pack_script_path.write_text(
+                "\n".join(full_game_capture_queue.script_lines(pack_queue)),
+                encoding="utf-8",
+            )
+            pack_markdown_path.write_text(
+                full_game_capture_queue.markdown_report(pack_queue),
+                encoding="utf-8",
+            )
+            pack_audit = capture_queue_audit.capture_queue_audit(pack_dir)
+            self.assertTrue(pack_audit["passed"], pack_audit)
+            self.assertEqual(pack_audit["pack_dir"], str(pack_dir))
+            self.assertEqual(
+                pack_audit["queue_file"], str(pack_queue_path))
+            self.assertEqual(
+                pack_audit["script_file"], str(pack_script_path))
+            self.assertEqual(
+                pack_audit["markdown_file"], str(pack_markdown_path))
 
             stale = publication_pack.load_json(queue_path)
             stale["queue_job_count"] = 1

@@ -476,7 +476,7 @@ assert icc["publication_ready_for_complete_claim"] is True
 assert icc["manifest_reproduce_recorded"] is True
 assert icc["manifest_reproduce_source_inputs_recorded"] is True
 assert icc["manifest_reproduce_missing_source_inputs"] is False
-assert icc["manifest_reproduce_optional_postpack_command_count"] == 30
+assert icc["manifest_reproduce_optional_postpack_command_count"] == 31
 assert icc["manifest_reproduce_publication_pack_command_count"] == 1
 assert icc["manifest_reproduce_missing_optional_postpack_command_count"] == 0
 assert icc["manifest_reproduce_missing_optional_postpack_commands"] == []
@@ -535,6 +535,15 @@ assert icc["registered_full_game_progress_target_map_count"] == 32
 assert icc["registered_full_game_progress_ready_map_count"] == 0
 assert icc["registered_full_game_progress_asset_missing_map_count"] == 32
 assert icc["registered_full_game_progress_capture_needed_map_count"] == 0
+assert icc["full_game_capture_queue_file"].endswith("resource/qge_full_game_capture_queue.json")
+assert icc["full_game_capture_queue_script_file"].endswith("resource/run_missing_maps.sh")
+assert icc["full_game_capture_queue_markdown_file"].endswith("resource/qge_full_game_capture_queue.md")
+assert icc["full_game_capture_queue_schema"] == "qge.full_game_capture_queue.v0"
+assert icc["full_game_capture_queue_source_schema"] == "qge.registered_full_game_progress.v0"
+assert icc["full_game_capture_queue_map_set"] == "quake_registered_single_player"
+assert icc["full_game_capture_queue_job_count"] == 0
+assert icc["full_game_capture_queue_asset_unavailable_missing_count"] == 32
+assert icc["full_game_capture_queue_remaining_map_count_after_queue"] == 32
 assert icc["native_backend_boundary_file"].endswith("resource/qge_native_backend_boundary.json")
 assert icc["native_backend_boundary_status"] == "pass"
 assert icc["moonlab_qae_payload_file"].endswith("advantage/qae_moonlab_payload.json")

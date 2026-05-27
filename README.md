@@ -172,9 +172,11 @@ Important known limitations:
   registered whole-game blocker ledger. The full-game capture queue can consume
   that packed progress JSON directly, so a later registered asset install can
   queue newly available maps without treating the shareware coverage ledger as
-  whole-game evidence. `tools/qge_full_game_capture_queue_audit.py` rebuilds
-  the queue from its recorded reproduction inputs and compares JSON, script,
-  and Markdown outputs so stale post-install queues cannot drift silently.
+  whole-game evidence. Publication packs now include the generated queue JSON,
+  `run_missing_maps.sh`, and Markdown under `resource/`.
+  `tools/qge_full_game_capture_queue_audit.py` rebuilds the queue from its
+  recorded reproduction inputs and compares JSON, script, and Markdown outputs
+  as part of the aggregate postpack suite so stale queues cannot drift silently.
   ICC tracks that progress-only ledger through
   `qge_registered_full_game_coverage_ledger`, separate from the deployment
   readiness target.

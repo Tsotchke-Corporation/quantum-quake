@@ -24,6 +24,7 @@ REQUIRED_REPRODUCE_COMMAND_PREFIXES = (
     "tools/qge_registered_asset_intake.py ",
     "tools/qge_asset_requirements.py ",
     "tools/qge_registered_full_game_progress.py ",
+    "tools/qge_full_game_capture_queue.py ",
     "tools/qge_moonlab_job_runner.py ",
     "tools/qge_moonlab_submission_bundle.py ",
     "tools/qge_moonlab_hardware_ingest.py ",
@@ -44,6 +45,7 @@ POSTPACK_REPRODUCE_COMMAND_PREFIXES = (
     "tools/qge_breadth_evidence_audit.py ",
     "tools/qge_asset_resource_audit.py ",
     "tools/qge_registered_full_game_progress_audit.py ",
+    "tools/qge_full_game_capture_queue_audit.py ",
     "tools/qge_registered_asset_script_audit.py ",
     "tools/qge_resource_boundary_audit.py ",
     "tools/qge_moonlab_full_game_plan_audit.py ",
@@ -674,6 +676,39 @@ def core_command_option_checks(
             checks["tools/qge_registered_full_game_progress.py "],
             "--icc-json",
             "/tmp/qge_registered_full_game_progress_icc_evidence.json",
+            required=True,
+        )
+    queue_plan = dict_or_empty(
+        source_inputs.get("full_game_capture_queue_reproduction"))
+    if queue_plan:
+        checks["tools/qge_full_game_capture_queue.py "] = [
+            position_check(
+                1,
+                queue_plan.get("source"),
+            )
+        ]
+        add_scalar_option_check(
+            checks["tools/qge_full_game_capture_queue.py "],
+            "--asset-root",
+            queue_plan.get("asset_root"),
+            required=True,
+        )
+        add_scalar_option_check(
+            checks["tools/qge_full_game_capture_queue.py "],
+            "--out",
+            "/tmp/qge_full_game_capture_queue.json",
+            required=True,
+        )
+        add_scalar_option_check(
+            checks["tools/qge_full_game_capture_queue.py "],
+            "--script-out",
+            "/tmp/run_missing_maps.sh",
+            required=True,
+        )
+        add_scalar_option_check(
+            checks["tools/qge_full_game_capture_queue.py "],
+            "--markdown",
+            "/tmp/qge_full_game_capture_queue.md",
             required=True,
         )
     checks.update({

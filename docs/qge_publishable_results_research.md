@@ -319,8 +319,9 @@ and marks UI-only `-nolauncher` paths as intentional skips.
    - Use `tools/qge_full_game_capture_queue.py <publication_pack_or_breadth_dir>`
      to generate `qge.full_game_capture_queue.v0` and a `run_missing_maps.sh`
      harness script. Check generated queue JSON, script, and Markdown with
-     `tools/qge_full_game_capture_queue_audit.py`; it rebuilds from the
-     recorded reproduction inputs and rejects stale post-install queues. The
+     `tools/qge_full_game_capture_queue_audit.py`; publication packs include
+     those queue artifacts under `resource/`, and the aggregate postpack suite
+     reruns the audit so stale post-install queues fail the pack gate. The
      generated queue for
      `diagnostics/publication_pack/20260525-route-authority-gate` inventories local loose/Pak
      BSP assets before queuing. With the current `assets/id1/pak0.pak`, it
