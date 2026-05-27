@@ -31,6 +31,7 @@ import qge_asset_inventory  # noqa: E402
 import qge_asset_requirements  # noqa: E402
 import qge_breadth_evidence  # noqa: E402
 import qge_manifest_reproduce_audit  # noqa: E402
+import qge_manifest_source_input_audit  # noqa: E402
 import qge_moonlab_deployment_gate  # noqa: E402
 import qge_moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_hardware_ingest  # noqa: E402
@@ -1151,7 +1152,7 @@ def resolve_inputs(args: argparse.Namespace) -> dict[str, Path | None]:
     graphics_capture_dir = args.graphics_capture_dir
     if graphics_capture_dir is None and vanilla_matrix is not None:
         candidate = vanilla_matrix.parent
-        if (candidate / "quantum.qge_perf_summary.json").is_file():
+        if candidate.is_dir():
             graphics_capture_dir = candidate
     agent_stream = args.agent_stream_dir
     if agent_stream is None and capture_dir is not None:
@@ -2537,6 +2538,12 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("asset_requirements_summary"))
     registered_asset_intake_summary = dict_or_empty(
         advantage_summary.get("registered_asset_intake_summary"))
+    source_input_audit = (
+        qge_manifest_source_input_audit.manifest_source_input_audit(
+            manifest,
+            required=True,
+        )
+    )
     reproduce_audit = qge_manifest_reproduce_audit.manifest_reproduce_audit(
         manifest,
         required=True,
@@ -2558,6 +2565,12 @@ def build_icc_evidence(manifest: dict[str, Any],
         "publication_manifest_file": str(manifest_path),
         "publication_icc_evidence_file": str(icc_path),
         "publication_pack_dir": manifest["pack_dir"],
+        "manifest_source_input_audit_passed": source_input_audit.get("passed"),
+        "manifest_source_input_recorded": source_input_audit.get("recorded"),
+        "manifest_source_input_check_count": source_input_audit.get(
+            "check_count"),
+        "manifest_source_input_mismatch_count": source_input_audit.get(
+            "mismatch_count"),
         "manifest_reproduce_audit_passed": reproduce_audit.get("passed"),
         "manifest_reproduce_recorded": reproduce_audit.get("recorded"),
         "manifest_reproduce_source_inputs_recorded": (

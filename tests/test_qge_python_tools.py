@@ -3014,6 +3014,21 @@ class PublicationPackTests(unittest.TestCase):
                 for item in missing_both_audit["mismatches"]
             ))
 
+            optional_breadth_missing_manifest = json.loads(
+                json.dumps(manifest))
+            del optional_breadth_missing_manifest["source_inputs"][
+                "breadth_evidence"]
+            del optional_breadth_missing_manifest["artifacts"]["breadth"][
+                "evidence"]["source_path"]
+            del optional_breadth_missing_manifest["artifacts"]["breadth"][
+                "icc_evidence"]["source_path"]
+            optional_breadth_audit = (
+                manifest_source_input_audit.manifest_source_input_audit(
+                    optional_breadth_missing_manifest)
+            )
+            self.assertTrue(optional_breadth_audit["passed"])
+            self.assertEqual(optional_breadth_audit["mismatch_count"], 0)
+
             missing_doc_manifest = json.loads(json.dumps(manifest))
             del missing_doc_manifest["source_inputs"]["architecture_doc"]
             missing_doc_audit = (
@@ -4802,16 +4817,96 @@ class PublicationPackTests(unittest.TestCase):
             "capture_dir": Path("diagnostics/quake_stream/run"),
             "vanilla_matrix": Path(
                 "diagnostics/quake_graphics/run/vanilla_capture_matrix.json"),
+            "vanilla_icc_evidence": Path(
+                "diagnostics/quake_graphics/run/"
+                "qge_vanilla_icc_evidence.json"),
             "graphics_capture_dir": Path("diagnostics/quake_graphics/run"),
+            "publication_performance_summary": Path(
+                "diagnostics/quake_graphics/run/qge_perf_summary.json"),
             "agent_stream_dir": Path("diagnostics/agent_stream/run"),
             "breadth_evidence": Path(
                 "diagnostics/breadth/run/breadth_evidence.json"),
         }
+        manifest["artifacts"].setdefault("source_docs", {})
+        manifest["artifacts"]["capture"].update({
+            "trace": {
+                "source_path": str(
+                    reproduce_inputs["capture_dir"] / "qge_trace.bin"),
+            },
+            "frame": {
+                "source_path": str(
+                    reproduce_inputs["capture_dir"] / "frame_001.png"),
+            },
+            "log": {
+                "source_path": str(
+                    reproduce_inputs["capture_dir"] / "quantum_quake.log"),
+            },
+            "readme": {
+                "source_path": str(
+                    reproduce_inputs["capture_dir"] / "README.txt"),
+            },
+        })
+        manifest["artifacts"]["capture"]["performance_summary"][
+            "source_path"] = str(
+                reproduce_inputs["publication_performance_summary"])
+        manifest["artifacts"]["capture"]["performance_icc_evidence"][
+            "source_path"] = str(
+                reproduce_inputs["publication_performance_summary"].with_name(
+                    "qge_perf_icc_evidence.json"))
+        manifest["artifacts"]["vanilla"]["matrix"]["source_path"] = str(
+            reproduce_inputs["vanilla_matrix"])
+        manifest["artifacts"]["vanilla"]["icc_evidence"]["source_path"] = str(
+            reproduce_inputs["vanilla_icc_evidence"])
+        manifest["artifacts"]["vanilla"]["classic_frame"] = {
+            "source_path": str(
+                reproduce_inputs["graphics_capture_dir"] / "classic.png"),
+        }
+        manifest["artifacts"]["vanilla"]["qge_frame"] = {
+            "source_path": str(
+                reproduce_inputs["graphics_capture_dir"] / "quantum.png"),
+        }
+        manifest["artifacts"]["agent_stream"]["stream_directory"][
+            "source_path"] = str(reproduce_inputs["agent_stream_dir"])
+        manifest["artifacts"]["agent_stream"]["manifest"]["source_path"] = str(
+            reproduce_inputs["agent_stream_dir"] / "manifest.json")
+        manifest["artifacts"]["agent_stream"]["events"]["source_path"] = str(
+            reproduce_inputs["agent_stream_dir"] / "events.ndjson")
+        manifest["artifacts"]["agent_stream"]["icc_evidence"] = {
+            "source_path": str(
+                reproduce_inputs["agent_stream_dir"] /
+                "qge_agent_stream_icc_evidence.jsonl"),
+        }
+        manifest["artifacts"]["breadth"]["evidence"]["source_path"] = str(
+            reproduce_inputs["breadth_evidence"])
+        manifest["artifacts"]["breadth"]["icc_evidence"]["source_path"] = str(
+            reproduce_inputs["breadth_evidence"].with_name(
+                "qge_breadth_icc_evidence.json"))
+        manifest["artifacts"]["source_docs"].update({
+            "claims_ledger": {
+                "source_path": str(reproduce_args.claims),
+            },
+            "scene_oracle_ir": {
+                "source_path": str(
+                    Path("docs/qge_scene_oracle_ir.md")),
+            },
+            "architecture": {
+                "source_path": str(
+                    Path("docs/qge_engine_architecture.md")),
+            },
+            "advantage_roadmap": {
+                "source_path": str(
+                    Path("docs/qge_quantum_advantage_research_roadmap.md")),
+            },
+        })
         manifest["source_inputs"] = {
             "capture_dir": str(reproduce_inputs["capture_dir"]),
             "vanilla_matrix": str(reproduce_inputs["vanilla_matrix"]),
+            "vanilla_icc_evidence": str(
+                reproduce_inputs["vanilla_icc_evidence"]),
             "graphics_capture_dir": str(
                 reproduce_inputs["graphics_capture_dir"]),
+            "publication_performance_summary": str(
+                reproduce_inputs["publication_performance_summary"]),
             "agent_stream_dir": str(reproduce_inputs["agent_stream_dir"]),
             "breadth_evidence": str(reproduce_inputs["breadth_evidence"]),
             "publication_pack_reproduction": {
@@ -4821,6 +4916,10 @@ class PublicationPackTests(unittest.TestCase):
                 publication_pack.breadth_evidence_reproduction_inputs(
                     reproduce_inputs)),
             "claims_ledger": str(reproduce_args.claims),
+            "scene_oracle_ir_doc": "docs/qge_scene_oracle_ir.md",
+            "architecture_doc": "docs/qge_engine_architecture.md",
+            "advantage_roadmap_doc": (
+                "docs/qge_quantum_advantage_research_roadmap.md"),
             "asset_root": str(reproduce_args.asset_root),
             "registered_asset_intake_reproduction": (
                 publication_pack.registered_asset_intake_reproduction_inputs(
@@ -4955,6 +5054,7 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(icc_audit["mismatch_count"], 0)
         stale_icc = json.loads(json.dumps(icc))
         stale_icc["moonlab_deployment_gate_blocker_count"] = 0
+        stale_icc["manifest_source_input_mismatch_count"] = 99
         stale_icc["hardware_quantum_advantage_claimed"] = True
         stale_audit = publication_icc_audit.publication_icc_evidence_audit(
             manifest,
@@ -4968,12 +5068,20 @@ class PublicationPackTests(unittest.TestCase):
             "moonlab_deployment_gate_blocker_count",
             stale_audit["field_mismatches"],
         )
+        self.assertIn(
+            "manifest_source_input_mismatch_count",
+            stale_audit["field_mismatches"],
+        )
         self.assertTrue(any(
             flag.get("flag") == "hardware_quantum_advantage_claimed"
             for flag in stale_audit["overclaim_flags"]
         ))
         self.assertEqual(icc["runtime_backend"], "qge_publication_pack")
         self.assertEqual(icc["completion_reason"], "qge_publication_artifact_pack_complete")
+        self.assertTrue(icc["manifest_source_input_audit_passed"])
+        self.assertTrue(icc["manifest_source_input_recorded"])
+        self.assertEqual(icc["manifest_source_input_check_count"], 20)
+        self.assertEqual(icc["manifest_source_input_mismatch_count"], 0)
         self.assertTrue(icc["manifest_reproduce_audit_passed"])
         self.assertTrue(icc["manifest_reproduce_recorded"])
         self.assertTrue(icc["manifest_reproduce_source_inputs_recorded"])

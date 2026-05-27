@@ -36,6 +36,9 @@ SIBLING_SOURCE_CHECKS = (
     ("publication_performance_summary", "capture", "performance_icc_evidence"),
     ("breadth_evidence", "breadth", "icc_evidence"),
 )
+OPTIONAL_MISSING_SOURCE_INPUTS = frozenset({
+    "breadth_evidence",
+})
 
 
 def dict_or_empty(value: Any) -> dict[str, Any]:
@@ -107,6 +110,12 @@ def compare_source(
         source_norm = normalized_parent(source_value)
     else:
         artifact_compare = artifact_norm
+    if (
+        source_norm is None and
+        artifact_compare is None and
+        input_name in OPTIONAL_MISSING_SOURCE_INPUTS
+    ):
+        return None
     if source_norm is None and artifact_compare is None:
         return {
             "source_input": input_name,

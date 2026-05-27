@@ -614,6 +614,10 @@ assert icc["moonlab_completed_simulator_job_count"] >= 2
 assert icc["moonlab_hardware_submitted_job_count"] == 0
 assert icc["whole_game_hardware_execution_claimed"] is False
 assert icc["vanilla_icc_evidence_file"].endswith("vanilla/qge_vanilla_icc_evidence.json")
+assert icc["manifest_source_input_audit_passed"] is True
+assert icc["manifest_source_input_recorded"] is True
+assert icc["manifest_source_input_check_count"] == 20
+assert icc["manifest_source_input_mismatch_count"] == 0
 assert icc["status"] == "success"
 assert any(
     "qge_publication_icc_audit.py" in command
