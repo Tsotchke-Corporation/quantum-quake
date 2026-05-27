@@ -680,8 +680,10 @@ Known current visual state:
   `tools/qge_full_game_capture_queue.py`
   turns the registered ledger
   into `qge.full_game_capture_queue.v0` and a runnable
-  `run_missing_maps.sh`; it now inventories local loose/Pak BSP assets before
-  queuing. Against the current publication pack and current `assets/id1/pak0.pak`,
+  `run_missing_maps.sh`; `tools/qge_full_game_capture_queue_audit.py`
+  rebuilds the queue from recorded reproduction inputs and rejects stale JSON,
+  script, or Markdown output. The queue now inventories local loose/Pak BSP
+  assets before queuing. Against the current publication pack and current `assets/id1/pak0.pak`,
   zero locally queueable missing maps remain and 23 registered maps are reported
   as asset-unavailable until additional registered BSP assets are installed; the
   queue status is explicitly `blocked_asset_unavailable`, not complete.

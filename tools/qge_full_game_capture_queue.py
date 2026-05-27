@@ -456,6 +456,30 @@ def queue_status(
     return "blocked_no_queueable_maps"
 
 
+def reproduction_inputs(
+    args: argparse.Namespace,
+    *,
+    source_path: Path,
+    asset_root: Path,
+    include_unavailable_assets: bool,
+    special_maps_last: bool,
+) -> dict[str, Any]:
+    return {
+        "source": str(source_path),
+        "asset_root": str(asset_root),
+        "limit": getattr(args, "limit", None),
+        "frames": int(getattr(args, "frames", 4)),
+        "wait_frames": int(getattr(args, "wait_frames", 35)),
+        "trace": bool(getattr(args, "trace", True)),
+        "special_maps_last": special_maps_last,
+        "authority_smoke": bool(getattr(args, "authority_smoke", True)),
+        "force_world_metrics": bool(
+            getattr(args, "force_world_metrics", True)),
+        "include_unavailable_assets": include_unavailable_assets,
+        "env": list(getattr(args, "env", None) or []),
+    }
+
+
 def build_queue(args: argparse.Namespace) -> dict[str, Any]:
     source_path = resolve_source_path(args.source)
     data = load_json(source_path)
@@ -539,6 +563,13 @@ def build_queue(args: argparse.Namespace) -> dict[str, Any]:
         "special_route_maps": sorted(SPECIAL_ROUTE_MAPS),
         "start_hub_route_maps": sorted(START_HUB_ROUTE_MAPS),
         "route_contract_schema": ROUTE_CONTRACT_SCHEMA,
+        "reproduction": reproduction_inputs(
+            args,
+            source_path=source_path,
+            asset_root=asset_root,
+            include_unavailable_assets=include_unavailable_assets,
+            special_maps_last=special_maps_last,
+        ),
         "route_contract_map_count": len(route_contracts),
         "route_contracts_complete": not missing_route_contract_maps,
         "missing_route_contract_maps": missing_route_contract_maps,

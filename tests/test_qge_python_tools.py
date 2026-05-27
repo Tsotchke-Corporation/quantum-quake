@@ -31,6 +31,7 @@ import qge_asset_resource_audit as asset_resource_audit  # noqa: E402
 import qge_breadth_evidence as breadth_evidence  # noqa: E402
 import qge_breadth_evidence_audit as breadth_evidence_audit  # noqa: E402
 import qge_full_game_capture_queue as full_game_capture_queue  # noqa: E402
+import qge_full_game_capture_queue_audit as capture_queue_audit  # noqa: E402
 import qge_map_set_evidence as map_set_evidence  # noqa: E402
 import qge_map_set_evidence_audit as map_set_evidence_audit  # noqa: E402
 import qge_map_sets as map_sets  # noqa: E402
@@ -10881,6 +10882,59 @@ class BreadthEvidenceTests(unittest.TestCase):
             self.assertIn("noesis_authority_smoke", markdown)
             self.assertIn("Route contracts: 32 (complete=True)", markdown)
             self.assertIn("Asset-unavailable missing maps", markdown)
+            self.assertEqual(
+                queue["reproduction"]["source"], str(breadth_path))
+            self.assertEqual(queue["reproduction"]["frames"], 3)
+
+            queue_path = tmpdir / "capture_queue.json"
+            script_path = tmpdir / "run_missing_maps.sh"
+            markdown_path = tmpdir / "capture_queue.md"
+            full_game_capture_queue.write_json(queue_path, queue)
+            script_path.write_text(
+                "\n".join(full_game_capture_queue.script_lines(queue)),
+                encoding="utf-8",
+            )
+            markdown_path.write_text(markdown, encoding="utf-8")
+            audit = capture_queue_audit.capture_queue_audit(
+                queue_path,
+                script_path=script_path,
+                markdown_path=markdown_path,
+            )
+            self.assertTrue(audit["passed"], audit)
+            self.assertEqual(audit["mismatch_count"], 0)
+
+            stale = publication_pack.load_json(queue_path)
+            stale["queue_job_count"] = 1
+            publication_pack.write_json(queue_path, stale)
+            stale_audit = capture_queue_audit.capture_queue_audit(
+                queue_path,
+                script_path=script_path,
+                markdown_path=markdown_path,
+            )
+            self.assertFalse(stale_audit["passed"])
+            self.assertIn(
+                "queue_job_count",
+                stale_audit["queue_field_mismatches"],
+            )
+
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(
+                    capture_queue_audit.main([
+                        str(queue_path),
+                        "--script",
+                        str(script_path),
+                        "--markdown",
+                        str(markdown_path),
+                        "--out",
+                        str(tmpdir / "capture_queue_audit.json"),
+                    ]),
+                    0,
+                )
+            self.assertIn(
+                "QGE_FULL_GAME_CAPTURE_QUEUE_AUDIT",
+                stdout.getvalue(),
+            )
 
             canonical_queue = full_game_capture_queue.build_queue(SimpleNamespace(
                 source=breadth_path,
