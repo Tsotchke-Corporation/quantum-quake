@@ -618,6 +618,16 @@ assert icc["manifest_source_input_audit_passed"] is True
 assert icc["manifest_source_input_recorded"] is True
 assert icc["manifest_source_input_check_count"] == 20
 assert icc["manifest_source_input_mismatch_count"] == 0
+assert icc["manifest_source_copy_audit_available"] is True
+assert icc["manifest_source_copy_audit_passed"] is True
+assert icc["manifest_source_copy_recorded"] is True
+assert icc["manifest_source_copy_record_count"] == 18
+assert icc["manifest_source_copy_file_record_count"] == 17
+assert icc["manifest_source_copy_directory_record_count"] == 1
+assert icc["manifest_source_copy_missing_pack_dir"] is False
+assert icc["manifest_source_copy_malformed_record_count"] == 0
+assert icc["manifest_source_copy_packed_path_membership_mismatch_count"] == 0
+assert icc["manifest_source_copy_mismatch_count"] == 0
 assert icc["status"] == "success"
 assert any(
     "qge_publication_icc_audit.py" in command

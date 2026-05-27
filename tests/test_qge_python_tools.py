@@ -5107,6 +5107,7 @@ class PublicationPackTests(unittest.TestCase):
         stale_icc = json.loads(json.dumps(icc))
         stale_icc["moonlab_deployment_gate_blocker_count"] = 0
         stale_icc["manifest_source_input_mismatch_count"] = 99
+        stale_icc["manifest_source_copy_mismatch_count"] = 99
         stale_icc["hardware_quantum_advantage_claimed"] = True
         stale_audit = publication_icc_audit.publication_icc_evidence_audit(
             manifest,
@@ -5124,6 +5125,10 @@ class PublicationPackTests(unittest.TestCase):
             "manifest_source_input_mismatch_count",
             stale_audit["field_mismatches"],
         )
+        self.assertIn(
+            "manifest_source_copy_mismatch_count",
+            stale_audit["field_mismatches"],
+        )
         self.assertTrue(any(
             flag.get("flag") == "hardware_quantum_advantage_claimed"
             for flag in stale_audit["overclaim_flags"]
@@ -5134,6 +5139,10 @@ class PublicationPackTests(unittest.TestCase):
         self.assertTrue(icc["manifest_source_input_recorded"])
         self.assertEqual(icc["manifest_source_input_check_count"], 20)
         self.assertEqual(icc["manifest_source_input_mismatch_count"], 0)
+        self.assertFalse(icc["manifest_source_copy_audit_available"])
+        self.assertIsNone(icc["manifest_source_copy_audit_passed"])
+        self.assertEqual(icc["manifest_source_copy_record_count"], 0)
+        self.assertEqual(icc["manifest_source_copy_mismatch_count"], 0)
         self.assertTrue(icc["manifest_reproduce_audit_passed"])
         self.assertTrue(icc["manifest_reproduce_recorded"])
         self.assertTrue(icc["manifest_reproduce_source_inputs_recorded"])
