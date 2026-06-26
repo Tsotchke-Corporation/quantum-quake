@@ -1,8 +1,0 @@
-{
-  "schema": "qge.hardware_advantage_campaign_state.v0",
-  "state": "submission_scope_ready",
-  "moonlab_hardware_submission_scope_ready": true,
-  "hardware_candidate_job_count": 1,
-  "hardware_candidate_job_count_state": "nonzero",
-  "source_pack": "diagnostics/publication_pack/20260624-shareware-v8"
-}

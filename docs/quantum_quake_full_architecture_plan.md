@@ -923,7 +923,7 @@ This module is the first actual engineering step if the goal is to make the quan
 ICC tracking:
 
 - task id: `qge_quantum_runtime_trace_spine`
-- artifact root: `/Users/tyr/Desktop/infinite_context_coder/artifacts/repos/quantum_quake/tasks/qge_quantum_runtime_trace_spine`
+- artifact root: `<icc-artifacts>/quantum_quake/tasks/qge_quantum_runtime_trace_spine`
 - status: foundation module implemented and verified on 2026-05-06
 - next item: `qge_world_registry_and_snapshot`
 - note: ICC source index and memory artifacts were refreshed on 2026-05-06; git-history is unavailable until this repo has a first commit.

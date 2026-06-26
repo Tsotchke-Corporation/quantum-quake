@@ -593,7 +593,7 @@ The next hard work is therefore:
 4. Keep the historical blocked check available when rebuilding evidence:
 
 ```sh
-/Users/tyr/Desktop/infinite_context_coder/bin/icc completion-oracle \
+icc completion-oracle \
   --repo quantum_quake \
   --target qge_vanilla_quake_conformance \
   --trace-dir diagnostics/quake_graphics/<capture> \

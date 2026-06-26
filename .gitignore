@@ -42,3 +42,20 @@ __pycache__/
 /quake/.git.upstream/
 /quake/Quake/quakespasm
 /quake/Quake/quakespasm.pak
+
+# Internal ICC control-plane state (local verification logs; not for release).
+# .icc/completion-oracles.json and .icc/README.md are kept: `make test` loads them.
+/.icc/attestations.yaml
+/.icc/production-audit.yaml
+/.icc/modularity-justifications.json
+
+# Internal engineering process docs and generated ICC sidecars (kept local, not shipped)
+/docs/qge_tsotchke_swarm_execution.md
+/docs/qge_tsotchke_swarm_execution.json
+/docs/qge_100_percent_swarm_queue.md
+/docs/qge_shareware_complete_effects_sprint.md
+/docs/qge_hardware_advantage_campaign.json
+/docs/qge_hardware_advantage_campaign_icc_evidence.json
+/docs/qge_hardware_advantage_campaign_no_overclaim_state.json
+/docs/qge_hardware_advantage_campaign_no_returned_hardware_state.json
+/docs/qge_hardware_advantage_campaign_submission_scope_state.json

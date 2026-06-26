@@ -168,7 +168,7 @@ emit_noesis_player_script() {
     "$noesis_player_tool"
 }
 
-find /Users/tyr/Library/Logs/DiagnosticReports -maxdepth 1 -type f -print | sort > "$outdir/crash_reports.before"
+find $HOME/Library/Logs/DiagnosticReports -maxdepth 1 -type f -print | sort > "$outdir/crash_reports.before"
 rm -f "$qconsole_file" "$qconsole_root_file"
 
 {
@@ -305,7 +305,7 @@ else
 fi
 
 print_log_updates
-find /Users/tyr/Library/Logs/DiagnosticReports -maxdepth 1 -type f -print | sort > "$outdir/crash_reports.after"
+find $HOME/Library/Logs/DiagnosticReports -maxdepth 1 -type f -print | sort > "$outdir/crash_reports.after"
 comm -13 "$outdir/crash_reports.before" "$outdir/crash_reports.after" > "$outdir/crash_reports.new"
 if [[ -f "$qconsole_file" ]]; then
   cp "$qconsole_file" "$outdir/qconsole.log"

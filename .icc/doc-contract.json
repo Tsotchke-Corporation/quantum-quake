@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "description": "Quantum Quake documentation-truth contract. Required strings keep the public docs evidence-grounded (verified runtime baseline tokens + measured renderer RMSE values that the noesis input contract also asserts); forbidden strings block overclaim wording disallowed by the QGE claims ledger.",
+  "docs": [
+    {
+      "path": "README.md",
+      "regex": false,
+      "required": [
+        "qge_vanilla_runtime_complete",
+        "diagnostic notify cleanup",
+        "world fullbright sampling scale",
+        "0.0349406",
+        "0.0343281",
+        "not a current claim"
+      ],
+      "forbidden": [
+        "quantum supremacy"
+      ]
+    },
+    {
+      "path": "docs/README.md",
+      "regex": false,
+      "required": [
+        "qge_state_of_development.md",
+        "qge_claims_ledger.md",
+        "qge_publishable_results_research.md"
+      ],
+      "forbidden": [
+        "quantum supremacy"
+      ]
+    },
+    {
+      "path": "docs/qge_claims_ledger.md",
+      "regex": false,
+      "required": [
+        "Practical hardware advantage is not an allowed current claim"
+      ]
+    }
+  ]
+}

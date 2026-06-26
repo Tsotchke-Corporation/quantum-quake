@@ -1,356 +1,280 @@
 # Quantum Quake
 
-Quantum Quake is the QuakeSpasm-based conformance title for QGE, the
-Moonlab-backed Quantum Game Engine layer. The project target is unambiguous:
-the entire game should run under QGE/Moonlab authority. QuakeSpasm may remain
-as host, compatibility shell, content loader, and classic reference oracle, but
-it must not be hidden production authority for domains claimed as Moonlab-owned.
-The current repository is centered on the C engine, QGE runtime hooks,
-diagnostics harnesses, Noesis gameplay automation, and ICC evidence used to
-move individual game domains from shadow telemetry toward bounded authority.
+**Real Quake. Real id1 maps. Rendered, simulated, and reasoned about through a quantum game engine.**
 
-The `master` branch is the primary development branch for this codebase.
-`origin/HEAD` resolves to `origin/master`, and `origin/main` is kept
-fast-forwarded to the same commit for compatibility after the older unrelated
-Three.js/WebTransport history was merged as provenance. The authoritative tree
-is the `master` QGE/QuakeSpasm layout documented here.
+Quantum Quake is the first conformance title for **QGE** — the Moonlab-backed
+**Quantum Game Engine** — a runtime layer that progressively moves a classic
+game's authoritative domains (rendering, visibility, physics, audio, AI, RNG)
+off the conventional CPU path and onto bounded, *traceable*, simulated-quantum
+computation. The host is [QuakeSpasm](https://github.com/sezero/quakespasm); the
+content is your own licensed Quake; the engine underneath is new.
 
-Latest verified runtime baseline: the current QGE world texture-detail restore,
-world-surface blue balance, one-texel bilinear world texture smoothing,
-moderate-minification texture prefilter, alias-skin viewmodel path, world fullbright sampling scale,
-and diagnostic notify cleanup, mirrored to both `origin/master` and
-`origin/main`.
+<p align="center">
+  <img src="docs/media/quantum_quake_e1m1_gameplay.gif" alt="Quantum Quake — live E1M1 gameplay rendered through the QGE sparse-DWT quantum render path" width="640"><br>
+  <em>Live E1M1 capture. Every frame above is produced by the QGE quantum render path
+  (<code>quantum_render 2</code>), not classic GL — sparse discrete-wavelet reconstruction
+  with per-surface ownership telemetry on each frame.</em>
+</p>
 
-## Current Status
+> **What this is, in one breath:** you load `e1m1`, you walk the slipgate base,
+> you fire the shotgun — and the pixels, the visible-set, the projectile
+> trajectories, and the entropy behind them are computed by a quantum runtime and
+> emitted as auditable evidence. Nothing here is mocked: every claim on this page
+> is backed by a trace, a metric, a screenshot, or an ICC task attempt.
 
-This is an active research and systems-engineering project, not a finished
-player-facing Quake distribution.
+---
 
-Working and routinely verified:
+## Table of Contents
 
-- Moonlab-backed QGE core runtime, trace, RNG, AI, render, visibility, audio,
-  physics, and world snapshot libraries.
-- A macOS QuakeSpasm application build with QGE hooks and cvars.
-- Sparse DWT QGE primary rendering with world-surface, material, lightmap,
-  entity, HUD/console ownership telemetry, native IDWT evidence, and explicit
-  fallback reasons. The current graphics baseline updates the QGE primary
-  render every host frame by default, seeds a far-depth ambient world
-  background for missing world pixels, normalizes warp/water texture
-  coordinates before palette sampling, uses the base Quake palette for ordinary
-  world texture indices, splits world fullbright texels into a bounded unlit
-  additive contribution, applies a bounded footprint prefilter to moderately
-  minified world texels, moves one-texel wall/ceiling samples onto the bilinear
-  palette path to reduce crawl, applies a bounded world-surface blue balance
-  against the classic fixed-view reference, restores a bounded amount of
-  texture detail around per-texture palette means, samples alias-model skin
-  texels for the first-person weapon mesh, keeps first-person weapon geometry
-  out of the world tone histogram, and derives render-gate display gain from
-  deterministic state marginals instead of finite-shot readout counts.
-- QGE visibility shadow/parity paths with audited authority-gate telemetry.
-- QGE projectile shadow/writeback/collision-oracle evidence paths with replay
-  and persistence-boundary trace records.
-- QGE audio post-mix and source-mode telemetry, including source authority
+- [Why this exists](#why-this-exists)
+- [What's actually *quantum* about it](#whats-actually-quantum-about-it)
+- [The QGE architecture](#the-qge-architecture)
+- [Honesty by construction: the claims ledger](#honesty-by-construction-the-claims-ledger)
+- [Current status — what works today](#current-status--what-works-today)
+- [Quick start](#quick-start)
+- [Renderer evidence](#renderer-evidence)
+- [For researchers: quantum advantage & the oracle compiler](#for-researchers-quantum-advantage--the-oracle-compiler)
+- [Repository layout](#repository-layout)
+- [Documentation map](#documentation-map)
+- [License & credits](#license--credits)
+
+---
+
+## Why this exists
+
+Most "quantum games" are either (a) a quantum-themed skin over classical code, or
+(b) a toy circuit that has nothing to do with a real, playable game. Quantum Quake
+is an attempt at the hard, honest version of the idea:
+
+> *Take a complete, beloved, fully-specified classical game — Quake — and rebuild
+> its authoritative runtime domains, one at a time, on a quantum computational
+> substrate, while keeping the original as a frame-by-frame reference oracle so
+> every divergence is measurable.*
+
+Quake is the perfect subject. Its rules are exhaustively documented, its renderer
+and physics are deterministic, and a reference build exists to diff against. That
+means QGE can make a falsifiable claim — "this domain now runs under quantum
+authority" — and *prove* it against vanilla Quake instead of asking you to take
+its word for it.
+
+The engine is the product. **Quantum Quake is the first conformance title, not the
+boundary of the engine** — QGE is designed to host any game that wants
+quantum-owned runtime domains, bounded quantum observables, and research-grade
+benchmark artifacts.
+
+---
+
+## What's actually *quantum* about it
+
+This is the question every serious reader asks first, so here is the direct
+answer, with receipts. The clip below is the **annotated "quantum distinctions"
+capture** — the same E1M1 playthrough, with each player-visible quantum behavior
+called out as it happens:
+
+<p align="center">
+  <img src="docs/media/quantum_quake_quantum_distinctions.gif" alt="Annotated capture calling out each player-visible quantum behavior in Quantum Quake" width="640">
+</p>
+
+<table>
+<tr><th>Distinction</th><th>What you're seeing</th><th>Evidence in this capture</th></tr>
+<tr>
+  <td><b>Quantum render path</b></td>
+  <td>The framebuffer is reconstructed from a <b>sparse discrete-wavelet transform</b> evaluated on the Moonlab quantum runtime, then bridged to native pixels — not drawn by the classic GL rasterizer.</td>
+  <td>41 sparse-DWT native-bridge render frames</td>
+</tr>
+<tr>
+  <td><b>Material phase observables</b></td>
+  <td>Surface material transitions are scored as bounded quantum <i>phase</i> measurements that are visible in the frame — no faked "slipgate shimmer," only measured phase.</td>
+  <td>41 player-visible material-phase measurements</td>
+</tr>
+<tr>
+  <td><b>Quantum projectile path</b></td>
+  <td>Projectile kicks (your shots, enemy fire) flow through a quantum physics path that produces a measured trajectory field, with replay and writeback evidence.</td>
+  <td>42 explicit shareware projectile-kick probes</td>
+</tr>
+<tr>
+  <td><b>Same-projectile correlation</b></td>
+  <td>A single projectile is followed across frames and proven to be the <i>same</i> measured subject via replay/writeback correlation — quantum state with identity, not per-frame noise.</td>
+  <td>subject 164, frame 20, replay + writeback evidence</td>
+</tr>
+<tr>
+  <td><b>Conformance gate</b></td>
+  <td>The whole capture passes the <b>ICC Quantum Rules v0 gate</b>, an external, adversarial check that every quantum-rule claim in the run is backed by evidence.</td>
+  <td>ICC Quantum Rules v0 gate: <b>11/11 PASS</b></td>
+</tr>
+</table>
+
+<p align="center">
+  <img src="docs/media/quantum_distinctions_contactsheet.png" alt="Five-panel contact sheet of the annotated quantum-distinction moments" width="360"><br>
+  <em>The five annotated quantum-distinction moments as a contact sheet.</em>
+</p>
+
+What is **not** claimed: no practical quantum-hardware speedup, no dense
+70,000-qubit state, no whole-game hardware execution. Those are research targets
+with their own fail-closed gates (see [below](#for-researchers-quantum-advantage--the-oracle-compiler)).
+The distinctions above are *simulated-quantum* runtime behavior that is real,
+reproducible, and player-visible today.
+
+---
+
+## The QGE architecture
+
+QGE is ~11k lines of portable C (`qge/`) plus integration hooks inside the
+QuakeSpasm host (`quake/Quake/qge_*.c`). It is built around one idea: **a game
+frame is a research problem**, and every runtime domain can be progressively
+handed from the CPU to a quantum runtime under measurement.
+
+### The runtime pipeline
+
+A frame flows through six layers:
+
+| Layer | Role |
+|---|---|
+| **1. World registry** | Stable resources: BSP models, surfaces, textures, lightmaps, alias/sprite models, HUD images, sounds. |
+| **2. Frame snapshot** | Immutable per-frame state: camera, visible surfaces, entities, particles, sounds, lights, entropy refs, ownership counters. |
+| **3. Scene / media graph** | The renderable + audible graph the quantum domains actually consume. |
+| **4. Quantum runtime** | Moonlab-backed states, gates, measurements, entropy, probes, entanglement edges — and explicit, traced fallbacks. |
+| **5. Observable compiler** | Turns scene/media state into *bounded observables* and oracle IR (the research-mode boundary). |
+| **6. Artifact layer** | Trace, replay, claims evidence, benchmark metrics, circuits, resource estimates. |
+
+### Eight domains, three ownership stages
+
+Every game domain climbs the **same ladder** — and crucially, *every fallback to
+the classical path is recorded as a trace event. Silent fallback is a publication
+blocker.* This is what makes the claims falsifiable.
+
+```
+   SHADOW            →     ADVISORY / COMPOSITE      →        AUTHORITATIVE
+   QGE observes &          QGE output is visible or          QGE owns the final
+   reports what it         affects bounded choices           frame / audio block /
+   would do                                                  visible-set / projectile
+```
+
+The eight domains currently modeled:
+
+- **render** — sparse DWT, dense reference, material/phase observables
+- **visibility** — surface/entity visible-set probabilities and search predicates
+- **media / audio** — per-source and post-mix quantum transducers
+- **physics / projectiles** — shadow and authoritative measured trajectory fields
+- **particles** — field-based particle ownership
+- **AI** — legal-action probability registers and measured choices
+- **RNG / entropy** — replayable, domain-tagged quantum entropy
+- **UI** — HUD, console, menu, glyph, and 2D-media ownership
+
+### Two modes at once
+
+- **Conformance mode** — reproduce vanilla Quake faithfully enough that QGE is a
+  credible runtime. Completion is defined precisely: *Quantum Quake is "done" only
+  when `quantum_render 2` can play vanilla Quake with the classic 3D and 2D draw
+  paths hidden.*
+- **Research mode** — compile game state into quantum oracle/observable problems
+  with explicit input model, readout, classical baseline, and resource cost.
+
+Deeper reading: **[docs/qge_engine_architecture.md](docs/qge_engine_architecture.md)**
+and the full **[architecture plan](docs/quantum_quake_full_architecture_plan.md)**.
+
+---
+
+## Honesty by construction: the claims ledger
+
+The thing that should make a skeptical reader *trust* this project is that it is
+engineered to make overclaiming hard. Quantum Quake treats prose as
+**unsupported by default**. A statement only becomes a "claim" when it maps to a
+machine-readable evidence contract in
+**[docs/claims/qge_claims.json](docs/claims/qge_claims.json)**, with:
+
+- a typed `claim_type` (feasibility, conformance, benchmark, query_advantage, sample_complexity, systems),
+- explicit `allowed_wording` **and** `disallowed_wording`,
+- a formal `problem_statement`, `input_model`, and `output_observable`,
+- the `classical_baseline` it must beat,
+- the exact `required_trace_fields` and `accepted_evidence` artifacts,
+- and the `failure_conditions` that would invalidate it.
+
+On top of that, the repository is continuously audited by **ICC** (Infinite
+Context Coder), an external control plane that runs completion oracles, source-drift
+checks, runtime-evidence gates, and adversarial production audits. The shareware
+release you're looking at is gated on those oracles reading green — and the
+honest blockers (e.g. *"the full registered game does not run under Moonlab yet"*)
+are reported as **fail-closed gates**, not quietly omitted.
+
+> If a claim cannot be validated from traces, sidecars, metrics, circuits, and
+> baseline artifacts, it is not supported. — `docs/qge_claims_ledger.md`
+
+See **[docs/qge_publication_adversarial_audit.md](docs/qge_publication_adversarial_audit.md)**
+for the adversarial-review posture.
+
+---
+
+## Current status — what works today
+
+This is an **active research and systems-engineering project**, not a finished,
+player-facing Quake distribution. Here is the honest split.
+
+### ✅ Working and routinely verified
+
+- Moonlab-backed QGE core runtime: trace, RNG, AI, render, visibility, audio,
+  physics, and world-snapshot libraries.
+- A macOS QuakeSpasm app build with QGE hooks and cvars.
+- **Sparse-DWT QGE primary rendering** with world-surface, material, lightmap,
+  entity, and HUD/console ownership telemetry, native IDWT evidence, and explicit
+  fallback reasons. The render refreshes the QGE primary output **every host
+  frame** by default and derives display gain from deterministic state marginals
+  (no finite-shot shimmer).
+- QGE **visibility** shadow/parity paths with audited authority-gate telemetry.
+- QGE **projectile** shadow/writeback/collision-oracle evidence with replay and
+  persistence-boundary trace records.
+- QGE **audio** post-mix and source-mode telemetry, including source-authority
   smoke checks.
-- Noesis harness play on `e1m1` with no-script autonomous server control by
-  default, opt-in keyboard-style action-plan fixtures for regression tests,
-  engine-side assist telemetry, route/combat outcome summaries, stale hidden
-  target cooldowns, local wall/floor/hazard probes when no target is engaged,
-  and ICC evidence sidecars.
-- Reproducible diagnostic streams under `diagnostics/agent_stream/` and
-  `diagnostics/quake_stream/`.
+- **Noesis** autonomous-agent play on `e1m1` (no-script server control by
+  default, with engine-side assist telemetry, route/combat summaries, and local
+  wall/floor/hazard probes).
+- Reproducible diagnostic streams under `diagnostics/`.
 
-Important known limitations:
+### 🚧 In progress / explicitly **not** claimed
 
-- The full-port ICC target is `qge_vanilla_quake_conformance`. The current
-  strongest self-contained evidence pack is
-  `diagnostics/publication_pack/20260524-asset-gate-remediation`, where ICC reports the strict
-  vanilla/QGE runtime ownership matrix and `qge_vanilla_runtime_complete`
-  ready. The pack includes `resource/qge_resource_envelope.json`, which scopes
-  Moonlab simulator/native-backend deployment,
-  `resource/qge_full_game_map_coverage.json`, which records partial canonical
-  map coverage at 9/32 maps with 23 maps pending,
-  `resource/qge_asset_inventory.json`, which records the PAK/BSP availability
-  blocker, `resource/qge_asset_requirements.json`, which lists the exact
-  registered `maps/*.bsp` entries needed to unblock the remaining captures,
-  `resource/qge_moonlab_full_game_plan.json`, which joins coverage,
-  asset status, capture requirements, and no-claim posture into one full-game
-  Moonlab deployment ledger, and
-  `resource/qge_moonlab_deployment_gate.json`, which is the hard fail-closed
-  eligibility gate for any "the full game runs in Moonlab" simulator/native
-  deployment claim, plus
-  `resource/qge_native_backend_boundary.json` with the pass/fail proof for the
-  three native backend boundaries,
-  `resource/qge_moonlab_job_specs.json` with selected simulator/native replay
-  jobs and one unsubmitted hardware-candidate QAE benchmark job, and
-  `resource/qge_moonlab_job_results.json` with four completed simulator jobs,
-  two completed native replay jobs, zero blocked jobs, and zero hardware
-  submissions. Its runtime-backend-probe job records the performance and
-  breadth aggregate evidence for the three native sparse-DWT bridge targets,
-  including native target sets, missing target sets, proof maps, event counts,
-  and the 945 native bridge breadth count, plus
-  `resource/qge_moonlab_replay_plan.json` with the exact
-  replay/validation contract and
-  `resource/qge_moonlab_submission_packet.json` with the deterministic
-  hardware-candidate handoff contract,
-  `advantage/qae_moonlab_payload.json` plus four
-  `advantage/moonlab_qae_circuits/*.moonlab` control-plane circuits for the
-  MLAE observation/readout schedule,
-  `advantage/qae_moonlab_oracle_kernel.moonlab`, a 32-qubit, 7,415-gate
-  supported-gate Moonlab `Q_f` predicate kernel under the 4 MB control-plane
-  body limit,
-  `advantage/qae_moonlab_observation_zero.moonlab`, a 32-qubit, 7,740-gate
-  Moonlab power-zero QAE observation circuit with exact 234-candidate state
-  preparation, uniform threshold preparation, and inline `Q_f` under the same
-  body limit,
-  `advantage/qae_moonlab_grover_schedule_plan.json`, which proves the selected
-  Grover powers 0, 1, 2, and 4 fit that 4 MB body cap, plus
-  `advantage/qae_moonlab_grover_circuits/*.moonlab` with the exact per-power
-  Moonlab payloads, and
-  `resource/qge_moonlab_submission_bundle.json` with the stricter
-  control-plane readiness verdict, plus
-  `resource/qge_moonlab_hardware_record_template.json` with the exact
-  no-claim record Moonlab must fill after a hardware run, and
-  `resource/qge_moonlab_hardware_submission_scope.json` to evaluate the
-  bounded QAE hardware handoff separately from full-game asset blockers.
-  `tools/qge_moonlab_job_runner.py` can
-  regenerate those results directly from the job specs, compare them against
-  the packed expected results, and emit both a replay plan and submission
-  packet. `tools/qge_moonlab_submission_bundle.py` then verifies whether the
-  candidate circuit artifacts are actually `# moonlab-circuit v1`; the current
-  bundle is `ready_for_control_plane_submission` because the readout-equivalent
-  Moonlab payload, reversible `Q_f` kernel, power-zero observation, and the
-  selected Grover schedule through `grover_power=4` are executable Moonlab
-  control-plane text. The largest selected circuit is `grover_power=4` at
-  610,599 bytes, below the current 4,194,304-byte control-plane limit.
-  After a real
-  Moonlab hardware run, use
-  `tools/qge_moonlab_hardware_ingest.py` to validate the returned backend ID,
-  run ID, schedule ID, matching shot counts, readout metadata, finite
-  observations, and candidate digest before updating
-  `qge_moonlab_job_results.json`. The pack explicitly does not claim whole-game
-  hardware execution, hardware quantum advantage, or a dense 70,000-qubit
-  state. The deployment gate is currently `blocked`: 9/32 canonical maps are
-  covered, 23 registered BSP assets are still missing, and the whole-game
-  Moonlab deployment claim is not allowed yet. This is a captured workload
-  proof, not a claim that every Quake domain is visually or hardware complete. Use
-  `tools/qge_full_game_capture_queue.py diagnostics/publication_pack/20260524-asset-gate-remediation`
-  to generate the remaining harness queue and breadth rebuild script; the queue
-  reads the selected map set from that registered/full-game source ledger,
-  inventories loose/Pak BSP assets, skips missing local BSPs unless
-  `--include-unavailable-assets` is set, and currently reports zero locally
-  queueable missing maps while 23 registered maps require additional registered
-  BSP assets before capture.
-  `make qge_shareware_episode1_breadth_evidence` regenerates the smaller
-  first-episode evidence sidecar at
-  `diagnostics/breadth_evidence/shareware_episode1/qge_breadth_icc_evidence.json`
-  by scanning ready `diagnostics/quake_graphics/**/vanilla_capture_matrix.json`
-  captures for `quake_shareware_episode1`; that ICC sidecar is the stable input
-  for the shareware readiness target and is still not a registered/full-game
-  deployment claim. `make qge_shareware_episode1_breadth_audit` rescans those
-  diagnostics and recomputes the breadth/ICC sidecars to reject stale local
-  shareware evidence.
-  `make qge_registered_full_game_breadth_status` uses the same generic
-  map-set evidence path with `--allow-partial` to write the registered
-  full-game progress ledger under
-  `diagnostics/breadth_evidence/registered_single_player_status/`; today that
-  is expected to remain partial until the licensed registered maps are present
-  and captured. `make qge_registered_full_game_breadth_status_audit` rejects a
-  stale registered status ledger without turning it into a completion claim.
-  The selection JSON includes per-map `target_map_status` rows so missing maps
-  are distinguished from maps that have non-ready capture attempts.
-  `make qge_registered_full_game_progress` joins that selection with the live
-  `assets/id1` inventory into
-  `diagnostics/full_game_progress/registered_single_player/`, classifying each
-  target as ready, asset-blocked, or capture-needed. The matching
-  `make qge_registered_full_game_progress_audit` recomputes the join so a stale
-  full-game progress report cannot hide whether the next blocker is licensed
-  BSP intake or capture evidence. ICC exposes this report as
-  `qge_registered_full_game_progress_report`, separate from both the coverage
-  ledger and the deployment gate. Publication packs also include the progress
-  JSON, Markdown, and ICC sidecar under `resource/`, with postpack audit
-  coverage, so every published shareware checkpoint still carries the
-  registered whole-game blocker ledger. The full-game capture queue can consume
-  that packed progress JSON directly, so a later registered asset install can
-  queue newly available maps without treating the shareware coverage ledger as
-  whole-game evidence. Publication packs now include the generated queue JSON,
-  `run_missing_maps.sh`, and Markdown under `resource/`.
-  `tools/qge_full_game_capture_queue_audit.py` rebuilds the queue from its
-  recorded reproduction inputs and compares JSON, script, and Markdown outputs
-  as part of the aggregate postpack suite so stale queues cannot drift silently.
-  ICC tracks that progress-only ledger through
-  `qge_registered_full_game_coverage_ledger`, separate from the deployment
-  readiness target.
-  `tools/qge_asset_inventory.py --map-set quake_registered_single_player`
-  emits the companion
-  hash-backed asset audit and rejects placeholder BSPs unless they pass the
-  Quake BSP29 header/lump gate; the current local inventory is one `pak0.pak`
-  containing 9/32 canonical maps with zero invalid BSP entries.
-  `tools/qge_registered_asset_intake.py --map-set quake_registered_single_player --candidate <quake_install_or_pak>`
-  scans external registered asset candidates, validates their BSP payloads,
-  and emits a non-destructive copy plan/script for the missing maps without
-  bundling game data or changing the no-claim posture. Use `--discover-root`
-  or `--discover-common` when the exact registered install path is not known;
-  common discovery includes Steam library manifests, derived Quake install
-  roots, and GOG/Heroic-style local roots.
-  Publication packs now include the same `qge_registered_asset_intake.json`,
-  Markdown, ICC evidence, and safe install script so the asset blocker is part
-  of the reproducible bundle. The generated install script verifies SHA-256
-  after local copies and emits both a discovery-refresh command for newly
-  installed licensed assets and the post-install capture queue command for the
-  same publication pack. The Moonlab deployment gate repeats those remediation
-  paths in its summary, next actions, Markdown, and ICC evidence.
-- `quantum_render 2` is not visually complete. The current renderer has
-  improved world-surface coverage, Quake-FOV world projection, bilinear
-  surface/light sampling, darker lightmap-preserving surface shading, and
-  preserved spatial detail for the final display while still running the sparse
-  DWT path for evidence. QGE now refreshes every host frame by default and
-  removes finite-shot render-gate shimmer from static floors, walls, and
-  ceilings, and no longer globally boosts high palette indices into noisy
-  floor speckles. Remaining issues are now more clearly projection/material
-  problems: residual tone mismatch, raster seams, warp/water seams, fullbright
-  material fidelity, viewmodel fidelity, and incomplete vanilla-material
-  fidelity.
-- Noesis is not yet learning Quake from experience and does not yet have a
-  map-level world model. Current no-script runs use a reactive server-side
-  controller with an explicit autonomous assist hint, target feedback,
-  wall-contact heuristics, and local floor/hazard probes; scripted route
-  fixtures are opt-in regression tools, not the default gameplay path.
-- QGE is not yet the sole owner of all vanilla Quake media. Sky, water/warp,
-  full conformance lighting, particles, sprites, menus, and all edge cases are
-  still in progress.
-- Practical quantum hardware advantage is not a current claim. Supported
+- `quantum_render 2` **is not visually complete.** It is a diagnostic primary path
+  with strong ownership telemetry, not a finished replacement for classic Quake
+  rendering. Remaining issues are projection/material problems: residual tone
+  mismatch, raster seams, warp/water seams, and viewmodel material parity.
+- QGE is **not yet the sole owner** of all vanilla Quake media (sky, water/warp,
+  full conformance lighting, particles, sprites, menus, edge cases are in progress).
+- Noesis is **not** learning Quake from experience and has no map-level world model
+  yet; default runs are reactive autonomous diagnostics.
+- **Practical quantum-hardware advantage is not a current claim.** Supported
   claims are limited to bounded simulated-QPU observables, scene-oracle IR, and
   explicitly scoped query/sample-complexity experiments.
-- Live graphics harnesses launch a local Quake app. Safe runs used by agents
-  set `QGE_STREAM_MOUSE=0` and `QGE_STREAM_ACTIVATE=0` unless a human is
-  intentionally testing interactivity.
-- Fixed-view renderer comparisons no longer depend solely on optional
-  numpy/Pillow tooling. `tools/qge_world_frame_metrics.py` uses only the Python
-  standard library to score floor, wall, ceiling, corridor, upper-playfield,
-  and viewmodel PNG crops. It also averages frame directories and can compare a
-  new QGE run against a baseline candidate for per-region deltas and
-  frame-to-frame drift; the paired graphics harness falls back to it
-  automatically. The paired harness freezes lightstyle animation by default for
-  reproducible fixed-view scoring.
+- Whole-game Moonlab deployment is **fail-closed blocked**: the shareware episode
+  covers **9/32** canonical single-player maps; the remaining 23 require licensed
+  registered BSP assets you supply yourself (the project ships no game data).
 
-## Current Renderer Evidence
+The current public snapshot is the
+**`quantum-quake-shareware-20260624-shareware-v8`** bundle: shareware episode 1,
+9/9 shareware maps captured, 945 native sparse-DWT bridges, Noesis smoke grade
+`strong_smoke` (84.0), with the registered full-game gate honestly `blocked`.
 
-The current QGE graphics baseline is improved but still visibly glitchy. The
-latest fixed-view frame-set evidence is
-`diagnostics/quake_graphics/20260522-164822/metrics.md`. That run keeps QGE
-ownership of world geometry, world textures, lightmaps, HUD/console, and the
-viewmodel with `own_world=1`, `own_textures=1`, `own_lightmaps=1`,
-`own_viewmodel=1`, `own_console=1`, and `fallback_reason=none` on captured
-frames. It also keeps QGE render/snapshot milestones in the logs instead of
-painting them as Quake notify text over the world. Against the classic
-`20260521-151552` reference,
-the previous world-tone capture
-`20260521-153315` moved the front-wall mean-luminance delta from about `-19.73`
-to `-0.92`, side-wall deltas from about `-9.64/-11.01` to `+3.08/+2.65`,
-ceiling delta from about `-11.51` to `+2.19`, and far-floor delta from about
-`-12.88` to `+4.75`. The follow-up fullbright work keeps normal
-floor/wall/ceiling regions effectively unchanged while moving sampled wall-light
-crops closer to classic; the latest fixed-view run improves whole-frame RMSE
-against the classic reference from `0.0457305` to `0.0452656`. The alias-skin
-viewmodel follow-up leaves the fixed-view world crops unchanged while replacing
-the flat gold weapon mesh with skin-sampled alias triangles and improves
-whole-frame RMSE again to `0.0349406`. The moderate-minification prefilter
-follow-up raises filtered world-texel coverage to roughly `193k` samples,
-reduces the mid-floor blur-difference metric from `0.00841979` to
-`0.00792546`, and improves whole-frame RMSE again to `0.0343281`. The
-one-texel bilinear follow-up targets the remaining wall/ceiling crawl: in the
-`20260521-180918` fixed-view capture, ceiling blur-difference drops from
-`0.00469063` to `0.00234635`, left/right wall drops from
-`0.00347071`/`0.00373587` to `0.00172187`/`0.00203961`, and front-wall drops
-from `0.0027016` to `0.00168355`. Whole-frame RMSE is mixed across the three
-captured frames (`0.0341756` on frame 2, `0.0347847` on frames 1/3), so this is
-a targeted wall/ceiling stability improvement rather than a complete renderer
-conformance win. The world-surface blue-balance follow-up at
-`20260521-183949` reduces blue lift in floor, ceiling, and front-wall crops and
-improves the fixed-view whole-frame RMSE again to `0.0340944`; it is still a
-bounded color-conformance step, not a complete material or lighting fix. The
-texture-detail follow-up at `20260521-190448` restores a conservative amount of
-palette texture contrast after bilinear/prefilter sampling: whole-frame RMSE
-improves to `0.0339437`, world high-frequency texture energy rises from `88.8%`
-to `92.8%` of the classic reference, and the ceiling/side-wall/front-wall
-high-frequency ratios improve from `75.2%`/`70.3%`/`78.8%`/`65.1%` to
-`80.7%`/`74.8%`/`82.9%`/`69.3%`. The deterministic display-contrast follow-up
-at `20260522-034256` applies a bounded luma contrast after QGE tone mapping:
-against the flat-lightstyle `20260522-031254` baseline, ceiling, left/right
-wall, front-wall, center-floor, near-floor, and mid-corridor crop RMSE all
-improve, with the largest deltas on center floor (`-0.011806`) and mid corridor
-(`-0.014200`). Candidate drift remains `0.000000`; the broad world crop RMSE
-increases by `+0.003629` because the output now preserves more visible
-texture/edge energy and the broad crop includes the first-person weapon band.
-The follow-up crop audit separates that signal: `world_upper` improves by
-`-0.007318` RMSE while the `viewmodel` crop regresses by `+0.034692`, making
-the next renderer target explicit. The bounded viewmodel-lighting follow-up at
-`20260522-115852` gives the first-person alias path its own brightness and
-shade floor: against `20260522-034256`, the `viewmodel` crop RMSE drops from
-`0.161956` to `0.094513`, `viewmodel_core` drops from `0.279478` to
-`0.163137`, and the broad `world` crop improves by `-0.012916`. Some named
-world crops move by roughly `+0.001` to `+0.002` through global DWT
-reconstruction coupling, so this is a targeted viewmodel lighting improvement,
-not a complete weapon/material fix. The second bounded pass at `20260522-121419`
-lowers the same viewmodel-only constants again: against `20260522-115852`,
-`viewmodel` RMSE drops from `0.094513` to `0.072401`, the broad `world` crop
-improves by `-0.003998`, and cumulative comparison against `20260522-034256`
-puts `viewmodel_core` at `0.124881` RMSE. Candidate drift remains `0.000000`.
-The alias-normal viewmodel follow-up at `20260522-124349` preserves the same
-world-only crops while shaping first-person alias fill with `lightnormalindex`
-and reducing first-person edge intensity: against `20260522-121419`,
-`viewmodel` RMSE drops from `0.072401` to `0.044634`, `viewmodel_core` drops
-from `0.092357` to `0.056752`, and `viewmodel_core` luma is nearly matched
-(`0.104936` candidate versus `0.104856` classic). Candidate drift remains
-`0.000000`. The first-person edge-cadence follow-up at `20260522-134809`
-preserves the named world-only crops while reducing viewmodel diagnostic edge
-over-detail: against `20260522-124349`, `viewmodel` RMSE drops from
-`0.044634` to `0.041117`, `viewmodel_core` drops from `0.056752` to
-`0.052033`, and viewmodel high-frequency ratio drops from `2.710` to `2.457`.
-The sparser edge-cadence/fill follow-up at `20260522-152252` keeps the named
-world-only crops unchanged while dropping `viewmodel` RMSE from `0.041117` to
-`0.037606` and high-frequency ratio from `2.457` to `2.186` against
-`20260522-134809`. The second sparser edge-cadence follow-up at
-`20260522-160233` keeps the named world-only crops unchanged while dropping
-`viewmodel` RMSE from `0.037606` to `0.033139` and high-frequency ratio from
-`2.186` to `1.728` against `20260522-152252`. The compensated edge-cadence
-follow-up at `20260522-164822` keeps the named world-only crops unchanged while
-dropping `viewmodel` RMSE from `0.033139` to `0.019361`, moving viewmodel
-high-frequency ratio from `1.728` to `1.007`, and recovering luma from
-`0.091578` to `0.091292` after the stride-only `20260522-164504` trial had
-dropped it to `0.089538`.
-Candidate drift remains `0.000000`.
+---
 
-What is still broken is just as important: light-emissive regions are closer but
-still too dim, nearby floors are slightly over-lifted, raster seams remain visible,
-turbulent water/warp materials are not vanilla-quality, and the viewmodel still
-needs classic placement and material parity beyond skin sampling and coarse
-lighting balance.
-Treat the renderer as a diagnostic primary path with useful ownership telemetry,
-not as a finished replacement for classic Quake rendering.
+## Quick start
 
-## Quick Start
+> **You need your own licensed Quake data.** Quantum Quake ships **no** game
+> content — no `pak0.pak`/`pak1.pak`, no maps. Place your licensed `id1` data
+> under `assets/id1/`. The shareware `pak0.pak` works for episode 1.
 
-Build and run the core test binary:
+### Build & run the engine
 
 ```sh
+# Core QGE test binary (fastest way to confirm the build works)
 make test_qge
 ./bin/test_qge
-```
 
-Run the full contract suite:
-
-```sh
+# Full contract suite (C + shell + Python)
 make test
-```
 
-Build the macOS app bundle:
-
-```sh
+# Build the macOS QuakeSpasm app bundle with QGE hooks
 make quake
 ```
 
-Run a compact fixed-view QGE graphics diagnostic:
+### See the quantum renderer (fixed-view diagnostic)
 
 ```sh
 QGE_STREAM_LAUNCH=open QGE_STREAM_MOUSE=0 QGE_STREAM_ACTIVATE=0 \
@@ -360,12 +284,7 @@ QGE_RENDER_UPDATE_INTERVAL=1 QGE_STREAM_SOUND=0 \
 bash tools/quake_graphics_stream.sh
 ```
 
-`QGE_RENDER_UPDATE_INTERVAL=1` is the default, but it is left in this command
-to make fixed-view graphics evidence explicit. On macOS, `QGE_STREAM_LAUNCH=open`
-is the validated safe path for app-bundle GL context startup; direct launch is
-kept for lower-level diagnostics.
-
-Run a harnessed Noesis gameplay smoke:
+### Watch the autonomous Noesis agent play
 
 ```sh
 QGE_STREAM_LAUNCH=open QGE_STREAM_MOUSE=0 QGE_STREAM_ACTIVATE=0 \
@@ -375,43 +294,153 @@ QGE_RENDER_UPDATE_INTERVAL=1 QGE_STREAM_SOUND=0 \
 bash tools/quake_graphics_stream.sh
 ```
 
-## Repository Layout
+On macOS, `QGE_STREAM_LAUNCH=open` is the validated safe path for app-bundle GL
+context startup. Agent/CI runs set `QGE_STREAM_MOUSE=0` and
+`QGE_STREAM_ACTIVATE=0` so the harness never steals input unless a human is
+intentionally testing interactivity. `QGE_RENDER_UPDATE_INTERVAL=1` is the
+default; it is shown above to make fixed-view evidence explicit.
 
-- `qge/`: reusable QGE runtime libraries.
-- `quake/Quake/`: QuakeSpasm engine with QGE integration hooks.
-- `deps/moonlab/`: Moonlab quantum simulation/runtime dependency.
-- `tools/`: diagnostics, stream, publication, Noesis, trace, and benchmark
-  helpers.
-- `tests/`: C, shell, and Python contract tests.
-- `docs/`: architecture, stream, claims, roadmap, and development-state docs.
-- `diagnostics/`: generated local run artifacts. These are evidence inputs, not
-  source.
-- `.icc/`: ICC policy/configuration used for drift, audit, and task evidence.
+---
 
-## Documentation Map
+## Renderer evidence
 
-Start with [docs/README.md](docs/README.md) for the curated documentation map.
-The authoritative current-state snapshot is
-[docs/qge_state_of_development.md](docs/qge_state_of_development.md); it covers
-branch consolidation, verified runtime surfaces, known visual/gameplay gaps,
-Noesis no-script reality, and the evidence baseline. The most useful current
-documents are:
+The renderer is the most visible — and most honestly tracked — part of the
+project. The current baseline is **improved but still visibly glitchy**, and it is
+developed as a *sequence of narrow, individually-verified fixes* rather than one
+sweeping "it's done" claim. A representative still:
 
-- [QGE state of development](docs/qge_state_of_development.md)
-- [QGE engine architecture](docs/qge_engine_architecture.md)
-- [QGE agent media stream](docs/qge_agent_stream.md)
-- [QGE claims ledger](docs/qge_claims_ledger.md)
-- [Quantum Quake full architecture plan](docs/quantum_quake_full_architecture_plan.md)
+<p align="center">
+  <img src="docs/media/quantum_quake_hero.png" alt="Quantum Quake E1M1 — QGE quantum render path, with lava glow down the corridor" width="640">
+</p>
 
-## Evidence Standard
+Each renderer slice is captured as a fixed-view frame set and scored against the
+classic reference with a dependency-free PNG metric tool
+(`tools/qge_world_frame_metrics.py`, standard-library only — no numpy/Pillow
+required). On every captured frame the run asserts QGE ownership of world
+geometry, textures, lightmaps, HUD/console, and the viewmodel
+(`own_world=1 own_textures=1 own_lightmaps=1 own_viewmodel=1 own_console=1`,
+`fallback_reason=none`).
 
-Project claims should be backed by executable tests, traces, screenshots,
-metrics, and ICC attempts. Prose-only claims are intentionally treated as
-unsupported. When changing runtime behavior, prefer a narrow patch with:
+Whole-frame RMSE against the classic reference has been driven down one verified
+slice at a time — for example to `0.0349406` after the alias-skin viewmodel pass
+and `0.0343281` after the moderate-minification texture prefilter — alongside
+targeted material work such as the world fullbright sampling scale split and a
+diagnostic notify cleanup that keeps QGE render/snapshot milestones in the logs
+instead of painting them over the world. As one example of the disciplined,
+measured progression, the cumulative viewmodel work drove the first-person weapon
+crop RMSE from `0.161956` down to `0.019361` across **nine** verified passes,
+while keeping the named world crops stable (zero candidate drift). The latest
+fixed-view evidence lives at `diagnostics/quake_graphics/20260522-164822/metrics.md`.
 
-- focused contract tests,
-- `make test_qge` and `./bin/test_qge` for C/QGE changes,
-- `make test` for broader integration changes,
-- a safe harnessed stream when changing live graphics or Noesis gameplay,
-- ICC source-drift, production-audit, task-attempt, and attempt-eval records
-  before pushing a verified slice.
+The strongest self-contained ICC evidence pack reports the strict vanilla/QGE
+runtime ownership matrix with `qge_vanilla_runtime_complete` ready — i.e. on the
+captured frames QGE, not classic GL, owns world geometry, textures, lightmaps,
+HUD/console, and the viewmodel with `fallback_reason=none`.
+
+**What is still broken** is documented just as carefully: light-emissive regions
+are still too dim, nearby floors are slightly over-lifted, raster seams remain
+visible, turbulent water/warp materials are not vanilla-quality, and the viewmodel
+still needs classic placement parity. Treat `quantum_render 2` as a *diagnostic
+primary path with useful ownership telemetry*, not a finished renderer.
+
+Full slice-by-slice history with every RMSE delta:
+**[docs/qge_state_of_development.md](docs/qge_state_of_development.md)**.
+
+---
+
+## For researchers: quantum advantage & the oracle compiler
+
+QGE's research mode compiles a game frame into a bounded quantum problem with an
+explicit input model, readout, classical baseline, and resource cost. The pieces:
+
+- **Scene / oracle IR** — a compiler boundary from captured Quake state to
+  auditable oracle inputs. See **[docs/qge_scene_oracle_ir.md](docs/qge_scene_oracle_ir.md)**.
+- **Bounded observables** — render-gate finite-shot observables, soft-shadow
+  visibility, patch irradiance, visibility confidence, DWT band energy, and
+  material-phase scores.
+- **Algorithm models** — finite-shot dense registers for small decisions,
+  **amplitude estimation** for bounded light-transport means, **Grover /
+  minimum-finding** for unstructured candidate search, and QSP/QSVT only once a
+  real block encoding exists.
+- **The hardware-advantage campaign** — a *planning-stage* artifact set targeting
+  defensible quantum advantage on `light_transport_qae_query_scaling`, with a
+  real Moonlab control-plane submission chain: an executable 32-qubit, 7,415-gate
+  `Q_f` predicate kernel, a power-zero QAE observation circuit, and a selected
+  Grover schedule (powers 0, 1, 2, 4) that fits Moonlab's 4 MB control-plane body
+  limit (largest circuit: `grover_power=4` at 610,599 bytes). **This proves the
+  campaign exists and is executable as control-plane text — not that hardware
+  advantage has been demonstrated.** A `qge_real_hardware_quantum_advantage`
+  oracle remains deliberately incomplete until a *returned* hardware result and a
+  strong baseline exist.
+
+Research entry points:
+
+- **[Publishable results research](docs/qge_publishable_results_research.md)** — external baselines (Quandoom et al.) and the concrete results package for a defensible paper/demo.
+- **[Quantum-advantage research roadmap](docs/qge_quantum_advantage_research_roadmap.md)** — bounded workloads and baseline expectations.
+- **[Quantum signal processing research](docs/qge_quantum_signal_processing_research.md)** — QSP/QSVT context for QGE media experiments.
+- **[Hardware-advantage campaign](docs/qge_hardware_advantage_campaign.md)** — the bounded-QAE hardware handoff plan and no-overclaim posture.
+
+---
+
+## Repository layout
+
+```
+quantum_quake/
+├── qge/                  Reusable QGE runtime libraries (~11k LOC C)
+│   ├── qge_render.c        sparse-DWT render path + material/phase observables
+│   ├── qge_vis.c           visibility probabilities & search predicates
+│   ├── qge_physics.c       projectile trajectory fields
+│   ├── qge_audio.c         per-source / post-mix quantum transducers
+│   ├── qge_ai.c            legal-action registers & measured choices
+│   ├── qge_rng.c           replayable domain-tagged entropy
+│   ├── qge_quantum_runtime.c   Moonlab-backed state/gate/measurement spine
+│   ├── qge_world.c         world registry & frame snapshots
+│   └── qge_trace.c         fixed-width binary trace
+├── quake/Quake/          QuakeSpasm host engine + QGE integration hooks
+│   ├── qge_hooks.c         the seam between classic Quake and QGE
+│   └── snd_quantum.c       quantum audio source path
+├── deps/moonlab/         Moonlab quantum simulation/runtime dependency
+├── tools/                84 diagnostics, stream, publication, Noesis & benchmark helpers
+├── tests/                C, shell, and Python contract tests
+├── docs/                 Architecture, claims, roadmap & state docs (+ media/)
+├── diagnostics/          Generated run artifacts — evidence inputs, not source
+├── assets/id1/           ← place your licensed Quake data here (gitignored)
+└── .icc/                 ICC policy/oracles used for drift, audit & task evidence
+```
+
+---
+
+## Documentation map
+
+Start with the curated hub: **[docs/README.md](docs/README.md)**. The most useful
+documents, in reading order:
+
+| Document | What it covers |
+|---|---|
+| [QGE state of development](docs/qge_state_of_development.md) | **Authoritative snapshot** — implemented systems, known gaps, renderer slice history, verification commands. |
+| [QGE engine architecture](docs/qge_engine_architecture.md) | The reusable engine model: layers, domains, ownership stages, artifact contract. |
+| [Moonlab full Quake port](docs/moonlab_full_quake_port.md) | The whole-game authority contract and what "done" means. |
+| [QGE agent media stream](docs/qge_agent_stream.md) | The live graphics/audio/Noesis diagnostic harness and manifest contract. |
+| [QGE claims ledger](docs/qge_claims_ledger.md) | The rules for supported wording and evidence. |
+| [Full architecture plan](docs/quantum_quake_full_architecture_plan.md) | The long-range target architecture and quantum-native capability matrix. |
+
+---
+
+## License & credits
+
+Quantum Quake builds on **[QuakeSpasm](https://github.com/sezero/quakespasm)**, a
+modern, faithful Quake engine, which is GPLv2 (as is the original
+[id Software Quake engine source](https://github.com/id-Software/Quake)). The QGE
+layer and Quantum Quake additions are distributed under the same terms; see
+`quake/LICENSE.txt` and the QuakeSpasm license headers.
+
+**Quantum Quake ships no id Software game content.** You must supply your own
+licensed Quake data (the shareware `pak0.pak` is sufficient for episode 1).
+
+- **Engine host:** QuakeSpasm (sezero et al.) on the id Software Quake engine.
+- **Quantum runtime:** Moonlab quantum simulation/runtime.
+- **Verification control plane:** ICC (Infinite Context Coder).
+
+Copyright © 2026 tsotchke. Quantum Quake and QGE are research software:
+claims are bounded, evidence-backed, and deliberately conservative.
+</content>

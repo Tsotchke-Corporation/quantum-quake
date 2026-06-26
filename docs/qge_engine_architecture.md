@@ -5,6 +5,18 @@ Status: initial engine contract, 2026-05-07.
 QGE is the Moonlab-backed quantum game engine layer. Quantum Quake is the first
 complete conformance title, not the permanent boundary of the engine.
 
+The implementation is ~11k lines of portable C in [`qge/`](../qge), plus
+integration hooks in the QuakeSpasm host ([`quake/Quake/qge_hooks.c`](../quake/Quake/qge_hooks.c)
+and `quake/Quake/snd_quantum.c`). For the player-facing showcase of what these
+domains actually look like at runtime, see the [top-level README](../README.md)
+and [`docs/media/`](media/).
+
+<p align="center">
+  <img src="media/quantum_projectile_action.png" alt="QGE quantum projectile path on E1M1 — annotated runtime capture" width="520"><br>
+  <em>The quantum projectile-physics domain in action — a measured trajectory
+  field on E1M1, captured live from the runtime described below.</em>
+</p>
+
 ## Engine Goal
 
 QGE should provide reusable engine services for games that need quantum-owned

@@ -4,6 +4,15 @@
 runtime artifacts into a project-local directory that other agents can inspect
 while the game is still running.
 
+This harness is what produced the project's showcase footage — the gameplay and
+annotated "quantum distinctions" captures embedded in the
+[top-level README](../README.md) and indexed under [`docs/media/`](media/). The
+clip below is a direct product of the stream path documented here:
+
+<p align="center">
+  <img src="media/quantum_quake_e1m1_gameplay.gif" alt="Live E1M1 capture from the QGE agent media stream harness" width="560">
+</p>
+
 The default stream directory is:
 
 ```text
@@ -890,7 +899,7 @@ loop with policy updates.
 - `QGE_STREAM_PLAYER`: harness player owner, default `noesis`. Set to `none`
   to disable harness-generated gameplay commands.
 - `QGE_NOESIS_DIR`: Noesis repo path used for player provenance, default
-  `~/Desktop/noesis`.
+  the Noesis checkout (set `QGE_NOESIS_DIR` to point at it).
 - `QGE_NOESIS_SCRIPTED`: opt in to repo-local scripted command-buffer playback,
   default `0`. Normal `QGE_STREAM_PLAYER=noesis` runs leave this off so Noesis
   does not use cached route scripts. Set it to `1` for regression fixtures that

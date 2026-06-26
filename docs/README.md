@@ -4,6 +4,27 @@ This directory contains the working documentation for Quantum Quake and QGE.
 The docs are intentionally split by purpose: engineering contracts, current
 state, claims policy, stream/harness operation, and long-range research plans.
 
+For the project pitch, the visual showcase, and a quick build/run path, start
+with the top-level **[README](../README.md)**. This hub is the index to the
+detailed working documents.
+
+## Visual Showcase
+
+The curated, publishable media lives under [`media/`](media/) (tracked, separate
+from the ephemeral `diagnostics/` evidence captures):
+
+| Asset | Description |
+|---|---|
+| [`quantum_quake_e1m1_gameplay.gif`](media/quantum_quake_e1m1_gameplay.gif) | Live E1M1 gameplay through the QGE `quantum_render 2` sparse-DWT path. |
+| [`quantum_quake_quantum_distinctions.gif`](media/quantum_quake_quantum_distinctions.gif) | The same run, annotated with each player-visible quantum behavior. |
+| [`quantum_distinctions_contactsheet.png`](media/quantum_distinctions_contactsheet.png) | The five annotated quantum-distinction moments as one contact sheet. |
+| [`quantum_quake_hero.png`](media/quantum_quake_hero.png) | Representative still frame from the quantum render path. |
+
+The original full-resolution MP4 captures (`quantum_quake_e1m1_gameplay_clean.mp4`,
+`quantum_quake_e1m1_quantum_distinctions.mp4`, plus 24fps interpolated variants and
+the `quantum_distinctions.srt` narration) are produced under
+`diagnostics/quantum_footage/` by the capture harness.
+
 ## Start Here
 
 - [QGE state of development](qge_state_of_development.md): current implemented
@@ -144,12 +165,13 @@ renderer fixes, not as one finished renderer claim:
   detailed target architecture and quantum-native capability matrix.
 - [QGE quantum advantage research roadmap](qge_quantum_advantage_research_roadmap.md):
   bounded research workloads and baseline expectations.
+- [QGE hardware advantage campaign](qge_hardware_advantage_campaign.md): the
+  planning-stage bounded-QAE Moonlab hardware handoff, submission chain, and
+  explicit no-overclaim / no-returned-hardware posture.
 - [QGE quantum signal processing research](qge_quantum_signal_processing_research.md):
   signal-processing context for QGE media experiments.
 - [QGE scene oracle IR](qge_scene_oracle_ir.md): compiler boundary from captured
   Quake state to auditable oracle inputs.
-- [QGE 100 percent swarm queue](qge_100_percent_swarm_queue.md): historical
-  engineering wave log and remaining domain-ownership queue.
 
 ## Claims And Publication Support
 

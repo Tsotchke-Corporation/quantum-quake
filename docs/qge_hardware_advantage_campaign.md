@@ -98,8 +98,8 @@ evidence update.
 Acceptance:
 
 ```sh
-/Users/tyr/Desktop/infinite_context_coder/bin/icc task-list --repo quantum_quake
-/Users/tyr/Desktop/infinite_context_coder/bin/icc next-action --repo quantum_quake --goal qge_real_hardware_quantum_advantage --format markdown
+icc task-list --repo quantum_quake
+icc next-action --repo quantum_quake --goal qge_real_hardware_quantum_advantage --format markdown
 ```
 
 Expected current result: the real-hardware target remains blocked with five

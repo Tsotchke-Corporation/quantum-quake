@@ -6,6 +6,15 @@ This document is the operational state snapshot for Quantum Quake. It is meant
 to answer what exists now, what has evidence, what remains incomplete, and how
 the repository should be handled after branch consolidation.
 
+For the project pitch and the visual showcase, see the
+[top-level README](../README.md); the curated media is indexed under
+[`docs/media/`](media/). The still below is representative of the current
+`quantum_render 2` baseline this document tracks slice by slice:
+
+<p align="center">
+  <img src="media/quantum_quake_hero.png" alt="Quantum Quake E1M1 through the QGE quantum render path" width="560">
+</p>
+
 ## Executive Summary
 
 Quantum Quake is currently a QuakeSpasm-based QGE integration lab with live
@@ -1094,9 +1103,9 @@ bash tools/quake_graphics_stream.sh
 ICC checks used for verified slices:
 
 ```sh
-/Users/tyr/Desktop/infinite_context_coder/bin/icc source-drift --repo quantum_quake --format markdown
-/Users/tyr/Desktop/infinite_context_coder/bin/icc assistant-status --repo quantum_quake --format markdown
-/Users/tyr/Desktop/infinite_context_coder/bin/icc production-audit --repo quantum_quake --preset shell-hardening --format markdown
+icc source-drift --repo quantum_quake --format markdown
+icc assistant-status --repo quantum_quake --format markdown
+icc production-audit --repo quantum_quake --preset shell-hardening --format markdown
 ```
 
 ## Development Rules Of Thumb
