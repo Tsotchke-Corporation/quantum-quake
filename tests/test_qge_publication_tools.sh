@@ -167,6 +167,154 @@ write_json(capture / "qge_perf_icc_evidence.json", {
     "status": "success",
 })
 
+noesis_dir = agent / "noesis"
+input_dir = agent / "input"
+noesis_dir.mkdir(parents=True)
+input_dir.mkdir()
+noesis_summary = noesis_dir / "qge_noesis_summary.json"
+noesis_icc = noesis_dir / "qge_noesis_icc_evidence.json"
+noesis_outcomes = noesis_dir / "gameplay_outcomes.ndjson"
+noesis_actions = input_dir / "noesis_actions.txt"
+noesis_commands = input_dir / "noesis_commands.cfg"
+noesis_actions.write_text("", encoding="utf-8")
+noesis_commands.write_text(
+    "echo QGE_NOESIS_PLAYER start\nwait\n"
+    "echo QGE_NOESIS_PLAYER done\n",
+    encoding="utf-8",
+)
+noesis_outcomes.write_text(
+    "\n".join([
+        json.dumps({
+            "schema": "qge.gameplay_outcome.v0",
+            "type": "sample",
+            "frame": 1,
+        }),
+        json.dumps({
+            "schema": "qge.gameplay_outcome.v0",
+            "type": "sample",
+            "frame": 2,
+        }),
+    ]) + "\n",
+    encoding="utf-8",
+)
+write_json(noesis_summary, {
+    "schema": "qge.noesis_summary.v0",
+    "status": "pass",
+    "map": "e1m1",
+    "player": "noesis",
+    "plan": "adaptive",
+    "inputs": {
+        "claim_scope": "server_autonomous",
+        "noesis_scripted": 0,
+        "noesis_autonomous": 1,
+        "autonomous_control": True,
+    },
+    "actions": {
+        "exists": True,
+        "line_count": 0,
+        "movement_action_count": 0,
+        "combat_action_count": 0,
+        "route_action_count": 0,
+        "policy_marker_count": 0,
+        "verb_counts": {},
+    },
+    "commands": {
+        "exists": True,
+        "line_count": 3,
+        "policy_marker_count": 0,
+        "player_start_present": True,
+        "player_done_present": True,
+    },
+    "frames": {"frame_count": 3},
+    "run": {"status": "ok", "success": 1},
+    "gameplay": {
+        "exists": True,
+        "sample_count": 2,
+        "parse_error_count": 0,
+        "route": {
+            "total_distance": 128.0,
+            "max_displacement_from_start": 96.0,
+            "terminal_stall": False,
+        },
+        "player": {"survived": True},
+        "combat": {
+            "visible_enemy_frames": 4,
+            "attack_active_frames": 2,
+            "damage_dealt_inferred": 18.0,
+            "kills": 1.0,
+        },
+        "assist": {
+            "telemetry_sample_count": 2,
+            "active_sample_count": 2,
+            "target_locked_sample_count": 1,
+            "target_visible_sample_count": 1,
+            "movement_injected_sample_count": 2,
+            "view_injected_sample_count": 1,
+        },
+    },
+    "gameplay_score": {
+        "score": 80.0,
+        "grade": "strong_smoke",
+        "blocking_gates": [],
+        "outcome_telemetry_present": True,
+        "assist_telemetry_present": True,
+    },
+    "trace": {"ai_decision_count": 9},
+    "claim_gates": {"unassisted_claim_supported": False},
+    "failures": [],
+})
+write_json(noesis_icc, [
+    {
+        "kind": "runtime_backend",
+        "name": "runtime_backend",
+        "value": "qge_noesis_summary",
+    },
+    {
+        "kind": "completion_condition",
+        "name": "completion_reason",
+        "value": "qge_noesis_summary_complete",
+    },
+    {
+        "kind": "runtime_state",
+        "name": "noesis_summary_status",
+        "value": "pass",
+    },
+    {
+        "kind": "runtime_state",
+        "name": "noesis_failure_free",
+        "value": True,
+    },
+    {
+        "kind": "runtime_state",
+        "name": "noesis_scripted",
+        "value": False,
+    },
+    {
+        "kind": "runtime_state",
+        "name": "noesis_autonomous",
+        "value": True,
+    },
+    {
+        "kind": "runtime_state",
+        "name": "noesis_autonomous_control",
+        "value": True,
+    },
+    {
+        "kind": "runtime_state",
+        "name": "noesis_gameplay_outcome_sample_count",
+        "value": 2,
+    },
+    {
+        "kind": "runtime_state",
+        "name": "noesis_gameplay_total_distance",
+        "value": 128.0,
+    },
+    {
+        "kind": "runtime_state",
+        "name": "noesis_gameplay_terminal_stall",
+        "value": False,
+    },
+])
 write_json(agent / "manifest.json", {
     "status": "complete",
     "frames_requested": 1,
@@ -185,6 +333,16 @@ write_json(agent / "manifest.json", {
         "status": "pass",
         "summary_file": "performance/qge_perf_summary.json",
         "icc_evidence_file": "performance/qge_perf_icc_evidence.json",
+    },
+    "input": {
+        "action_trace_file": str(noesis_actions),
+        "command_trace_file": str(noesis_commands),
+    },
+    "noesis": {
+        "status": "complete",
+        "summary_file": str(noesis_summary),
+        "icc_evidence_file": str(noesis_icc),
+        "gameplay_outcomes_file": str(noesis_outcomes),
     },
 })
 (agent / "events.ndjson").write_text(
@@ -322,18 +480,23 @@ import sys
 manifest = json.load(open(sys.argv[1], encoding="utf-8"))
 icc = json.load(open(sys.argv[2], encoding="utf-8"))
 runtime = manifest["runtime_summary"]
+packed_perf_summary = manifest["artifacts"]["capture"]["performance_summary"]["packed"]["path"]
+packed_perf_icc = manifest["artifacts"]["capture"]["performance_icc_evidence"]["packed"]["path"]
+perf_icc = json.load(open(packed_perf_icc, encoding="utf-8"))
 assert manifest["schema"] == "qge.publication_pack.v0"
 assert runtime["publication_ready_for_complete_claim"] is True
 assert runtime["agent_stream_manifest_ok"] is True
 assert runtime["performance_ok"] is True
 assert runtime["vanilla_performance_ok"] is True
+assert perf_icc["performance_summary_file"] == packed_perf_summary
+assert perf_icc["performance_icc_evidence_file"] == packed_perf_icc
 assert manifest["artifacts"]["oracle"]["oracle_scene"]["exists"] is True
 assert manifest["artifacts"]["advantage"]["metrics"]["exists"] is True
 assert manifest["artifacts"]["advantage"]["qae_moonlab_payload"]["exists"] is True
 assert manifest["artifacts"]["advantage"]["qae_moonlab_payload_markdown"]["exists"] is True
 assert manifest["artifacts"]["advantage"]["qae_moonlab_payload_icc_evidence"]["exists"] is True
 assert manifest["artifacts"]["advantage"]["qae_moonlab_circuits"]["exists"] is True
-assert manifest["artifacts"]["advantage"]["qae_moonlab_circuits"]["file_count"] > 0
+assert manifest["artifacts"]["advantage"]["qae_moonlab_circuits"]["file_count"] > 0, manifest["artifacts"]["advantage"]["qae_moonlab_circuits"]
 assert manifest["artifacts"]["advantage"]["qae_moonlab_oracle_kernel"]["exists"] is True
 assert manifest["artifacts"]["advantage"]["qae_moonlab_oracle_kernel_circuit"]["exists"] is True
 assert manifest["artifacts"]["advantage"]["qae_moonlab_oracle_kernel_markdown"]["exists"] is True
@@ -356,6 +519,8 @@ assert manifest["artifacts"]["resource"]["registered_asset_intake"]["exists"] is
 assert manifest["artifacts"]["resource"]["registered_asset_intake_markdown"]["exists"] is True
 assert manifest["artifacts"]["resource"]["registered_asset_intake_script"]["exists"] is True
 assert manifest["artifacts"]["resource"]["registered_asset_intake_icc_evidence"]["exists"] is True
+assert manifest["artifacts"]["resource"]["registered_full_game_selection"]["exists"] is True
+assert manifest["artifacts"]["source_ledgers"]["registered_full_game_selection"]["packed"]["exists"] is True
 assert manifest["artifacts"]["resource"]["registered_full_game_progress"]["exists"] is True
 assert manifest["artifacts"]["resource"]["registered_full_game_progress_markdown"]["exists"] is True
 assert manifest["artifacts"]["resource"]["registered_full_game_progress_icc_evidence"]["exists"] is True
@@ -374,6 +539,17 @@ assert manifest["artifacts"]["resource"]["moonlab_full_game_plan_icc_evidence"][
 assert manifest["artifacts"]["resource"]["moonlab_deployment_gate"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_deployment_gate_markdown"]["exists"] is True
 assert manifest["artifacts"]["resource"]["moonlab_deployment_gate_icc_evidence"]["exists"] is True
+assert manifest["artifacts"]["resource"]["moonlab_shareware_deployment_gate"]["exists"] is True
+assert manifest["artifacts"]["resource"]["moonlab_shareware_deployment_gate_markdown"]["exists"] is True
+assert manifest["artifacts"]["resource"]["moonlab_shareware_deployment_gate_icc_evidence"]["exists"] is True
+assert manifest["artifacts"]["agent_stream"]["noesis_release_gate"]["exists"] is True
+assert manifest["artifacts"]["agent_stream"]["noesis_release_gate_markdown"]["exists"] is True
+assert manifest["artifacts"]["agent_stream"]["noesis_release_gate_icc_evidence"]["exists"] is True
+assert runtime["noesis_release_gate_status"] == "ready_for_noesis_autonomous_diagnostics_claim"
+assert runtime["noesis_autonomous_diagnostics_claim_allowed"] is True
+assert runtime["noesis_learned_play_claim_allowed"] is False
+assert runtime["noesis_robust_map_level_world_model_claim_allowed"] is False
+assert runtime["noesis_gameplay_quality_score"] == 80.0
 assert manifest["advantage_summary"]["resource_envelope_summary"]["whole_game_hardware_execution_claimed"] is False
 assert manifest["advantage_summary"]["full_game_map_coverage_summary"]["status"] == "partial"
 assert manifest["advantage_summary"]["full_game_map_coverage_summary"]["target_map_count"] == 32
@@ -469,6 +645,13 @@ assert manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["registe
 assert manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["post_install_verification_command_count"] == 2
 assert manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["post_install_capture_queue_command_present"] is True
 assert "qge_full_game_capture_queue.py" in manifest["advantage_summary"]["moonlab_deployment_gate_summary"]["post_install_capture_queue_command"]
+shareware_gate = manifest["advantage_summary"]["moonlab_shareware_deployment_gate_summary"]
+assert shareware_gate["schema"] == "qge.moonlab_shareware_deployment_gate.v0"
+assert shareware_gate["status"] == "blocked"
+assert shareware_gate["shareware_moonlab_deployment_claim_allowed"] is False
+assert shareware_gate["whole_game_moonlab_deployment_claim_allowed"] is False
+assert shareware_gate["whole_game_hardware_execution_claim_allowed"] is False
+assert shareware_gate["hardware_quantum_advantage_claim_allowed"] is False
 assert manifest["artifacts"]["vanilla"]["icc_evidence"]["packed"]["exists"] is True
 assert icc["completion_reason"] == "qge_publication_artifact_pack_complete"
 assert icc["runtime_backend"] == "qge_publication_pack"
@@ -477,9 +660,12 @@ assert icc["manifest_reproduce_recorded"] is True
 assert icc["manifest_reproduce_source_inputs_recorded"] is True
 assert icc["manifest_reproduce_missing_source_inputs"] is False
 assert icc["manifest_reproduce_optional_postpack_command_count"] == 31
+assert icc["manifest_reproduce_release_signoff_command_count"] == 1
 assert icc["manifest_reproduce_publication_pack_command_count"] == 1
 assert icc["manifest_reproduce_missing_optional_postpack_command_count"] == 0
 assert icc["manifest_reproduce_missing_optional_postpack_commands"] == []
+assert icc["manifest_reproduce_missing_release_signoff_command_count"] == 0
+assert icc["manifest_reproduce_missing_release_signoff_commands"] == []
 assert icc["manifest_reproduce_unexpected_command_count"] == 0
 assert icc["manifest_reproduce_unexpected_commands"] == []
 assert icc["manifest_reproduce_unsafe_command_count"] == 0
@@ -525,6 +711,7 @@ assert icc["registered_asset_intake_post_install_verification_command_count"] ==
 assert icc["registered_asset_intake_post_install_capture_queue_command_present"] is True
 assert icc["asset_intake_copies_game_data"] is False
 assert icc["registered_full_game_progress_file"].endswith("resource/qge_registered_full_game_progress.json")
+assert icc["registered_full_game_selection_file"].endswith("resource/qge_registered_full_game_selection.json")
 assert icc["registered_full_game_progress_markdown_file"].endswith("resource/qge_registered_full_game_progress.md")
 assert icc["registered_full_game_progress_icc_evidence_file"].endswith("resource/qge_registered_full_game_progress_icc_evidence.json")
 assert icc["registered_full_game_progress_schema"] == "qge.registered_full_game_progress.v0"
@@ -640,6 +827,22 @@ assert icc["whole_game_moonlab_deployment_claim_allowed"] is False
 assert icc["whole_game_hardware_execution_claim_allowed"] is False
 assert icc["hardware_quantum_advantage_claim_allowed"] is False
 assert icc["dense_70000_qubit_state_claim_allowed"] is False
+assert icc["moonlab_shareware_deployment_gate_file"].endswith("resource/qge_moonlab_shareware_deployment_gate.json")
+assert icc["moonlab_shareware_deployment_gate_markdown_file"].endswith("resource/qge_moonlab_shareware_deployment_gate.md")
+assert icc["moonlab_shareware_deployment_gate_icc_evidence_file"].endswith("resource/qge_moonlab_shareware_deployment_gate_icc_evidence.json")
+assert icc["moonlab_shareware_deployment_gate_schema"] == "qge.moonlab_shareware_deployment_gate.v0"
+assert icc["moonlab_shareware_deployment_gate_status"] == "blocked"
+assert icc["shareware_moonlab_deployment_claim_allowed"] is False
+assert icc["noesis_release_gate_file"].endswith("agent_stream_release/noesis/qge_noesis_release_gate.json")
+assert icc["noesis_release_gate_markdown_file"].endswith("agent_stream_release/noesis/qge_noesis_release_gate.md")
+assert icc["noesis_release_gate_icc_evidence_file"].endswith("agent_stream_release/noesis/qge_noesis_release_gate_icc_evidence.json")
+assert icc["noesis_release_gate_schema"] == "qge.noesis_release_gate.v0"
+assert icc["noesis_release_gate_status"] == "ready_for_noesis_autonomous_diagnostics_claim"
+assert icc["noesis_autonomous_diagnostics_claim_allowed"] is True
+assert icc["noesis_learned_play_claim_allowed"] is False
+assert icc["noesis_robust_map_level_world_model_claim_allowed"] is False
+assert icc["noesis_gameplay_quality_score"] == 80.0
+assert icc["noesis_gameplay_outcome_sample_count"] == 2
 assert icc["moonlab_hardware_candidate_job_count"] == 1
 assert icc["moonlab_completed_simulator_job_count"] >= 2
 assert icc["moonlab_hardware_submitted_job_count"] == 0
@@ -647,7 +850,7 @@ assert icc["whole_game_hardware_execution_claimed"] is False
 assert icc["vanilla_icc_evidence_file"].endswith("vanilla/qge_vanilla_icc_evidence.json")
 assert icc["manifest_source_input_audit_passed"] is True
 assert icc["manifest_source_input_recorded"] is True
-assert icc["manifest_source_input_check_count"] == 20
+assert icc["manifest_source_input_check_count"] == 21
 assert icc["manifest_source_input_mismatch_count"] == 0
 assert icc["manifest_source_copy_audit_available"] is True
 assert icc["manifest_source_copy_audit_passed"] is True
@@ -666,6 +869,15 @@ assert any(
 )
 assert any(
     "qge_postpack_audit.py" in command
+    for command in manifest["reproduce_commands"]
+)
+assert any(
+    "qge_noesis_release_gate.py" in command
+    for command in manifest["reproduce_commands"]
+)
+assert any(
+    "qge_shareware_release_candidate_gate.py" in command
+    and "--postpack /tmp/qge_postpack_audit.json" in command
     for command in manifest["reproduce_commands"]
 )
 source_inputs = manifest["source_inputs"]
@@ -797,6 +1009,7 @@ progress_commands = [
 assert len(progress_commands) == 1
 progress_tokens = shlex.split(progress_commands[0])
 progress_plan = source_inputs["registered_full_game_progress_reproduction"]
+assert progress_plan["selection"] == "<pack_dir>/resource/qge_registered_full_game_selection.json"
 assert progress_tokens[progress_tokens.index("--selection") + 1] == progress_plan["selection"]
 assert progress_tokens[progress_tokens.index("--matrix-root") + 1] == progress_plan["matrix_root"]
 assert progress_tokens[progress_tokens.index("--asset-root") + 1] == progress_plan["asset_root"]
@@ -1115,6 +1328,107 @@ assert icc["gate_status"] == gate["status"]
 assert icc["whole_game_moonlab_deployment_claim_allowed"] is False
 assert icc["registered_asset_install_script"].endswith("resource/install_registered_assets.sh")
 assert icc["post_install_capture_queue_command_present"] is True
+PY
+
+python3 "$repo_root/tools/qge_moonlab_shareware_deployment_gate.py" \
+  "$pack_dir" \
+  --out "$tmpdir/qge_moonlab_shareware_deployment_gate.json" \
+  --markdown "$tmpdir/qge_moonlab_shareware_deployment_gate.md" \
+  --icc-json "$tmpdir/qge_moonlab_shareware_deployment_gate_icc_evidence.json" \
+  > "$tmpdir/moonlab_shareware_deployment_gate.stdout"
+grep -F 'QGE_MOONLAB_SHAREWARE_DEPLOYMENT_GATE' "$tmpdir/moonlab_shareware_deployment_gate.stdout" >/dev/null
+grep -F 'QGE_MOONLAB_SHAREWARE_DEPLOYMENT_GATE_MARKDOWN' "$tmpdir/moonlab_shareware_deployment_gate.stdout" >/dev/null
+grep -F 'QGE_MOONLAB_SHAREWARE_DEPLOYMENT_GATE_ICC_EVIDENCE' "$tmpdir/moonlab_shareware_deployment_gate.stdout" >/dev/null
+python3 - "$tmpdir/qge_moonlab_shareware_deployment_gate.json" "$tmpdir/qge_moonlab_shareware_deployment_gate_icc_evidence.json" "$pack_dir/publication_manifest.json" <<'PY'
+import json
+import sys
+
+gate = json.load(open(sys.argv[1], encoding="utf-8"))
+icc = json.load(open(sys.argv[2], encoding="utf-8"))
+manifest = json.load(open(sys.argv[3], encoding="utf-8"))
+summary = manifest["advantage_summary"]["moonlab_shareware_deployment_gate_summary"]
+assert gate["schema"] == "qge.moonlab_shareware_deployment_gate.v0"
+assert gate["status"] == summary["status"]
+assert gate["shareware_moonlab_deployment_claim_allowed"] is False
+assert gate["whole_game_moonlab_deployment_claim_allowed"] is False
+assert gate["hardware_quantum_advantage_claim_allowed"] is False
+assert icc["runtime_backend"] == "qge_moonlab_shareware_deployment_gate"
+assert icc["gate_status"] == gate["status"]
+assert icc["shareware_moonlab_deployment_claim_allowed"] is False
+PY
+
+python3 "$repo_root/tools/qge_noesis_release_gate.py" \
+  "$pack_dir" \
+  --out "$tmpdir/qge_noesis_release_gate.json" \
+  --markdown "$tmpdir/qge_noesis_release_gate.md" \
+  --icc-json "$tmpdir/qge_noesis_release_gate_icc_evidence.json" \
+  > "$tmpdir/noesis_release_gate.stdout"
+grep -F 'QGE_NOESIS_RELEASE_GATE' "$tmpdir/noesis_release_gate.stdout" >/dev/null
+grep -F 'QGE_NOESIS_RELEASE_GATE_MARKDOWN' "$tmpdir/noesis_release_gate.stdout" >/dev/null
+grep -F 'QGE_NOESIS_RELEASE_GATE_ICC' "$tmpdir/noesis_release_gate.stdout" >/dev/null
+python3 - "$tmpdir/qge_noesis_release_gate.json" "$tmpdir/qge_noesis_release_gate_icc_evidence.json" "$pack_dir/publication_manifest.json" <<'PY'
+import json
+import sys
+
+gate = json.load(open(sys.argv[1], encoding="utf-8"))
+icc = json.load(open(sys.argv[2], encoding="utf-8"))
+manifest = json.load(open(sys.argv[3], encoding="utf-8"))
+runtime = manifest["runtime_summary"]
+assert gate["schema"] == "qge.noesis_release_gate.v0"
+assert gate["status"] == runtime["noesis_release_gate_status"]
+assert gate["noesis_autonomous_diagnostics_claim_allowed"] is True
+assert gate["learned_play_claim_allowed"] is False
+assert gate["robust_map_level_world_model_claim_allowed"] is False
+assert icc["runtime_backend"] == "qge_noesis_release_gate"
+assert icc["completion_reason"] == "qge_noesis_release_gate_ready"
+assert icc["noesis_gameplay_quality_score"] == 80.0
+PY
+
+python3 - "$tmpdir/qge_postpack_audit.json" <<'PY'
+import json
+import sys
+
+json.dump({
+    "schema": "qge.postpack_audit.v0",
+    "passed": True,
+    "failed_count": 0,
+    "mismatch_count_total": 0,
+    "load_error_count": 0,
+    "stale_output_error_count": 0,
+    "manifest_postpack_command_count": 31,
+    "default_child_audit_count": 30,
+}, open(sys.argv[1], "w", encoding="utf-8"), indent=2)
+PY
+
+python3 "$repo_root/tools/qge_shareware_release_candidate_gate.py" \
+  "$pack_dir" \
+  --postpack "$tmpdir/qge_postpack_audit.json" \
+  --out "$tmpdir/qge_shareware_release_candidate_gate.json" \
+  --markdown "$tmpdir/qge_shareware_release_candidate_gate.md" \
+  --icc-json "$tmpdir/qge_shareware_release_candidate_gate_icc_evidence.json" \
+  > "$tmpdir/shareware_release_candidate_gate.stdout"
+grep -F 'QGE_SHAREWARE_RELEASE_CANDIDATE_GATE' "$tmpdir/shareware_release_candidate_gate.stdout" >/dev/null
+grep -F 'QGE_SHAREWARE_RELEASE_CANDIDATE_GATE_MARKDOWN' "$tmpdir/shareware_release_candidate_gate.stdout" >/dev/null
+grep -F 'QGE_SHAREWARE_RELEASE_CANDIDATE_GATE_ICC' "$tmpdir/shareware_release_candidate_gate.stdout" >/dev/null
+python3 - "$tmpdir/qge_shareware_release_candidate_gate.json" "$tmpdir/qge_shareware_release_candidate_gate_icc_evidence.json" <<'PY'
+import json
+import sys
+
+gate = json.load(open(sys.argv[1], encoding="utf-8"))
+icc = json.load(open(sys.argv[2], encoding="utf-8"))
+assert gate["schema"] == "qge.shareware_release_candidate_gate.v0"
+assert gate["status"] == "blocked"
+assert gate["shareware_release_candidate_claim_allowed"] is False
+assert gate["whole_game_moonlab_deployment_claim_allowed"] is False
+assert gate["hardware_quantum_advantage_claim_allowed"] is False
+assert gate["summary"]["postpack_passed"] is True
+assert any(
+    item["id"] == "shareware_moonlab_gate_ready"
+    for item in gate["blockers"]
+)
+assert icc["runtime_backend"] == "qge_shareware_release_candidate_gate"
+assert icc["completion_reason"] == "qge_shareware_release_candidate_gate_blocked"
+assert icc["runtime_backend_scope_map_set"] == "quake_shareware_episode1"
 PY
 
 python3 "$repo_root/tools/qge_asset_requirements.py" \

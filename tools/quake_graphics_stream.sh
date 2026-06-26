@@ -15,6 +15,7 @@ frames="${QGE_STREAM_FRAMES:-12}"
 waits_per_frame="${QGE_STREAM_WAIT_FRAMES:-20}"
 capture_wait_override="${QGE_STREAM_CAPTURE_WAIT:-}"
 map_name="${QGE_STREAM_MAP:-start}"
+stream_skill="${QGE_STREAM_SKILL:-}"
 render_value="${QGE_RENDER:-1}"
 render_res="${QGE_RENDER_RES:-1024}"
 render_threshold="${QGE_RENDER_THRESHOLD:-0.001}"
@@ -51,6 +52,7 @@ noesis_min_capture_wait="${QGE_NOESIS_MIN_CAPTURE_WAIT:-280}"
 noesis_assist="${QGE_NOESIS_ASSIST:-2}"
 noesis_scripted="${QGE_NOESIS_SCRIPTED:-0}"
 noesis_autonomous="${QGE_NOESIS_AUTONOMOUS:-}"
+noesis_target_class="${QGE_NOESIS_TARGET_CLASS:-}"
 noesis_require_combat="${QGE_NOESIS_REQUIRE_COMBAT:-}"
 noesis_cmd="${QGE_NOESIS_CMD:-}"
 default_noesis_cmd="$repo_root/tools/noesis_quake_policy.sh"
@@ -156,6 +158,9 @@ fire_min_start_wait="$(normalize_nonnegative_int "$fire_min_start_wait" 48)"
 fire_min_frames="$(normalize_nonnegative_int "$fire_min_frames" 8)"
 frames="$(normalize_positive_int "$frames" 12)"
 waits_per_frame="$(normalize_positive_int "$waits_per_frame" 20)"
+case "$stream_skill" in
+  ''|*[!0-9]*) stream_skill="" ;;
+esac
 case "$noesis_min_route_distance" in
   ''|*[!0-9.]*|*.*.*|'.') noesis_min_route_distance="64" ;;
 esac
@@ -172,6 +177,7 @@ if [[ "$fire_test" == "1" && "$stream_player" == "noesis" && -z "${QGE_NOESIS_AS
   noesis_assist=0
 fi
 if [[ "$fire_test" == "1" && "$stream_player" == "noesis" &&
+      -z "${QGE_NOESIS_START_WAIT+x}" &&
       "$fire_min_start_wait" -gt 0 &&
       "$noesis_start_wait" -lt "$fire_min_start_wait" ]]; then
   noesis_start_wait="$fire_min_start_wait"
@@ -382,6 +388,7 @@ write_agent_manifest() {
   "capture_dir": $(json_string "$outdir"),
   "app_bin": $(json_string "$app_bin"),
   "map": $(json_string "$map_name"),
+  "skill": $(json_string "$stream_skill"),
   "frames_requested": $frames,
   "frames_captured": $manifest_frame_count,
   "waits_per_frame": $waits_per_frame,
@@ -432,6 +439,7 @@ write_agent_manifest() {
     "noesis_assist": $noesis_assist,
     "noesis_scripted": $noesis_scripted,
     "noesis_autonomous": $noesis_autonomous,
+    "noesis_target_class": $(json_string "$noesis_target_class"),
     "noesis_require_combat": $noesis_require_combat,
     "fire_test": $fire_test,
     "fire_min_start_wait": $fire_min_start_wait,
@@ -793,6 +801,10 @@ trap restore_autoexec EXIT
   echo "quantum_vis $vis_value"
   echo "qge_noesis_assist $noesis_assist"
   echo "qge_noesis_autonomous $noesis_autonomous"
+  echo "qge_noesis_target_class \"$noesis_target_class\""
+  if [[ -n "$stream_skill" ]]; then
+    echo "skill $stream_skill"
+  fi
   if [[ "$sound" == "1" ]]; then
     echo "snd_quantum $sound_quantum_mode"
     echo "snd_quantum_source_authority $sound_source_authority"

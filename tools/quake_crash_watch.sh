@@ -14,6 +14,7 @@ qconsole_root_file="$repo_root/qconsole.log"
 seconds="${QGE_CRASH_SECONDS:-90}"
 script_waits="${QGE_CRASH_WAITS:-3600}"
 map_name="${QGE_CRASH_MAP:-e1m1}"
+stream_skill="${QGE_STREAM_SKILL:-}"
 render_value="${QGE_RENDER:-1}"
 render_res="${QGE_RENDER_RES:-1024}"
 render_threshold="${QGE_RENDER_THRESHOLD:-0.003}"
@@ -45,6 +46,7 @@ noesis_start_wait="${QGE_NOESIS_START_WAIT:-60}"
 noesis_max_wait="${QGE_NOESIS_MAX_WAIT:-600}"
 noesis_scripted="${QGE_NOESIS_SCRIPTED:-0}"
 noesis_autonomous="${QGE_NOESIS_AUTONOMOUS:-}"
+noesis_target_class="${QGE_NOESIS_TARGET_CLASS:-}"
 noesis_cmd="${QGE_NOESIS_CMD:-}"
 default_noesis_cmd="$repo_root/tools/noesis_quake_policy.sh"
 noesis_cmd_default=0
@@ -104,6 +106,9 @@ if [[ -n "$noesis_autonomous" ]]; then
 fi
 seconds="$(normalize_nonnegative_int "$seconds" 90)"
 script_waits="$(normalize_nonnegative_int "$script_waits" 3600)"
+case "$stream_skill" in
+  ''|*[!0-9]*) stream_skill="" ;;
+esac
 if [[ "$stream_player" == "noesis" && "$noesis_scripted" == "1" &&
       -z "$noesis_cmd" && -z "$noesis_actions_file" && -x "$default_noesis_cmd" ]]; then
   noesis_cmd="$default_noesis_cmd"
@@ -190,6 +195,10 @@ rm -f "$qconsole_file" "$qconsole_root_file"
   echo "quantum_physics_authoritative $physics_authoritative"
   echo "quantum_particles $particles_value"
   echo "qge_noesis_autonomous $noesis_autonomous"
+  echo "qge_noesis_target_class \"$noesis_target_class\""
+  if [[ -n "$stream_skill" ]]; then
+    echo "skill $stream_skill"
+  fi
   echo "map $map_name"
   if [[ "$stream_player" == "noesis" ]]; then
     emit_noesis_player_script

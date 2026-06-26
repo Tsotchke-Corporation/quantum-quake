@@ -44,9 +44,11 @@ cvar_t quantum_vis       = {"quantum_vis",       "0", CVAR_ARCHIVE};
 cvar_t quantum_physics   = {"quantum_physics",   "1", CVAR_ARCHIVE};
 cvar_t quantum_projectiles = {"quantum_projectiles", "1", CVAR_ARCHIVE};
 cvar_t quantum_physics_authoritative = {"quantum_physics_authoritative", "0", CVAR_ARCHIVE};
+cvar_t quantum_shareware_encounter = {"quantum_shareware_encounter", "1", CVAR_ARCHIVE};
 cvar_t quantum_debug     = {"quantum_debug",     "0", CVAR_NONE};
 cvar_t qge_noesis_assist = {"qge_noesis_assist", "0", CVAR_NONE};
 cvar_t qge_noesis_autonomous = {"qge_noesis_autonomous", "0", CVAR_NONE};
+cvar_t qge_noesis_target_class = {"qge_noesis_target_class", "", CVAR_NONE};
 cvar_t quantum_overlay_alpha = {"quantum_overlay_alpha", "0.10", CVAR_ARCHIVE};
 cvar_t quantum_scene_surface_budget = {"quantum_scene_surface_budget", "512", CVAR_ARCHIVE};
 cvar_t quantum_render_res = {"quantum_render_res", "1024", CVAR_ARCHIVE};
@@ -182,6 +184,10 @@ static int qge_gameplay_attack_aligned_total = 0;
 static int qge_gameplay_prev_health = 0;
 static int qge_gameplay_prev_armor = 0;
 static int qge_gameplay_prev_ammo_total = 0;
+static int qge_gameplay_prev_shells = 0;
+static int qge_gameplay_prev_nails = 0;
+static int qge_gameplay_prev_rockets = 0;
+static int qge_gameplay_prev_cells = 0;
 static int qge_gameplay_prev_items = 0;
 static int qge_gameplay_prev_weapon = 0;
 static int qge_gameplay_prev_frags = 0;
@@ -306,6 +312,16 @@ static float qge_render_gate_entropy = 0.0f;
 static float qge_render_gate_max_probability = 1.0f;
 static uint64_t qge_render_gate_majority_basis = 0;
 static uint64_t qge_render_gate_state_hash = 0;
+static float qge_shareware_encounter_material_gain = 1.0f;
+static int qge_shareware_encounter_triggers = 0;
+static qboolean qge_shareware_encounter_start_valid = false;
+static char qge_shareware_encounter_map[64];
+static vec3_t qge_shareware_encounter_start_origin;
+static int qge_shareware_encounter_last_frame = -999999;
+static int qge_shareware_encounter_selected_basis = 0;
+static float qge_shareware_encounter_probability = 0.0f;
+static float qge_shareware_encounter_coherence = 0.0f;
+static float qge_shareware_encounter_phase = 0.0f;
 static float qge_tone_lut[QGE_TONE_LUT_SIZE];
 static qboolean qge_tone_lut_ready = false;
 
@@ -587,6 +603,16 @@ static void QGE_TraceProjectileAuthorityGate(qge_quantum_runtime_t *rt);
 static void QGE_TraceProjectileWritebackDecision(
 	qge_quantum_runtime_t *rt,
 	const qge_projectile_writeback_decision_t *decision);
+static void QGE_TraceProjectileWritebackApply(
+	qge_quantum_runtime_t *rt,
+	const qge_projectile_writeback_decision_t *decision,
+	const qge_projectile_writeback_request_t *request);
+static void QGE_TraceMaterialOperators(qge_quantum_runtime_t *rt);
+static void QGE_TraceSharewareEncounter(qge_quantum_runtime_t *rt);
+static void QGE_TraceSharewareProjectileKick(
+	const qge_projectile_branch_request_t *request,
+	float strength,
+	float side);
 static qboolean QGE_PhysicsBuildProjectileBranchRequest(
 	qge_phys_object_t *obj,
 	edict_t *ent,
@@ -609,6 +635,8 @@ static qge_world_stats_t qge_registry_stats;
 static qge_resource_id_t qge_precache_model_resource_ids[MAX_MODELS];
 static qge_resource_id_t qge_precache_sound_resource_ids[MAX_SOUNDS];
 static qge_resource_id_t qge_debug_sprite_logged_id = QGE_RESOURCE_ID_INVALID;
+static qmodel_t *qge_material_inventory_worldmodel = NULL;
+static char qge_material_inventory_map[MAX_QPATH];
 
 #define QGE_MAX_TEXTURE_SIGNAL_CACHE MAX_MAP_TEXTURES
 typedef struct {
@@ -912,6 +940,10 @@ static void QGE_GameplayOutcomeResetState(void)
 	qge_gameplay_prev_health = 0;
 	qge_gameplay_prev_armor = 0;
 	qge_gameplay_prev_ammo_total = 0;
+	qge_gameplay_prev_shells = 0;
+	qge_gameplay_prev_nails = 0;
+	qge_gameplay_prev_rockets = 0;
+	qge_gameplay_prev_cells = 0;
 	qge_gameplay_prev_items = 0;
 	qge_gameplay_prev_weapon = 0;
 	qge_gameplay_prev_frags = 0;
@@ -1191,6 +1223,38 @@ static qboolean QGE_NoesisAssistHiddenCoolingDown(int target_id,
 	return true;
 }
 
+static qboolean QGE_NoesisAssistTargetClassRequested(void)
+{
+	return qge_noesis_target_class.string &&
+		qge_noesis_target_class.string[0] != '\0';
+}
+
+static qboolean QGE_NoesisAssistEnemyMatchesTargetClass(edict_t *enemy)
+{
+	const char *classname;
+
+	if (!QGE_NoesisAssistTargetClassRequested())
+		return true;
+	if (!enemy || !enemy->v.classname)
+		return false;
+	classname = PR_GetString(enemy->v.classname);
+	return classname &&
+		q_strcasecmp(classname, qge_noesis_target_class.string) == 0;
+}
+
+static qboolean QGE_NoesisAssistEntityIsEnemyCandidate(edict_t *enemy)
+{
+	if (!enemy || enemy->free || enemy->v.health <= 0.0f)
+		return false;
+	if ((int)enemy->v.flags & FL_MONSTER)
+		return true;
+
+	/* The E1M7 boss is a real shareware monster class, but it is driven by a
+	 * special QuakeC path.  Allow it only for explicit targeted coverage. */
+	return QGE_NoesisAssistTargetClassRequested() &&
+		QGE_NoesisAssistEnemyMatchesTargetClass(enemy);
+}
+
 static void QGE_NoesisAssistResetHiddenWallStall(void)
 {
 	qge_noesis_assist_hidden_wall_target_id = 0;
@@ -1400,8 +1464,8 @@ static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
 		float hidden_chase_distance;
 		qboolean visible;
 
-		if (locked && !locked->free && locked->v.health > 0.0f &&
-			((int)locked->v.flags & FL_MONSTER)) {
+		if (QGE_NoesisAssistEntityIsEnemyCandidate(locked) &&
+			QGE_NoesisAssistEnemyMatchesTargetClass(locked)) {
 			VectorSubtract(locked->v.origin, player->v.origin, delta);
 			distance = VectorLength(delta);
 			visible = QGE_GameplayEnemyAimPoint(player, locked, locked_aim);
@@ -1436,8 +1500,9 @@ static edict_t *QGE_NoesisAssistFindEnemy(edict_t *player,
 		float distance;
 		qboolean visible;
 
-		if (!ent || ent->free || ent->v.health <= 0.0f ||
-			!((int)ent->v.flags & FL_MONSTER))
+		if (!QGE_NoesisAssistEntityIsEnemyCandidate(ent))
+			continue;
+		if (!QGE_NoesisAssistEnemyMatchesTargetClass(ent))
 			continue;
 
 		VectorSubtract(ent->v.origin, player->v.origin, delta);
@@ -1910,6 +1975,182 @@ static void QGE_NoesisPhase_f(void)
 			  sizeof(qge_noesis_current_phase));
 }
 
+static int QGE_PositiveDelta(int previous, int current)
+{
+	return previous > current ? previous - current : 0;
+}
+
+static uint64_t QGE_RegistryHashStep(uint64_t hash, uint64_t value);
+
+static qge_weapon_operator_kind_t QGE_WeaponOperatorForWeapon(int weapon)
+{
+	if (weapon & IT_LIGHTNING)
+		return QGE_WEAPON_OPERATOR_LIGHTNING_CONTINUOUS_MEASUREMENT;
+	if (weapon & IT_ROCKET_LAUNCHER)
+		return QGE_WEAPON_OPERATOR_ROCKET_SPLASH_WAVEFRONT;
+	if (weapon & IT_GRENADE_LAUNCHER)
+		return QGE_WEAPON_OPERATOR_GRENADE_FUSE_BRANCH;
+	if (weapon & (IT_NAILGUN | IT_SUPER_NAILGUN))
+		return QGE_WEAPON_OPERATOR_NAIL_PAULI_NOISE;
+	if (weapon & (IT_SHOTGUN | IT_SUPER_SHOTGUN))
+		return QGE_WEAPON_OPERATOR_SHOTGUN_SPREAD_MEASUREMENT;
+	if (weapon & IT_AXE)
+		return QGE_WEAPON_OPERATOR_AXE_CONTACT_MEASUREMENT;
+	return QGE_WEAPON_OPERATOR_NONE;
+}
+
+static int QGE_WeaponAmmoDelta(qge_weapon_operator_kind_t kind,
+							   int shell_delta,
+							   int nail_delta,
+							   int rocket_delta,
+							   int cell_delta)
+{
+	switch (kind) {
+	case QGE_WEAPON_OPERATOR_SHOTGUN_SPREAD_MEASUREMENT:
+		return shell_delta;
+	case QGE_WEAPON_OPERATOR_NAIL_PAULI_NOISE:
+		return nail_delta;
+	case QGE_WEAPON_OPERATOR_ROCKET_SPLASH_WAVEFRONT:
+	case QGE_WEAPON_OPERATOR_GRENADE_FUSE_BRANCH:
+		return rocket_delta;
+	case QGE_WEAPON_OPERATOR_LIGHTNING_CONTINUOUS_MEASUREMENT:
+		return cell_delta;
+	default:
+		return 0;
+	}
+}
+
+static uint32_t QGE_WeaponOperatorFlags(qge_weapon_operator_kind_t kind,
+										int ammo_delta,
+										int damage_delta)
+{
+	uint32_t flags = QGE_WEAPON_OPERATOR_FLAG_GAMEPLAY_STATE |
+					 QGE_WEAPON_OPERATOR_FLAG_NONCOMMUTING;
+
+	switch (kind) {
+	case QGE_WEAPON_OPERATOR_SHOTGUN_SPREAD_MEASUREMENT:
+		flags |= QGE_WEAPON_OPERATOR_FLAG_HITSCAN;
+		break;
+	case QGE_WEAPON_OPERATOR_NAIL_PAULI_NOISE:
+		flags |= QGE_WEAPON_OPERATOR_FLAG_PROJECTILE |
+				 QGE_WEAPON_OPERATOR_FLAG_NOISE_OPERATION;
+		break;
+	case QGE_WEAPON_OPERATOR_ROCKET_SPLASH_WAVEFRONT:
+	case QGE_WEAPON_OPERATOR_GRENADE_FUSE_BRANCH:
+		flags |= QGE_WEAPON_OPERATOR_FLAG_PROJECTILE;
+		break;
+	case QGE_WEAPON_OPERATOR_LIGHTNING_CONTINUOUS_MEASUREMENT:
+		flags |= QGE_WEAPON_OPERATOR_FLAG_HITSCAN |
+				 QGE_WEAPON_OPERATOR_FLAG_CONTINUOUS;
+		break;
+	case QGE_WEAPON_OPERATOR_AXE_CONTACT_MEASUREMENT:
+		flags |= QGE_WEAPON_OPERATOR_FLAG_MELEE;
+		break;
+	default:
+		break;
+	}
+	if (ammo_delta > 0)
+		flags |= QGE_WEAPON_OPERATOR_FLAG_AMMO_CONSUMED;
+	if (damage_delta > 0)
+		flags |= QGE_WEAPON_OPERATOR_FLAG_DAMAGE_RESULT;
+	return flags;
+}
+
+static void QGE_WeaponOperatorDefaults(qge_weapon_operator_kind_t kind,
+									   double *phase,
+									   double *decoherence,
+									   double *spread,
+									   double *amplification)
+{
+	*phase = 0.0;
+	*decoherence = 0.1;
+	*spread = 0.1;
+	*amplification = 1.0;
+
+	switch (kind) {
+	case QGE_WEAPON_OPERATOR_SHOTGUN_SPREAD_MEASUREMENT:
+		*phase = 0.125;
+		*decoherence = 0.15;
+		*spread = 0.75;
+		break;
+	case QGE_WEAPON_OPERATOR_NAIL_PAULI_NOISE:
+		*phase = 0.25;
+		*decoherence = 0.25;
+		*spread = 0.25;
+		break;
+	case QGE_WEAPON_OPERATOR_ROCKET_SPLASH_WAVEFRONT:
+		*phase = 0.5;
+		*decoherence = 0.20;
+		*spread = 0.35;
+		*amplification = 1.5;
+		break;
+	case QGE_WEAPON_OPERATOR_GRENADE_FUSE_BRANCH:
+		*phase = 0.75;
+		*decoherence = 0.35;
+		*spread = 0.45;
+		*amplification = 1.25;
+		break;
+	case QGE_WEAPON_OPERATOR_LIGHTNING_CONTINUOUS_MEASUREMENT:
+		*phase = 1.0;
+		*decoherence = 0.05;
+		*spread = 0.10;
+		*amplification = 2.0;
+		break;
+	case QGE_WEAPON_OPERATOR_AXE_CONTACT_MEASUREMENT:
+		*phase = 0.0;
+		*decoherence = 0.40;
+		*spread = 0.05;
+		break;
+	default:
+		break;
+	}
+}
+
+static void QGE_RecordWeaponOperatorFromGameplay(int weapon,
+												 int ammo_delta,
+												 int damage_delta,
+												 int attack_press_delta)
+{
+	qge_weapon_operator_event_t event;
+	qge_weapon_operator_kind_t kind;
+	uint64_t hash = 1469598103934665603ULL;
+	double phase, decoherence, spread, amplification;
+
+	kind = QGE_WeaponOperatorForWeapon(weapon);
+	if (kind == QGE_WEAPON_OPERATOR_NONE)
+		return;
+	if (ammo_delta <= 0 && damage_delta <= 0 &&
+		!(kind == QGE_WEAPON_OPERATOR_AXE_CONTACT_MEASUREMENT &&
+		  attack_press_delta > 0))
+		return;
+
+	QGE_WeaponOperatorDefaults(kind, &phase, &decoherence, &spread,
+							   &amplification);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)qge_frame_count);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)weapon);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)kind);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)ammo_delta);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)damage_delta);
+
+	memset(&event, 0, sizeof(event));
+	event.frame = qge_frame_count;
+	event.server_time_msec = QGE_ServerTimeMsec();
+	event.subject_id = 1;
+	event.kind = kind;
+	event.observation_boundary =
+		damage_delta > 0 ? QGE_OBSERVE_DAMAGE : QGE_OBSERVE_PLAYER_VISIBLE;
+	event.flags = QGE_WeaponOperatorFlags(kind, ammo_delta, damage_delta);
+	event.weapon_id = (uint64_t)(uint32_t)weapon;
+	event.ammo_delta = ammo_delta;
+	event.damage_delta = damage_delta;
+	event.phase_shift = phase;
+	event.decoherence = decoherence;
+	event.spread = spread;
+	event.amplification = amplification;
+	event.trace_id = hash;
+	qge_quantum_record_weapon_operator(QGE_Runtime(), &event);
+}
+
 static void QGE_GameplayOutcomeSample(void)
 {
 	edict_t *player;
@@ -1923,6 +2164,7 @@ static void QGE_GameplayOutcomeSample(void)
 	int pickup_delta, item_bits_added, weapon_changed_delta;
 	int attack_active, attack_press_delta;
 	int ammo_total, combined, prev_combined;
+	int shell_delta, nail_delta, rocket_delta, cell_delta, weapon_ammo_delta;
 	int damageable_alive = 0;
 	int visible_enemy_count = 0;
 	int aligned_visible_enemy_count = 0;
@@ -2028,6 +2270,11 @@ static void QGE_GameplayOutcomeSample(void)
 	item_bits_added = 0;
 	weapon_changed_delta = 0;
 	attack_press_delta = 0;
+	shell_delta = 0;
+	nail_delta = 0;
+	rocket_delta = 0;
+	cell_delta = 0;
+	weapon_ammo_delta = 0;
 	kills_delta = 0;
 	if (qge_gameplay_prev_valid) {
 		VectorSubtract(player->v.origin, qge_gameplay_prev_origin, delta);
@@ -2057,6 +2304,16 @@ static void QGE_GameplayOutcomeSample(void)
 			attack_press_delta = 1;
 			qge_gameplay_attack_presses_total++;
 		}
+		shell_delta = QGE_PositiveDelta(qge_gameplay_prev_shells, shells);
+		nail_delta = QGE_PositiveDelta(qge_gameplay_prev_nails, nails);
+		rocket_delta = QGE_PositiveDelta(qge_gameplay_prev_rockets, rockets);
+		cell_delta = QGE_PositiveDelta(qge_gameplay_prev_cells, cells);
+		weapon_ammo_delta = QGE_WeaponAmmoDelta(
+			QGE_WeaponOperatorForWeapon(weapon),
+			shell_delta,
+			nail_delta,
+			rocket_delta,
+			cell_delta);
 		if (killed_monsters > qge_gameplay_prev_killed_monsters)
 			kills_delta = killed_monsters - qge_gameplay_prev_killed_monsters;
 		else if (damageable_alive < qge_gameplay_prev_damageable_alive)
@@ -2083,6 +2340,10 @@ static void QGE_GameplayOutcomeSample(void)
 	qge_gameplay_attack_visible_total += attack_visible_delta;
 	qge_gameplay_attack_aligned_total += attack_aligned_delta;
 	qge_gameplay_samples++;
+	QGE_RecordWeaponOperatorFromGameplay(weapon,
+										 weapon_ammo_delta,
+										 damage_dealt_delta,
+										 attack_press_delta);
 
 	fprintf(qge_gameplay_outcome_file,
 		"{\"schema\":\"qge.gameplay_outcome.v0\",\"type\":\"sample\","
@@ -2320,6 +2581,10 @@ static void QGE_GameplayOutcomeSample(void)
 	qge_gameplay_prev_health = health;
 	qge_gameplay_prev_armor = armor;
 	qge_gameplay_prev_ammo_total = ammo_total;
+	qge_gameplay_prev_shells = shells;
+	qge_gameplay_prev_nails = nails;
+	qge_gameplay_prev_rockets = rockets;
+	qge_gameplay_prev_cells = cells;
 	qge_gameplay_prev_items = items;
 	qge_gameplay_prev_weapon = weapon;
 	qge_gameplay_prev_frags = frags;
@@ -4245,9 +4510,11 @@ void QGE_Init(void)
 	Cvar_RegisterVariable(&quantum_physics);
 	Cvar_RegisterVariable(&quantum_projectiles);
 	Cvar_RegisterVariable(&quantum_physics_authoritative);
+	Cvar_RegisterVariable(&quantum_shareware_encounter);
 	Cvar_RegisterVariable(&quantum_debug);
 	Cvar_RegisterVariable(&qge_noesis_assist);
 	Cvar_RegisterVariable(&qge_noesis_autonomous);
+	Cvar_RegisterVariable(&qge_noesis_target_class);
 	Cvar_RegisterVariable(&quantum_overlay_alpha);
 	Cvar_RegisterVariable(&quantum_scene_surface_budget);
 	Cvar_RegisterVariable(&quantum_render_res);
@@ -4305,10 +4572,11 @@ void QGE_Init(void)
 			memset(&replay_stats, 0, sizeof(replay_stats));
 			qge_quantum_runtime_get_stats(rt, &replay_stats);
 			fprintf(stderr,
-					"QGE replay path=%s strict=%d entropy_loaded=%llu ai_loaded=%llu\n",
+					"QGE replay path=%s strict=%d entropy_loaded=%llu ai_loaded=%llu measurements_loaded=%llu\n",
 					replay_path, replay_strict ? 1 : 0,
 					(unsigned long long)replay_stats.replay_events_loaded,
-					(unsigned long long)replay_stats.replay_ai_decisions_loaded);
+					(unsigned long long)replay_stats.replay_ai_decisions_loaded,
+					(unsigned long long)replay_stats.replay_measurements_loaded);
 		} else {
 			Con_Printf("QGE: Failed to load replay trace %s\n", replay_path);
 			fprintf(stderr, "QGE replay load failed path=%s strict=%d\n",
@@ -4519,10 +4787,12 @@ void QGE_Shutdown(void)
 		qge_quantum_runtime_get_stats(QGE_Runtime(), &replay_stats);
 		if (replay_stats.replay_events_loaded ||
 			replay_stats.replay_ai_decisions_loaded ||
+			replay_stats.replay_measurements_loaded ||
 			replay_stats.replay_events_consumed ||
-			replay_stats.replay_ai_decisions_consumed) {
+			replay_stats.replay_ai_decisions_consumed ||
+			replay_stats.replay_measurements_consumed) {
 			fprintf(stderr,
-					"QGE replay stats entropy_loaded=%llu entropy_consumed=%llu entropy_mismatches=%llu entropy_exhaustions=%llu ai_loaded=%llu ai_consumed=%llu ai_mismatches=%llu ai_exhaustions=%llu\n",
+					"QGE replay stats entropy_loaded=%llu entropy_consumed=%llu entropy_mismatches=%llu entropy_exhaustions=%llu ai_loaded=%llu ai_consumed=%llu ai_mismatches=%llu ai_exhaustions=%llu measurements_loaded=%llu measurements_consumed=%llu measurement_mismatches=%llu measurement_exhaustions=%llu\n",
 					(unsigned long long)replay_stats.replay_events_loaded,
 					(unsigned long long)replay_stats.replay_events_consumed,
 					(unsigned long long)replay_stats.replay_mismatches,
@@ -4530,7 +4800,11 @@ void QGE_Shutdown(void)
 					(unsigned long long)replay_stats.replay_ai_decisions_loaded,
 					(unsigned long long)replay_stats.replay_ai_decisions_consumed,
 					(unsigned long long)replay_stats.replay_ai_decision_mismatches,
-					(unsigned long long)replay_stats.replay_ai_decision_exhaustions);
+					(unsigned long long)replay_stats.replay_ai_decision_exhaustions,
+					(unsigned long long)replay_stats.replay_measurements_loaded,
+					(unsigned long long)replay_stats.replay_measurements_consumed,
+					(unsigned long long)replay_stats.replay_measurement_mismatches,
+					(unsigned long long)replay_stats.replay_measurement_exhaustions);
 		}
 		QGE_TraceBackendGate("shutdown");
 		qge_shutdown(qge_ctx);
@@ -4665,6 +4939,8 @@ void QGE_FrameEnd(void)
 		qge_quantum_record_probe(rt, &probe);
 
 		QGE_TraceWorldSurfaceSubmissionProbe(rt);
+		QGE_TraceMaterialOperators(rt);
+		QGE_TraceSharewareEncounter(rt);
 	}
 
 	if (quantum_debug.value >= 1.0f &&
@@ -5085,6 +5361,838 @@ static float QGE_SurfaceMaterialSignal(const qge_scene_surface_t *surface)
 	if (signal > 1.0f)
 		signal = 1.0f;
 	return signal;
+}
+
+static int QGE_CountBits32(uint32_t mask)
+{
+	int count = 0;
+
+	while (mask) {
+		count += (mask & 1u) ? 1 : 0;
+		mask >>= 1;
+	}
+	return count;
+}
+
+static double QGE_ClampDouble01(double value)
+{
+	if (value < 0.0)
+		return 0.0;
+	if (value > 1.0)
+		return 1.0;
+	return value;
+}
+
+static uint64_t QGE_MaterialOperatorTraceId(
+	qge_material_operator_kind_t kind,
+	int subject_id,
+	uint64_t material_id,
+	double phase_shift,
+	double decoherence,
+	double amplification,
+	double protection)
+{
+	uint64_t hash = 0x5151455f4d41544fULL;
+
+	hash = QGE_RegistryHashStep(hash, (uint64_t)qge_frame_count);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)kind);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)subject_id);
+	hash = QGE_RegistryHashStep(hash, material_id);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)(phase_shift * 1000000.0));
+	hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)(decoherence * 1000000.0));
+	hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)(amplification * 1000000.0));
+	hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)(protection * 1000000.0));
+	return hash ? hash : 0x5151455f4d415431ULL;
+}
+
+static void QGE_RecordMaterialOperator(
+	qge_quantum_runtime_t *rt,
+	qge_material_operator_kind_t kind,
+	qge_observation_boundary_t boundary,
+	int subject_id,
+	uint32_t flags,
+	uint64_t material_id,
+	double phase_shift,
+	double decoherence,
+	double amplification,
+	double protection)
+{
+	qge_material_operator_event_t event;
+
+	if (!rt || material_id == 0)
+		return;
+
+	memset(&event, 0, sizeof(event));
+	event.frame = qge_frame_count;
+	event.server_time_msec = QGE_ServerTimeMsec();
+	event.subject_id = subject_id;
+	event.kind = kind;
+	event.observation_boundary = boundary;
+	event.flags = flags | QGE_MATERIAL_OPERATOR_FLAG_GAMEPLAY_STATE;
+	event.material_id = material_id;
+	event.phase_shift = phase_shift;
+	event.decoherence = QGE_ClampDouble01(decoherence);
+	event.amplification = amplification;
+	event.protection = QGE_ClampDouble01(protection);
+	event.trace_id = QGE_MaterialOperatorTraceId(kind, subject_id, material_id,
+												 phase_shift, decoherence,
+												 amplification, protection);
+	qge_quantum_record_material_operator(rt, &event);
+}
+
+static uint64_t QGE_MaterialClassHash(const char *label, int count,
+									  double avg_signal)
+{
+	uint64_t hash = 1469598103934665603ULL;
+	const unsigned char *p = (const unsigned char *)label;
+
+	while (p && *p) {
+		hash = QGE_RegistryHashStep(hash, (uint64_t)*p);
+		p++;
+	}
+	hash = QGE_RegistryHashStep(hash, (uint64_t)(count < 0 ? 0 : count));
+	hash = QGE_RegistryHashStep(hash, (uint64_t)(avg_signal * 1000000.0));
+	return hash;
+}
+
+typedef struct {
+	int water_count;
+	int lava_count;
+	int slipgate_count;
+	int material_ordinary_count;
+	int material_water_count;
+	int material_lava_count;
+	int material_slime_count;
+	int material_teleport_count;
+	int material_sky_count;
+	int material_fullbright_count;
+	int material_warp_count;
+	double water_signal;
+	double lava_signal;
+	double slipgate_signal;
+	double material_ordinary_signal;
+	double material_water_signal;
+	double material_lava_signal;
+	double material_slime_signal;
+	double material_teleport_signal;
+	double material_sky_signal;
+	double material_fullbright_signal;
+	double material_warp_signal;
+} qge_material_aggregate_t;
+
+static void QGE_MaterialAggregateAdd(qge_material_aggregate_t *aggregate,
+									 int flags,
+									 qboolean has_fullbright,
+									 qboolean has_warp,
+									 float material_signal)
+{
+	qboolean class_special = false;
+
+	if (!aggregate)
+		return;
+
+	if (flags & (SURF_DRAWWATER | SURF_DRAWTURB | SURF_DRAWSLIME)) {
+		aggregate->water_count++;
+		aggregate->water_signal += material_signal;
+	}
+	if (flags & SURF_DRAWLAVA) {
+		aggregate->lava_count++;
+		aggregate->lava_signal += material_signal;
+	}
+	if (flags & SURF_DRAWTELE) {
+		aggregate->slipgate_count++;
+		aggregate->slipgate_signal += material_signal;
+	}
+	if (flags & SURF_DRAWSKY) {
+		aggregate->material_sky_count++;
+		aggregate->material_sky_signal += material_signal;
+		class_special = true;
+	}
+	if (flags & SURF_DRAWWATER) {
+		aggregate->material_water_count++;
+		aggregate->material_water_signal += material_signal;
+		class_special = true;
+	}
+	if (flags & SURF_DRAWLAVA) {
+		aggregate->material_lava_count++;
+		aggregate->material_lava_signal += material_signal;
+		class_special = true;
+	}
+	if (flags & SURF_DRAWSLIME) {
+		aggregate->material_slime_count++;
+		aggregate->material_slime_signal += material_signal;
+		class_special = true;
+	}
+	if (flags & SURF_DRAWTELE) {
+		aggregate->material_teleport_count++;
+		aggregate->material_teleport_signal += material_signal;
+		class_special = true;
+	}
+	if (has_fullbright) {
+		aggregate->material_fullbright_count++;
+		aggregate->material_fullbright_signal += material_signal;
+		class_special = true;
+	}
+	if (has_warp || (flags & SURF_DRAWTURB)) {
+		aggregate->material_warp_count++;
+		aggregate->material_warp_signal += material_signal;
+		class_special = true;
+	}
+	if (!class_special && !(flags & SURF_DRAWFENCE)) {
+		aggregate->material_ordinary_count++;
+		aggregate->material_ordinary_signal += material_signal;
+	}
+}
+
+static void QGE_RecordMaterialClassProbe(qge_quantum_runtime_t *rt,
+										 const char *label,
+										 int count,
+										 double signal_sum)
+{
+	qge_state_probe_t probe;
+	double avg_signal;
+
+	if (!rt || !label || count <= 0)
+		return;
+
+	avg_signal = signal_sum / (double)count;
+	memset(&probe, 0, sizeof(probe));
+	probe.frame = qge_frame_count;
+	probe.server_time_msec = QGE_ServerTimeMsec();
+	probe.domain = QGE_DOMAIN_MATERIAL;
+	probe.representation = QGE_REP_MATERIAL_PHASE_FIELD;
+	probe.subject_id = count;
+	probe.flags = QGE_MATERIAL_OPERATOR_FLAG_WORLD_SURFACE;
+	probe.state_hash = QGE_MaterialClassHash(label, count, avg_signal);
+	probe.entropy = avg_signal;
+	probe.coherence = 1.0;
+	probe.max_probability = avg_signal;
+	probe.total_probability = (double)count;
+	probe.active_basis_count = count;
+	probe.qubit_count = qge_quantum_qubits_for_basis_count((uint64_t)count);
+	probe.memory_bytes = (uint64_t)count *
+						 (uint64_t)sizeof(qge_scene_surface_t);
+	strlcpy(probe.label, label, sizeof(probe.label));
+	qge_quantum_record_probe(rt, &probe);
+}
+
+static void QGE_RecordMaterialAggregate(qge_quantum_runtime_t *rt,
+										const qge_material_aggregate_t *aggregate,
+										uint64_t material_id_seed)
+{
+	if (!rt || !aggregate)
+		return;
+
+	if (aggregate->water_count > 0) {
+		double avg = aggregate->water_signal / (double)aggregate->water_count;
+		QGE_RecordMaterialOperator(rt,
+								   QGE_MATERIAL_OPERATOR_WATER_DECOHERENCE,
+								   QGE_OBSERVE_PLAYER_VISIBLE,
+								   aggregate->water_count,
+								   QGE_MATERIAL_OPERATOR_FLAG_WORLD_SURFACE,
+								   QGE_RegistryHashStep(material_id_seed,
+														 (uint64_t)aggregate->water_count),
+								   0.25 + avg * 0.50,
+								   0.18 + avg * 0.45,
+								   1.0,
+								   0.0);
+	}
+	if (aggregate->lava_count > 0) {
+		double avg = aggregate->lava_signal / (double)aggregate->lava_count;
+		QGE_RecordMaterialOperator(rt,
+								   QGE_MATERIAL_OPERATOR_LAVA_PHASE,
+								   QGE_OBSERVE_DAMAGE,
+								   aggregate->lava_count,
+								   QGE_MATERIAL_OPERATOR_FLAG_WORLD_SURFACE,
+								   QGE_RegistryHashStep(material_id_seed,
+														 (uint64_t)aggregate->lava_count),
+								   0.95 + avg * 0.75,
+								   0.50 + avg * 0.35,
+								   1.25,
+								   0.0);
+	}
+	if (aggregate->slipgate_count > 0) {
+		double avg = aggregate->slipgate_signal /
+					 (double)aggregate->slipgate_count;
+		QGE_RecordMaterialOperator(rt,
+								   QGE_MATERIAL_OPERATOR_SLIPGATE_PHASE,
+								   QGE_OBSERVE_PLAYER_VISIBLE,
+								   aggregate->slipgate_count,
+								   QGE_MATERIAL_OPERATOR_FLAG_WORLD_SURFACE,
+								   QGE_RegistryHashStep(material_id_seed,
+														 (uint64_t)aggregate->slipgate_count),
+								   1.57079632679 + avg * 0.25,
+								   0.04,
+								   1.0 + avg * 0.15,
+								   0.0);
+	}
+
+	QGE_RecordMaterialClassProbe(rt, "material_class_ordinary",
+								 aggregate->material_ordinary_count,
+								 aggregate->material_ordinary_signal);
+	QGE_RecordMaterialClassProbe(rt, "material_class_water",
+								 aggregate->material_water_count,
+								 aggregate->material_water_signal);
+	QGE_RecordMaterialClassProbe(rt, "material_class_lava",
+								 aggregate->material_lava_count,
+								 aggregate->material_lava_signal);
+	QGE_RecordMaterialClassProbe(rt, "material_class_slime",
+								 aggregate->material_slime_count,
+								 aggregate->material_slime_signal);
+	QGE_RecordMaterialClassProbe(rt, "material_class_teleport",
+								 aggregate->material_teleport_count,
+								 aggregate->material_teleport_signal);
+	QGE_RecordMaterialClassProbe(rt, "material_class_sky",
+								 aggregate->material_sky_count,
+								 aggregate->material_sky_signal);
+	QGE_RecordMaterialClassProbe(rt, "material_class_fullbright",
+								 aggregate->material_fullbright_count,
+								 aggregate->material_fullbright_signal);
+	QGE_RecordMaterialClassProbe(rt, "material_class_warp",
+								 aggregate->material_warp_count,
+								 aggregate->material_warp_signal);
+}
+
+static float QGE_WorldSurfaceMaterialSignal(qmodel_t *model,
+											const msurface_t *surf,
+											int surface_index,
+											qboolean *has_fullbright,
+											qboolean *has_warp)
+{
+	qge_scene_surface_t surface;
+	texture_t *tex;
+
+	if (has_fullbright)
+		*has_fullbright = false;
+	if (has_warp)
+		*has_warp = false;
+	if (!model || !surf)
+		return 0.25f;
+
+	memset(&surface, 0, sizeof(surface));
+	surface.surf = surf;
+	surface.surface_id = surface_index;
+	surface.flags = surf->flags;
+	tex = surf->texinfo ? surf->texinfo->texture : NULL;
+	if (tex) {
+		surface.has_fullbright = tex->fullbright != NULL;
+		surface.has_warp = tex->warpimage != NULL;
+	}
+	QGE_CachedSurfaceLightSignal(surface_index, surf,
+								 &surface.light_energy,
+								 &surface.light_contrast);
+	surface.material_signal = QGE_SurfaceMaterialSignal(&surface);
+	if (has_fullbright)
+		*has_fullbright = surface.has_fullbright;
+	if (has_warp)
+		*has_warp = surface.has_warp;
+	return surface.material_signal;
+}
+
+static void QGE_TraceWorldMaterialInventoryOperators(qge_quantum_runtime_t *rt)
+{
+	qge_material_aggregate_t aggregate;
+	qmodel_t *model;
+	const char *map_name;
+	uint64_t material_id_seed;
+
+	if (!rt)
+		return;
+
+	model = cl.worldmodel ? cl.worldmodel : sv.worldmodel;
+	if (!model || !model->surfaces || model->numsurfaces <= 0)
+		return;
+
+	map_name = cl.mapname[0] ? cl.mapname :
+		(sv.name[0] ? sv.name : model->name);
+	if (qge_material_inventory_worldmodel == model &&
+		q_strcasecmp(qge_material_inventory_map, map_name) == 0)
+		return;
+
+	memset(&aggregate, 0, sizeof(aggregate));
+	for (int i = 0; i < model->numsurfaces; i++) {
+		const msurface_t *surf = &model->surfaces[i];
+		qboolean has_fullbright = false;
+		qboolean has_warp = false;
+		float material_signal =
+			QGE_WorldSurfaceMaterialSignal(model, surf, i,
+										   &has_fullbright, &has_warp);
+		QGE_MaterialAggregateAdd(&aggregate, surf->flags,
+								 has_fullbright, has_warp, material_signal);
+	}
+
+	material_id_seed = QGE_RegistryHashString(map_name);
+	material_id_seed = QGE_RegistryHashStep(material_id_seed,
+											(uint64_t)model->numsurfaces);
+	QGE_RecordMaterialAggregate(rt, &aggregate, material_id_seed);
+	qge_material_inventory_worldmodel = model;
+	q_strlcpy(qge_material_inventory_map, map_name,
+			  sizeof(qge_material_inventory_map));
+}
+
+static void QGE_TraceMaterialOperators(qge_quantum_runtime_t *rt)
+{
+	edict_t *player = NULL;
+	uint32_t items = 0u;
+	qge_material_aggregate_t scene_aggregate;
+
+	if (!rt)
+		return;
+
+	QGE_TraceWorldMaterialInventoryOperators(rt);
+	memset(&scene_aggregate, 0, sizeof(scene_aggregate));
+	for (int i = 0; i < qge_scene_surface_count; i++) {
+		const qge_scene_surface_t *surface = &qge_scene_surfaces[i];
+		QGE_MaterialAggregateAdd(&scene_aggregate, surface->flags,
+								 surface->has_fullbright,
+								 surface->has_warp,
+								 surface->material_signal);
+	}
+
+	QGE_RecordMaterialAggregate(rt, &scene_aggregate, 0x5151455f5343454eULL);
+
+	if (sv.active && sv.num_edicts > 1) {
+		player = EDICT_NUM(1);
+		if (player && !player->free)
+			items = (uint32_t)(int)player->v.items;
+	}
+	if (!player || player->free)
+		return;
+
+	if ((int)player->v.waterlevel > 0) {
+		int watertype = (int)player->v.watertype;
+		if (watertype == CONTENTS_LAVA) {
+			QGE_RecordMaterialOperator(rt,
+									   QGE_MATERIAL_OPERATOR_LAVA_PHASE,
+									   QGE_OBSERVE_DAMAGE,
+									   1,
+									   QGE_MATERIAL_OPERATOR_FLAG_PLAYER_MEDIUM,
+									   (uint64_t)(uint32_t)CONTENTS_LAVA,
+									   1.25,
+									   0.75,
+									   1.35,
+									   0.0);
+		} else if (watertype <= CONTENTS_WATER) {
+			QGE_RecordMaterialOperator(rt,
+									   QGE_MATERIAL_OPERATOR_WATER_DECOHERENCE,
+									   QGE_OBSERVE_PLAYER_VISIBLE,
+									   1,
+									   QGE_MATERIAL_OPERATOR_FLAG_PLAYER_MEDIUM,
+									   (uint64_t)(uint32_t)watertype,
+									   0.45,
+									   0.30 + 0.10 * (double)player->v.waterlevel,
+									   1.0,
+									   0.0);
+		}
+	}
+
+	if (items & (uint32_t)IT_QUAD) {
+		QGE_RecordMaterialOperator(rt,
+								   QGE_MATERIAL_OPERATOR_QUAD_AMPLIFICATION,
+								   QGE_OBSERVE_DAMAGE,
+								   1,
+								   QGE_MATERIAL_OPERATOR_FLAG_PLAYER_POWERUP,
+								   (uint64_t)(uint32_t)IT_QUAD,
+								   0.78539816339,
+								   0.0,
+								   4.0,
+								   0.0);
+	}
+	if (items & (uint32_t)IT_INVISIBILITY) {
+		QGE_RecordMaterialOperator(rt,
+								   QGE_MATERIAL_OPERATOR_RING_PROTECTION,
+								   QGE_OBSERVE_PLAYER_VISIBLE,
+								   1,
+								   QGE_MATERIAL_OPERATOR_FLAG_PLAYER_POWERUP,
+								   (uint64_t)(uint32_t)IT_INVISIBILITY,
+								   1.04719755120,
+								   0.05,
+								   1.0,
+								   0.75);
+	}
+	if (items & (uint32_t)IT_INVULNERABILITY) {
+		QGE_RecordMaterialOperator(rt,
+								   QGE_MATERIAL_OPERATOR_PENTAGRAM_PROTECTION,
+								   QGE_OBSERVE_DAMAGE,
+								   1,
+								   QGE_MATERIAL_OPERATOR_FLAG_PLAYER_POWERUP,
+								   (uint64_t)(uint32_t)IT_INVULNERABILITY,
+								   0.0,
+								   0.0,
+								   1.0,
+								   1.0);
+	}
+	if (items & 0xf0000000u) {
+		uint32_t rune_mask = items & 0xf0000000u;
+		int rune_count = QGE_CountBits32(rune_mask);
+		QGE_RecordMaterialOperator(rt,
+								   QGE_MATERIAL_OPERATOR_RUNE_PHASE,
+								   QGE_OBSERVE_SAVE_OR_DEMO,
+								   rune_count,
+								   QGE_MATERIAL_OPERATOR_FLAG_PLAYER_POWERUP,
+								   (uint64_t)rune_mask,
+								   0.39269908169 * (double)rune_count,
+								   0.0,
+								   1.0 + 0.10 * (double)rune_count,
+								   0.25 * (double)rune_count);
+	}
+}
+
+#define QGE_SHAREWARE_ENCOUNTER_FLAG_ACTIVE          0x00010000u
+#define QGE_SHAREWARE_ENCOUNTER_FLAG_INTERFERENCE    0x00020000u
+#define QGE_SHAREWARE_ENCOUNTER_FLAG_DECOHERENCE     0x00040000u
+#define QGE_SHAREWARE_ENCOUNTER_FLAG_OBSERVED        0x00080000u
+#define QGE_SHAREWARE_ENCOUNTER_FLAG_MATERIAL_PHASE  0x00100000u
+#define QGE_SHAREWARE_ENCOUNTER_FLAG_PLAYER_VISIBLE  0x00200000u
+#define QGE_SHAREWARE_ENCOUNTER_FLAG_E1M1            0x00400000u
+#define QGE_SHAREWARE_ENCOUNTER_FLAG_RENDER_FEEDBACK 0x00800000u
+
+static qboolean QGE_IsSharewareEncounterMap(void)
+{
+	const char *map = sv.name[0] ? sv.name : cl.mapname;
+
+	if (!map || !map[0])
+		return false;
+	return q_strcasecmp(map, "e1m1") == 0 ||
+		   q_strcasecmp(map, "maps/e1m1.bsp") == 0 ||
+		   strstr(map, "/e1m1") != NULL ||
+		   strstr(map, "\\e1m1") != NULL;
+}
+
+static double QGE_EntropyUnit53(uint64_t entropy)
+{
+	return (double)(entropy >> 11) * (1.0 / 9007199254740992.0);
+}
+
+static uint64_t QGE_SharewareEncounterTraceId(
+	const edict_t *player,
+	uint32_t flags,
+	int basis,
+	double phase,
+	double probability)
+{
+	uint64_t hash = 0x5151455f53573145ULL;
+
+	hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)qge_frame_count);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)flags);
+	hash = QGE_RegistryHashStep(hash, (uint64_t)(uint32_t)basis);
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)(uint32_t)(phase * 1000000.0));
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)(uint32_t)(probability * 1000000.0));
+	if (player) {
+		hash = QGE_RegistryHashStep(hash,
+									(uint64_t)(uint32_t)(int32_t)
+									(player->v.origin[0] * 16.0f));
+		hash = QGE_RegistryHashStep(hash,
+									(uint64_t)(uint32_t)(int32_t)
+									(player->v.origin[1] * 16.0f));
+		hash = QGE_RegistryHashStep(hash,
+									(uint64_t)(uint32_t)(int32_t)
+									(player->v.origin[2] * 16.0f));
+	}
+	return hash ? hash : 0x5151455f53573131ULL;
+}
+
+static void QGE_RecordSharewareEncounterProbe(
+	qge_quantum_runtime_t *rt,
+	const char *label,
+	qge_quantum_representation_t representation,
+	uint32_t flags,
+	uint64_t state_hash,
+	double entropy,
+	double coherence,
+	double max_probability,
+	double total_probability,
+	int active_basis_count)
+{
+	qge_state_probe_t probe;
+
+	if (!rt || !label)
+		return;
+
+	memset(&probe, 0, sizeof(probe));
+	probe.frame = qge_frame_count;
+	probe.server_time_msec = QGE_ServerTimeMsec();
+	probe.domain = QGE_DOMAIN_MATERIAL;
+	probe.representation = representation;
+	probe.subject_id = 1;
+	probe.flags = flags;
+	probe.state_hash = state_hash;
+	probe.entropy = entropy;
+	probe.coherence = coherence;
+	probe.max_probability = max_probability;
+	probe.total_probability = total_probability;
+	probe.active_basis_count = active_basis_count;
+	probe.qubit_count =
+		qge_quantum_qubits_for_basis_count((uint64_t)active_basis_count);
+	probe.memory_bytes = sizeof(qge_state_probe_t);
+	strlcpy(probe.label, label, sizeof(probe.label));
+	qge_quantum_record_probe(rt, &probe);
+}
+
+static void QGE_TraceSharewareEncounter(qge_quantum_runtime_t *rt)
+{
+	edict_t *player;
+	vec3_t delta;
+	double displacement;
+	double activation;
+	double phase;
+	double path_a;
+	double path_b;
+	double norm;
+	double p0;
+	double p1;
+	double decoherence;
+	double coherence;
+	double selected_probability;
+	double material_phase;
+	double roll;
+	uint64_t entropy;
+	uint64_t trace_id;
+	uint32_t flags;
+	int water_count = 0;
+	int lava_count = 0;
+	int slipgate_count = 0;
+	int selected_basis;
+	qge_measurement_event_t event;
+
+	qge_shareware_encounter_material_gain = 1.0f;
+	if (!rt || quantum_shareware_encounter.value < 0.5f ||
+		!sv.active || sv.num_edicts <= 1 || !QGE_IsSharewareEncounterMap())
+		return;
+
+	player = EDICT_NUM(1);
+	if (!player || player->free || player->v.health <= 0.0f)
+		return;
+
+	if (strcmp(qge_shareware_encounter_map, sv.name) != 0) {
+		q_strlcpy(qge_shareware_encounter_map, sv.name,
+				  sizeof(qge_shareware_encounter_map));
+		qge_shareware_encounter_start_valid = false;
+	}
+	if (!qge_shareware_encounter_start_valid) {
+		VectorCopy(player->v.origin, qge_shareware_encounter_start_origin);
+		qge_shareware_encounter_start_valid = true;
+	}
+
+	VectorSubtract(player->v.origin,
+				   qge_shareware_encounter_start_origin,
+				   delta);
+	displacement = VectorLength(delta);
+	activation = QGE_ClampDouble01(displacement / 192.0);
+
+	for (int i = 0; i < qge_scene_surface_count; i++) {
+		const qge_scene_surface_t *surface = &qge_scene_surfaces[i];
+
+		if (surface->flags & (SURF_DRAWWATER | SURF_DRAWTURB | SURF_DRAWSLIME))
+			water_count++;
+		if (surface->flags & SURF_DRAWLAVA)
+			lava_count++;
+		if (surface->flags & SURF_DRAWTELE)
+			slipgate_count++;
+	}
+
+	phase = (double)(player->v.origin[0] + player->v.origin[1]) * 0.0125 +
+			(double)qge_frame_count * 0.071 +
+			(double)slipgate_count * 0.157;
+	path_a = cos(phase);
+	path_b = sin(phase + activation * 0.78539816339);
+	p0 = path_a * path_a;
+	p1 = path_b * path_b;
+	norm = p0 + p1;
+	if (norm <= 0.000001) {
+		p0 = 0.5;
+		p1 = 0.5;
+	} else {
+		p0 /= norm;
+		p1 /= norm;
+	}
+
+	decoherence = QGE_ClampDouble01(
+		0.06 + activation * 0.16 +
+		(double)water_count * 0.015 +
+		(double)lava_count * 0.05 +
+		(player->v.button0 != 0.0f ? 0.08 : 0.0));
+	coherence = 1.0 - decoherence;
+	entropy = qge_quantum_entropy_u64(rt, QGE_DOMAIN_MATERIAL, 1);
+	roll = QGE_EntropyUnit53(entropy);
+	selected_basis = roll < p0 ? 0 : 1;
+	selected_probability = selected_basis == 0 ? p0 : p1;
+	selected_probability = QGE_ClampDouble01(
+		selected_probability * (0.70 + coherence * 0.30));
+	material_phase = 1.57079632679 +
+					 (selected_basis ? 0.39269908169 : -0.39269908169) +
+					 activation * 0.25 +
+					 (double)slipgate_count * 0.015;
+	flags = QGE_SHAREWARE_ENCOUNTER_FLAG_ACTIVE |
+			QGE_SHAREWARE_ENCOUNTER_FLAG_INTERFERENCE |
+			QGE_SHAREWARE_ENCOUNTER_FLAG_DECOHERENCE |
+			QGE_SHAREWARE_ENCOUNTER_FLAG_OBSERVED |
+			QGE_SHAREWARE_ENCOUNTER_FLAG_MATERIAL_PHASE |
+			QGE_SHAREWARE_ENCOUNTER_FLAG_PLAYER_VISIBLE |
+			QGE_SHAREWARE_ENCOUNTER_FLAG_E1M1 |
+			QGE_SHAREWARE_ENCOUNTER_FLAG_RENDER_FEEDBACK;
+	trace_id = QGE_SharewareEncounterTraceId(player, flags,
+											 selected_basis,
+											 material_phase,
+											 selected_probability);
+
+	QGE_RecordSharewareEncounterProbe(
+		rt, "shareware_interference_field", QGE_REP_DENSE_STATE,
+		flags, trace_id, decoherence, coherence,
+		selected_probability, 1.0, 2);
+	QGE_RecordSharewareEncounterProbe(
+		rt, "shareware_decoherence_field", QGE_REP_MATERIAL_PHASE_FIELD,
+		flags, QGE_RegistryHashStep(trace_id, 1u), decoherence, coherence,
+		1.0 - decoherence, 1.0, 2);
+	QGE_RecordSharewareEncounterProbe(
+		rt, "shareware_observation_collapse", QGE_REP_CLASSICAL_ORACLE,
+		flags, QGE_RegistryHashStep(trace_id, 2u), decoherence, 1.0,
+		selected_probability, 1.0, 2);
+	QGE_RecordSharewareEncounterProbe(
+		rt, "shareware_material_phase", QGE_REP_MATERIAL_PHASE_FIELD,
+		flags, QGE_RegistryHashStep(trace_id, 3u), decoherence, coherence,
+		fabs(material_phase), 1.0, 2);
+
+	memset(&event, 0, sizeof(event));
+	event.domain = QGE_DOMAIN_MATERIAL;
+	event.kind = QGE_MEASURE_MATERIAL_PHASE;
+	event.boundary = QGE_OBSERVE_PLAYER_VISIBLE;
+	event.frame = qge_frame_count;
+	event.server_time_msec = QGE_ServerTimeMsec();
+	event.subject_id = 1;
+	event.flags = flags;
+	event.basis_index = (uint64_t)(uint32_t)selected_basis;
+	event.probability = selected_probability;
+	event.phase = material_phase;
+	event.entropy_offset = entropy;
+	event.trace_id = trace_id;
+	qge_quantum_record_measurement(rt, &event);
+
+	if (slipgate_count > 0) {
+		QGE_RecordMaterialOperator(rt,
+								   QGE_MATERIAL_OPERATOR_SLIPGATE_PHASE,
+								   QGE_OBSERVE_PLAYER_VISIBLE,
+								   slipgate_count,
+								   QGE_MATERIAL_OPERATOR_FLAG_WORLD_SURFACE,
+								   QGE_RegistryHashStep(trace_id,
+														 (uint64_t)slipgate_count),
+								   material_phase,
+								   decoherence,
+								   1.0 + selected_probability * 0.25,
+								   0.0);
+	}
+
+	qge_shareware_encounter_material_gain =
+		1.0f + (float)(selected_probability * coherence * 0.22);
+	qge_shareware_encounter_last_frame = qge_frame_count;
+	qge_shareware_encounter_selected_basis = selected_basis;
+	qge_shareware_encounter_probability = (float)selected_probability;
+	qge_shareware_encounter_coherence = (float)coherence;
+	qge_shareware_encounter_phase = (float)material_phase;
+	qge_shareware_encounter_triggers++;
+}
+
+static qboolean QGE_SharewareEncounterGameplayActive(void)
+{
+	if (quantum_shareware_encounter.value < 0.5f ||
+		!QGE_IsSharewareEncounterMap() ||
+		qge_shareware_encounter_last_frame < 0)
+		return false;
+	return qge_frame_count - qge_shareware_encounter_last_frame <= 4;
+}
+
+static void QGE_TraceSharewareProjectileKick(
+	const qge_projectile_branch_request_t *request,
+	float strength,
+	float side)
+{
+	qge_quantum_runtime_t *rt;
+	qge_state_probe_t probe;
+	uint64_t hash;
+
+	if (!request)
+		return;
+	rt = QGE_Runtime();
+	if (!rt)
+		return;
+
+	hash = QGE_RegistryHashStep(0x5151455f4b49434bULL,
+								(uint64_t)(uint32_t)qge_frame_count);
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)(uint32_t)request->entity_id);
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)(uint32_t)
+								qge_shareware_encounter_selected_basis);
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)(uint32_t)(strength * 1000000.0f));
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)(uint32_t)(int32_t)
+								(request->qge_velocity.x * 1000.0f));
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)(uint32_t)(int32_t)
+								(request->qge_velocity.y * 1000.0f));
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)(uint32_t)(int32_t)
+								(request->qge_velocity.z * 1000.0f));
+
+	memset(&probe, 0, sizeof(probe));
+	probe.frame = qge_frame_count;
+	probe.server_time_msec = QGE_ServerTimeMsec();
+	probe.domain = QGE_DOMAIN_PROJECTILE;
+	probe.representation = QGE_REP_CA_MPS;
+	probe.subject_id = request->entity_id;
+	probe.flags = 0;
+	probe.state_hash = hash;
+	probe.entropy = fabsf(side);
+	probe.coherence = qge_shareware_encounter_coherence;
+	probe.max_probability = qge_shareware_encounter_probability;
+	probe.total_probability = strength;
+	probe.active_basis_count = qge_shareware_encounter_selected_basis + 1;
+	probe.qubit_count = qge_quantum_qubits_for_basis_count(2);
+	probe.memory_bytes = sizeof(*request);
+	strlcpy(probe.label, "shareware_projectile_kick",
+			sizeof(probe.label));
+	qge_quantum_record_probe(rt, &probe);
+}
+
+static void QGE_ApplySharewareEncounterProjectileKick(
+	qge_projectile_branch_request_t *request)
+{
+	float vx, vy, speed_xy, phase, strength, side;
+
+	if (!request || !QGE_SharewareEncounterGameplayActive())
+		return;
+
+	vx = request->classic_velocity.x;
+	vy = request->classic_velocity.y;
+	speed_xy = sqrtf(vx * vx + vy * vy);
+	if (speed_xy < 1.0f)
+		return;
+
+	phase = qge_shareware_encounter_phase;
+	strength = 0.05f + qge_shareware_encounter_probability * 0.10f;
+	strength *= 0.50f + qge_shareware_encounter_coherence * 0.50f;
+	side = qge_shareware_encounter_selected_basis ? 1.0f : -1.0f;
+
+	request->qge_velocity.x =
+		request->classic_velocity.x + (-vy / speed_xy) * speed_xy *
+		strength * side * cosf(phase);
+	request->qge_velocity.y =
+		request->classic_velocity.y + (vx / speed_xy) * speed_xy *
+		strength * side * sinf(phase);
+	request->qge_velocity.z =
+		request->classic_velocity.z +
+		8.0f * strength * side;
+	request->qge_origin.x =
+		request->classic_origin.x + request->qge_velocity.x * 0.008f;
+	request->qge_origin.y =
+		request->classic_origin.y + request->qge_velocity.y * 0.008f;
+	request->qge_origin.z =
+		request->classic_origin.z + request->qge_velocity.z * 0.008f;
+
+	QGE_TraceSharewareProjectileKick(request, strength, side);
 }
 
 void QGE_SceneSubmitWorldSurface(qmodel_t *model, msurface_t *surf)
@@ -7753,6 +8861,7 @@ static void QGE_EncodeSurfaceMaterialDWT(dwt_framebuffer_t *fb,
 
 	material_gain = quantum_render_material_gain.value;
 	material_gain *= qge_render_gate_material_gain;
+	material_gain *= qge_shareware_encounter_material_gain;
 	if (material_gain <= 0.0f)
 		return;
 	if (material_gain > 1.0f)
@@ -10855,6 +11964,61 @@ static uint32_t QGE_PhysicsProjectileBranchFlags(
 	return flags;
 }
 
+static void QGE_PhysicsProjectileMeasurementContract(
+	qge_quantum_semantics_contract_t *contract,
+	qge_measurement_kind_t kind,
+	qge_observation_boundary_t boundary)
+{
+	if (!contract)
+		return;
+
+	memset(contract, 0, sizeof(*contract));
+	contract->domain = QGE_DOMAIN_PROJECTILE;
+	contract->representation = QGE_REP_CA_MPS;
+	contract->measurement_kind = kind;
+	contract->observation_boundary = boundary;
+	contract->gameplay_affecting = true;
+	contract->authoritative_writeback = true;
+	contract->basis_semantics =
+		"projectile trajectory, impact, and collision-oracle branches";
+	contract->amplitude_semantics =
+		"normalized branch weights from the projectile CA-MPS state";
+	contract->phase_semantics =
+		"material, velocity, and impact phase encoded per branch";
+	contract->evolution_semantics =
+		"bounded projectile branch evolution before observation";
+	contract->measurement_semantics =
+		"collision, damage, or save/demo observation selects one branch";
+	contract->decoherence_semantics =
+		"impact media and authority gates collapse branch coherence";
+	contract->replay_semantics =
+		"nonzero trace id replays the selected branch and boundary";
+	contract->fallback_semantics =
+		"classic projectile state is retained with explicit reason";
+	contract->writeback_semantics =
+		"selected branch can mutate projectile impact, save, or demo state";
+}
+
+static void QGE_RecordProjectileGameplayMeasurement(
+	qge_quantum_runtime_t *rt,
+	const qge_measurement_event_t *event)
+{
+	qge_quantum_semantics_contract_t contract;
+	qge_measurement_event_t generic_event;
+
+	if (!rt || !event)
+		return;
+
+	QGE_PhysicsProjectileMeasurementContract(&contract, event->kind,
+											 event->boundary);
+	if (!qge_quantum_record_gameplay_measurement(rt, event, &contract))
+	{
+		generic_event = *event;
+		generic_event.flags &= ~QGE_MEASUREMENT_FLAG_GAMEPLAY_AUTHORITY;
+		qge_quantum_record_measurement(rt, &generic_event);
+	}
+}
+
 static void QGE_TraceProjectileSaveDemoBoundary(
 	qge_quantum_runtime_t *rt,
 	const qge_projectile_branch_state_t *state,
@@ -10864,7 +12028,8 @@ static void QGE_TraceProjectileSaveDemoBoundary(
 	qboolean writeback_boundary)
 {
 	qge_measurement_event_t event;
-	uint32_t flags = QGE_PROJECTILE_TRACE_FLAG_SAVE_DEMO_BOUNDARY;
+	uint32_t flags = QGE_PROJECTILE_TRACE_FLAG_SAVE_DEMO_BOUNDARY |
+		QGE_MEASUREMENT_FLAG_GAMEPLAY_AUTHORITY;
 	uint64_t trace_id = decision_hash;
 	int entity_id = 0;
 
@@ -10923,7 +12088,7 @@ static void QGE_TraceProjectileSaveDemoBoundary(
 		(decision && decision->authority_ready ? 1.0 : 0.0);
 	event.entropy_offset = trace_id;
 	event.trace_id = trace_id;
-	qge_quantum_record_measurement(rt, &event);
+	QGE_RecordProjectileGameplayMeasurement(rt, &event);
 }
 
 static void QGE_TraceProjectileBranchState(
@@ -11031,13 +12196,14 @@ static void QGE_TraceProjectileImpactMeasurement(
 	event.frame = qge_frame_count;
 	event.server_time_msec = QGE_ServerTimeMsec();
 	event.subject_id = state->entity_id;
-	event.flags = QGE_PhysicsProjectileBranchFlags(state);
+	event.flags = QGE_PhysicsProjectileBranchFlags(state) |
+		QGE_MEASUREMENT_FLAG_GAMEPLAY_AUTHORITY;
 	event.basis_index = (uint64_t)state->selected_branch_id;
 	event.probability = state->selected_probability;
 	event.phase = branch->phase;
 	event.entropy_offset = state->state_hash;
 	event.trace_id = state->state_hash;
-	qge_quantum_record_measurement(rt, &event);
+	QGE_RecordProjectileGameplayMeasurement(rt, &event);
 }
 
 static void QGE_TraceProjectileWritebackDecision(
@@ -11107,6 +12273,58 @@ static void QGE_TraceProjectileWritebackDecision(
 			   decision->origin_delta_length,
 			   decision->velocity_delta_length);
 	qge_quantum_record_fallback(rt, &fallback);
+}
+
+static void QGE_TraceProjectileWritebackApply(
+	qge_quantum_runtime_t *rt,
+	const qge_projectile_writeback_decision_t *decision,
+	const qge_projectile_writeback_request_t *request)
+{
+	qge_state_probe_t probe;
+	uint64_t hash;
+
+	if (!rt || !decision || !request || !decision->writeback_allowed)
+		return;
+
+	hash = QGE_RegistryHashStep((uint64_t)(uint32_t)decision->entity_id,
+								(uint64_t)decision->source);
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)(uint32_t)(int32_t)
+								(request->qge_origin.x * 1000.0f));
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)(uint32_t)(int32_t)
+								(request->qge_origin.y * 1000.0f));
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)(uint32_t)(int32_t)
+								(request->qge_origin.z * 1000.0f));
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)(uint32_t)(int32_t)
+								(request->qge_velocity.x * 1000.0f));
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)(uint32_t)(int32_t)
+								(request->qge_velocity.y * 1000.0f));
+	hash = QGE_RegistryHashStep(hash,
+								(uint64_t)(uint32_t)(int32_t)
+								(request->qge_velocity.z * 1000.0f));
+
+	memset(&probe, 0, sizeof(probe));
+	probe.frame = qge_frame_count;
+	probe.server_time_msec = QGE_ServerTimeMsec();
+	probe.domain = QGE_DOMAIN_PROJECTILE;
+	probe.representation = QGE_REP_CA_MPS;
+	probe.subject_id = decision->entity_id;
+	probe.flags = QGE_PhysicsProjectileWritebackFlags(decision);
+	probe.state_hash = hash;
+	probe.entropy = 1.0;
+	probe.coherence = decision->authority_ready ? 1.0 : 0.0;
+	probe.max_probability = decision->origin_delta_length;
+	probe.total_probability = decision->velocity_delta_length;
+	probe.active_basis_count = (int32_t)decision->source;
+	probe.qubit_count = qge_quantum_qubits_for_basis_count(2);
+	probe.memory_bytes = sizeof(*decision) + sizeof(*request);
+	strlcpy(probe.label, "projectile_writeback_apply",
+			sizeof(probe.label));
+	qge_quantum_record_probe(rt, &probe);
 }
 
 static void QGE_TraceProjectileAuthorityGate(qge_quantum_runtime_t *rt)
@@ -11320,6 +12538,7 @@ static qboolean QGE_PhysicsBuildProjectileBranchRequest(
 		request->qge_origin = request->classic_origin;
 		request->qge_velocity = request->classic_velocity;
 	}
+	QGE_ApplySharewareEncounterProjectileKick(request);
 	request->boundary = boundary;
 	if (trace) {
 		request->has_impact = true;
@@ -11522,6 +12741,9 @@ void QGE_PhysicsTrackToss(edict_t *ent, float dt)
 				ent->v.velocity[1] = writeback_request.qge_velocity.y;
 				ent->v.velocity[2] = writeback_request.qge_velocity.z;
 				qge_phys_projectile_writeback_selected++;
+				QGE_TraceProjectileWritebackApply(QGE_Runtime(),
+												  &writeback_decision,
+												  &writeback_request);
 			} else if (writeback_decision.authority_requested) {
 				qge_phys_projectile_writeback_fallback++;
 				if (writeback_decision.rollback_required)

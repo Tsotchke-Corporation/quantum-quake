@@ -32,6 +32,20 @@ The oracles in `completion-oracles.json` deliberately separate task classes:
   It suppresses the generic pack-level `failure_free` check only for this
   hardware-packet target so the full-game Moonlab deployment gate remains
   blocked until registered BSP assets and full-game evidence are present.
+- `qge_hardware_advantage_campaign`: planning work for real Moonlab hardware
+  execution and defensible quantum-advantage evidence. It requires the campaign
+  Markdown/JSON artifacts, the bounded-QAE campaign ICC sidecar, the ready
+  scoped-submission state, and explicit no-returned-hardware/no-overclaim state
+  markers. Passing this oracle means the campaign exists, not that hardware
+  execution or advantage is proven.
+- `qge_real_hardware_quantum_advantage`: the actual future hardware/advantage
+  end-state. It requires the scoped hardware handoff, a real
+  `qge_moonlab_hardware_ingest` result, a hardware-vs-simulator comparison
+  artifact, a returned hardware-record hash, and a future fail-closed
+  `qge_hardware_advantage_gate` scoped to
+  `advantage.light_transport_qae_query_scaling`. This oracle must remain
+  incomplete until a returned hardware result and strong baseline evidence
+  exist.
 - `qge_moonlab_full_game_deployment`: whole-game Moonlab simulator/native
   deployment work. It requires the deployment-gate artifact, the matching
   runtime backend event, and the `qge_moonlab_deployment_gate_ready` completion

@@ -22,7 +22,9 @@ import qge_moonlab_oracle_transpile  # noqa: E402
 import qge_moonlab_qae_grover_plan  # noqa: E402
 import qge_moonlab_qae_observation_transpile  # noqa: E402
 import qge_moonlab_qae_transpile  # noqa: E402
+import qge_moonlab_shareware_deployment_gate  # noqa: E402
 import qge_moonlab_submission_bundle  # noqa: E402
+import qge_noesis_release_gate  # noqa: E402
 import qge_registered_asset_intake  # noqa: E402
 
 
@@ -98,6 +100,20 @@ MARKDOWN_ARTIFACTS = (
         "moonlab_deployment_gate_markdown",
         "resource.moonlab_deployment_gate_markdown",
         qge_moonlab_deployment_gate.markdown_report,
+    ),
+    MarkdownArtifactSpec(
+        "resource",
+        "moonlab_shareware_deployment_gate",
+        "moonlab_shareware_deployment_gate_markdown",
+        "resource.moonlab_shareware_deployment_gate_markdown",
+        qge_moonlab_shareware_deployment_gate.markdown_report,
+    ),
+    MarkdownArtifactSpec(
+        "agent_stream",
+        "noesis_release_gate",
+        "noesis_release_gate_markdown",
+        "agent_stream.noesis_release_gate_markdown",
+        qge_noesis_release_gate.markdown_report,
     ),
 )
 

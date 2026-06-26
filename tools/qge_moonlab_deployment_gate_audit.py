@@ -22,6 +22,7 @@ import qge_resource_boundary_audit  # noqa: E402
 GATE_SCHEMA = "qge.moonlab_deployment_gate.v0"
 ICC_EVIDENCE_SCHEMA = "qge.icc_evidence.v0"
 IGNORED_GATE_FIELDS = ("created_utc", "source_path")
+IGNORED_GATE_ICC_FIELDS = ("moonlab_deployment_gate_file",)
 DEPLOYMENT_GATE_FORBIDDEN_CLAIMS = (
     "whole_game_moonlab_deployment_claimed",
     "whole_game_hardware_execution_claimed",
@@ -82,6 +83,11 @@ def load_artifact_json(
 
 def filter_ignored_fields(fields: list[str]) -> list[str]:
     ignored = set(IGNORED_GATE_FIELDS)
+    return [field for field in fields if field not in ignored]
+
+
+def filter_ignored_icc_fields(fields: list[str]) -> list[str]:
+    ignored = set(IGNORED_GATE_ICC_FIELDS)
     return [field for field in fields if field not in ignored]
 
 
@@ -167,13 +173,12 @@ def deployment_gate_artifact_audit(
             recorded_gate,
         )
     ) if recorded_gate else []
-    gate_icc_mismatches = (
+    gate_icc_mismatches = filter_ignored_icc_fields(
         qge_resource_boundary_audit.mismatch_paths(
             expected_icc,
             recorded_icc,
         )
-        if recorded_icc else []
-    )
+    ) if recorded_icc else []
     overclaim_flags = (
         qge_moonlab_overclaim_audit.recursive_overclaim_flags(
             "moonlab_deployment_gate",
@@ -208,6 +213,7 @@ def deployment_gate_artifact_audit(
         "gate_mismatches": gate_mismatches,
         "gate_icc_mismatches": gate_icc_mismatches,
         "ignored_gate_fields": list(IGNORED_GATE_FIELDS),
+        "ignored_gate_icc_fields": list(IGNORED_GATE_ICC_FIELDS),
         "build_errors": build_errors,
         "overclaim_flags": overclaim_flags,
         "mismatch_count": mismatch_count,

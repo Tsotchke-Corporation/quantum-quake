@@ -43,17 +43,27 @@ import qge_moonlab_oracle_transpile  # noqa: E402
 import qge_moonlab_qae_grover_plan  # noqa: E402
 import qge_moonlab_qae_observation_transpile  # noqa: E402
 import qge_moonlab_qae_transpile  # noqa: E402
+import qge_moonlab_shareware_deployment_gate  # noqa: E402
 import qge_moonlab_submission_bundle  # noqa: E402
+import qge_noesis_release_gate  # noqa: E402
 import qge_oracle_export  # noqa: E402
 import qge_perf_summary  # noqa: E402
 import qge_resource_boundary_audit  # noqa: E402
 import qge_registered_asset_intake  # noqa: E402
 import qge_registered_full_game_progress  # noqa: E402
+import qge_runtime_icc_audit  # noqa: E402
+import qge_vanilla_capture_matrix  # noqa: E402
 
 DEFAULT_SAMPLE_COUNTS = [16, 32, 64, 128]
 ADVANTAGE_REPLAY_OUTDIR = "/tmp/qge_advantage_benchmark"
 PUBLICATION_PACK_REPLAY_OUTDIR = "/tmp/qge_publication_pack_replay"
 PACK_ORACLE_SCENE = "<pack_dir>/oracle/oracle_scene.json"
+PACK_REGISTERED_FULL_GAME_SELECTION = (
+    "<pack_dir>/resource/qge_registered_full_game_selection.json"
+)
+SHAREWARE_EPISODE_ONE_SELECTION_FILENAME = (
+    "qge_shareware_episode1_selection.json"
+)
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -144,9 +154,14 @@ def asset_requirements_reproduce_command(
 
 def registered_full_game_progress_reproduction_inputs(
     args: argparse.Namespace,
+    *,
+    selection: str | None = None,
 ) -> dict[str, Any]:
     return {
-        "selection": str(qge_registered_full_game_progress.DEFAULT_SELECTION),
+        "selection": (
+            selection or
+            str(qge_registered_full_game_progress.DEFAULT_SELECTION)
+        ),
         "matrix_root": str(
             qge_registered_full_game_progress
             .qge_map_set_evidence.DEFAULT_MATRIX_ROOT
@@ -158,8 +173,11 @@ def registered_full_game_progress_reproduction_inputs(
 
 def registered_full_game_progress_reproduce_command(
     args: argparse.Namespace,
+    *,
+    plan: dict[str, Any] | None = None,
 ) -> str:
-    plan = registered_full_game_progress_reproduction_inputs(args)
+    if plan is None:
+        plan = registered_full_game_progress_reproduction_inputs(args)
     parts = ["tools/qge_registered_full_game_progress.py"]
     append_command_option(parts, "--selection", plan.get("selection"))
     append_command_option(parts, "--matrix-root", plan.get("matrix_root"))
@@ -449,6 +467,10 @@ def agent_manifest_summary(path: Path | None) -> dict[str, Any]:
         "performance_status": None,
         "performance_summary_file": None,
         "performance_icc_evidence_file": None,
+        "noesis_status": None,
+        "noesis_summary_file": None,
+        "noesis_icc_evidence_file": None,
+        "noesis_gameplay_outcomes_file": None,
     }
     if path is None or not path.is_file():
         return summary
@@ -480,6 +502,15 @@ def agent_manifest_summary(path: Path | None) -> dict[str, Any]:
             "performance_summary_file": performance.get("summary_file"),
             "performance_icc_evidence_file": performance.get(
                 "icc_evidence_file"),
+        })
+    noesis = manifest.get("noesis", {})
+    if isinstance(noesis, dict):
+        summary.update({
+            "noesis_status": noesis.get("status"),
+            "noesis_summary_file": noesis.get("summary_file"),
+            "noesis_icc_evidence_file": noesis.get("icc_evidence_file"),
+            "noesis_gameplay_outcomes_file": noesis.get(
+                "gameplay_outcomes_file"),
         })
     return summary
 
@@ -569,6 +600,21 @@ def resolve_breadth_evidence_path(path: Path | None) -> Path | None:
         if candidate.is_file():
             return candidate
     return path
+
+
+def resolve_shareware_selection_path(
+    breadth_evidence: Path | None,
+    breadth_summary: dict[str, Any],
+) -> Path | None:
+    if breadth_evidence is None or not breadth_evidence.is_file():
+        return None
+    if breadth_summary.get("full_game_map_set") != (
+        qge_map_sets.SHAREWARE_EPISODE_ONE_MAP_SET
+    ):
+        return None
+    candidate = breadth_evidence.with_name(
+        SHAREWARE_EPISODE_ONE_SELECTION_FILENAME)
+    return candidate if candidate.is_file() else None
 
 
 def breadth_evidence_summary(path: Path | None) -> dict[str, Any]:
@@ -959,9 +1005,12 @@ def resolve_vanilla_icc_evidence_path(
     graphics_capture_dir: Path | None,
 ) -> Path | None:
     candidates: list[Path] = []
-    if graphics_capture_dir is not None:
-        candidates.append(graphics_capture_dir / "qge_vanilla_icc_evidence.json")
     candidates.append(vanilla_matrix.parent / "qge_vanilla_icc_evidence.json")
+    if (
+        graphics_capture_dir is not None and
+        graphics_capture_dir != vanilla_matrix.parent
+    ):
+        candidates.append(graphics_capture_dir / "qge_vanilla_icc_evidence.json")
     for candidate in candidates:
         if candidate.is_file():
             return candidate
@@ -1008,6 +1057,61 @@ def pack_file(src: Path | None, outdir: Path, rel: str) -> dict[str, Any]:
         "source_path": str(src),
         "packed": file_info(dest),
     }
+
+
+def pack_performance_sidecars(
+    summary_src: Path | None,
+    icc_src: Path | None,
+    outdir: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    summary_artifact = pack_file(
+        summary_src, outdir, "capture/qge_perf_summary.json")
+    icc_artifact = pack_file(
+        icc_src, outdir, "capture/qge_perf_icc_evidence.json")
+    packed_summary = summary_artifact["packed"].get("path")
+    if not isinstance(packed_summary, str) or not Path(packed_summary).is_file():
+        return summary_artifact, icc_artifact
+
+    packed_summary_path = Path(packed_summary)
+    packed_icc_path = outdir / "capture/qge_perf_icc_evidence.json"
+    evidence = qge_runtime_icc_audit.expected_performance_icc_evidence(
+        load_json(packed_summary_path),
+        packed_summary_path,
+        packed_icc_path,
+    )
+    write_json(packed_icc_path, evidence)
+    icc_artifact["packed"] = file_info(packed_icc_path)
+    icc_artifact["source_copy"] = False
+    return summary_artifact, icc_artifact
+
+
+def pack_vanilla_sidecars(
+    matrix_src: Path | None,
+    icc_src: Path | None,
+    outdir: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    matrix_artifact = pack_file(
+        matrix_src, outdir, "vanilla/vanilla_capture_matrix.json")
+    icc_artifact = pack_file(
+        icc_src, outdir, "vanilla/qge_vanilla_icc_evidence.json")
+    packed_matrix = matrix_artifact["packed"].get("path")
+    if not isinstance(packed_matrix, str) or not Path(packed_matrix).is_file():
+        return matrix_artifact, icc_artifact
+
+    packed_matrix_path = Path(packed_matrix)
+    packed_icc_path = outdir / "vanilla/qge_vanilla_icc_evidence.json"
+    try:
+        evidence = qge_vanilla_capture_matrix.build_icc_evidence(
+            load_json(packed_matrix_path),
+            packed_matrix_path,
+            packed_icc_path,
+        )
+    except (KeyError, TypeError, ValueError):
+        return matrix_artifact, icc_artifact
+    write_json(packed_icc_path, evidence)
+    icc_artifact["packed"] = file_info(packed_icc_path)
+    icc_artifact["source_copy"] = False
+    return matrix_artifact, icc_artifact
 
 
 def pack_directory(src: Path | None, outdir: Path, rel: str) -> dict[str, Any]:
@@ -1317,6 +1421,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         breadth_evidence.parent / "qge_breadth_icc_evidence.json"
         if breadth_evidence is not None else None
     )
+    shareware_selection_path = resolve_shareware_selection_path(
+        breadth_evidence, breadth_summary)
     agent_icc = (
         agent_stream_dir / "qge_agent_stream_icc_evidence.jsonl"
         if agent_stream_dir is not None else None
@@ -1335,6 +1441,16 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             args.outdir,
             "source/docs/qge_quantum_advantage_research_roadmap.md"),
     }
+    perf_summary_artifact, perf_icc_artifact = pack_performance_sidecars(
+        perf_summary_path,
+        perf_icc_path,
+        args.outdir,
+    )
+    vanilla_matrix_artifact, vanilla_icc_artifact = pack_vanilla_sidecars(
+        vanilla_matrix,
+        vanilla_icc_evidence,
+        args.outdir,
+    )
     capture_artifacts = {
         "trace": pack_file(capture_dir / "qge_trace.bin", args.outdir,
                            "capture/qge_trace.bin"),
@@ -1342,21 +1458,14 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                            "capture/frame_001.png"),
         "log": pack_file(capture_dir / "quantum_quake.log", args.outdir,
                          "capture/quantum_quake.log"),
-        "performance_summary": pack_file(
-            perf_summary_path, args.outdir,
-            "capture/qge_perf_summary.json"),
-        "performance_icc_evidence": pack_file(
-            perf_icc_path, args.outdir,
-            "capture/qge_perf_icc_evidence.json"),
+        "performance_summary": perf_summary_artifact,
+        "performance_icc_evidence": perf_icc_artifact,
         "readme": pack_file(capture_dir / "README.txt", args.outdir,
                             "capture/README.txt"),
     }
     vanilla_artifacts = {
-        "matrix": pack_file(vanilla_matrix, args.outdir,
-                            "vanilla/vanilla_capture_matrix.json"),
-        "icc_evidence": pack_file(
-            vanilla_icc_evidence, args.outdir,
-            "vanilla/qge_vanilla_icc_evidence.json"),
+        "matrix": vanilla_matrix_artifact,
+        "icc_evidence": vanilla_icc_artifact,
         "classic_frame": pack_file(
             Path(vanilla.get("modes", [{}])[0].get("frame", {}).get("path", "")),
             args.outdir,
@@ -1379,11 +1488,50 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "icc_evidence": pack_file(agent_icc, args.outdir,
                                   "agent_stream/qge_agent_stream_icc_evidence.jsonl"),
     }
+    noesis_release_gate = qge_noesis_release_gate.build_gate_from_agent_stream(
+        agent_stream_dir,
+        claims_path=claims_path,
+        source_path=args.outdir,
+    )
+    noesis_release_gate_path = (
+        args.outdir / "agent_stream_release" / "noesis" /
+        "qge_noesis_release_gate.json"
+    )
+    write_json(noesis_release_gate_path, noesis_release_gate)
+    noesis_release_gate_markdown_path = (
+        args.outdir / "agent_stream_release" / "noesis" /
+        "qge_noesis_release_gate.md"
+    )
+    noesis_release_gate_markdown_path.write_text(
+        qge_noesis_release_gate.markdown_report(noesis_release_gate),
+        encoding="utf-8",
+    )
+    noesis_release_gate_icc = qge_noesis_release_gate.build_icc_evidence(
+        noesis_release_gate,
+        out_path=noesis_release_gate_path,
+    )
+    noesis_release_gate_icc_path = (
+        args.outdir / "agent_stream_release" / "noesis" /
+        "qge_noesis_release_gate_icc_evidence.json"
+    )
+    write_json(noesis_release_gate_icc_path, noesis_release_gate_icc)
+    agent_artifacts.update({
+        "noesis_release_gate": file_info(noesis_release_gate_path),
+        "noesis_release_gate_markdown": file_info(
+            noesis_release_gate_markdown_path),
+        "noesis_release_gate_icc_evidence": file_info(
+            noesis_release_gate_icc_path),
+    })
     breadth_artifacts = {
         "evidence": pack_file(breadth_evidence, args.outdir,
                               "breadth/breadth_evidence.json"),
         "icc_evidence": pack_file(breadth_icc_evidence, args.outdir,
                                   "breadth/qge_breadth_icc_evidence.json"),
+        "shareware_episode1_selection": pack_file(
+            shareware_selection_path,
+            args.outdir,
+            f"breadth/{SHAREWARE_EPISODE_ONE_SELECTION_FILENAME}",
+        ),
     }
     metrics = advantage["metrics_data"]
     agent_stream_manifest_ok = not explicit_agent_run_failure(
@@ -1486,59 +1634,48 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 registered_asset_discovery.get("found_candidates"))
             if isinstance(entry, dict) and isinstance(entry.get("path"), str)
         )
-    registered_asset_intake = qge_registered_asset_intake.build_intake(
-        Path(getattr(args, "asset_root", qge_asset_inventory.DEFAULT_ASSET_ROOT)),
-        registered_asset_candidates,
-        map_set=str(
-            full_game_map_coverage.get("map_set") or
-            qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
-        ),
-        discovery=registered_asset_discovery,
-        publication_pack_dir=args.outdir,
-    )
     registered_asset_intake_path = (
         args.outdir / "resource" / "qge_registered_asset_intake.json"
     )
-    write_json(registered_asset_intake_path, registered_asset_intake)
     registered_asset_intake_markdown_path = (
         args.outdir / "resource" / "qge_registered_asset_intake.md"
     )
-    registered_asset_intake_markdown_path.write_text(
-        qge_registered_asset_intake.markdown_report(registered_asset_intake),
-        encoding="utf-8",
-    )
     registered_asset_intake_script_path = (
         args.outdir / "resource" / "install_registered_assets.sh"
-    )
-    registered_asset_intake_script_path.write_text(
-        "\n".join(qge_registered_asset_intake.script_lines(
-            registered_asset_intake)),
-        encoding="utf-8",
-    )
-    registered_asset_intake_script_path.chmod(
-        registered_asset_intake_script_path.stat().st_mode | 0o111)
-    registered_asset_intake_icc = (
-        qge_registered_asset_intake.build_icc_evidence(
-            registered_asset_intake,
-            out_path=registered_asset_intake_path,
-        )
     )
     registered_asset_intake_icc_path = (
         args.outdir / "resource" /
         "qge_registered_asset_intake_icc_evidence.json"
     )
-    write_json(registered_asset_intake_icc_path, registered_asset_intake_icc)
-    registered_progress_inputs = (
+    registered_progress_source_inputs = (
         registered_full_game_progress_reproduction_inputs(args)
+    )
+    registered_full_game_selection_artifact = pack_file(
+        Path(registered_progress_source_inputs["selection"]),
+        args.outdir,
+        "resource/qge_registered_full_game_selection.json",
+    )
+    registered_full_game_selection_path = Path(
+        registered_full_game_selection_artifact["packed"]["path"]
+    ) if registered_full_game_selection_artifact["packed"]["exists"] else None
+    registered_progress_inputs = (
+        registered_full_game_progress_reproduction_inputs(
+            args,
+            selection=PACK_REGISTERED_FULL_GAME_SELECTION,
+        )
     )
     registered_full_game_progress = (
         qge_registered_full_game_progress.build_progress(
-            selection_path=Path(registered_progress_inputs["selection"]),
-            matrix_root=Path(registered_progress_inputs["matrix_root"]),
-            asset_root=Path(registered_progress_inputs["asset_root"]),
-            map_set=registered_progress_inputs["map_set"],
+            selection_path=Path(
+                registered_progress_source_inputs["selection"]),
+            matrix_root=Path(registered_progress_source_inputs["matrix_root"]),
+            asset_root=Path(registered_progress_source_inputs["asset_root"]),
+            map_set=registered_progress_source_inputs["map_set"],
         )
     )
+    if registered_full_game_selection_path is not None:
+        registered_full_game_progress["selection_file"] = str(
+            registered_full_game_selection_path)
     registered_full_game_progress_path = (
         args.outdir / "resource" / "qge_registered_full_game_progress.json"
     )
@@ -1566,6 +1703,35 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         registered_full_game_progress_icc_path,
         registered_full_game_progress_icc,
     )
+    registered_asset_intake = qge_registered_asset_intake.build_intake(
+        Path(getattr(args, "asset_root", qge_asset_inventory.DEFAULT_ASSET_ROOT)),
+        registered_asset_candidates,
+        map_set=str(
+            full_game_map_coverage.get("map_set") or
+            qge_map_sets.DEFAULT_FULL_GAME_MAP_SET
+        ),
+        discovery=registered_asset_discovery,
+        publication_pack_dir=args.outdir,
+    )
+    write_json(registered_asset_intake_path, registered_asset_intake)
+    registered_asset_intake_markdown_path.write_text(
+        qge_registered_asset_intake.markdown_report(registered_asset_intake),
+        encoding="utf-8",
+    )
+    registered_asset_intake_script_path.write_text(
+        "\n".join(qge_registered_asset_intake.script_lines(
+            registered_asset_intake)),
+        encoding="utf-8",
+    )
+    registered_asset_intake_script_path.chmod(
+        registered_asset_intake_script_path.stat().st_mode | 0o111)
+    registered_asset_intake_icc = (
+        qge_registered_asset_intake.build_icc_evidence(
+            registered_asset_intake,
+            out_path=registered_asset_intake_path,
+        )
+    )
+    write_json(registered_asset_intake_icc_path, registered_asset_intake_icc)
     full_game_capture_queue = qge_full_game_capture_queue.build_queue(
         SimpleNamespace(
             source=registered_full_game_progress_path,
@@ -1755,13 +1921,16 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         moonlab_hardware_submission_scope_icc_path,
         moonlab_hardware_submission_scope_icc,
     )
+    breadth_evidence_data = (
+        load_json(breadth_evidence)
+        if breadth_evidence is not None and breadth_evidence.is_file()
+        else {}
+    )
     moonlab_full_game_plan = qge_moonlab_full_game_plan.build_plan(
         full_game_map_coverage,
         asset_inventory,
         source_path=args.outdir,
-        breadth_evidence=load_json(breadth_evidence)
-        if breadth_evidence is not None and breadth_evidence.is_file()
-        else None,
+        breadth_evidence=breadth_evidence_data,
         moonlab_job_results=moonlab_job_results,
         submission_packet=moonlab_submission_packet,
         hardware_record_template=moonlab_hardware_record_template,
@@ -1879,9 +2048,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "performance_summary": load_json(perf_summary_path)
             if perf_summary_path is not None and perf_summary_path.is_file()
             else {},
-            "breadth_evidence": load_json(breadth_evidence)
-            if breadth_evidence is not None and breadth_evidence.is_file()
-            else {},
+            "breadth_evidence": breadth_evidence_data,
         },
         resource_boundary_required=True,
         asset_remediation=(
@@ -1917,6 +2084,55 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "qge_moonlab_deployment_gate_icc_evidence.json"
     )
     write_json(moonlab_deployment_gate_icc_path, moonlab_deployment_gate_icc)
+    moonlab_shareware_deployment_gate = (
+        qge_moonlab_shareware_deployment_gate.build_gate(
+            full_game_map_coverage,
+            asset_inventory,
+            asset_requirements,
+            breadth_evidence_data,
+            vanilla,
+            load_json(perf_summary_path)
+            if perf_summary_path is not None and perf_summary_path.is_file()
+            else {},
+            moonlab_job_results,
+            moonlab_submission_bundle,
+            moonlab_hardware_submission_scope,
+            native_backend_boundary,
+            moonlab_deployment_gate,
+            source_path=args.outdir,
+        )
+    )
+    moonlab_shareware_deployment_gate_path = (
+        args.outdir / "resource" /
+        "qge_moonlab_shareware_deployment_gate.json"
+    )
+    write_json(
+        moonlab_shareware_deployment_gate_path,
+        moonlab_shareware_deployment_gate,
+    )
+    moonlab_shareware_deployment_gate_markdown_path = (
+        args.outdir / "resource" /
+        "qge_moonlab_shareware_deployment_gate.md"
+    )
+    moonlab_shareware_deployment_gate_markdown_path.write_text(
+        qge_moonlab_shareware_deployment_gate.markdown_report(
+            moonlab_shareware_deployment_gate),
+        encoding="utf-8",
+    )
+    moonlab_shareware_deployment_gate_icc = (
+        qge_moonlab_shareware_deployment_gate.build_icc_evidence(
+            moonlab_shareware_deployment_gate,
+            out_path=moonlab_shareware_deployment_gate_path,
+        )
+    )
+    moonlab_shareware_deployment_gate_icc_path = (
+        args.outdir / "resource" /
+        "qge_moonlab_shareware_deployment_gate_icc_evidence.json"
+    )
+    write_json(
+        moonlab_shareware_deployment_gate_icc_path,
+        moonlab_shareware_deployment_gate_icc,
+    )
     resource_artifacts = {
         "envelope": file_info(resource_path),
         "full_game_map_coverage": file_info(full_game_map_coverage_path),
@@ -1934,6 +2150,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             registered_asset_intake_script_path),
         "registered_asset_intake_icc_evidence": file_info(
             registered_asset_intake_icc_path),
+        "registered_full_game_selection": file_info(
+            registered_full_game_selection_path),
         "registered_full_game_progress": file_info(
             registered_full_game_progress_path),
         "registered_full_game_progress_markdown": file_info(
@@ -1971,7 +2189,15 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             moonlab_deployment_gate_markdown_path),
         "moonlab_deployment_gate_icc_evidence": file_info(
             moonlab_deployment_gate_icc_path),
+        "moonlab_shareware_deployment_gate": file_info(
+            moonlab_shareware_deployment_gate_path),
+        "moonlab_shareware_deployment_gate_markdown": file_info(
+            moonlab_shareware_deployment_gate_markdown_path),
+        "moonlab_shareware_deployment_gate_icc_evidence": file_info(
+            moonlab_shareware_deployment_gate_icc_path),
     }
+    noesis_release_gate_summary = dict_or_empty(
+        noesis_release_gate.get("summary"))
     return {
         "schema": "qge.publication_pack.v0",
         "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -1992,6 +2218,10 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "agent_stream_dir": str(agent_stream_dir) if agent_stream_dir else None,
             "breadth_evidence": str(breadth_evidence)
             if breadth_evidence is not None else None,
+            "shareware_episode1_selection": (
+                str(shareware_selection_path)
+                if shareware_selection_path is not None else None
+            ),
             "breadth_evidence_reproduction": (
                 breadth_evidence_reproduction_inputs(inputs)),
             "claims_ledger": str(claims_path),
@@ -2049,6 +2279,12 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         },
         "artifacts": {
             "source_docs": source_docs,
+            "source_ledgers": {
+                "registered_full_game_selection": (
+                    registered_full_game_selection_artifact),
+                "shareware_episode1_selection": (
+                    breadth_artifacts["shareware_episode1_selection"]),
+            },
             "capture": capture_artifacts,
             "vanilla": vanilla_artifacts,
             "agent_stream": agent_artifacts,
@@ -2161,6 +2397,39 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "agent_stream_trace_bytes": agent_stream_summary.get("trace_bytes"),
             "agent_stream_performance_status": agent_stream_summary.get(
                 "performance_status"),
+            "agent_stream_noesis_status": agent_stream_summary.get(
+                "noesis_status"),
+            "agent_stream_noesis_summary_file": agent_stream_summary.get(
+                "noesis_summary_file"),
+            "agent_stream_noesis_icc_evidence_file": agent_stream_summary.get(
+                "noesis_icc_evidence_file"),
+            "agent_stream_noesis_gameplay_outcomes_file": (
+                agent_stream_summary.get("noesis_gameplay_outcomes_file")),
+            "noesis_release_gate": noesis_release_gate,
+            "noesis_release_gate_status": noesis_release_gate.get("status"),
+            "noesis_release_gate_blocker_count": (
+                noesis_release_gate.get("blocker_count")),
+            "noesis_autonomous_diagnostics_claim_allowed": (
+                noesis_release_gate.get(
+                    "noesis_autonomous_diagnostics_claim_allowed")),
+            "noesis_learned_play_claim_allowed": (
+                noesis_release_gate.get("learned_play_claim_allowed")),
+            "noesis_robust_map_level_world_model_claim_allowed": (
+                noesis_release_gate.get(
+                    "robust_map_level_world_model_claim_allowed")),
+            "noesis_gameplay_quality_score": (
+                noesis_release_gate_summary.get("gameplay_quality_score")),
+            "noesis_gameplay_quality_grade": (
+                noesis_release_gate_summary.get("gameplay_quality_grade")),
+            "noesis_gameplay_outcome_sample_count": (
+                noesis_release_gate_summary.get(
+                    "gameplay_outcome_sample_count")),
+            "noesis_gameplay_total_distance": (
+                noesis_release_gate_summary.get("total_distance")),
+            "noesis_gameplay_kills": noesis_release_gate_summary.get("kills"),
+            "noesis_assist_telemetry_sample_count": (
+                noesis_release_gate_summary.get(
+                    "assist_telemetry_sample_count")),
             "performance_summary": capture_perf_summary,
             "performance_source": perf_source,
             "performance_status": capture_perf_summary.get("status"),
@@ -2199,6 +2468,15 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "breadth_maps": breadth_summary.get("maps"),
             "full_game_map_coverage": full_game_map_coverage,
             "full_game_map_set": full_game_map_coverage.get("map_set"),
+            "map_scope": full_game_map_coverage.get("map_scope"),
+            "shareware_episode_one_scope": (
+                full_game_map_coverage.get("shareware_episode_one_scope")),
+            "registered_full_game_scope": (
+                full_game_map_coverage.get("registered_full_game_scope")),
+            "shareware_episode1_selection_file": (
+                breadth_artifacts["shareware_episode1_selection"]["packed"][
+                    "path"
+                ]),
             "full_game_map_coverage_status": (
                 full_game_map_coverage.get("status")),
             "full_game_map_target_count": (
@@ -2668,6 +2946,57 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                     moonlab_deployment_gate.get("summary", {}).get(
                         "post_install_capture_queue_script")),
             },
+            "moonlab_shareware_deployment_gate_summary": {
+                "schema": moonlab_shareware_deployment_gate.get("schema"),
+                "status": moonlab_shareware_deployment_gate.get("status"),
+                "failed_criterion_count": (
+                    moonlab_shareware_deployment_gate.get(
+                        "failed_criterion_count")),
+                "blocker_count": moonlab_shareware_deployment_gate.get(
+                    "blocker_count"),
+                "shareware_moonlab_deployment_claim_allowed": (
+                    moonlab_shareware_deployment_gate.get(
+                        "shareware_moonlab_deployment_claim_allowed")),
+                "whole_game_moonlab_deployment_claim_allowed": (
+                    moonlab_shareware_deployment_gate.get(
+                        "whole_game_moonlab_deployment_claim_allowed")),
+                "whole_game_hardware_execution_claim_allowed": (
+                    moonlab_shareware_deployment_gate.get(
+                        "whole_game_hardware_execution_claim_allowed")),
+                "hardware_quantum_advantage_claim_allowed": (
+                    moonlab_shareware_deployment_gate.get(
+                        "hardware_quantum_advantage_claim_allowed")),
+                "dense_70000_qubit_state_claim_allowed": (
+                    moonlab_shareware_deployment_gate.get(
+                        "dense_70000_qubit_state_claim_allowed")),
+                "map_set": (
+                    moonlab_shareware_deployment_gate.get("summary", {}).get(
+                        "map_set")),
+                "target_map_count": (
+                    moonlab_shareware_deployment_gate.get("summary", {}).get(
+                        "target_map_count")),
+                "covered_map_count": (
+                    moonlab_shareware_deployment_gate.get("summary", {}).get(
+                        "covered_map_count")),
+                "coverage_missing_map_count": (
+                    moonlab_shareware_deployment_gate.get("summary", {}).get(
+                        "coverage_missing_map_count")),
+                "moonlab_completed_simulator_job_count": (
+                    moonlab_shareware_deployment_gate.get("summary", {}).get(
+                        "moonlab_completed_simulator_job_count")),
+                "moonlab_completed_native_replay_job_count": (
+                    moonlab_shareware_deployment_gate.get("summary", {}).get(
+                        "moonlab_completed_native_replay_job_count")),
+                "moonlab_hardware_submitted_job_count": (
+                    moonlab_shareware_deployment_gate.get("summary", {}).get(
+                        "moonlab_hardware_submitted_job_count")),
+                "full_game_deployment_gate_status": (
+                    moonlab_shareware_deployment_gate.get("summary", {}).get(
+                        "full_game_deployment_gate_status")),
+                "full_game_deployment_gate_blocker_count": (
+                    moonlab_shareware_deployment_gate.get("summary", {}).get(
+                        "full_game_deployment_gate_blocker_count")),
+            },
         },
         "claim_posture": {
             "allowed_wording": (
@@ -2706,13 +3035,18 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 str(full_game_map_coverage.get("map_set") or
                     qge_map_sets.DEFAULT_FULL_GAME_MAP_SET),
             ),
-            registered_full_game_progress_reproduce_command(args),
+            registered_full_game_progress_reproduce_command(
+                args,
+                plan=registered_progress_inputs,
+            ),
             full_game_capture_queue_reproduce_command(args),
             "tools/qge_moonlab_job_runner.py <pack_dir>/resource/qge_moonlab_job_specs.json --out /tmp/qge_moonlab_job_results.verify.json --expect <pack_dir>/resource/qge_moonlab_job_results.json --plan-out /tmp/qge_moonlab_replay_plan.verify.json --submission-out /tmp/qge_moonlab_submission_packet.verify.json",
             "tools/qge_moonlab_submission_bundle.py <pack_dir>/resource/qge_moonlab_submission_packet.json --out /tmp/qge_moonlab_submission_bundle.json --markdown /tmp/qge_moonlab_submission_bundle.md --icc-json /tmp/qge_moonlab_submission_bundle_icc_evidence.json",
             "tools/qge_moonlab_hardware_ingest.py <pack_dir>/resource/qge_moonlab_submission_packet.json --template-out /tmp/qge_moonlab_hardware_record.template.json",
             "tools/qge_moonlab_full_game_plan.py <pack_dir> --out /tmp/qge_moonlab_full_game_plan.json --markdown /tmp/qge_moonlab_full_game_plan.md --icc-json /tmp/qge_moonlab_full_game_plan_icc_evidence.json",
             "tools/qge_moonlab_deployment_gate.py <pack_dir> --out /tmp/qge_moonlab_deployment_gate.json --markdown /tmp/qge_moonlab_deployment_gate.md --icc-json /tmp/qge_moonlab_deployment_gate_icc_evidence.json",
+            "tools/qge_moonlab_shareware_deployment_gate.py <pack_dir> --out /tmp/qge_moonlab_shareware_deployment_gate.json --markdown /tmp/qge_moonlab_shareware_deployment_gate.md --icc-json /tmp/qge_moonlab_shareware_deployment_gate_icc_evidence.json",
+            "tools/qge_noesis_release_gate.py <pack_dir> --out /tmp/qge_noesis_release_gate.json --markdown /tmp/qge_noesis_release_gate.md --icc-json /tmp/qge_noesis_release_gate_icc_evidence.json",
             "tools/qge_runtime_icc_audit.py <pack_dir> --out /tmp/qge_runtime_icc_audit.json --fail-on-mismatch",
             "tools/qge_publication_icc_audit.py <pack_dir> --out /tmp/qge_publication_icc_audit.json --fail-on-mismatch",
             "tools/qge_vanilla_matrix_audit.py <pack_dir> --out /tmp/qge_vanilla_matrix_audit.json --fail-on-mismatch",
@@ -2739,6 +3073,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "tools/qge_manifest_reproduce_audit.py <pack_dir> --out /tmp/qge_manifest_reproduce_audit.json --fail-on-mismatch",
             "tools/qge_manifest_markdown_audit.py <pack_dir> --out /tmp/qge_manifest_markdown_audit.json --fail-on-mismatch",
             "tools/qge_postpack_audit.py <pack_dir> --outdir /tmp/qge_postpack_audits --out /tmp/qge_postpack_audit.json --fail-on-mismatch",
+            "tools/qge_shareware_release_candidate_gate.py <pack_dir> --postpack /tmp/qge_postpack_audit.json --out /tmp/qge_shareware_release_candidate_gate.json --markdown /tmp/qge_shareware_release_candidate_gate.md --icc-json /tmp/qge_shareware_release_candidate_gate_icc_evidence.json",
         ],
     }
 
@@ -2777,6 +3112,11 @@ def build_icc_evidence(manifest: dict[str, Any],
         advantage_summary.get("moonlab_full_game_plan_summary"))
     deployment_gate_summary = dict_or_empty(
         advantage_summary.get("moonlab_deployment_gate_summary"))
+    shareware_deployment_gate_summary = dict_or_empty(
+        advantage_summary.get("moonlab_shareware_deployment_gate_summary"))
+    noesis_release_gate = dict_or_empty(runtime.get("noesis_release_gate"))
+    noesis_release_gate_summary = dict_or_empty(
+        noesis_release_gate.get("summary"))
     native_boundary_summary = dict_or_empty(
         advantage_summary.get("native_backend_boundary_summary"))
     full_game_summary = dict_or_empty(
@@ -2997,6 +3337,9 @@ def build_icc_evidence(manifest: dict[str, Any],
         "registered_full_game_progress_file": (
             artifacts.get("resource", {}).get(
                 "registered_full_game_progress", {}).get("path")),
+        "registered_full_game_selection_file": (
+            artifacts.get("resource", {}).get(
+                "registered_full_game_selection", {}).get("path")),
         "registered_full_game_progress_markdown_file": (
             artifacts.get("resource", {}).get(
                 "registered_full_game_progress_markdown", {}).get("path")),
@@ -3093,6 +3436,16 @@ def build_icc_evidence(manifest: dict[str, Any],
         "moonlab_deployment_gate_icc_evidence_file": (
             artifacts.get("resource", {}).get(
                 "moonlab_deployment_gate_icc_evidence", {}).get("path")),
+        "moonlab_shareware_deployment_gate_file": (
+            artifacts.get("resource", {}).get(
+                "moonlab_shareware_deployment_gate", {}).get("path")),
+        "moonlab_shareware_deployment_gate_markdown_file": (
+            artifacts.get("resource", {}).get(
+                "moonlab_shareware_deployment_gate_markdown", {}).get("path")),
+        "moonlab_shareware_deployment_gate_icc_evidence_file": (
+            artifacts.get("resource", {}).get(
+                "moonlab_shareware_deployment_gate_icc_evidence", {}).get(
+                    "path")),
         "moonlab_selected_job_count": job_specs_summary.get(
             "selected_job_count"),
         "moonlab_hardware_candidate_job_count": job_specs_summary.get(
@@ -3211,6 +3564,38 @@ def build_icc_evidence(manifest: dict[str, Any],
         "dense_70000_qubit_state_claim_allowed": (
             deployment_gate_summary.get(
                 "dense_70000_qubit_state_claim_allowed")),
+        "moonlab_shareware_deployment_gate_schema": (
+            shareware_deployment_gate_summary.get("schema")),
+        "moonlab_shareware_deployment_gate_status": (
+            shareware_deployment_gate_summary.get("status")),
+        "moonlab_shareware_deployment_gate_failed_criterion_count": (
+            shareware_deployment_gate_summary.get("failed_criterion_count")),
+        "moonlab_shareware_deployment_gate_blocker_count": (
+            shareware_deployment_gate_summary.get("blocker_count")),
+        "shareware_moonlab_deployment_claim_allowed": (
+            shareware_deployment_gate_summary.get(
+                "shareware_moonlab_deployment_claim_allowed")),
+        "moonlab_shareware_deployment_gate_map_set": (
+            shareware_deployment_gate_summary.get("map_set")),
+        "moonlab_shareware_deployment_gate_target_map_count": (
+            shareware_deployment_gate_summary.get("target_map_count")),
+        "moonlab_shareware_deployment_gate_covered_map_count": (
+            shareware_deployment_gate_summary.get("covered_map_count")),
+        "moonlab_shareware_deployment_gate_coverage_missing_map_count": (
+            shareware_deployment_gate_summary.get(
+                "coverage_missing_map_count")),
+        "moonlab_shareware_deployment_completed_simulator_job_count": (
+            shareware_deployment_gate_summary.get(
+                "moonlab_completed_simulator_job_count")),
+        "moonlab_shareware_deployment_completed_native_replay_job_count": (
+            shareware_deployment_gate_summary.get(
+                "moonlab_completed_native_replay_job_count")),
+        "moonlab_shareware_deployment_hardware_submitted_job_count": (
+            shareware_deployment_gate_summary.get(
+                "moonlab_hardware_submitted_job_count")),
+        "moonlab_shareware_deployment_full_gate_status": (
+            shareware_deployment_gate_summary.get(
+                "full_game_deployment_gate_status")),
         "vanilla_capture_matrix_file": artifacts["vanilla"]["matrix"]["packed"]["path"],
         "vanilla_icc_evidence_file": artifacts["vanilla"]["icc_evidence"]["packed"]["path"],
         "breadth_evidence_file": artifacts.get("breadth", {}).get(
@@ -3223,6 +3608,44 @@ def build_icc_evidence(manifest: dict[str, Any],
         "agent_stream_manifest_file": artifacts["agent_stream"]["manifest"]["packed"]["path"],
         "agent_stream_events_file": artifacts["agent_stream"]["events"]["packed"]["path"],
         "agent_stream_file_count": artifacts["agent_stream"]["stream_directory"]["packed"]["file_count"],
+        "noesis_release_gate_file": artifacts["agent_stream"].get(
+            "noesis_release_gate", {}).get("path"),
+        "noesis_release_gate_markdown_file": artifacts["agent_stream"].get(
+            "noesis_release_gate_markdown", {}).get("path"),
+        "noesis_release_gate_icc_evidence_file": (
+            artifacts["agent_stream"].get(
+                "noesis_release_gate_icc_evidence", {}).get("path")),
+        "noesis_release_gate_schema": noesis_release_gate.get("schema"),
+        "noesis_release_gate_status": noesis_release_gate.get("status"),
+        "noesis_release_gate_blocker_count": noesis_release_gate.get(
+            "blocker_count"),
+        "noesis_autonomous_diagnostics_claim_allowed": (
+            noesis_release_gate.get(
+                "noesis_autonomous_diagnostics_claim_allowed")),
+        "noesis_learned_play_claim_allowed": noesis_release_gate.get(
+            "learned_play_claim_allowed"),
+        "noesis_robust_map_level_world_model_claim_allowed": (
+            noesis_release_gate.get(
+                "robust_map_level_world_model_claim_allowed")),
+        "noesis_agent_stream_status": noesis_release_gate_summary.get(
+            "agent_stream_noesis_status"),
+        "noesis_claim_scope": noesis_release_gate_summary.get("claim_scope"),
+        "noesis_scripted": noesis_release_gate_summary.get("noesis_scripted"),
+        "noesis_autonomous": noesis_release_gate_summary.get(
+            "noesis_autonomous"),
+        "noesis_autonomous_control": noesis_release_gate_summary.get(
+            "noesis_autonomous_control"),
+        "noesis_gameplay_quality_score": noesis_release_gate_summary.get(
+            "gameplay_quality_score"),
+        "noesis_gameplay_quality_grade": noesis_release_gate_summary.get(
+            "gameplay_quality_grade"),
+        "noesis_gameplay_outcome_sample_count": (
+            noesis_release_gate_summary.get("gameplay_outcome_sample_count")),
+        "noesis_gameplay_total_distance": noesis_release_gate_summary.get(
+            "total_distance"),
+        "noesis_gameplay_kills": noesis_release_gate_summary.get("kills"),
+        "noesis_assist_telemetry_sample_count": (
+            noesis_release_gate_summary.get("assist_telemetry_sample_count")),
         "fallback_count": runtime.get("fallback_count"),
         "surrogate_count": runtime.get("surrogate_count"),
         "classic3d_count": runtime.get("classic3d_count"),
@@ -3300,6 +3723,16 @@ def build_icc_evidence(manifest: dict[str, Any],
             "breadth_ready_matrix_run_count"),
         "breadth_map_count": runtime.get("breadth_map_count"),
         "breadth_maps": runtime.get("breadth_maps"),
+        "runtime_backend_scope_map_set": runtime.get("full_game_map_set"),
+        "runtime_backend_scope_map_scope": runtime.get("map_scope"),
+        "runtime_backend_scope_coverage_status": runtime.get(
+            "full_game_map_coverage_status"),
+        "shareware_episode_one_scope": runtime.get(
+            "shareware_episode_one_scope"),
+        "registered_full_game_scope": runtime.get(
+            "registered_full_game_scope"),
+        "shareware_episode1_selection_file": runtime.get(
+            "shareware_episode1_selection_file"),
         "runtime_full_game_map_coverage_status": runtime.get(
             "full_game_map_coverage_status"),
         "runtime_full_game_map_target_count": runtime.get(

@@ -35,10 +35,308 @@ static int test_quantum_runtime_types(void) {
     const char* domain = qge_quantum_domain_name(QGE_DOMAIN_PROJECTILE);
     const char* rep = qge_quantum_representation_name(QGE_REP_CA_MPS);
     const char* measure = qge_measurement_kind_name(QGE_MEASURE_AI_ACTION);
+    const char* boundary = qge_observation_boundary_name(QGE_OBSERVE_COLLISION);
 
     return strcmp(domain, "projectile") == 0 &&
            strcmp(rep, "ca_mps") == 0 &&
-           strcmp(measure, "ai_action") == 0;
+           strcmp(measure, "ai_action") == 0 &&
+           strcmp(boundary, "collision") == 0;
+}
+
+static int test_quantum_semantics_contract(void) {
+    qge_quantum_semantics_contract_t contract;
+    qge_quantum_semantics_contract_t cosmetic;
+    uint32_t coverage;
+
+    memset(&contract, 0, sizeof(contract));
+    contract.domain = QGE_DOMAIN_PROJECTILE;
+    contract.representation = QGE_REP_CA_MPS;
+    contract.measurement_kind = QGE_MEASURE_PROJECTILE_IMPACT;
+    contract.observation_boundary = QGE_OBSERVE_COLLISION;
+    contract.gameplay_affecting = true;
+    contract.authoritative_writeback = true;
+    contract.basis_semantics = "trajectory and impact branches";
+    contract.amplitude_semantics = "normalized branch weights";
+    contract.phase_semantics = "material and weapon phase rotations";
+    contract.evolution_semantics = "bounded CA-MPS projectile branch update";
+    contract.measurement_semantics = "collision selects one branch";
+    contract.decoherence_semantics = "walls, water, and explosions reduce coherence";
+    contract.replay_semantics = "seed plus measurement trace reproduces selection";
+    contract.fallback_semantics = "classic projectile state with explicit reason";
+    contract.writeback_semantics = "selected branch mutates projectile impact";
+
+    coverage = qge_quantum_semantics_contract_coverage(&contract);
+
+    memset(&cosmetic, 0, sizeof(cosmetic));
+    cosmetic.domain = QGE_DOMAIN_RENDER;
+    cosmetic.representation = QGE_REP_SPARSE_DWT;
+    cosmetic.measurement_kind = QGE_MEASURE_RENDER_SAMPLE;
+    cosmetic.observation_boundary = QGE_OBSERVE_FRAME_BOUNDARY;
+    cosmetic.basis_semantics = "screen samples";
+    cosmetic.amplitude_semantics = "display intensity";
+    cosmetic.evolution_semantics = "postprocess shimmer";
+
+    return coverage == QGE_SEMANTICS_REQUIRED_COMPLETE &&
+           qge_quantum_semantics_contract_is_complete(&contract) &&
+           qge_quantum_semantics_contract_is_gameplay_authoritative(&contract) &&
+           !qge_quantum_semantics_contract_is_complete(&cosmetic) &&
+           !qge_quantum_semantics_contract_is_gameplay_authoritative(&cosmetic);
+}
+
+static void populate_projectile_semantics_contract(
+    qge_quantum_semantics_contract_t* contract,
+    qge_measurement_kind_t kind,
+    qge_observation_boundary_t boundary) {
+    memset(contract, 0, sizeof(*contract));
+    contract->domain = QGE_DOMAIN_PROJECTILE;
+    contract->representation = QGE_REP_CA_MPS;
+    contract->measurement_kind = kind;
+    contract->observation_boundary = boundary;
+    contract->gameplay_affecting = true;
+    contract->authoritative_writeback = true;
+    contract->basis_semantics = "projectile trajectory and impact branches";
+    contract->amplitude_semantics = "normalized branch impact weights";
+    contract->phase_semantics = "material and motion phase rotation";
+    contract->evolution_semantics = "bounded CA-MPS projectile evolution";
+    contract->measurement_semantics = "observation selects one branch";
+    contract->decoherence_semantics = "collision media collapse branch coherence";
+    contract->replay_semantics = "trace id replays selected branch";
+    contract->fallback_semantics = "classic projectile state with reason";
+    contract->writeback_semantics = "selected branch mutates gameplay state";
+}
+
+static int test_quantum_gameplay_measurement_bus(void) {
+    qge_quantum_runtime_t* rt = qge_quantum_runtime_create();
+    qge_quantum_semantics_contract_t contract;
+    qge_quantum_runtime_stats_t stats;
+    qge_measurement_event_t event;
+    qge_measurement_event_t rejected;
+    int ok;
+
+    if (!rt) return 0;
+    populate_projectile_semantics_contract(&contract,
+                                           QGE_MEASURE_PROJECTILE_IMPACT,
+                                           QGE_OBSERVE_COLLISION);
+
+    memset(&event, 0, sizeof(event));
+    event.domain = QGE_DOMAIN_PROJECTILE;
+    event.kind = QGE_MEASURE_PROJECTILE_IMPACT;
+    event.boundary = QGE_OBSERVE_COLLISION;
+    event.frame = 23;
+    event.server_time_msec = 368;
+    event.subject_id = 99;
+    event.flags = QGE_MEASUREMENT_FLAG_GAMEPLAY_AUTHORITY | 0x20000u;
+    event.basis_index = 2;
+    event.probability = 0.875;
+    event.phase = 0.5;
+    event.entropy_offset = 0x5151455f4d454153ULL;
+    event.trace_id = 0x5151455f4d454153ULL;
+
+    qge_quantum_frame_begin(rt, event.frame, event.server_time_msec);
+    ok = qge_quantum_measurement_event_is_replayable(&event) &&
+         qge_quantum_measurement_event_matches_contract(&event, &contract) &&
+         qge_quantum_gameplay_measurement_is_valid(&event, &contract) &&
+         qge_quantum_record_gameplay_measurement(rt, &event, &contract);
+
+    rejected = event;
+    rejected.trace_id = 0;
+    rejected.entropy_offset = 0;
+    ok = ok &&
+         !qge_quantum_measurement_event_is_replayable(&rejected) &&
+         !qge_quantum_gameplay_measurement_is_valid(&rejected, &contract) &&
+         !qge_quantum_record_gameplay_measurement(rt, &rejected, &contract);
+
+    rejected = event;
+    rejected.boundary = QGE_OBSERVE_DAMAGE;
+    ok = ok &&
+         !qge_quantum_measurement_event_matches_contract(&rejected,
+                                                         &contract) &&
+         !qge_quantum_gameplay_measurement_is_valid(&rejected, &contract) &&
+         !qge_quantum_record_gameplay_measurement(rt, &rejected, &contract);
+
+    qge_quantum_frame_end(rt);
+    memset(&stats, 0, sizeof(stats));
+    qge_quantum_runtime_get_stats(rt, &stats);
+    qge_quantum_runtime_free(rt);
+
+    return ok &&
+           stats.frames_started == 1 &&
+           stats.frames_ended == 1 &&
+           stats.measurement_events == 1 &&
+           stats.gameplay_measurement_events == 1 &&
+           stats.trace_write_errors == 0;
+}
+
+static int test_quantum_material_operator_records(void) {
+    qge_quantum_runtime_t* rt = qge_quantum_runtime_create();
+    qge_quantum_runtime_stats_t stats;
+    qge_material_operator_kind_t kinds[] = {
+        QGE_MATERIAL_OPERATOR_WATER_DECOHERENCE,
+        QGE_MATERIAL_OPERATOR_LAVA_PHASE,
+        QGE_MATERIAL_OPERATOR_SLIPGATE_PHASE,
+        QGE_MATERIAL_OPERATOR_QUAD_AMPLIFICATION,
+        QGE_MATERIAL_OPERATOR_RING_PROTECTION,
+        QGE_MATERIAL_OPERATOR_PENTAGRAM_PROTECTION,
+        QGE_MATERIAL_OPERATOR_RUNE_PHASE
+    };
+    int count = (int)(sizeof(kinds) / sizeof(kinds[0]));
+    int ok = 1;
+
+    if (!rt) return 0;
+    qge_quantum_frame_begin(rt, 31, 496);
+    for (int i = 0; i < count; i++) {
+        qge_material_operator_event_t event;
+
+        memset(&event, 0, sizeof(event));
+        event.frame = 31;
+        event.server_time_msec = 496;
+        event.subject_id = 100 + i;
+        event.kind = kinds[i];
+        event.observation_boundary =
+            (kinds[i] == QGE_MATERIAL_OPERATOR_LAVA_PHASE ||
+             kinds[i] == QGE_MATERIAL_OPERATOR_QUAD_AMPLIFICATION ||
+             kinds[i] == QGE_MATERIAL_OPERATOR_PENTAGRAM_PROTECTION) ?
+            QGE_OBSERVE_DAMAGE : QGE_OBSERVE_PLAYER_VISIBLE;
+        event.flags = QGE_MATERIAL_OPERATOR_FLAG_GAMEPLAY_STATE |
+                      (i < 3 ? QGE_MATERIAL_OPERATOR_FLAG_WORLD_SURFACE :
+                       QGE_MATERIAL_OPERATOR_FLAG_PLAYER_POWERUP);
+        event.material_id = (uint64_t)i + 1u;
+        event.phase_shift = 0.125 * (double)(i + 1);
+        event.decoherence = i == 0 ? 0.35 : 0.05;
+        event.amplification =
+            kinds[i] == QGE_MATERIAL_OPERATOR_QUAD_AMPLIFICATION ? 4.0 : 1.0;
+        event.protection =
+            kinds[i] == QGE_MATERIAL_OPERATOR_PENTAGRAM_PROTECTION ? 1.0 : 0.0;
+        event.trace_id = 0x5151455f4d415431ULL ^ (uint64_t)(i + 1);
+
+        ok = ok &&
+             strcmp(qge_material_operator_name(kinds[i]), "unknown") != 0 &&
+             qge_quantum_material_operator_is_valid(&event) &&
+             qge_quantum_record_material_operator(rt, &event);
+    }
+
+    {
+        qge_material_operator_event_t rejected;
+
+        memset(&rejected, 0, sizeof(rejected));
+        rejected.kind = QGE_MATERIAL_OPERATOR_WATER_DECOHERENCE;
+        rejected.observation_boundary = QGE_OBSERVE_PLAYER_VISIBLE;
+        rejected.material_id = 1;
+        rejected.decoherence = 0.25;
+        rejected.amplification = 1.0;
+        ok = ok &&
+             !qge_quantum_material_operator_is_valid(&rejected) &&
+             !qge_quantum_record_material_operator(rt, &rejected);
+    }
+
+    qge_quantum_frame_end(rt);
+    memset(&stats, 0, sizeof(stats));
+    qge_quantum_runtime_get_stats(rt, &stats);
+    qge_quantum_runtime_free(rt);
+
+    return ok &&
+           stats.frames_started == 1 &&
+           stats.frames_ended == 1 &&
+           stats.material_operator_events == (uint64_t)count &&
+           stats.measurement_events == (uint64_t)count &&
+           stats.probe_events == (uint64_t)count &&
+           stats.trace_write_errors == 0;
+}
+
+static int test_quantum_weapon_operator_records(void) {
+    qge_quantum_runtime_t* rt = qge_quantum_runtime_create();
+    qge_quantum_runtime_stats_t stats;
+    qge_weapon_operator_kind_t kinds[] = {
+        QGE_WEAPON_OPERATOR_SHOTGUN_SPREAD_MEASUREMENT,
+        QGE_WEAPON_OPERATOR_NAIL_PAULI_NOISE,
+        QGE_WEAPON_OPERATOR_ROCKET_SPLASH_WAVEFRONT,
+        QGE_WEAPON_OPERATOR_GRENADE_FUSE_BRANCH,
+        QGE_WEAPON_OPERATOR_LIGHTNING_CONTINUOUS_MEASUREMENT,
+        QGE_WEAPON_OPERATOR_AXE_CONTACT_MEASUREMENT
+    };
+    int count = (int)(sizeof(kinds) / sizeof(kinds[0]));
+    int ok = 1;
+
+    if (!rt) return 0;
+    qge_quantum_frame_begin(rt, 41, 656);
+    for (int i = 0; i < count; i++) {
+        qge_weapon_operator_event_t event;
+
+        memset(&event, 0, sizeof(event));
+        event.frame = 41;
+        event.server_time_msec = 656;
+        event.subject_id = 1;
+        event.kind = kinds[i];
+        event.observation_boundary =
+            (kinds[i] == QGE_WEAPON_OPERATOR_ROCKET_SPLASH_WAVEFRONT ||
+             kinds[i] == QGE_WEAPON_OPERATOR_GRENADE_FUSE_BRANCH) ?
+            QGE_OBSERVE_COLLISION : QGE_OBSERVE_DAMAGE;
+        event.flags = QGE_WEAPON_OPERATOR_FLAG_GAMEPLAY_STATE |
+                      QGE_WEAPON_OPERATOR_FLAG_NONCOMMUTING;
+        if (kinds[i] == QGE_WEAPON_OPERATOR_SHOTGUN_SPREAD_MEASUREMENT ||
+            kinds[i] == QGE_WEAPON_OPERATOR_LIGHTNING_CONTINUOUS_MEASUREMENT) {
+            event.flags |= QGE_WEAPON_OPERATOR_FLAG_HITSCAN;
+        }
+        if (kinds[i] == QGE_WEAPON_OPERATOR_NAIL_PAULI_NOISE ||
+            kinds[i] == QGE_WEAPON_OPERATOR_ROCKET_SPLASH_WAVEFRONT ||
+            kinds[i] == QGE_WEAPON_OPERATOR_GRENADE_FUSE_BRANCH) {
+            event.flags |= QGE_WEAPON_OPERATOR_FLAG_PROJECTILE;
+        }
+        if (kinds[i] == QGE_WEAPON_OPERATOR_AXE_CONTACT_MEASUREMENT) {
+            event.flags |= QGE_WEAPON_OPERATOR_FLAG_MELEE;
+        }
+        if (kinds[i] == QGE_WEAPON_OPERATOR_LIGHTNING_CONTINUOUS_MEASUREMENT) {
+            event.flags |= QGE_WEAPON_OPERATOR_FLAG_CONTINUOUS;
+        }
+        if (kinds[i] != QGE_WEAPON_OPERATOR_AXE_CONTACT_MEASUREMENT) {
+            event.flags |= QGE_WEAPON_OPERATOR_FLAG_AMMO_CONSUMED;
+            event.ammo_delta = 1;
+        }
+        event.flags |= QGE_WEAPON_OPERATOR_FLAG_DAMAGE_RESULT;
+        event.weapon_id = 1u << i;
+        event.damage_delta = 10 + i;
+        event.phase_shift = 0.25 * (double)(i + 1);
+        event.decoherence = 0.05 * (double)(i + 1);
+        event.spread = 0.10 * (double)(i + 1);
+        event.amplification =
+            kinds[i] == QGE_WEAPON_OPERATOR_LIGHTNING_CONTINUOUS_MEASUREMENT ?
+            2.0 : 1.0;
+        event.trace_id = 0x5151455f57455031ULL ^ (uint64_t)(i + 1);
+
+        ok = ok &&
+             strcmp(qge_weapon_operator_name(kinds[i]), "unknown") != 0 &&
+             qge_quantum_weapon_operator_is_valid(&event) &&
+             qge_quantum_record_weapon_operator(rt, &event);
+    }
+
+    {
+        qge_weapon_operator_event_t rejected;
+
+        memset(&rejected, 0, sizeof(rejected));
+        rejected.kind = QGE_WEAPON_OPERATOR_SHOTGUN_SPREAD_MEASUREMENT;
+        rejected.observation_boundary = QGE_OBSERVE_DAMAGE;
+        rejected.weapon_id = 1;
+        rejected.trace_id = 0;
+        rejected.decoherence = 0.1;
+        rejected.spread = 0.1;
+        rejected.amplification = 1.0;
+        ok = ok &&
+             !qge_quantum_weapon_operator_is_valid(&rejected) &&
+             !qge_quantum_record_weapon_operator(rt, &rejected);
+    }
+
+    qge_quantum_frame_end(rt);
+    memset(&stats, 0, sizeof(stats));
+    qge_quantum_runtime_get_stats(rt, &stats);
+    qge_quantum_runtime_free(rt);
+
+    return ok &&
+           stats.frames_started == 1 &&
+           stats.frames_ended == 1 &&
+           stats.weapon_operator_events == (uint64_t)count &&
+           stats.measurement_events == (uint64_t)count &&
+           stats.probe_events == (uint64_t)count &&
+           stats.trace_write_errors == 0;
 }
 
 static int test_quantum_basis_qubit_count(void) {
@@ -323,6 +621,156 @@ static int test_quantum_entropy_replay(void) {
            stats.replay_events_consumed == 12 &&
            stats.replay_mismatches == 0 &&
            stats.replay_exhaustions == 0 &&
+           stats.fallback_events == 0;
+}
+
+static int test_quantum_measurement_replay_projectile_writeback(void) {
+    const char* path = "/tmp/qge_measurement_replay_projectile.bin";
+    qge_quantum_runtime_t* rt_record = qge_quantum_runtime_create();
+    qge_quantum_runtime_t* rt_direct;
+    qge_quantum_runtime_t* rt_mismatch;
+    qge_quantum_runtime_t* rt_gate;
+    qge_quantum_semantics_contract_t contract;
+    qge_quantum_runtime_stats_t stats;
+    qge_measurement_event_t branch;
+    qge_measurement_event_t writeback;
+    qge_measurement_event_t replayed_branch;
+    qge_measurement_event_t replayed_writeback;
+    int ok;
+
+    if (!rt_record) return 0;
+    if (qge_quantum_trace_open(rt_record, path) != 0) {
+        qge_quantum_runtime_free(rt_record);
+        return 0;
+    }
+    qge_quantum_frame_begin(rt_record, 12, 192);
+
+    memset(&branch, 0, sizeof(branch));
+    branch.domain = QGE_DOMAIN_PROJECTILE;
+    branch.kind = QGE_MEASURE_PROJECTILE_BRANCH;
+    branch.boundary = QGE_OBSERVE_SAVE_OR_DEMO;
+    branch.frame = 12;
+    branch.server_time_msec = 192;
+    branch.subject_id = 313;
+    branch.flags = QGE_MEASUREMENT_FLAG_GAMEPLAY_AUTHORITY | 0x100000u;
+    branch.basis_index = 1;
+    branch.probability = 0.875;
+    branch.phase = 0.625;
+    branch.entropy_offset = 0x5151455f42524131ULL;
+    branch.trace_id = 0x5151455f42524131ULL;
+    populate_projectile_semantics_contract(
+        &contract, branch.kind, branch.boundary);
+    if (!qge_quantum_record_gameplay_measurement(
+            rt_record, &branch, &contract)) {
+        qge_quantum_runtime_free(rt_record);
+        return 0;
+    }
+
+    memset(&writeback, 0, sizeof(writeback));
+    writeback.domain = QGE_DOMAIN_PROJECTILE;
+    writeback.kind = QGE_MEASURE_PROJECTILE_WRITEBACK;
+    writeback.boundary = QGE_OBSERVE_SAVE_OR_DEMO;
+    writeback.frame = 12;
+    writeback.server_time_msec = 192;
+    writeback.subject_id = 313;
+    writeback.flags = QGE_MEASUREMENT_FLAG_GAMEPLAY_AUTHORITY | 0x2000u;
+    writeback.basis_index = 1;
+    writeback.probability = 1.0;
+    writeback.phase = 1.0;
+    writeback.entropy_offset = 0x5151455f57524231ULL;
+    writeback.trace_id = 0x5151455f57524231ULL;
+    populate_projectile_semantics_contract(
+        &contract, writeback.kind, writeback.boundary);
+    if (!qge_quantum_record_gameplay_measurement(
+            rt_record, &writeback, &contract)) {
+        qge_quantum_runtime_free(rt_record);
+        return 0;
+    }
+
+    qge_quantum_frame_end(rt_record);
+    qge_quantum_runtime_free(rt_record);
+
+    rt_direct = qge_quantum_runtime_create();
+    if (!rt_direct) return 0;
+    if (qge_quantum_runtime_load_replay_trace(rt_direct, path) != 0) {
+        qge_quantum_runtime_free(rt_direct);
+        return 0;
+    }
+    qge_quantum_frame_begin(rt_direct, 12, 192);
+    ok = qge_quantum_replay_measurement(
+             rt_direct, &branch, &replayed_branch) == 1 &&
+         qge_quantum_replay_measurement(
+             rt_direct, &writeback, &replayed_writeback) == 1 &&
+         replayed_branch.kind == QGE_MEASURE_PROJECTILE_BRANCH &&
+         replayed_branch.basis_index == branch.basis_index &&
+         replayed_branch.probability == branch.probability &&
+         replayed_branch.trace_id == branch.trace_id &&
+         replayed_writeback.kind == QGE_MEASURE_PROJECTILE_WRITEBACK &&
+         replayed_writeback.basis_index == writeback.basis_index &&
+         replayed_writeback.probability == writeback.probability &&
+         replayed_writeback.trace_id == writeback.trace_id;
+    qge_quantum_frame_end(rt_direct);
+    memset(&stats, 0, sizeof(stats));
+    qge_quantum_runtime_get_stats(rt_direct, &stats);
+    ok = ok &&
+         stats.replay_measurements_loaded == 2 &&
+         stats.replay_measurements_consumed == 2 &&
+         stats.replay_measurement_mismatches == 0 &&
+         stats.replay_measurement_exhaustions == 0 &&
+         stats.fallback_events == 0;
+    qge_quantum_runtime_free(rt_direct);
+    if (!ok) return 0;
+
+    rt_mismatch = qge_quantum_runtime_create();
+    if (!rt_mismatch) return 0;
+    if (qge_quantum_runtime_load_replay_trace(rt_mismatch, path) != 0) {
+        qge_quantum_runtime_free(rt_mismatch);
+        return 0;
+    }
+    replayed_branch = branch;
+    replayed_branch.basis_index = branch.basis_index + 1;
+    qge_quantum_frame_begin(rt_mismatch, 12, 192);
+    ok = qge_quantum_replay_measurement(
+        rt_mismatch, &replayed_branch, &replayed_writeback) == -1;
+    qge_quantum_frame_end(rt_mismatch);
+    memset(&stats, 0, sizeof(stats));
+    qge_quantum_runtime_get_stats(rt_mismatch, &stats);
+    qge_quantum_runtime_free(rt_mismatch);
+    if (!ok ||
+        stats.replay_measurements_loaded != 2 ||
+        stats.replay_measurements_consumed != 1 ||
+        stats.replay_measurement_mismatches != 1 ||
+        stats.fallback_events != 1) {
+        return 0;
+    }
+
+    rt_gate = qge_quantum_runtime_create();
+    if (!rt_gate) return 0;
+    if (qge_quantum_runtime_load_replay_trace(rt_gate, path) != 0) {
+        qge_quantum_runtime_free(rt_gate);
+        return 0;
+    }
+    qge_quantum_frame_begin(rt_gate, 12, 192);
+    populate_projectile_semantics_contract(
+        &contract, branch.kind, branch.boundary);
+    ok = qge_quantum_record_gameplay_measurement(
+        rt_gate, &branch, &contract);
+    populate_projectile_semantics_contract(
+        &contract, writeback.kind, writeback.boundary);
+    ok = ok && qge_quantum_record_gameplay_measurement(
+        rt_gate, &writeback, &contract);
+    qge_quantum_frame_end(rt_gate);
+    memset(&stats, 0, sizeof(stats));
+    qge_quantum_runtime_get_stats(rt_gate, &stats);
+    qge_quantum_runtime_free(rt_gate);
+
+    return ok &&
+           stats.replay_measurements_loaded == 2 &&
+           stats.replay_measurements_consumed == 2 &&
+           stats.replay_measurement_mismatches == 0 &&
+           stats.replay_measurement_exhaustions == 0 &&
+           stats.gameplay_measurement_events == 2 &&
+           stats.measurement_events == 2 &&
            stats.fallback_events == 0;
 }
 
@@ -1298,14 +1746,14 @@ static int test_ai_decide_traced_protocol(void) {
 
     qge_ai_set_runtime(rt);
     qge_quantum_frame_begin(rt, 123, 4567);
-    qge_ai_init_enemy(17, 2);
+    qge_ai_init_enemy(17, QGE_AI_ENEMY_BOSS);
     input.version = QGE_AI_TRACE_VERSION;
     input.frame = 123;
     input.server_time_msec = 4567;
     input.enemy_id = 17;
-    input.enemy_type = 2;
+    input.enemy_type = QGE_AI_ENEMY_BOSS;
     input.health = 80.0f;
-    input.flags = 0x10u;
+    input.flags = QGE_AI_INPUT_FLAG_ENEMY_CLASS_KNOWN | 0x10u;
     input.target_entnum = 1;
     input.aggression = 0.75f;
     input.player_distance = 320.0f;
@@ -1330,8 +1778,10 @@ static int test_ai_decide_traced_protocol(void) {
             saw_ai_decision = event->frame == 123 &&
                               event->server_time_msec == 4567 &&
                               event->enemy_id == 17 &&
+                              event->enemy_type == QGE_AI_ENEMY_BOSS &&
                               event->target_entnum == 1 &&
-                              event->input_flags == 0x10u &&
+                              event->input_flags ==
+                                  (QGE_AI_INPUT_FLAG_ENEMY_CLASS_KNOWN | 0x10u) &&
                               event->input_hash == expected_hash &&
                               event->legal_action_mask == QGE_AI_ACTION_PATROL_MASK &&
                               event->action == AI_PATROL &&
@@ -1346,6 +1796,7 @@ static int test_ai_decide_traced_protocol(void) {
          trace.input.version == QGE_AI_TRACE_VERSION &&
          trace.input.frame == 123 &&
          trace.input.enemy_id == 17 &&
+         trace.input.enemy_type == QGE_AI_ENEMY_BOSS &&
          trace.output.version == QGE_AI_TRACE_VERSION &&
          trace.output.input_hash == expected_hash &&
          trace.output.action == AI_PATROL &&
@@ -3660,10 +4111,15 @@ int main(void) {
 
     printf("Quantum Runtime / Trace Tests:\n");
     TEST(quantum_runtime_types);
+    TEST(quantum_semantics_contract);
+    TEST(quantum_gameplay_measurement_bus);
+    TEST(quantum_material_operator_records);
+    TEST(quantum_weapon_operator_records);
     TEST(quantum_basis_qubit_count);
     TEST(quantum_runtime_events);
     TEST(quantum_trace_roundtrip);
     TEST(quantum_entropy_replay);
+    TEST(quantum_measurement_replay_projectile_writeback);
     TEST(quantum_entropy_replay_survives_rng_bind);
     TEST(quantum_entropy_replay_strict_mismatch);
     TEST(quantum_entropy_replay_exhaustion);

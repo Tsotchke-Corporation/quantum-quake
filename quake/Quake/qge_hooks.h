@@ -168,9 +168,11 @@ extern cvar_t quantum_vis;          /* Enable quantum visibility (default 0) */
 extern cvar_t quantum_physics;      /* Feed server physics into QGE (default 1) */
 extern cvar_t quantum_projectiles;  /* Feed projectile/missile state into QGE (default 1) */
 extern cvar_t quantum_physics_authoritative; /* Let QGE write approved physics state (default 0) */
+extern cvar_t quantum_shareware_encounter; /* Enable e1m1 quantum encounter evidence (default 1) */
 extern cvar_t quantum_debug;        /* Emit QGE render diagnostics (default 0) */
 extern cvar_t qge_noesis_assist;    /* Opt-in server-state Noesis assist (default 0) */
 extern cvar_t qge_noesis_autonomous; /* No-script Noesis controller hint (default 0) */
+extern cvar_t qge_noesis_target_class; /* Optional Noesis assist monster classname hint */
 extern cvar_t quantum_overlay_alpha;/* Quantum render composite alpha (default 0.10) */
 extern cvar_t quantum_scene_surface_budget; /* DWT surface encode budget (default 512) */
 extern cvar_t quantum_render_detail_mix; /* Mix preserved spatial detail into DWT output (default 1.0) */

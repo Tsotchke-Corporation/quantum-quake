@@ -20,24 +20,27 @@ EXACT_SOURCE_CHECKS = (
     ("advantage_roadmap_doc", "source_docs", "advantage_roadmap"),
     ("agent_stream_dir", "agent_stream", "stream_directory"),
     ("breadth_evidence", "breadth", "evidence"),
+    ("shareware_episode1_selection", "breadth",
+     "shareware_episode1_selection"),
 )
 PARENT_SOURCE_CHECKS = (
     ("capture_dir", "capture", "trace"),
     ("capture_dir", "capture", "frame"),
     ("capture_dir", "capture", "log"),
     ("capture_dir", "capture", "readme"),
-    ("graphics_capture_dir", "vanilla", "classic_frame"),
-    ("graphics_capture_dir", "vanilla", "qge_frame"),
     ("agent_stream_dir", "agent_stream", "manifest"),
     ("agent_stream_dir", "agent_stream", "events"),
     ("agent_stream_dir", "agent_stream", "icc_evidence"),
 )
 SIBLING_SOURCE_CHECKS = (
+    ("vanilla_matrix", "vanilla", "classic_frame"),
+    ("vanilla_matrix", "vanilla", "qge_frame"),
     ("publication_performance_summary", "capture", "performance_icc_evidence"),
     ("breadth_evidence", "breadth", "icc_evidence"),
 )
 OPTIONAL_MISSING_SOURCE_INPUTS = frozenset({
     "breadth_evidence",
+    "shareware_episode1_selection",
 })
 
 

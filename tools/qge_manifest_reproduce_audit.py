@@ -30,6 +30,8 @@ REQUIRED_REPRODUCE_COMMAND_PREFIXES = (
     "tools/qge_moonlab_hardware_ingest.py ",
     "tools/qge_moonlab_full_game_plan.py ",
     "tools/qge_moonlab_deployment_gate.py ",
+    "tools/qge_moonlab_shareware_deployment_gate.py ",
+    "tools/qge_noesis_release_gate.py ",
 )
 POSTPACK_REPRODUCE_COMMAND_PREFIXES = (
     "tools/qge_oracle_scene_audit.py ",
@@ -64,6 +66,9 @@ POSTPACK_REPRODUCE_COMMAND_PREFIXES = (
     "tools/qge_manifest_markdown_audit.py ",
     "tools/qge_postpack_audit.py ",
 )
+RELEASE_SIGNOFF_REPRODUCE_COMMAND_PREFIXES = (
+    "tools/qge_shareware_release_candidate_gate.py ",
+)
 OPTIONAL_POSTPACK_REPRODUCE_COMMAND_PREFIXES = (
     POSTPACK_REPRODUCE_COMMAND_PREFIXES)
 FORBIDDEN_SHELL_FRAGMENTS = (";", "&&", "||", "|", "`", "$(")
@@ -96,7 +101,8 @@ def command_matches(commands: list[str], prefix: str) -> bool:
 def expected_reproduce_command_prefixes() -> tuple[str, ...]:
     return (
         REQUIRED_REPRODUCE_COMMAND_PREFIXES +
-        POSTPACK_REPRODUCE_COMMAND_PREFIXES
+        POSTPACK_REPRODUCE_COMMAND_PREFIXES +
+        RELEASE_SIGNOFF_REPRODUCE_COMMAND_PREFIXES
     )
 
 
@@ -943,6 +949,72 @@ def core_command_option_checks(
                 "required": True,
             },
         ],
+        "tools/qge_moonlab_shareware_deployment_gate.py ": [
+            position_check(1, "<pack_dir>"),
+            {
+                "option": "--out",
+                "expected_values": [
+                    "/tmp/qge_moonlab_shareware_deployment_gate.json"],
+                "required": True,
+            },
+            {
+                "option": "--markdown",
+                "expected_values": [
+                    "/tmp/qge_moonlab_shareware_deployment_gate.md"],
+                "required": True,
+            },
+            {
+                "option": "--icc-json",
+                "expected_values": [
+                    "/tmp/qge_moonlab_shareware_deployment_gate_icc_evidence.json"],
+                "required": True,
+            },
+        ],
+        "tools/qge_noesis_release_gate.py ": [
+            position_check(1, "<pack_dir>"),
+            {
+                "option": "--out",
+                "expected_values": ["/tmp/qge_noesis_release_gate.json"],
+                "required": True,
+            },
+            {
+                "option": "--markdown",
+                "expected_values": ["/tmp/qge_noesis_release_gate.md"],
+                "required": True,
+            },
+            {
+                "option": "--icc-json",
+                "expected_values": [
+                    "/tmp/qge_noesis_release_gate_icc_evidence.json"],
+                "required": True,
+            },
+        ],
+        "tools/qge_shareware_release_candidate_gate.py ": [
+            position_check(1, "<pack_dir>"),
+            {
+                "option": "--postpack",
+                "expected_values": ["/tmp/qge_postpack_audit.json"],
+                "required": True,
+            },
+            {
+                "option": "--out",
+                "expected_values": [
+                    "/tmp/qge_shareware_release_candidate_gate.json"],
+                "required": True,
+            },
+            {
+                "option": "--markdown",
+                "expected_values": [
+                    "/tmp/qge_shareware_release_candidate_gate.md"],
+                "required": True,
+            },
+            {
+                "option": "--icc-json",
+                "expected_values": [
+                    "/tmp/qge_shareware_release_candidate_gate_icc_evidence.json"],
+                "required": True,
+            },
+        ],
     })
     return checks
 
@@ -1059,8 +1131,11 @@ def manifest_reproduce_audit(
             "missing_source_inputs": False,
             "required_command_count": len(REQUIRED_REPRODUCE_COMMAND_PREFIXES),
             "postpack_command_count": len(POSTPACK_REPRODUCE_COMMAND_PREFIXES),
+            "release_signoff_command_count": len(
+                RELEASE_SIGNOFF_REPRODUCE_COMMAND_PREFIXES),
             "missing_required_commands": [],
             "missing_postpack_commands": [],
+            "missing_release_signoff_commands": [],
             "missing_optional_postpack_commands": [],
             "unexpected_commands": [],
             "duplicate_commands": [],
@@ -1082,6 +1157,10 @@ def manifest_reproduce_audit(
     ]
     missing_postpack = [
         prefix for prefix in POSTPACK_REPRODUCE_COMMAND_PREFIXES
+        if not command_matches(string_commands, prefix)
+    ]
+    missing_release_signoff = [
+        prefix for prefix in RELEASE_SIGNOFF_REPRODUCE_COMMAND_PREFIXES
         if not command_matches(string_commands, prefix)
     ]
     unexpected_commands = unexpected_reproduce_commands(string_commands)
@@ -1120,6 +1199,7 @@ def manifest_reproduce_audit(
         (1 if missing_source_inputs else 0) +
         len(missing_required) +
         len(missing_postpack) +
+        len(missing_release_signoff) +
         len(unexpected_commands) +
         len(duplicates) +
         len(duplicate_prefixes) +
@@ -1138,10 +1218,13 @@ def manifest_reproduce_audit(
         "missing_source_inputs": missing_source_inputs,
         "required_command_count": len(REQUIRED_REPRODUCE_COMMAND_PREFIXES),
         "postpack_command_count": len(POSTPACK_REPRODUCE_COMMAND_PREFIXES),
+        "release_signoff_command_count": len(
+            RELEASE_SIGNOFF_REPRODUCE_COMMAND_PREFIXES),
         "optional_postpack_command_count": (
             len(POSTPACK_REPRODUCE_COMMAND_PREFIXES)),
         "missing_required_commands": missing_required,
         "missing_postpack_commands": missing_postpack,
+        "missing_release_signoff_commands": missing_release_signoff,
         "missing_optional_postpack_commands": missing_postpack,
         "unexpected_commands": unexpected_commands,
         "duplicate_commands": duplicates,
@@ -1191,6 +1274,8 @@ def manifest_reproduce_icc_summary(
             audit.get("required_command_count")),
         "manifest_reproduce_postpack_command_count": (
             audit.get("postpack_command_count")),
+        "manifest_reproduce_release_signoff_command_count": (
+            audit.get("release_signoff_command_count")),
         "manifest_reproduce_optional_postpack_command_count": (
             audit.get("optional_postpack_command_count")),
         "manifest_reproduce_publication_pack_command_count": (
@@ -1200,6 +1285,8 @@ def manifest_reproduce_icc_summary(
             audit.get("missing_required_commands", [])),
         "manifest_reproduce_missing_postpack_command_count": len(
             audit.get("missing_postpack_commands", [])),
+        "manifest_reproduce_missing_release_signoff_command_count": len(
+            audit.get("missing_release_signoff_commands", [])),
         "manifest_reproduce_missing_optional_postpack_command_count": len(
             audit.get("missing_optional_postpack_commands", [])),
         "manifest_reproduce_unexpected_command_count": len(
@@ -1224,6 +1311,8 @@ def manifest_reproduce_icc_summary(
             audit.get("missing_required_commands")),
         "manifest_reproduce_missing_postpack_commands": (
             audit.get("missing_postpack_commands")),
+        "manifest_reproduce_missing_release_signoff_commands": (
+            audit.get("missing_release_signoff_commands")),
         "manifest_reproduce_missing_optional_postpack_commands": (
             audit.get("missing_optional_postpack_commands")),
         "manifest_reproduce_unexpected_commands": (

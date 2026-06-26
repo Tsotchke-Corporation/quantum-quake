@@ -1,0 +1,100 @@
+{
+  "schema": "qge.hardware_advantage_campaign.v0",
+  "status": "ready_for_campaign_execution",
+  "runtime_backend": "qge_hardware_advantage_campaign",
+  "completion_reason": "qge_hardware_advantage_campaign_ready",
+  "scope": "bounded_qae_hardware_execution_and_advantage_research",
+  "created_utc": "2026-06-26T02:30:00Z",
+  "source_pack": "diagnostics/publication_pack/20260624-shareware-v8",
+  "current_state": {
+    "shareware_user_playable_release_ready": true,
+    "moonlab_hardware_submission_scope_ready": true,
+    "moonlab_hardware_submission_scope_ready_state": "true",
+    "hardware_candidate_job_count": 1,
+    "hardware_candidate_job_count_state": "nonzero",
+    "hardware_submitted_job_count": 0,
+    "hardware_submitted_job_count_state": "zero",
+    "completed_hardware_job_count": 0,
+    "completed_hardware_job_count_state": "zero",
+    "hardware_quantum_advantage_claim_allowed": false,
+    "hardware_quantum_advantage_claim_allowed_state": "false",
+    "whole_game_hardware_execution_claim_allowed": false,
+    "whole_game_hardware_execution_claim_allowed_state": "false",
+    "dense_70000_qubit_state_claim_allowed": false,
+    "dense_70000_qubit_state_claim_allowed_state": "false",
+    "real_target_status": "blocked_until_real_backend_return_and_advantage_gate"
+  },
+  "target_claims": {
+    "hardware_execution": {
+      "status": "blocked_until_real_backend_return",
+      "required_runtime_backend": "qge_moonlab_hardware_ingest",
+      "required_completion_reason": "qge_moonlab_hardware_result_recorded"
+    },
+    "quantum_advantage": {
+      "status": "blocked_until_hardware_and_baseline_gate",
+      "required_runtime_backend": "qge_hardware_advantage_gate",
+      "required_completion_reason": "qge_hardware_advantage_claim_ready",
+      "claim_id": "advantage.light_transport_qae_query_scaling"
+    }
+  },
+  "workstreams": [
+    {
+      "id": "icc_control_plane",
+      "owner_profile": "release/evidence engineer",
+      "status": "ready",
+      "acceptance_gate": "ICC campaign readiness and real-target blocked state are both visible"
+    },
+    {
+      "id": "moonlab_candidate_regeneration",
+      "owner_profile": "circuit/compiler engineer",
+      "status": "ready",
+      "acceptance_gate": "Moonlab QAE payload, Q_f kernel, observation circuit, Grover schedule, and artifact audits regenerate"
+    },
+    {
+      "id": "hardware_submission_and_return",
+      "owner_profile": "hardware/backend operator",
+      "status": "blocked_external_backend",
+      "acceptance_gate": "real qge.moonlab_hardware_record.v0 is returned and validates"
+    },
+    {
+      "id": "hardware_result_audit_release_integration",
+      "owner_profile": "evidence/release engineer",
+      "status": "pending",
+      "acceptance_gate": "hardware job results, comparison, ICC sidecar, and postpack audits pass"
+    },
+    {
+      "id": "advantage_baselines_claim_gate",
+      "owner_profile": "research/benchmark engineer",
+      "status": "pending",
+      "acceptance_gate": "strong baselines and fail-closed advantage gate support exact claims ledger wording"
+    },
+    {
+      "id": "autonomous_swarm_slices",
+      "owner_profile": "multi-agent coordinator",
+      "status": "ready",
+      "acceptance_gate": "compiler, hardware, benchmark, gate, and docs lanes have disjoint write scopes"
+    }
+  ],
+  "acceptance_commands": [
+    "/Users/tyr/Desktop/infinite_context_coder/bin/icc readiness --repo quantum_quake --target qge_hardware_advantage_campaign --trace-file docs/qge_hardware_advantage_campaign_icc_evidence.json --runtime-event-limit 200 --format markdown",
+    "/Users/tyr/Desktop/infinite_context_coder/bin/icc readiness --repo quantum_quake --target qge_real_hardware_quantum_advantage --trace-dir diagnostics/publication_pack/20260624-shareware-v8 --runtime-event-limit 200 --format markdown",
+    "python3 tools/qge_moonlab_hardware_ingest.py diagnostics/publication_pack/20260624-shareware-v8/resource/qge_moonlab_submission_packet.json --template-out /tmp/qge_moonlab_hardware_record.template.json",
+    "python3 tools/qge_postpack_audit.py diagnostics/publication_pack/20260624-shareware-v8 --outdir /tmp/qge_postpack_audits --out /tmp/qge_postpack_audit.json --fail-on-mismatch"
+  ],
+  "disallowed_claims": [
+    "hardware execution from simulator/native replay evidence",
+    "quantum advantage from a single unbenchmarked hardware return",
+    "full-frame quantum rendering",
+    "whole-game hardware execution",
+    "dense 70000 qubit execution",
+    "practical hardware speedup without a matched classical baseline"
+  ],
+  "artifacts": {
+    "campaign_markdown": "docs/qge_hardware_advantage_campaign.md",
+    "campaign_json": "docs/qge_hardware_advantage_campaign.json",
+    "campaign_icc_evidence": "docs/qge_hardware_advantage_campaign_icc_evidence.json",
+    "campaign_submission_scope_state": "docs/qge_hardware_advantage_campaign_submission_scope_state.json",
+    "campaign_no_returned_hardware_state": "docs/qge_hardware_advantage_campaign_no_returned_hardware_state.json",
+    "campaign_no_overclaim_state": "docs/qge_hardware_advantage_campaign_no_overclaim_state.json"
+  }
+}

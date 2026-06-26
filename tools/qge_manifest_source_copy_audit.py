@@ -75,7 +75,10 @@ def iter_source_copy_records(
     records: list[dict[str, Any]] = []
     if isinstance(value, dict):
         packed = dict_or_empty(value.get("packed"))
-        if isinstance(value.get("source_path"), str):
+        if (
+            isinstance(value.get("source_path"), str) and
+            value.get("source_copy") is not False
+        ):
             if is_file_record(packed):
                 records.append({
                     "kind": "file",

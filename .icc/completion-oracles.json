@@ -439,6 +439,257 @@
       ]
     },
     {
+      "name": "qge_hardware_advantage_campaign",
+      "target": "Campaign for real Moonlab hardware execution and defensible Quantum Quake advantage evidence",
+      "aliases": [
+        "qge_hardware_advantage_campaign",
+        "hardware advantage campaign",
+        "real quantum hardware campaign",
+        "qpu execution campaign",
+        "moonlab hardware advantage campaign"
+      ],
+      "requires": [
+        {
+          "id": "qge_hardware_advantage_campaign_backend",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_hardware_advantage_campaign"
+          ],
+          "severity": "high",
+          "label": "Hardware/advantage campaign backend evidence is present",
+          "action": "emit_qge_hardware_advantage_campaign_icc_evidence"
+        },
+        {
+          "id": "qge_hardware_advantage_campaign_ready",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_hardware_advantage_campaign_ready"
+          ],
+          "severity": "high",
+          "label": "Hardware/advantage campaign is ready for execution",
+          "action": "complete_qge_hardware_advantage_campaign"
+        },
+        {
+          "id": "qge_hardware_advantage_campaign_scope",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend",
+            "runtime_state",
+            "artifact"
+          ],
+          "event_names": [
+            "runtime_backend_scope",
+            "scope"
+          ],
+          "event_values": [
+            "bounded_qae_hardware_execution_and_advantage_research"
+          ],
+          "severity": "high",
+          "label": "Hardware/advantage campaign is scoped to bounded QAE evidence",
+          "action": "set_qge_hardware_advantage_campaign_scope"
+        },
+        {
+          "id": "qge_hardware_advantage_campaign_artifact",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "hardware_advantage_campaign_file",
+            "hardware_advantage_campaign_json_file",
+            "qge_hardware_advantage_campaign.md",
+            "qge_hardware_advantage_campaign.json"
+          ],
+          "severity": "high",
+          "label": "Hardware/advantage campaign artifacts are visible to ICC",
+          "action": "write_qge_hardware_advantage_campaign_artifacts"
+        },
+        {
+          "id": "qge_hardware_advantage_campaign_submission_scope",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "qge_hardware_advantage_campaign_submission_scope_state.json"
+          ],
+          "severity": "high",
+          "label": "Campaign records a ready bounded hardware-submission scope and at least one candidate job",
+          "action": "record_qge_hardware_advantage_campaign_submission_scope"
+        },
+        {
+          "id": "qge_hardware_advantage_campaign_no_returned_hardware_yet",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "qge_hardware_advantage_campaign_no_returned_hardware_state.json"
+          ],
+          "severity": "high",
+          "label": "Campaign explicitly records that no hardware result has returned yet",
+          "action": "record_qge_hardware_advantage_campaign_blocked_state"
+        },
+        {
+          "id": "qge_hardware_advantage_campaign_no_overclaim",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "qge_hardware_advantage_campaign_no_overclaim_state.json"
+          ],
+          "severity": "high",
+          "label": "Campaign explicitly blocks hardware advantage, whole-game hardware, and dense-state claims",
+          "action": "record_qge_hardware_advantage_campaign_no_overclaim"
+        }
+      ]
+    },
+    {
+      "name": "qge_real_hardware_quantum_advantage",
+      "target": "Returned Moonlab hardware result plus defensible Quantum Quake advantage evidence",
+      "aliases": [
+        "qge_real_hardware_quantum_advantage",
+        "real quantum hardware execution",
+        "moonlab hardware result",
+        "quantum advantage proof",
+        "qpu backed quantum quake advantage"
+      ],
+      "requires": [
+        {
+          "id": "qge_real_hardware_submission_scope_ready",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_moonlab_hardware_submission_scope_ready"
+          ],
+          "severity": "high",
+          "label": "Bounded Moonlab hardware submission scope is ready",
+          "action": "keep_qge_moonlab_hardware_submission_scope_ready"
+        },
+        {
+          "id": "qge_real_hardware_result_backend",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_moonlab_hardware_ingest"
+          ],
+          "severity": "high",
+          "label": "Real Moonlab hardware result ingestion evidence is present",
+          "action": "ingest_real_moonlab_hardware_result"
+        },
+        {
+          "id": "qge_real_hardware_result_recorded",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_moonlab_hardware_result_recorded"
+          ],
+          "severity": "high",
+          "label": "Returned hardware result is recorded",
+          "action": "record_qge_moonlab_hardware_result"
+        },
+        {
+          "id": "qge_real_hardware_comparison_artifact",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "moonlab_hardware_comparison_file"
+          ],
+          "severity": "high",
+          "label": "Hardware-vs-simulator comparison artifact is visible",
+          "action": "write_qge_moonlab_hardware_comparison_artifact"
+        },
+        {
+          "id": "qge_real_hardware_record_hash",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "hardware_record_sha256"
+          ],
+          "severity": "high",
+          "label": "Returned hardware result record hash is visible",
+          "action": "record_qge_moonlab_hardware_record_hash"
+        },
+        {
+          "id": "qge_advantage_gate_backend",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_hardware_advantage_gate"
+          ],
+          "severity": "high",
+          "label": "Fail-closed quantum advantage gate evidence is present",
+          "action": "run_qge_hardware_advantage_gate"
+        },
+        {
+          "id": "qge_advantage_claim_ready",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_hardware_advantage_claim_ready"
+          ],
+          "severity": "high",
+          "label": "Defensible quantum-advantage claim is ready",
+          "action": "complete_qge_hardware_advantage_gate"
+        },
+        {
+          "id": "qge_advantage_claim_scope",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "qge_hardware_advantage_claim_scope_advantage.light_transport_qae_query_scaling.json"
+          ],
+          "severity": "high",
+          "label": "Advantage claim is restricted to bounded QAE query scaling",
+          "action": "scope_qge_hardware_advantage_claim"
+        }
+      ]
+    },
+    {
       "name": "qge_shareware_episode1_moonlab_breadth",
       "target": "Shareware Episode 1 Quake running in Moonlab with publishable first-episode evidence",
       "aliases": [
@@ -524,6 +775,1074 @@
           "severity": "high",
           "label": "Shareware Episode 1 breadth artifact is visible to ICC",
           "action": "write_shareware_episode1_breadth_evidence_json"
+        }
+      ]
+    },
+    {
+      "name": "qge_moonlab_shareware_deployment",
+      "target": "Shareware Episode 1 Quake running in Moonlab with simulator/native deployment evidence",
+      "aliases": [
+        "qge_moonlab_shareware_deployment",
+        "shareware quake moonlab deployment",
+        "shareware episode 1 moonlab deployment",
+        "pak0 moonlab deployment"
+      ],
+      "requires": [
+        {
+          "id": "qge_moonlab_shareware_deployment_backend",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_moonlab_shareware_deployment_gate"
+          ],
+          "severity": "high",
+          "label": "Moonlab shareware deployment gate backend evidence is present",
+          "action": "emit_qge_moonlab_shareware_deployment_gate_icc_evidence"
+        },
+        {
+          "id": "qge_moonlab_shareware_deployment_ready",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_moonlab_shareware_deployment_gate_ready"
+          ],
+          "severity": "high",
+          "label": "Moonlab shareware deployment gate is ready",
+          "action": "complete_shareware_moonlab_deployment_gate"
+        },
+        {
+          "id": "qge_moonlab_shareware_deployment_map_set",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend",
+            "runtime_state",
+            "artifact"
+          ],
+          "event_names": [
+            "runtime_backend_scope_map_set",
+            "map_set",
+            "moonlab_shareware_deployment_gate_map_set"
+          ],
+          "event_values": [
+            "quake_shareware_episode1"
+          ],
+          "severity": "high",
+          "label": "Moonlab shareware deployment gate is scoped to Episode 1",
+          "action": "set_moonlab_shareware_gate_scope"
+        },
+        {
+          "id": "qge_moonlab_shareware_deployment_artifact",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "moonlab_shareware_deployment_gate_file",
+            "qge_moonlab_shareware_deployment_gate.json"
+          ],
+          "severity": "high",
+          "label": "Moonlab shareware deployment gate artifact is visible to ICC",
+          "action": "write_qge_moonlab_shareware_deployment_gate_json"
+        }
+      ]
+    },
+    {
+      "name": "qge_noesis_autonomous_diagnostics",
+      "target": "Noesis bounded no-script autonomous Quake diagnostics release evidence",
+      "aliases": [
+        "qge_noesis_autonomous_diagnostics",
+        "noesis autonomous diagnostics",
+        "noesis release gate",
+        "noesis bounded diagnostics"
+      ],
+      "requires": [
+        {
+          "id": "qge_noesis_release_gate_backend",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_noesis_release_gate"
+          ],
+          "severity": "high",
+          "label": "Noesis release gate backend evidence is present",
+          "action": "emit_qge_noesis_release_gate_icc_evidence"
+        },
+        {
+          "id": "qge_noesis_release_gate_ready",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_noesis_release_gate_ready"
+          ],
+          "severity": "high",
+          "label": "Noesis bounded diagnostics gate is ready",
+          "action": "complete_qge_noesis_release_gate"
+        },
+        {
+          "id": "qge_noesis_release_gate_artifact",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "noesis_release_gate_file",
+            "qge_noesis_release_gate.json"
+          ],
+          "severity": "high",
+          "label": "Noesis release gate artifact is visible to ICC",
+          "action": "write_qge_noesis_release_gate_json"
+        }
+      ]
+    },
+    {
+      "name": "qge_shareware_release_candidate",
+      "target": "Quake shareware release-candidate pack with Moonlab and bounded Noesis evidence",
+      "aliases": [
+        "qge_shareware_release_candidate",
+        "shareware release candidate",
+        "quake shareware release gate",
+        "moonlab noesis shareware signoff"
+      ],
+      "requires": [
+        {
+          "id": "qge_shareware_release_candidate_backend",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_shareware_release_candidate_gate"
+          ],
+          "severity": "high",
+          "label": "Shareware release-candidate gate backend evidence is present",
+          "action": "emit_qge_shareware_release_candidate_gate_icc_evidence"
+        },
+        {
+          "id": "qge_shareware_release_candidate_ready",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_shareware_release_candidate_gate_ready"
+          ],
+          "severity": "high",
+          "label": "Shareware release-candidate gate is ready",
+          "action": "complete_qge_shareware_release_candidate_gate"
+        },
+        {
+          "id": "qge_shareware_release_candidate_scope",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend",
+            "runtime_state",
+            "artifact"
+          ],
+          "event_names": [
+            "runtime_backend_scope_map_set",
+            "release_scope",
+            "map_set",
+            "shareware_release_candidate_map_set"
+          ],
+          "event_values": [
+            "quake_shareware_episode1"
+          ],
+          "severity": "high",
+          "label": "Shareware release candidate is scoped to Episode 1",
+          "action": "set_qge_shareware_release_candidate_scope"
+        },
+        {
+          "id": "qge_shareware_release_candidate_artifact",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "shareware_release_candidate_gate_file",
+            "qge_shareware_release_candidate_gate.json"
+          ],
+          "severity": "high",
+          "label": "Shareware release-candidate gate artifact is visible to ICC",
+          "action": "write_qge_shareware_release_candidate_gate_json"
+        }
+      ]
+    },
+    {
+      "name": "qge_shareware_release_bundle",
+      "target": "Persistent Quake shareware release bundle with archive checksum",
+      "aliases": [
+        "qge_shareware_release_bundle",
+        "shareware release bundle",
+        "shareware release archive",
+        "quantum quake shareware zip"
+      ],
+      "requires": [
+        {
+          "id": "qge_shareware_release_bundle_backend",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_shareware_release_bundle"
+          ],
+          "severity": "high",
+          "label": "Shareware release bundle backend evidence is present",
+          "action": "emit_qge_shareware_release_bundle_icc_evidence"
+        },
+        {
+          "id": "qge_shareware_release_bundle_ready",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_shareware_release_bundle_ready"
+          ],
+          "severity": "high",
+          "label": "Shareware release bundle is ready",
+          "action": "complete_qge_shareware_release_bundle"
+        },
+        {
+          "id": "qge_shareware_release_bundle_scope",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend",
+            "runtime_state",
+            "artifact"
+          ],
+          "event_names": [
+            "runtime_backend_scope_map_set",
+            "release_scope",
+            "map_set"
+          ],
+          "event_values": [
+            "quake_shareware_episode1"
+          ],
+          "severity": "high",
+          "label": "Shareware release bundle is scoped to Episode 1",
+          "action": "set_qge_shareware_release_bundle_scope"
+        },
+        {
+          "id": "qge_shareware_release_bundle_archive",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "shareware_release_bundle_archive_checksum_file",
+            "shareware_release_bundle_archive_sha256",
+            "qge_shareware_release_bundle_archive_checksum.json"
+          ],
+          "severity": "high",
+          "label": "Shareware release archive and checksum are visible to ICC",
+          "action": "write_qge_shareware_release_archive"
+        },
+        {
+          "id": "qge_shareware_release_bundle_manifest",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "shareware_release_bundle_manifest_file",
+            "qge_shareware_release_bundle.json"
+          ],
+          "severity": "high",
+          "label": "Shareware release bundle manifest is visible to ICC",
+          "action": "write_qge_shareware_release_bundle_manifest"
+        }
+      ]
+    },
+    {
+      "name": "qge_shareware_user_playable_release",
+      "target": "User-playable complete Quake shareware release with no content exceptions",
+      "aliases": [
+        "qge_shareware_user_playable_release",
+        "shareware user playable release",
+        "whole shareware playable release",
+        "complete shareware game release",
+        "no exception shareware release"
+      ],
+      "requires": [
+        {
+          "id": "qge_shareware_playability_backend",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_shareware_playability_gate"
+          ],
+          "severity": "high",
+          "label": "Shareware playability gate backend evidence is present",
+          "action": "emit_qge_shareware_playability_gate_icc_evidence"
+        },
+        {
+          "id": "qge_shareware_user_playable_release_ready",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_shareware_user_playable_release_ready"
+          ],
+          "severity": "high",
+          "label": "Shareware user-playable release is ready",
+          "action": "complete_qge_shareware_user_playable_release"
+        },
+        {
+          "id": "qge_shareware_playability_scope",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend",
+            "runtime_state",
+            "artifact"
+          ],
+          "event_names": [
+            "runtime_backend_scope_map_set",
+            "release_scope",
+            "map_set"
+          ],
+          "event_values": [
+            "quake_shareware_episode1"
+          ],
+          "severity": "high",
+          "label": "Shareware playability gate is scoped to Episode 1",
+          "action": "set_qge_shareware_playability_scope"
+        },
+        {
+          "id": "qge_shareware_playability_artifact",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "shareware_playability_gate_file",
+            "qge_shareware_playability_gate.json"
+          ],
+          "severity": "high",
+          "label": "Shareware playability gate artifact is visible to ICC",
+          "action": "write_qge_shareware_playability_gate_json"
+        },
+        {
+          "id": "qge_shareware_user_package_backend",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_shareware_user_package"
+          ],
+          "severity": "high",
+          "label": "Player-facing shareware package backend evidence is present",
+          "action": "emit_qge_shareware_user_package_icc_evidence"
+        },
+        {
+          "id": "qge_shareware_user_package_ready",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_shareware_user_package_ready"
+          ],
+          "severity": "high",
+          "label": "Player-facing shareware package is ready",
+          "action": "complete_qge_shareware_user_package"
+        },
+        {
+          "id": "qge_shareware_user_package_archive",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "shareware_user_package_archive_checksum_file",
+            "shareware_user_package_archive_sha256",
+            "qge_shareware_user_package_archive_checksum.json"
+          ],
+          "severity": "high",
+          "label": "Player-facing shareware package archive and checksum are visible to ICC",
+          "action": "write_qge_shareware_user_package_archive"
+        },
+        {
+          "id": "qge_shareware_user_package_manifest",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "shareware_user_package_manifest_file",
+            "qge_shareware_user_package.json"
+          ],
+          "severity": "high",
+          "label": "Player-facing shareware package manifest is visible to ICC",
+          "action": "write_qge_shareware_user_package_manifest"
+        },
+        {
+          "id": "qge_shareware_user_package_app_bundle",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "shareware_user_package_app_bundle_completion"
+          ],
+          "event_values": [
+            "present"
+          ],
+          "severity": "high",
+          "label": "Player-facing package contains QuantumQuake.app",
+          "action": "package_quantum_quake_app_bundle"
+        },
+        {
+          "id": "qge_shareware_user_package_pak",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "shareware_user_package_pak_completion"
+          ],
+          "event_values": [
+            "present"
+          ],
+          "severity": "high",
+          "label": "Player-facing package contains assets/id1/pak0.pak",
+          "action": "package_shareware_pak0"
+        },
+        {
+          "id": "qge_shareware_user_package_playability_gate",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "shareware_user_package_playability_gate_file"
+          ],
+          "severity": "high",
+          "label": "Player-facing package contains final playability gate evidence",
+          "action": "package_shareware_playability_gate_evidence"
+        },
+        {
+          "id": "qge_shareware_user_package_complete_effects_gate",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "shareware_user_package_complete_effects_gate_file"
+          ],
+          "severity": "high",
+          "label": "Player-facing package contains complete-effects gate evidence",
+          "action": "package_shareware_complete_effects_gate_evidence"
+        }
+      ]
+    },
+    {
+      "name": "qge_shareware_public_release_snapshot",
+      "target": "Public Quantum Quake shareware release snapshot with checksum and no hardware overclaim",
+      "aliases": [
+        "qge_shareware_public_release_snapshot",
+        "shareware public release snapshot",
+        "public shareware release",
+        "shareware release claim boundary",
+        "release package no hardware overclaim"
+      ],
+      "requires": [
+        {
+          "id": "qge_shareware_public_release_snapshot_backend",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_shareware_public_release_snapshot"
+          ],
+          "severity": "high",
+          "label": "Public shareware release snapshot backend evidence is present",
+          "action": "emit_qge_shareware_public_release_snapshot_icc_evidence"
+        },
+        {
+          "id": "qge_shareware_public_release_snapshot_ready",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_shareware_public_release_snapshot_ready"
+          ],
+          "severity": "high",
+          "label": "Public shareware release snapshot is ready",
+          "action": "complete_qge_shareware_public_release_snapshot"
+        },
+        {
+          "id": "qge_shareware_public_release_snapshot_scope",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend",
+            "runtime_state",
+            "artifact"
+          ],
+          "event_names": [
+            "runtime_backend_scope_map_set",
+            "release_scope",
+            "map_set"
+          ],
+          "event_values": [
+            "quake_shareware_episode1"
+          ],
+          "severity": "high",
+          "label": "Public shareware release snapshot is scoped to Episode 1",
+          "action": "set_qge_shareware_public_release_snapshot_scope"
+        },
+        {
+          "id": "qge_shareware_public_release_snapshot_artifact",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "shareware_public_release_snapshot_file",
+            "qge_shareware_public_release_snapshot.json"
+          ],
+          "severity": "high",
+          "label": "Public shareware release snapshot artifact is visible to ICC",
+          "action": "write_qge_shareware_public_release_snapshot"
+        },
+        {
+          "id": "qge_shareware_public_release_archive",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "shareware_public_release_archive_completion"
+          ],
+          "event_values": [
+            "present"
+          ],
+          "severity": "high",
+          "label": "Public shareware release archive and checksum are verified",
+          "action": "record_qge_shareware_public_release_archive"
+        },
+        {
+          "id": "qge_shareware_public_release_readme",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "shareware_public_release_readme_completion"
+          ],
+          "event_values": [
+            "present"
+          ],
+          "severity": "high",
+          "label": "Public package README explains the QGE runtime distinction and claim boundary",
+          "action": "record_qge_shareware_public_release_readme"
+        },
+        {
+          "id": "qge_shareware_public_release_no_hardware_overclaim",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "shareware_public_release_no_hardware_overclaim_completion"
+          ],
+          "event_values": [
+            "present"
+          ],
+          "severity": "high",
+          "label": "Public release explicitly forbids hardware advantage and whole-game hardware claims",
+          "action": "record_qge_shareware_public_release_no_hardware_overclaim"
+        }
+      ]
+    },
+    {
+      "name": "qge_quantum_rules_v0",
+      "target": "Quantum Rules v0 gameplay evidence for Quake shareware Episode 1",
+      "aliases": [
+        "qge_quantum_rules_v0",
+        "quantum rules v0",
+        "quantum quake rules v0",
+        "non cosmetic quantum shareware encounter"
+      ],
+      "requires": [
+        {
+          "id": "qge_quantum_rules_v0_backend",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_quantum_rules_v0"
+          ],
+          "severity": "high",
+          "label": "Quantum Rules v0 release-gate backend evidence is present",
+          "action": "emit_qge_quantum_rules_v0_icc_evidence"
+        },
+        {
+          "id": "qge_quantum_rules_v0_ready",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_quantum_rules_v0_ready"
+          ],
+          "severity": "high",
+          "label": "Quantum Rules v0 readiness is recorded",
+          "action": "complete_qge_quantum_rules_v0_release_gate"
+        },
+        {
+          "id": "qge_quantum_rules_v0_scope",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend",
+            "runtime_state",
+            "artifact"
+          ],
+          "event_names": [
+            "runtime_backend_scope_map_set",
+            "release_scope",
+            "map_set"
+          ],
+          "event_values": [
+            "quake_shareware_episode1"
+          ],
+          "severity": "high",
+          "label": "Quantum Rules v0 gate is scoped to shareware Episode 1",
+          "action": "set_qge_quantum_rules_v0_shareware_scope"
+        },
+        {
+          "id": "qge_quantum_rules_v0_kick_evidence",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "shareware_projectile_kick_evidence_file"
+          ],
+          "severity": "high",
+          "label": "Shareware encounter projectile-kick evidence is visible to ICC",
+          "action": "record_shareware_projectile_kick_evidence"
+        },
+        {
+          "id": "qge_quantum_rules_v0_kick_present",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "shareware_projectile_kick_evidence_completion"
+          ],
+          "event_values": [
+            "present"
+          ],
+          "severity": "high",
+          "label": "Shareware encounter projectile-kick evidence is present",
+          "action": "record_shareware_projectile_kick_present"
+        },
+        {
+          "id": "qge_quantum_rules_v0_projectile_correlation",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "shareware_projectile_correlation_evidence_completion"
+          ],
+          "event_values": [
+            "present"
+          ],
+          "severity": "high",
+          "label": "Shareware projectile kick is correlated to branch/writeback evidence",
+          "action": "record_shareware_projectile_correlation"
+        },
+        {
+          "id": "qge_quantum_rules_v0_projectile_authority",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "projectile_gameplay_authority_evidence_completion"
+          ],
+          "event_values": [
+            "present"
+          ],
+          "severity": "high",
+          "label": "Projectile gameplay-authority evidence is present",
+          "action": "record_projectile_gameplay_authority_evidence"
+        },
+        {
+          "id": "qge_quantum_rules_v0_replay_trace",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "replay_trace_evidence_completion"
+          ],
+          "event_values": [
+            "present"
+          ],
+          "severity": "high",
+          "label": "Replayable projectile branch/writeback evidence is present",
+          "action": "record_replayable_projectile_evidence"
+        },
+        {
+          "id": "qge_quantum_rules_v0_material_scope",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "material_operator_scope_evidence_completion"
+          ],
+          "event_values": [
+            "honest"
+          ],
+          "severity": "high",
+          "label": "Material operator evidence does not overclaim slipgate surfaces",
+          "action": "record_honest_material_operator_scope"
+        },
+        {
+          "id": "qge_quantum_rules_v0_gate_artifact",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "qge_quantum_rules_v0_gate_file",
+            "qge_quantum_rules_release_gate.json"
+          ],
+          "severity": "high",
+          "label": "Quantum Rules v0 gate artifact is visible to ICC",
+          "action": "write_qge_quantum_rules_release_gate_json"
+        },
+        {
+          "id": "qge_quantum_rules_v0_icc_artifact",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "qge_quantum_rules_v0_icc_evidence_file",
+            "qge_quantum_rules_v0_icc_evidence.json"
+          ],
+          "severity": "high",
+          "label": "Quantum Rules v0 ICC evidence artifact is visible",
+          "action": "write_qge_quantum_rules_v0_icc_evidence_json"
+        }
+      ]
+    },
+    {
+      "name": "qge_shareware_complete_effects",
+      "target": "Literal Quake shareware Episode 1 coverage with map-complete and effect-complete QGE/Moonlab evidence",
+      "aliases": [
+        "qge_shareware_complete_effects",
+        "shareware complete effects",
+        "entire shareware game effects",
+        "complete quantum quake shareware demo",
+        "literal shareware coverage"
+      ],
+      "requires": [
+        {
+          "id": "qge_shareware_effects_backend",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend"
+          ],
+          "event_names": [
+            "runtime_backend"
+          ],
+          "event_values": [
+            "qge_shareware_complete_effects"
+          ],
+          "severity": "high",
+          "label": "Shareware complete-effects backend evidence is present",
+          "action": "emit_qge_shareware_complete_effects_icc_evidence"
+        },
+        {
+          "id": "qge_shareware_effects_ready",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "completion_reason"
+          ],
+          "event_values": [
+            "qge_shareware_complete_effects_ready"
+          ],
+          "severity": "high",
+          "label": "Shareware complete-effects gate is ready",
+          "action": "complete_qge_shareware_complete_effects_gate"
+        },
+        {
+          "id": "qge_shareware_effects_scope",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "runtime_backend",
+            "runtime_state",
+            "artifact"
+          ],
+          "event_names": [
+            "runtime_backend_scope_map_set",
+            "release_scope",
+            "map_set",
+            "shareware_effects_map_set"
+          ],
+          "event_values": [
+            "quake_shareware_episode1"
+          ],
+          "severity": "high",
+          "label": "Complete-effects evidence is scoped to shareware Episode 1",
+          "action": "set_qge_shareware_complete_effects_scope"
+        },
+        {
+          "id": "qge_shareware_effects_inventory",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "shareware_effects_inventory_file",
+            "qge_shareware_effects_inventory.json"
+          ],
+          "severity": "high",
+          "label": "Shareware effects inventory is visible to ICC",
+          "action": "write_qge_shareware_effects_inventory_json"
+        },
+        {
+          "id": "qge_shareware_effects_matrix",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "shareware_effects_matrix_file",
+            "qge_shareware_effects_matrix.json"
+          ],
+          "severity": "high",
+          "label": "Shareware effects matrix is visible to ICC",
+          "action": "write_qge_shareware_effects_matrix_json"
+        },
+        {
+          "id": "qge_shareware_effects_gate_artifact",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "shareware_complete_effects_gate_file",
+            "qge_shareware_complete_effects_gate.json"
+          ],
+          "severity": "high",
+          "label": "Shareware complete-effects gate artifact is visible to ICC",
+          "action": "write_qge_shareware_complete_effects_gate_json"
+        },
+        {
+          "id": "qge_shareware_effects_all_maps",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "shareware_effects_map_coverage_completion"
+          ],
+          "event_values": [
+            "complete"
+          ],
+          "severity": "high",
+          "label": "All nine shareware maps are covered in the effects matrix",
+          "action": "cover_start_and_e1m1_through_e1m8_in_effects_matrix"
+        },
+        {
+          "id": "qge_shareware_effects_slipgate",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "shareware_slipgate_effect_evidence_completion"
+          ],
+          "event_values": [
+            "present"
+          ],
+          "severity": "high",
+          "label": "Slipgate/teleport material evidence is present where shareware BSPs contain it",
+          "action": "capture_start_and_drawtele_surfaces_with_slipgate_material_operator"
+        },
+        {
+          "id": "qge_shareware_effects_enemies",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "shareware_enemy_effect_evidence_completion"
+          ],
+          "event_values": [
+            "complete"
+          ],
+          "severity": "high",
+          "label": "Every discovered shareware monster class has QGE/Noesis evidence",
+          "action": "cover_discovered_shareware_enemy_classes"
+        },
+        {
+          "id": "qge_shareware_effects_materials",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "shareware_material_effect_evidence_completion"
+          ],
+          "event_values": [
+            "complete"
+          ],
+          "severity": "high",
+          "label": "Water, warp, lava, slime, sky, fullbright, and world materials are covered where present",
+          "action": "cover_shareware_material_classes"
+        },
+        {
+          "id": "qge_shareware_effects_projectiles",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "shareware_projectile_effect_evidence_completion"
+          ],
+          "event_values": [
+            "complete"
+          ],
+          "severity": "high",
+          "label": "Weapons and projectile effects have authority, branch/writeback, and replay evidence",
+          "action": "cover_shareware_weapons_and_projectiles"
+        },
+        {
+          "id": "qge_shareware_effects_particles_sprites",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "shareware_particle_sprite_effect_evidence_completion"
+          ],
+          "event_values": [
+            "complete"
+          ],
+          "severity": "high",
+          "label": "Sprites, particles, explosions, gibs, and pickup effects are covered",
+          "action": "cover_shareware_sprites_particles_explosions_and_gibs"
+        },
+        {
+          "id": "qge_shareware_effects_audio",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "shareware_audio_effect_evidence_completion"
+          ],
+          "event_values": [
+            "complete"
+          ],
+          "severity": "high",
+          "label": "Shareware weapon, monster, pickup, ambient, and teleport audio evidence is covered",
+          "action": "cover_shareware_source_audio_classes"
+        },
+        {
+          "id": "qge_shareware_effects_noesis_replay",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "completion_condition"
+          ],
+          "event_names": [
+            "shareware_noesis_replay_effect_evidence_completion"
+          ],
+          "event_values": [
+            "complete"
+          ],
+          "severity": "high",
+          "label": "Noesis route/combat and replay evidence cover the complete shareware effects matrix",
+          "action": "cover_shareware_noesis_routes_and_replay"
+        },
+        {
+          "id": "qge_shareware_effects_footage",
+          "kind": "runtime_event",
+          "event_kinds": [
+            "artifact"
+          ],
+          "event_names": [
+            "shareware_effects_footage_file",
+            "qge_shareware_effects_footage_manifest.json"
+          ],
+          "severity": "high",
+          "label": "Release footage is tied to matrix-backed real captures",
+          "action": "write_matrix_backed_shareware_effects_footage_manifest"
         }
       ]
     },

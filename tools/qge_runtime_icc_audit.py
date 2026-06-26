@@ -407,12 +407,32 @@ def runtime_icc_sidecar_audit_from_manifest(
         "agent_stream_performance_icc_evidence": (
             load_agent_stream_performance_icc(manifest)),
     }
+    performance_paths_are_packed = (
+        artifact_entry(
+            manifest,
+            "capture",
+            "performance_icc_evidence",
+        ).get("source_copy") is False
+    )
+    vanilla_paths_are_packed = (
+        artifact_entry(
+            manifest,
+            "vanilla",
+            "icc_evidence",
+        ).get("source_copy") is False
+    )
     artifact_paths = {
-        "vanilla_matrix": artifact_path(manifest, "vanilla", "matrix"),
+        "vanilla_matrix": artifact_path(
+            manifest,
+            "vanilla",
+            "matrix",
+            packed=vanilla_paths_are_packed,
+        ),
         "vanilla_icc_evidence": artifact_path(
             manifest,
             "vanilla",
             "icc_evidence",
+            packed=vanilla_paths_are_packed,
         ),
         "breadth_evidence": artifact_path(manifest, "breadth", "evidence"),
         "breadth_icc_evidence": artifact_path(
@@ -424,11 +444,13 @@ def runtime_icc_sidecar_audit_from_manifest(
             manifest,
             "capture",
             "performance_summary",
+            packed=performance_paths_are_packed,
         ),
         "performance_icc_evidence": artifact_path(
             manifest,
             "capture",
             "performance_icc_evidence",
+            packed=performance_paths_are_packed,
         ),
         "agent_stream_performance_summary": agent_perf_summary_path,
         "agent_stream_performance_icc_evidence": agent_perf_icc_path,

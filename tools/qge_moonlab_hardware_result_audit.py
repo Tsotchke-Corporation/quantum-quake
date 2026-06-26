@@ -3,7 +3,11 @@
 
 from __future__ import annotations
 
+import argparse
+import json
 import math
+import sys
+from pathlib import Path
 from typing import Any
 
 
@@ -56,6 +60,20 @@ def hex_digest(value: Any) -> bool:
     if not isinstance(value, str) or len(value) != 64:
         return False
     return all(char in "0123456789abcdef" for char in value.lower())
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"{path} did not contain a JSON object")
+    return data
+
+
+def write_json(path: Path, data: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8")
 
 
 def job_id(job: dict[str, Any]) -> str | None:
@@ -229,6 +247,8 @@ def hardware_result_ledger_audit(
     submission_packet: dict[str, Any],
     job_results: dict[str, Any],
     hardware_submission_scope: dict[str, Any] | None = None,
+    *,
+    strict_real_campaign: bool = False,
 ) -> dict[str, Any]:
     packet = dict_or_empty(submission_packet)
     results = dict_or_empty(job_results)
@@ -296,9 +316,23 @@ def hardware_result_ledger_audit(
     ):
         count_mismatches.append("overall_status")
 
+    strict_mismatches = []
+    if strict_real_campaign:
+        if hardware_result_job_count <= 0:
+            strict_mismatches.append("hardware_result_job_count")
+        if completed_hardware_result_count <= 0:
+            strict_mismatches.append("completed_hardware_result_count")
+        if reported_completed != hardware_result_job_count:
+            strict_mismatches.append("reported_completed_hardware_job_count")
+        if reported_submitted != hardware_result_job_count:
+            strict_mismatches.append("reported_hardware_submitted_job_count")
+        if results.get("overall_status") != "simulator_complete_hardware_recorded":
+            strict_mismatches.append("overall_status")
+
     mismatch_count = (
         len(schema_mismatches) +
         len(count_mismatches) +
+        len(strict_mismatches) +
         invalid_result_job_count +
         len(duplicate_hardware_result_job_ids) +
         sum(len(row["mismatches"]) for row in row_mismatches)
@@ -319,6 +353,8 @@ def hardware_result_ledger_audit(
         "invalid_result_job_count": invalid_result_job_count,
         "schema_mismatches": schema_mismatches,
         "count_mismatches": count_mismatches,
+        "strict_real_campaign": strict_real_campaign,
+        "strict_real_campaign_mismatches": strict_mismatches,
         "row_mismatch_job_ids": sorted({
             row["job_id"] for row in row_mismatches if row.get("job_id")
         }),
@@ -326,3 +362,86 @@ def hardware_result_ledger_audit(
         "mismatch_count": mismatch_count,
         "passed": recorded and mismatch_count == 0,
     }
+
+
+def build_icc_evidence(
+    audit: dict[str, Any],
+    *,
+    out_path: Path | None = None,
+) -> dict[str, Any]:
+    passed = bool(audit.get("passed"))
+    completion_reason = (
+        "qge_moonlab_hardware_result_audit_passed"
+        if passed else
+        "qge_moonlab_hardware_result_audit_blocked"
+    )
+    return {
+        "schema": "qge.icc_evidence.v0",
+        "runtime_backend": "qge_moonlab_hardware_result_audit",
+        "completion_reason": completion_reason,
+        "moonlab_hardware_result_audit_file": str(out_path) if out_path else None,
+        "status": "success" if passed else "blocked",
+        "hardware_result_audit_passed": passed,
+        "strict_real_campaign": audit.get("strict_real_campaign"),
+        "hardware_result_job_count": audit.get("hardware_result_job_count"),
+        "hardware_result_row_count": audit.get("hardware_result_row_count"),
+        "completed_hardware_result_count": (
+            audit.get("completed_hardware_result_count")),
+        "mismatch_count": audit.get("mismatch_count"),
+        "strict_real_campaign_mismatches": (
+            audit.get("strict_real_campaign_mismatches")),
+    }
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("submission_packet", type=Path)
+    parser.add_argument("job_results", type=Path)
+    parser.add_argument("--hardware-scope", type=Path)
+    parser.add_argument("--out", type=Path)
+    parser.add_argument("--icc-out", type=Path)
+    parser.add_argument(
+        "--strict-real-campaign",
+        action="store_true",
+        help="Fail unless at least one completed Moonlab hardware row exists.",
+    )
+    parser.add_argument(
+        "--fail-on-mismatch",
+        action="store_true",
+        help="Exit nonzero when the audit does not pass.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    try:
+        scope = load_json(args.hardware_scope) if args.hardware_scope else None
+        audit = hardware_result_ledger_audit(
+            load_json(args.submission_packet),
+            load_json(args.job_results),
+            scope,
+            strict_real_campaign=args.strict_real_campaign,
+        )
+        if args.out:
+            write_json(args.out, audit)
+        if args.icc_out:
+            write_json(
+                args.icc_out,
+                build_icc_evidence(audit, out_path=args.out),
+            )
+    except (OSError, ValueError) as exc:
+        print(f"qge_moonlab_hardware_result_audit: {exc}", file=sys.stderr)
+        return 1
+
+    if args.out:
+        print(f"QGE_MOONLAB_HARDWARE_RESULT_AUDIT {args.out}")
+    if args.icc_out:
+        print(f"QGE_MOONLAB_HARDWARE_RESULT_AUDIT_ICC {args.icc_out}")
+    if args.fail_on_mismatch and not audit.get("passed"):
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

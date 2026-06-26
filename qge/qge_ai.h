@@ -27,6 +27,20 @@ typedef enum {
     AI_DEAD
 } ai_action_t;
 
+typedef enum {
+    QGE_AI_ENEMY_ARMY = 0,
+    QGE_AI_ENEMY_KNIGHT = 1,
+    QGE_AI_ENEMY_OGRE = 2,
+    QGE_AI_ENEMY_DEMON1 = 3,
+    QGE_AI_ENEMY_SHAMBLER = 4,
+    QGE_AI_ENEMY_ZOMBIE = 5,
+    QGE_AI_ENEMY_DOG = 6,
+    QGE_AI_ENEMY_WIZARD = 7,
+    QGE_AI_ENEMY_BOSS = 8,
+    QGE_AI_ENEMY_DEFAULT = 9,
+    QGE_AI_ENEMY_TYPE_COUNT = 10
+} qge_ai_enemy_type_t;
+
 enum {
     QGE_AI_ACTION_IDLE_MASK = QGE_AI_ACTION_MASK(AI_IDLE),
     QGE_AI_ACTION_PATROL_MASK = QGE_AI_ACTION_MASK(AI_PATROL),
@@ -57,6 +71,10 @@ typedef enum {
     QGE_AI_AUTHORITY_ADVISORY = 1,
     QGE_AI_AUTHORITY_EXPLICIT = 2
 } qge_ai_authority_t;
+
+enum {
+    QGE_AI_INPUT_FLAG_ENEMY_CLASS_KNOWN = 1u << 31
+};
 
 enum {
     QGE_AI_DECISION_FLAG_ADVISORY = 1u << 0,

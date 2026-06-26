@@ -22,6 +22,50 @@ extern "C" {
 #define QGE_TRACE_MESSAGE_MAX 96
 #define QGE_PROBE_LABEL_MAX 32
 
+#define QGE_SEMANTICS_HAS_DOMAIN                (1u << 0)
+#define QGE_SEMANTICS_HAS_REPRESENTATION        (1u << 1)
+#define QGE_SEMANTICS_HAS_BASIS                 (1u << 2)
+#define QGE_SEMANTICS_HAS_AMPLITUDES            (1u << 3)
+#define QGE_SEMANTICS_HAS_PHASE                 (1u << 4)
+#define QGE_SEMANTICS_HAS_EVOLUTION             (1u << 5)
+#define QGE_SEMANTICS_HAS_MEASUREMENT           (1u << 6)
+#define QGE_SEMANTICS_HAS_OBSERVATION_BOUNDARY  (1u << 7)
+#define QGE_SEMANTICS_HAS_DECOHERENCE           (1u << 8)
+#define QGE_SEMANTICS_HAS_REPLAY                (1u << 9)
+#define QGE_SEMANTICS_HAS_FALLBACK              (1u << 10)
+#define QGE_SEMANTICS_HAS_WRITEBACK             (1u << 11)
+
+#define QGE_SEMANTICS_REQUIRED_COMPLETE \
+    (QGE_SEMANTICS_HAS_DOMAIN | \
+     QGE_SEMANTICS_HAS_REPRESENTATION | \
+     QGE_SEMANTICS_HAS_BASIS | \
+     QGE_SEMANTICS_HAS_AMPLITUDES | \
+     QGE_SEMANTICS_HAS_PHASE | \
+     QGE_SEMANTICS_HAS_EVOLUTION | \
+     QGE_SEMANTICS_HAS_MEASUREMENT | \
+     QGE_SEMANTICS_HAS_OBSERVATION_BOUNDARY | \
+     QGE_SEMANTICS_HAS_DECOHERENCE | \
+     QGE_SEMANTICS_HAS_REPLAY | \
+     QGE_SEMANTICS_HAS_FALLBACK | \
+     QGE_SEMANTICS_HAS_WRITEBACK)
+
+#define QGE_MEASUREMENT_FLAG_GAMEPLAY_AUTHORITY (1u << 31)
+
+#define QGE_MATERIAL_OPERATOR_FLAG_GAMEPLAY_STATE (1u << 0)
+#define QGE_MATERIAL_OPERATOR_FLAG_WORLD_SURFACE  (1u << 1)
+#define QGE_MATERIAL_OPERATOR_FLAG_PLAYER_MEDIUM  (1u << 2)
+#define QGE_MATERIAL_OPERATOR_FLAG_PLAYER_POWERUP (1u << 3)
+
+#define QGE_WEAPON_OPERATOR_FLAG_GAMEPLAY_STATE  (1u << 0)
+#define QGE_WEAPON_OPERATOR_FLAG_HITSCAN         (1u << 1)
+#define QGE_WEAPON_OPERATOR_FLAG_PROJECTILE      (1u << 2)
+#define QGE_WEAPON_OPERATOR_FLAG_MELEE           (1u << 3)
+#define QGE_WEAPON_OPERATOR_FLAG_CONTINUOUS      (1u << 4)
+#define QGE_WEAPON_OPERATOR_FLAG_AMMO_CONSUMED   (1u << 5)
+#define QGE_WEAPON_OPERATOR_FLAG_DAMAGE_RESULT   (1u << 6)
+#define QGE_WEAPON_OPERATOR_FLAG_NOISE_OPERATION (1u << 7)
+#define QGE_WEAPON_OPERATOR_FLAG_NONCOMMUTING    (1u << 8)
+
 typedef enum {
     QGE_DOMAIN_RENDER = 0,
     QGE_DOMAIN_VISIBILITY,
@@ -33,6 +77,7 @@ typedef enum {
     QGE_DOMAIN_MATERIAL,
     QGE_DOMAIN_PHYSICS,
     QGE_DOMAIN_UI,
+    QGE_DOMAIN_WEAPON,
     QGE_DOMAIN_MAX
 } qge_quantum_domain_t;
 
@@ -67,6 +112,7 @@ typedef enum {
     QGE_MEASURE_PROJECTILE_WRITEBACK,
     QGE_MEASURE_PROJECTILE_BRANCH,
     QGE_MEASURE_PROJECTILE_COLLISION_ORACLE,
+    QGE_MEASURE_WEAPON_OPERATION,
     QGE_MEASURE_MAX
 } qge_measurement_kind_t;
 
@@ -83,6 +129,29 @@ typedef enum {
     QGE_OBSERVE_FRAME_BOUNDARY,
     QGE_OBSERVE_MAX
 } qge_observation_boundary_t;
+
+typedef enum {
+    QGE_MATERIAL_OPERATOR_NONE = 0,
+    QGE_MATERIAL_OPERATOR_WATER_DECOHERENCE,
+    QGE_MATERIAL_OPERATOR_LAVA_PHASE,
+    QGE_MATERIAL_OPERATOR_SLIPGATE_PHASE,
+    QGE_MATERIAL_OPERATOR_QUAD_AMPLIFICATION,
+    QGE_MATERIAL_OPERATOR_RING_PROTECTION,
+    QGE_MATERIAL_OPERATOR_PENTAGRAM_PROTECTION,
+    QGE_MATERIAL_OPERATOR_RUNE_PHASE,
+    QGE_MATERIAL_OPERATOR_MAX
+} qge_material_operator_kind_t;
+
+typedef enum {
+    QGE_WEAPON_OPERATOR_NONE = 0,
+    QGE_WEAPON_OPERATOR_SHOTGUN_SPREAD_MEASUREMENT,
+    QGE_WEAPON_OPERATOR_NAIL_PAULI_NOISE,
+    QGE_WEAPON_OPERATOR_ROCKET_SPLASH_WAVEFRONT,
+    QGE_WEAPON_OPERATOR_GRENADE_FUSE_BRANCH,
+    QGE_WEAPON_OPERATOR_LIGHTNING_CONTINUOUS_MEASUREMENT,
+    QGE_WEAPON_OPERATOR_AXE_CONTACT_MEASUREMENT,
+    QGE_WEAPON_OPERATOR_MAX
+} qge_weapon_operator_kind_t;
 
 typedef enum {
     QGE_ENTROPY_SOURCE_QRNG = 0,
@@ -184,6 +253,56 @@ typedef struct {
 } qge_ai_decision_event_t;
 
 typedef struct {
+    int32_t frame;
+    int32_t server_time_msec;
+    int32_t subject_id;
+    qge_material_operator_kind_t kind;
+    qge_observation_boundary_t observation_boundary;
+    uint32_t flags;
+    uint64_t material_id;
+    double phase_shift;
+    double decoherence;
+    double amplification;
+    double protection;
+    uint64_t trace_id;
+} qge_material_operator_event_t;
+
+typedef struct {
+    int32_t frame;
+    int32_t server_time_msec;
+    int32_t subject_id;
+    qge_weapon_operator_kind_t kind;
+    qge_observation_boundary_t observation_boundary;
+    uint32_t flags;
+    uint64_t weapon_id;
+    int32_t ammo_delta;
+    int32_t damage_delta;
+    double phase_shift;
+    double decoherence;
+    double spread;
+    double amplification;
+    uint64_t trace_id;
+} qge_weapon_operator_event_t;
+
+typedef struct {
+    qge_quantum_domain_t domain;
+    qge_quantum_representation_t representation;
+    qge_measurement_kind_t measurement_kind;
+    qge_observation_boundary_t observation_boundary;
+    bool gameplay_affecting;
+    bool authoritative_writeback;
+    const char *basis_semantics;
+    const char *amplitude_semantics;
+    const char *phase_semantics;
+    const char *evolution_semantics;
+    const char *measurement_semantics;
+    const char *decoherence_semantics;
+    const char *replay_semantics;
+    const char *fallback_semantics;
+    const char *writeback_semantics;
+} qge_quantum_semantics_contract_t;
+
+typedef struct {
     uint64_t frames_started;
     uint64_t frames_ended;
     uint64_t entropy_events;
@@ -195,7 +314,14 @@ typedef struct {
     uint64_t replay_ai_decisions_consumed;
     uint64_t replay_ai_decision_mismatches;
     uint64_t replay_ai_decision_exhaustions;
+    uint64_t replay_measurements_loaded;
+    uint64_t replay_measurements_consumed;
+    uint64_t replay_measurement_mismatches;
+    uint64_t replay_measurement_exhaustions;
     uint64_t measurement_events;
+    uint64_t gameplay_measurement_events;
+    uint64_t material_operator_events;
+    uint64_t weapon_operator_events;
     uint64_t probe_events;
     uint64_t fallback_events;
     uint64_t entanglement_edges;
@@ -243,6 +369,28 @@ uint64_t qge_quantum_entropy_u64(qge_quantum_runtime_t *rt,
 
 void qge_quantum_record_measurement(qge_quantum_runtime_t *rt,
                                     const qge_measurement_event_t *event);
+bool qge_quantum_measurement_event_is_replayable(
+    const qge_measurement_event_t *event);
+bool qge_quantum_measurement_event_matches_contract(
+    const qge_measurement_event_t *event,
+    const qge_quantum_semantics_contract_t *contract);
+bool qge_quantum_gameplay_measurement_is_valid(
+    const qge_measurement_event_t *event,
+    const qge_quantum_semantics_contract_t *contract);
+bool qge_quantum_record_gameplay_measurement(
+    qge_quantum_runtime_t *rt,
+    const qge_measurement_event_t *event,
+    const qge_quantum_semantics_contract_t *contract);
+bool qge_quantum_material_operator_is_valid(
+    const qge_material_operator_event_t *event);
+bool qge_quantum_record_material_operator(
+    qge_quantum_runtime_t *rt,
+    const qge_material_operator_event_t *event);
+bool qge_quantum_weapon_operator_is_valid(
+    const qge_weapon_operator_event_t *event);
+bool qge_quantum_record_weapon_operator(
+    qge_quantum_runtime_t *rt,
+    const qge_weapon_operator_event_t *event);
 void qge_quantum_record_probe(qge_quantum_runtime_t *rt,
                               const qge_state_probe_t *probe);
 void qge_quantum_record_fallback(qge_quantum_runtime_t *rt,
@@ -254,6 +402,9 @@ void qge_quantum_record_ai_decision(qge_quantum_runtime_t *rt,
 int qge_quantum_replay_ai_decision(qge_quantum_runtime_t *rt,
                                    const qge_ai_decision_event_t *request,
                                    qge_ai_decision_event_t *replay);
+int qge_quantum_replay_measurement(qge_quantum_runtime_t *rt,
+                                   const qge_measurement_event_t *request,
+                                   qge_measurement_event_t *replay);
 
 int qge_quantum_trace_open(qge_quantum_runtime_t *rt, const char *path);
 void qge_quantum_trace_close(qge_quantum_runtime_t *rt);
@@ -261,6 +412,16 @@ void qge_quantum_trace_close(qge_quantum_runtime_t *rt);
 const char *qge_quantum_domain_name(qge_quantum_domain_t domain);
 const char *qge_quantum_representation_name(qge_quantum_representation_t rep);
 const char *qge_measurement_kind_name(qge_measurement_kind_t kind);
+const char *qge_observation_boundary_name(qge_observation_boundary_t boundary);
+const char *qge_material_operator_name(qge_material_operator_kind_t kind);
+const char *qge_weapon_operator_name(qge_weapon_operator_kind_t kind);
+
+uint32_t qge_quantum_semantics_contract_coverage(
+    const qge_quantum_semantics_contract_t *contract);
+bool qge_quantum_semantics_contract_is_complete(
+    const qge_quantum_semantics_contract_t *contract);
+bool qge_quantum_semantics_contract_is_gameplay_authoritative(
+    const qge_quantum_semantics_contract_t *contract);
 
 #ifdef __cplusplus
 }

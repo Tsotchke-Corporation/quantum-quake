@@ -102,7 +102,7 @@ QGE_OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(QGE_SRCS))
 QGE_OBJS += $(patsubst %.mm,$(BUILD_DIR)/%.o,$(QGE_OBJC_SRCS))
 
 # Targets
-.PHONY: all clean test moonlab qge dirs demo demo-sdl quake run-quake qge_shareware_episode1_breadth_evidence qge_shareware_episode1_breadth_audit qge_registered_full_game_breadth_status qge_registered_full_game_breadth_status_audit qge_registered_full_game_progress qge_registered_full_game_progress_audit test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools test_qge_python_tools test_snd_quantum_source_contract test_qge_audio_authority_smoke
+.PHONY: all clean test moonlab qge dirs demo demo-sdl quake run-quake qge_shareware_episode1_breadth_evidence qge_shareware_episode1_breadth_audit qge_registered_full_game_breadth_status qge_registered_full_game_breadth_status_audit qge_registered_full_game_progress qge_registered_full_game_progress_audit test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools test_qge_python_tools test_qge_hardware_return_handoff test_snd_quantum_source_contract test_qge_audio_authority_smoke
 
 QGE_SHAREWARE_MATRIX_ROOT ?= diagnostics/quake_graphics
 QGE_SHAREWARE_EVIDENCE_OUT ?= diagnostics/breadth_evidence/shareware_episode1
@@ -197,6 +197,10 @@ test_qge_python_tools:
 	@echo "Running QGE Python tools unit tests..."
 	@python3 tests/test_qge_python_tools.py
 
+test_qge_hardware_return_handoff:
+	@echo "Running QGE Moonlab hardware return handoff tests..."
+	@python3 tests/test_qge_moonlab_hardware_return_handoff.py
+
 test_snd_quantum_source_contract:
 	@echo "Running QGE quantum source audio contract test..."
 	@bash tests/test_snd_quantum_source_contract.sh
@@ -256,7 +260,7 @@ qge_registered_full_game_progress_audit: qge_registered_full_game_progress
 		--fail-on-mismatch
 
 # Run tests
-test: test_qge test_console_contract test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools test_qge_python_tools test_snd_quantum_source_contract test_qge_audio_authority_smoke
+test: test_qge test_console_contract test_noesis_input_contract test_qge_perf_summary test_qge_trace_summary test_qge_vanilla_matrix_perf test_qge_publication_tools test_qge_python_tools test_qge_hardware_return_handoff test_snd_quantum_source_contract test_qge_audio_authority_smoke
 	@echo "Running QGE tests..."
 	@./$(BIN_DIR)/test_qge
 	@echo "Running console artifact contract test..."

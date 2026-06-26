@@ -42,15 +42,17 @@
 #define BEHAVIOR_QUBITS 3
 
 /* Enemy type base aggression values */
-static const float BASE_AGGRESSION[] = {
-    0.3f,   /* Type 0: Grunt - low aggression */
-    0.5f,   /* Type 1: Knight - medium */
-    0.7f,   /* Type 2: Ogre - high */
-    0.9f,   /* Type 3: Demon - very high */
-    0.6f,   /* Type 4: Shambler - medium-high */
-    0.4f,   /* Type 5: Zombie - low-medium */
-    0.8f,   /* Type 6: Fiend - high */
-    0.5f    /* Type 7: Default */
+static const float BASE_AGGRESSION[QGE_AI_ENEMY_TYPE_COUNT] = {
+    0.3f,   /* monster_army */
+    0.5f,   /* monster_knight */
+    0.7f,   /* monster_ogre */
+    0.9f,   /* monster_demon1 */
+    0.6f,   /* monster_shambler */
+    0.4f,   /* monster_zombie */
+    0.5f,   /* monster_dog */
+    0.8f,   /* monster_wizard */
+    1.0f,   /* monster_boss */
+    0.5f    /* unknown/default monster */
 };
 
 /* ============================================================================
@@ -228,9 +230,10 @@ uint64_t qge_ai_decision_input_hash(const qge_ai_decision_input_t* input) {
 }
 
 static int normalize_enemy_type(int enemy_type) {
-    int type = enemy_type % 8;
-    if (type < 0) type += 8;
-    return type;
+    if (enemy_type >= 0 && enemy_type < QGE_AI_ENEMY_TYPE_COUNT) {
+        return enemy_type;
+    }
+    return QGE_AI_ENEMY_DEFAULT;
 }
 
 static uint32_t normalize_legal_mask(uint32_t legal_action_mask) {

@@ -187,7 +187,7 @@ PY
 
 grep -F 'Records: {"ai_decision": 1, "fallback": 1, "state_probe": 3}' "$summary_text" >/dev/null
 grep -F 'Sequence errors: 1' "$summary_text" >/dev/null
-grep -F 'AI decision enemy=17 type=2 target=1 action=patrol mapped=patrol count=1 frames=5..5 legal_mask=0x2 input_flags=0x10 output_flags=0x9 basis_xor=0x1 offsets=7..7 prob=0.500 confidence=0.250' "$summary_text" >/dev/null
+grep -F 'AI decision enemy=17 type=2 class=unclassified_type_2 target=1 action=patrol mapped=patrol count=1 frames=5..5 legal_mask=0x2 input_flags=0x10 output_flags=0x9 basis_xor=0x1 offsets=7..7 prob=0.500 confidence=0.250' "$summary_text" >/dev/null
 grep -F 'Probe ai_action domain=ai rep=dense_state count=2 frames=1..3 basis=4..8 qubits=3..3 max_mem=256 flags_or=0x5 subject=43' "$summary_text" >/dev/null
 grep -F 'Probe render_gate_kernel domain=render rep=hybrid count=1 frames=4..4 basis=64..64 qubits=6..6 max_mem=512 flags_or=0x2 gates=26 shots=64 coherence=0.750..0.750 max_prob=0.500' "$summary_text" >/dev/null
 

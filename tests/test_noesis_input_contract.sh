@@ -51,6 +51,9 @@ grep -q 'QGE_ALIAS_VIEWMODEL_SHADE_MIN' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'alias-normal shade' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'edge cadence' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'timeout_seconds="${QGE_STREAM_TIMEOUT_SECONDS:-}"' "$repo_root/tools/quake_graphics_stream.sh"
+grep -q 'stream_skill="${QGE_STREAM_SKILL:-}"' "$repo_root/tools/quake_graphics_stream.sh"
+grep -q '"skill": $(json_string "$stream_skill")' "$repo_root/tools/quake_graphics_stream.sh"
+grep -q 'echo "skill $stream_skill"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -q 'normalize_positive_int' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'width="$(normalize_positive_int "$width" 800)"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'render_res="$(normalize_positive_int "$render_res" 1024)"' "$repo_root/tools/quake_graphics_stream.sh"
@@ -405,6 +408,9 @@ grep -q 'qge_registered_full_game_coverage_ledger' "$repo_root/.icc/completion-o
 grep -q 'qge_registered_full_game_progress_report' "$repo_root/.icc/completion-oracles.json"
 grep -q 'registered_full_game_progress_file' "$repo_root/.icc/completion-oracles.json"
 grep -q 'qge_shareware_episode1_moonlab_breadth' "$repo_root/.icc/completion-oracles.json"
+grep -q 'qge_quantum_rules_v0' "$repo_root/.icc/completion-oracles.json"
+grep -q 'qge_quantum_rules_v0_ready' "$repo_root/.icc/completion-oracles.json"
+grep -q 'shareware_projectile_kick_evidence' "$repo_root/.icc/completion-oracles.json"
 grep -q 'quake_shareware_episode1' "$repo_root/.icc/completion-oracles.json"
 grep -q 'suppressed_runtime_checks' "$repo_root/.icc/completion-oracles.json"
 grep -q 'qge_breadth_evidence.py' "$repo_root/docs/qge_agent_stream.md"
@@ -603,6 +609,8 @@ grep -q '"timeout_seconds": \$max_seconds' "$repo_root/tools/quake_graphics_stre
 grep -q 'agent_event "process_exit"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -q 'startup_issue="process_exit_\$game_status"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -q 'stream_mouse="${QGE_STREAM_MOUSE:-0}"' "$repo_root/tools/quake_crash_watch.sh"
+grep -q 'stream_skill="${QGE_STREAM_SKILL:-}"' "$repo_root/tools/quake_crash_watch.sh"
+grep -q 'echo "skill $stream_skill"' "$repo_root/tools/quake_crash_watch.sh"
 grep -q 'stream_display="${QGE_STREAM_DISPLAY:-}"' "$repo_root/tools/quake_crash_watch.sh"
 grep -Fq 'run_args+=(-nomouse)' "$repo_root/tools/quake_crash_watch.sh"
 grep -Fq 'run_args+=(-display "$stream_display")' "$repo_root/tools/quake_crash_watch.sh"
@@ -663,6 +671,9 @@ grep -Fq 'QGE_NOESIS_SCRIPTED="$noesis_scripted"' "$repo_root/tools/quake_crash_
 grep -Fq 'QGE_NOESIS_SCRIPTED+x' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'qge_noesis_autonomous $noesis_autonomous' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'qge_noesis_autonomous $noesis_autonomous' "$repo_root/tools/quake_crash_watch.sh"
+grep -Fq 'noesis_target_class="${QGE_NOESIS_TARGET_CLASS:-}"' "$repo_root/tools/quake_graphics_stream.sh"
+grep -Fq 'qge_noesis_target_class \"$noesis_target_class\"' "$repo_root/tools/quake_graphics_stream.sh"
+grep -Fq 'qge_noesis_target_class \"$noesis_target_class\"' "$repo_root/tools/quake_crash_watch.sh"
 grep -q 'noesis_require_combat=$noesis_require_combat' "$repo_root/tools/quake_graphics_stream.sh"
 grep -q 'QGE_NOESIS_REQUIRE_COMBAT' "$repo_root/docs/qge_agent_stream.md"
 grep -q 'emit_start "autonomous"' "$repo_root/tools/noesis_quake_player.sh"
@@ -924,6 +935,15 @@ grep -q 'switch_fire_suppressed' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'QGE_NOESIS_TARGET_LOCK_FRAMES' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'QGE_NOESIS_VIEW_HOLD_DEG' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'qge_noesis_autonomous' "$repo_root/quake/Quake/qge_hooks.c"
+grep -q 'qge_noesis_target_class' "$repo_root/quake/Quake/qge_hooks.c"
+grep -q 'QGE_NoesisAssistEnemyMatchesTargetClass' "$repo_root/quake/Quake/qge_hooks.c"
+grep -q 'QGE_NoesisAssistEntityIsEnemyCandidate' "$repo_root/quake/Quake/qge_hooks.c"
+grep -q 'SV_QGEAITraceableEntity' "$repo_root/quake/Quake/sv_phys.c"
+grep -q 'QGE_AI_ENEMY_BOSS' "$repo_root/quake/Quake/sv_phys.c"
+grep -q 'input.authority == QGE_AI_AUTHORITY_EXPLICIT &&' "$repo_root/quake/Quake/sv_phys.c"
+grep -q 'QGE_TraceWorldMaterialInventoryOperators' "$repo_root/quake/Quake/qge_hooks.c"
+grep -q 'qge_material_inventory_worldmodel' "$repo_root/quake/Quake/qge_hooks.c"
+grep -q 'QGE_WorldSurfaceMaterialSignal' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'QGE_NOESIS_AUTONOMOUS_CHASE_DISTANCE 1152.0f' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'QGE_NOESIS_WALL_TRAP_CLEAR 40.0f' "$repo_root/quake/Quake/qge_hooks.c"
 grep -q 'QGE_NOESIS_WALL_SLIDE_CLEAR 56.0f' "$repo_root/quake/Quake/qge_hooks.c"
@@ -982,6 +1002,7 @@ grep -Fq 'noesis_max_wait="${QGE_NOESIS_MAX_WAIT:-600}"' "$repo_root/tools/quake
 grep -Fq '"noesis_max_wait": $noesis_max_wait' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'fire_min_start_wait="${QGE_STREAM_FIRE_MIN_START_WAIT:-48}"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq 'fire_min_frames="${QGE_STREAM_FIRE_MIN_FRAMES:-8}"' "$repo_root/tools/quake_graphics_stream.sh"
+grep -Fq -- '-z "${QGE_NOESIS_START_WAIT+x}"' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq '"fire_min_start_wait": $fire_min_start_wait' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq '"fire_min_frames": $fire_min_frames' "$repo_root/tools/quake_graphics_stream.sh"
 grep -Fq '"engine_capture_wait": $manifest_engine_capture_wait' "$repo_root/tools/quake_graphics_stream.sh"
@@ -1032,12 +1053,69 @@ grep -q '^echo QGE_NOESIS_PLAYER done$' "$commands_file"
 
 action_count="$(wc -l < "$actions_file" | tr -d ' ')"
 command_count="$(wc -l < "$commands_file" | tr -d ' ')"
-if [[ "$action_count" != "13" ]]; then
-  echo "expected 13 Noesis action lines, got $action_count" >&2
+if [[ "$action_count" != "18" ]]; then
+  echo "expected 18 Noesis action lines, got $action_count" >&2
   exit 1
 fi
 if (( command_count < 50 )); then
   echo "expected translated Quake command trace, got only $command_count lines" >&2
+  exit 1
+fi
+
+weapon_actions="$tmpdir/weapon-actions.txt"
+weapon_commands="$tmpdir/weapon-commands.cfg"
+weapon_stdout="$tmpdir/weapon-stdout.cfg"
+
+QGE_NOESIS_DIR="$repo_root" \
+QGE_NOESIS_PLAN=weapon-cycle-smoke \
+QGE_STREAM_MAP=start \
+QGE_NOESIS_CMD="$repo_root/tools/noesis_quake_policy.sh" \
+QGE_NOESIS_START_WAIT=0 \
+QGE_NOESIS_ACTION_TRACE_FILE="$weapon_actions" \
+QGE_NOESIS_COMMAND_TRACE_FILE="$weapon_commands" \
+  "$repo_root/tools/noesis_quake_player.sh" > "$weapon_stdout"
+
+cmp -s "$weapon_stdout" "$weapon_commands"
+grep -q '^cmd echo QGE_NOESIS_PHASE phase=weapon_seed_give$' "$weapon_actions"
+grep -q '^cmd echo QGE_NOESIS_PHASE phase=weapon_lightning$' "$weapon_actions"
+grep -q '^give 3$' "$weapon_actions"
+grep -q '^give 8$' "$weapon_actions"
+grep -q '^give n 200$' "$weapon_actions"
+grep -q '^give c 100$' "$weapon_actions"
+grep -q '^weapon 8$' "$weapon_actions"
+grep -q '^impulse 8$' "$weapon_commands"
+weapon_attack_count="$(grep -c '^+attack$' "$weapon_commands" | tr -d ' ')"
+if [[ "$weapon_attack_count" != "6" ]]; then
+  echo "expected 6 weapon-cycle attack bursts, got $weapon_attack_count" >&2
+  exit 1
+fi
+
+target_weapon_actions="$tmpdir/target-weapon-actions.txt"
+target_weapon_commands="$tmpdir/target-weapon-commands.cfg"
+target_weapon_stdout="$tmpdir/target-weapon-stdout.cfg"
+
+QGE_NOESIS_DIR="$repo_root" \
+QGE_NOESIS_PLAN=weapon-cycle-smoke \
+QGE_NOESIS_WEAPON_TARGET=weapon_lightning \
+QGE_STREAM_MAP=start \
+QGE_NOESIS_CMD="$repo_root/tools/noesis_quake_policy.sh" \
+QGE_NOESIS_START_WAIT=0 \
+QGE_NOESIS_ACTION_TRACE_FILE="$target_weapon_actions" \
+QGE_NOESIS_COMMAND_TRACE_FILE="$target_weapon_commands" \
+  "$repo_root/tools/noesis_quake_player.sh" > "$target_weapon_stdout"
+
+cmp -s "$target_weapon_stdout" "$target_weapon_commands"
+grep -q '^cmd echo QGE_NOESIS_PHASE phase=weapon_seed_give$' "$target_weapon_actions"
+grep -q '^cmd echo QGE_NOESIS_PHASE phase=weapon_lightning$' "$target_weapon_actions"
+grep -q '^weapon 8$' "$target_weapon_actions"
+grep -q '^impulse 8$' "$target_weapon_commands"
+if grep -q '^cmd echo QGE_NOESIS_PHASE phase=weapon_supershotgun$' "$target_weapon_actions"; then
+  echo "targeted weapon smoke unexpectedly emitted full weapon cycle" >&2
+  exit 1
+fi
+target_weapon_attack_count="$(grep -c '^+attack$' "$target_weapon_commands" | tr -d ' ')"
+if [[ "$target_weapon_attack_count" != "1" ]]; then
+  echo "expected 1 targeted weapon attack burst, got $target_weapon_attack_count" >&2
   exit 1
 fi
 

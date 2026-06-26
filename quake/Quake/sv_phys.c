@@ -62,6 +62,54 @@ static uint32_t SV_QGEAILegalActionMask (edict_t *ent)
 	return QGE_AI_ACTION_LIVE_MASK;
 }
 
+static int SV_QGEAIEnemyType (edict_t *ent)
+{
+	const char *classname;
+
+	if (!ent || !ent->v.classname)
+		return QGE_AI_ENEMY_DEFAULT;
+
+	classname = PR_GetString(ent->v.classname);
+	if (!classname)
+		return QGE_AI_ENEMY_DEFAULT;
+
+	if (!strcmp(classname, "monster_army"))
+		return QGE_AI_ENEMY_ARMY;
+	if (!strcmp(classname, "monster_knight"))
+		return QGE_AI_ENEMY_KNIGHT;
+	if (!strcmp(classname, "monster_ogre"))
+		return QGE_AI_ENEMY_OGRE;
+	if (!strcmp(classname, "monster_demon1"))
+		return QGE_AI_ENEMY_DEMON1;
+	if (!strcmp(classname, "monster_shambler"))
+		return QGE_AI_ENEMY_SHAMBLER;
+	if (!strcmp(classname, "monster_zombie"))
+		return QGE_AI_ENEMY_ZOMBIE;
+	if (!strcmp(classname, "monster_dog"))
+		return QGE_AI_ENEMY_DOG;
+	if (!strcmp(classname, "monster_wizard"))
+		return QGE_AI_ENEMY_WIZARD;
+	if (!strcmp(classname, "monster_boss"))
+		return QGE_AI_ENEMY_BOSS;
+
+	return QGE_AI_ENEMY_DEFAULT;
+}
+
+static qboolean SV_QGEAITraceableEntity (edict_t *ent)
+{
+	int enemy_type;
+
+	if (!ent || ent->free)
+		return false;
+	if ((int)ent->v.flags & FL_MONSTER)
+		return true;
+
+	/* Quake's episode-one boss uses a special QuakeC path and may not carry
+	 * FL_MONSTER, but it is still a discovered shareware monster class. */
+	enemy_type = SV_QGEAIEnemyType(ent);
+	return enemy_type == QGE_AI_ENEMY_BOSS;
+}
+
 static void SV_QGEAIThinkTrace (edict_t *ent)
 {
 	qge_ai_decision_input_t input;
@@ -71,6 +119,7 @@ static void SV_QGEAIThinkTrace (edict_t *ent)
 	int	ent_id;
 	int	visible;
 	float	dist;
+	int	enemy_type;
 
 	memset (&input, 0, sizeof(input));
 	memset (&trace, 0, sizeof(trace));
@@ -92,8 +141,12 @@ static void SV_QGEAIThinkTrace (edict_t *ent)
 	input.frame = host_framecount;
 	input.server_time_msec = (int)(sv.time * 1000.0);
 	input.enemy_id = ent_id;
+	enemy_type = SV_QGEAIEnemyType(ent);
+	input.enemy_type = enemy_type;
 	input.health = ent->v.health;
 	input.flags = (uint32_t)(int)ent->v.flags;
+	if (enemy_type != QGE_AI_ENEMY_DEFAULT)
+		input.flags |= QGE_AI_INPUT_FLAG_ENEMY_CLASS_KNOWN;
 	input.target_entnum = 0;
 	if (ent->v.enemy)
 	{
@@ -127,7 +180,8 @@ static void SV_QGEAIThinkTrace (edict_t *ent)
 					(unsigned long long)trace.output.entropy_offset);
 	}
 
-	if (input.authority == QGE_AI_AUTHORITY_EXPLICIT)
+	if (input.authority == QGE_AI_AUTHORITY_EXPLICIT &&
+		((int)ent->v.flags & FL_MONSTER))
 		ent->v.impulse = (float)trace.output.action;
 }
 
@@ -222,7 +276,7 @@ qboolean SV_RunThink (edict_t *ent)
 	/* Quantum AI advisory trace.  quantum_ai 1 computes/logs suggestions
 	 * without changing QuakeC control fields; quantum_ai 2 is the explicit
 	 * authority mode that may apply the suggested action. */
-	if (quantum_ai.value >= 0.5f && (int)ent->v.flags & FL_MONSTER)
+	if (quantum_ai.value >= 0.5f && SV_QGEAITraceableEntity(ent))
 	{
 		SV_QGEAIThinkTrace(ent);
 	}

@@ -6,10 +6,13 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
+import stat
 import struct
 import sys
 import tempfile
 import unittest
+import zipfile
 import zlib
 from pathlib import Path
 from types import SimpleNamespace
@@ -43,6 +46,7 @@ import qge_moonlab_deployment_gate as moonlab_deployment_gate  # noqa: E402
 import qge_moonlab_full_game_plan as moonlab_full_game_plan  # noqa: E402
 import qge_moonlab_full_game_plan_audit as moonlab_full_game_plan_audit  # noqa: E402
 import qge_moonlab_handoff_audit as moonlab_handoff_audit  # noqa: E402
+import qge_hardware_advantage_gate as hardware_advantage_gate  # noqa: E402
 import qge_moonlab_hardware_ingest as moonlab_hardware_ingest  # noqa: E402
 import qge_moonlab_hardware_result_audit as moonlab_hardware_result_audit  # noqa: E402
 import qge_moonlab_job_plan_audit as moonlab_job_plan_audit  # noqa: E402
@@ -52,7 +56,9 @@ import qge_moonlab_oracle_transpile as moonlab_oracle_transpile  # noqa: E402
 import qge_moonlab_qae_grover_plan as moonlab_grover_plan  # noqa: E402
 import qge_moonlab_qae_observation_transpile as moonlab_observation_transpile  # noqa: E402
 import qge_moonlab_qae_transpile as moonlab_qae_transpile  # noqa: E402
+import qge_moonlab_shareware_deployment_gate as moonlab_shareware_deployment_gate  # noqa: E402
 import qge_moonlab_submission_bundle as moonlab_submission_bundle  # noqa: E402
+import qge_noesis_release_gate as noesis_release_gate  # noqa: E402
 import qge_noesis_summary as noesis_summary  # noqa: E402
 import qge_manifest_file_audit as manifest_file_audit  # noqa: E402
 import qge_manifest_claim_policy_audit as manifest_claim_policy_audit  # noqa: E402
@@ -69,12 +75,22 @@ import qge_perf_summary as perf_summary  # noqa: E402
 import qge_postpack_audit as postpack_audit  # noqa: E402
 import qge_publication_icc_audit as publication_icc_audit  # noqa: E402
 import qge_publication_pack as publication_pack  # noqa: E402
+import qge_quantum_rules_release_gate as quantum_rules_release_gate  # noqa: E402
 import qge_resource_boundary_audit as resource_boundary_audit  # noqa: E402
 import qge_registered_asset_intake as registered_asset_intake  # noqa: E402
 import qge_registered_asset_script_audit as registered_asset_script_audit  # noqa: E402
 import qge_registered_full_game_progress as registered_progress  # noqa: E402
 import qge_registered_full_game_progress_audit as registered_progress_audit  # noqa: E402
 import qge_runtime_icc_audit as runtime_icc_audit  # noqa: E402
+import qge_shareware_effects_capture_queue as shareware_effects_capture_queue  # noqa: E402
+import qge_shareware_complete_effects_gate as shareware_complete_effects_gate  # noqa: E402
+import qge_shareware_effects_inventory as shareware_effects_inventory  # noqa: E402
+import qge_shareware_effects_matrix as shareware_effects_matrix  # noqa: E402
+import qge_shareware_playability_gate as shareware_playability_gate  # noqa: E402
+import qge_shareware_public_release_snapshot as shareware_public_snapshot  # noqa: E402
+import qge_shareware_release_bundle as shareware_release_bundle  # noqa: E402
+import qge_shareware_release_candidate_gate as shareware_release_gate  # noqa: E402
+import qge_shareware_user_package as shareware_user_package  # noqa: E402
 import qge_shareware_episode_evidence_audit as shareware_episode_evidence_audit  # noqa: E402
 import qge_shareware_episode_evidence as shareware_episode_evidence  # noqa: E402
 import qge_trace_summary as trace_summary  # noqa: E402
@@ -103,6 +119,25 @@ def exact_postpack_reproduce_commands() -> list[str]:
     return [
         exact_postpack_reproduce_command(prefix)
         for prefix in manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES
+    ]
+
+
+def exact_release_signoff_reproduce_command(prefix: str) -> str:
+    return (
+        f"{prefix}<pack_dir> "
+        "--postpack /tmp/qge_postpack_audit.json "
+        "--out /tmp/qge_shareware_release_candidate_gate.json "
+        "--markdown /tmp/qge_shareware_release_candidate_gate.md "
+        "--icc-json /tmp/qge_shareware_release_candidate_gate_icc_evidence.json"
+    )
+
+
+def exact_release_signoff_reproduce_commands() -> list[str]:
+    return [
+        exact_release_signoff_reproduce_command(prefix)
+        for prefix in (
+            manifest_reproduce_audit
+            .RELEASE_SIGNOFF_REPRODUCE_COMMAND_PREFIXES)
     ]
 
 
@@ -138,6 +173,67 @@ def minimal_bsp_bytes() -> bytes:
     body = bytearray()
     offset = 4 + 15 * 8
     for lump_index, payload in ((0, entities), (14, model)):
+        lumps[lump_index] = (offset, len(payload))
+        body.extend(payload)
+        offset += len(payload)
+    header = bytearray(struct.pack("<i", 29))
+    for lump_offset, lump_length in lumps:
+        header.extend(struct.pack("<ii", lump_offset, lump_length))
+    return bytes(header + body)
+
+
+def bsp_bytes_with_entities_and_textures(
+    entities_text: str,
+    texture_names: list[str],
+) -> bytes:
+    entities = entities_text.encode("ascii") + b"\0"
+    miptex = bytearray(struct.pack("<i", len(texture_names)))
+    texture_offsets = []
+    texture_payloads = bytearray()
+    for index, name in enumerate(texture_names):
+        texture_offsets.append(
+            4 + len(texture_names) * 4 + len(texture_payloads))
+        raw_name = name.encode("ascii")[:15]
+        pixels = bytes([224, 225, 1, 2] if index == 0 else [1, 2, 3, 4])
+        texture_payloads.extend(
+            raw_name.ljust(16, b"\0") +
+            struct.pack("<ii", 2, 2) +
+            struct.pack("<iiii", 40, 0, 0, 0) +
+            pixels
+        )
+    for texture_offset in texture_offsets:
+        miptex.extend(struct.pack("<i", texture_offset))
+    miptex.extend(texture_payloads)
+
+    texinfo = bytearray()
+    faces = bytearray()
+    for index, _name in enumerate(texture_names):
+        texinfo.extend(b"\0" * 32 + struct.pack("<ii", index, 0))
+        faces.extend(struct.pack(
+            "<HHIHH4Bi",
+            0,
+            0,
+            0,
+            3,
+            index,
+            0,
+            0,
+            0,
+            0,
+            -1,
+        ))
+
+    model = b"\0" * 64
+    lumps = [(0, 0)] * 15
+    body = bytearray()
+    offset = 4 + 15 * 8
+    for lump_index, payload in (
+        (0, entities),
+        (2, bytes(miptex)),
+        (6, bytes(texinfo)),
+        (7, bytes(faces)),
+        (14, model),
+    ):
         lumps[lump_index] = (offset, len(payload))
         body.extend(payload)
         offset += len(payload)
@@ -512,6 +608,363 @@ class ICCProfileTests(unittest.TestCase):
             "hardware-deployment evidence",
         )
 
+    def test_shareware_complete_effects_oracle_requires_matrix(self) -> None:
+        profile = json.loads(
+            (REPO_ROOT / ".icc" / "completion-oracles.json")
+            .read_text(encoding="utf-8")
+        )
+        oracle = next(
+            item for item in profile["oracles"]
+            if item["name"] == "qge_shareware_complete_effects"
+        )
+        self.assertIn("entire shareware game effects", oracle["aliases"])
+        requirements = {item["id"]: item for item in oracle["requires"]}
+        self.assertEqual(
+            requirements["qge_shareware_effects_backend"]["event_values"],
+            ["qge_shareware_complete_effects"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_effects_ready"]["event_values"],
+            ["qge_shareware_complete_effects_ready"],
+        )
+        self.assertIn(
+            "shareware_effects_inventory_file",
+            requirements["qge_shareware_effects_inventory"]["event_names"],
+        )
+        self.assertIn(
+            "shareware_effects_matrix_file",
+            requirements["qge_shareware_effects_matrix"]["event_names"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_effects_slipgate"]["event_values"],
+            ["present"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_effects_enemies"]["event_values"],
+            ["complete"],
+        )
+        self.assertIn(
+            "qge_shareware_effects_footage_manifest.json",
+            requirements["qge_shareware_effects_footage"]["event_names"],
+        )
+
+    def test_shareware_deployment_oracle_is_not_full_game(self) -> None:
+        profile = json.loads(
+            (REPO_ROOT / ".icc" / "completion-oracles.json")
+            .read_text(encoding="utf-8")
+        )
+        oracle = next(
+            item for item in profile["oracles"]
+            if item["name"] == "qge_moonlab_shareware_deployment"
+        )
+        self.assertEqual(
+            oracle["target"],
+            "Shareware Episode 1 Quake running in Moonlab with "
+            "simulator/native deployment evidence",
+        )
+        self.assertIn(
+            "shareware episode 1 moonlab deployment",
+            oracle["aliases"],
+        )
+
+        requirements = {item["id"]: item for item in oracle["requires"]}
+        self.assertEqual(
+            requirements["qge_moonlab_shareware_deployment_backend"][
+                "event_values"],
+            ["qge_moonlab_shareware_deployment_gate"],
+        )
+        self.assertEqual(
+            requirements["qge_moonlab_shareware_deployment_ready"][
+                "event_values"],
+            ["qge_moonlab_shareware_deployment_gate_ready"],
+        )
+        self.assertEqual(
+            requirements["qge_moonlab_shareware_deployment_map_set"][
+                "event_values"],
+            ["quake_shareware_episode1"],
+        )
+        self.assertIn(
+            "moonlab_shareware_deployment_gate_file",
+            requirements["qge_moonlab_shareware_deployment_artifact"][
+                "event_names"],
+        )
+        self.assertNotEqual(
+            requirements["qge_moonlab_shareware_deployment_backend"][
+                "event_values"],
+            ["qge_moonlab_deployment_gate"],
+        )
+
+    def test_noesis_release_oracle_is_bounded_diagnostics(self) -> None:
+        profile = json.loads(
+            (REPO_ROOT / ".icc" / "completion-oracles.json")
+            .read_text(encoding="utf-8")
+        )
+        oracle = next(
+            item for item in profile["oracles"]
+            if item["name"] == "qge_noesis_autonomous_diagnostics"
+        )
+        self.assertEqual(
+            oracle["target"],
+            "Noesis bounded no-script autonomous Quake diagnostics "
+            "release evidence",
+        )
+        self.assertIn("noesis release gate", oracle["aliases"])
+
+        requirements = {item["id"]: item for item in oracle["requires"]}
+        self.assertEqual(
+            requirements["qge_noesis_release_gate_backend"][
+                "event_values"],
+            ["qge_noesis_release_gate"],
+        )
+        self.assertEqual(
+            requirements["qge_noesis_release_gate_ready"]["event_values"],
+            ["qge_noesis_release_gate_ready"],
+        )
+        self.assertIn(
+            "noesis_release_gate_file",
+            requirements["qge_noesis_release_gate_artifact"][
+                "event_names"],
+        )
+        self.assertNotIn("learned", oracle["aliases"])
+
+    def test_shareware_release_candidate_oracle_composes_gates(self) -> None:
+        profile = json.loads(
+            (REPO_ROOT / ".icc" / "completion-oracles.json")
+            .read_text(encoding="utf-8")
+        )
+        oracle = next(
+            item for item in profile["oracles"]
+            if item["name"] == "qge_shareware_release_candidate"
+        )
+        self.assertEqual(
+            oracle["target"],
+            "Quake shareware release-candidate pack with Moonlab and "
+            "bounded Noesis evidence",
+        )
+        self.assertIn("shareware release candidate", oracle["aliases"])
+
+        requirements = {item["id"]: item for item in oracle["requires"]}
+        self.assertEqual(
+            requirements["qge_shareware_release_candidate_backend"][
+                "event_values"],
+            ["qge_shareware_release_candidate_gate"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_release_candidate_ready"][
+                "event_values"],
+            ["qge_shareware_release_candidate_gate_ready"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_release_candidate_scope"][
+                "event_values"],
+            ["quake_shareware_episode1"],
+        )
+        self.assertIn(
+            "runtime_backend_scope_map_set",
+            requirements["qge_shareware_release_candidate_scope"][
+                "event_names"],
+        )
+        self.assertIn(
+            "shareware_release_candidate_gate_file",
+            requirements["qge_shareware_release_candidate_artifact"][
+                "event_names"],
+        )
+        self.assertNotIn("registered full game release", oracle["aliases"])
+
+    def test_shareware_release_bundle_oracle_tracks_archive(self) -> None:
+        profile = json.loads(
+            (REPO_ROOT / ".icc" / "completion-oracles.json")
+            .read_text(encoding="utf-8")
+        )
+        oracle = next(
+            item for item in profile["oracles"]
+            if item["name"] == "qge_shareware_release_bundle"
+        )
+        self.assertEqual(
+            oracle["target"],
+            "Persistent Quake shareware release bundle with archive checksum",
+        )
+        self.assertIn("shareware release archive", oracle["aliases"])
+        requirements = {item["id"]: item for item in oracle["requires"]}
+        self.assertEqual(
+            requirements["qge_shareware_release_bundle_backend"][
+                "event_values"],
+            ["qge_shareware_release_bundle"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_release_bundle_ready"][
+                "event_values"],
+            ["qge_shareware_release_bundle_ready"],
+        )
+        self.assertIn(
+            "runtime_backend_scope_map_set",
+            requirements["qge_shareware_release_bundle_scope"][
+                "event_names"],
+        )
+        self.assertIn(
+            "shareware_release_bundle_archive_checksum_file",
+            requirements["qge_shareware_release_bundle_archive"][
+                "event_names"],
+        )
+        self.assertIn(
+            "qge_shareware_release_bundle_archive_checksum.json",
+            requirements["qge_shareware_release_bundle_archive"][
+                "event_names"],
+        )
+        self.assertIn(
+            "shareware_release_bundle_manifest_file",
+            requirements["qge_shareware_release_bundle_manifest"][
+                "event_names"],
+        )
+
+    def test_shareware_playability_oracle_requires_final_gate(self) -> None:
+        profile = json.loads(
+            (REPO_ROOT / ".icc" / "completion-oracles.json")
+            .read_text(encoding="utf-8")
+        )
+        oracle = next(
+            item for item in profile["oracles"]
+            if item["name"] == "qge_shareware_user_playable_release"
+        )
+        self.assertEqual(
+            oracle["target"],
+            "User-playable complete Quake shareware release with no content exceptions",
+        )
+        self.assertIn("whole shareware playable release", oracle["aliases"])
+        requirements = {item["id"]: item for item in oracle["requires"]}
+        self.assertEqual(
+            requirements["qge_shareware_playability_backend"][
+                "event_values"],
+            ["qge_shareware_playability_gate"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_user_playable_release_ready"][
+                "event_values"],
+            ["qge_shareware_user_playable_release_ready"],
+        )
+        self.assertIn(
+            "runtime_backend_scope_map_set",
+            requirements["qge_shareware_playability_scope"][
+                "event_names"],
+        )
+        self.assertIn(
+            "shareware_playability_gate_file",
+            requirements["qge_shareware_playability_artifact"][
+                "event_names"],
+        )
+        self.assertIn(
+            "qge_shareware_playability_gate.json",
+            requirements["qge_shareware_playability_artifact"][
+                "event_names"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_user_package_backend"][
+                "event_values"],
+            ["qge_shareware_user_package"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_user_package_ready"][
+                "event_values"],
+            ["qge_shareware_user_package_ready"],
+        )
+        self.assertIn(
+            "shareware_user_package_archive_checksum_file",
+            requirements["qge_shareware_user_package_archive"][
+                "event_names"],
+        )
+        self.assertIn(
+            "qge_shareware_user_package_archive_checksum.json",
+            requirements["qge_shareware_user_package_archive"][
+                "event_names"],
+        )
+        self.assertIn(
+            "shareware_user_package_app_bundle_completion",
+            requirements["qge_shareware_user_package_app_bundle"][
+                "event_names"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_user_package_app_bundle"][
+                "event_values"],
+            ["present"],
+        )
+        self.assertIn(
+            "shareware_user_package_pak_completion",
+            requirements["qge_shareware_user_package_pak"][
+                "event_names"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_user_package_pak"]["event_values"],
+            ["present"],
+        )
+        self.assertIn(
+            "shareware_user_package_playability_gate_file",
+            requirements["qge_shareware_user_package_playability_gate"][
+                "event_names"],
+        )
+        self.assertIn(
+            "shareware_user_package_complete_effects_gate_file",
+            requirements["qge_shareware_user_package_complete_effects_gate"][
+                "event_names"],
+        )
+
+    def test_shareware_public_release_snapshot_oracle_blocks_overclaim(
+        self,
+    ) -> None:
+        profile = json.loads(
+            (REPO_ROOT / ".icc" / "completion-oracles.json")
+            .read_text(encoding="utf-8")
+        )
+        oracle = next(
+            item for item in profile["oracles"]
+            if item["name"] == "qge_shareware_public_release_snapshot"
+        )
+        self.assertEqual(
+            oracle["target"],
+            "Public Quantum Quake shareware release snapshot with checksum and no hardware overclaim",
+        )
+        self.assertIn("shareware release claim boundary", oracle["aliases"])
+        requirements = {item["id"]: item for item in oracle["requires"]}
+        self.assertEqual(
+            requirements["qge_shareware_public_release_snapshot_backend"][
+                "event_values"],
+            ["qge_shareware_public_release_snapshot"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_public_release_snapshot_ready"][
+                "event_values"],
+            ["qge_shareware_public_release_snapshot_ready"],
+        )
+        self.assertIn(
+            "qge_shareware_public_release_snapshot.json",
+            requirements["qge_shareware_public_release_snapshot_artifact"][
+                "event_names"],
+        )
+        self.assertIn(
+            "shareware_public_release_archive_completion",
+            requirements["qge_shareware_public_release_archive"][
+                "event_names"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_public_release_archive"][
+                "event_values"],
+            ["present"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_public_release_readme"][
+                "event_values"],
+            ["present"],
+        )
+        self.assertIn(
+            "shareware_public_release_readme_completion",
+            requirements["qge_shareware_public_release_readme"][
+                "event_names"],
+        )
+        self.assertEqual(
+            requirements["qge_shareware_public_release_no_hardware_overclaim"][
+                "event_values"],
+            ["present"],
+        )
+
     def test_registered_full_game_coverage_oracle_is_not_deployment(self) -> None:
         profile = json.loads(
             (REPO_ROOT / ".icc" / "completion-oracles.json")
@@ -668,6 +1121,109 @@ class ICCProfileTests(unittest.TestCase):
         self.assertIn(
             "qge_moonlab_hardware_submission_scope.json",
             artifact_requirement["event_names"],
+        )
+
+    def test_hardware_advantage_campaign_oracles_are_separate(self) -> None:
+        profile = json.loads(
+            (REPO_ROOT / ".icc" / "completion-oracles.json")
+            .read_text(encoding="utf-8")
+        )
+        campaign = next(
+            item for item in profile["oracles"]
+            if item["name"] == "qge_hardware_advantage_campaign"
+        )
+        self.assertEqual(
+            campaign["target"],
+            "Campaign for real Moonlab hardware execution and defensible "
+            "Quantum Quake advantage evidence",
+        )
+        self.assertIn("qpu execution campaign", campaign["aliases"])
+        campaign_requirements = {
+            item["id"]: item for item in campaign["requires"]
+        }
+        self.assertEqual(
+            campaign_requirements["qge_hardware_advantage_campaign_backend"][
+                "event_values"],
+            ["qge_hardware_advantage_campaign"],
+        )
+        self.assertEqual(
+            campaign_requirements["qge_hardware_advantage_campaign_ready"][
+                "event_values"],
+            ["qge_hardware_advantage_campaign_ready"],
+        )
+        self.assertIn(
+            "qge_hardware_advantage_campaign.md",
+            campaign_requirements[
+                "qge_hardware_advantage_campaign_artifact"][
+                    "event_names"],
+        )
+        self.assertEqual(
+            campaign_requirements[
+                "qge_hardware_advantage_campaign_submission_scope"][
+                    "event_names"],
+            ["qge_hardware_advantage_campaign_submission_scope_state.json"],
+        )
+        self.assertEqual(
+            campaign_requirements[
+                "qge_hardware_advantage_campaign_no_returned_hardware_yet"][
+                    "event_names"],
+            [
+                "qge_hardware_advantage_campaign_no_returned_hardware_state.json",
+            ],
+        )
+        self.assertEqual(
+            campaign_requirements[
+                "qge_hardware_advantage_campaign_no_overclaim"][
+                    "event_names"],
+            ["qge_hardware_advantage_campaign_no_overclaim_state.json"],
+        )
+
+        real_target = next(
+            item for item in profile["oracles"]
+            if item["name"] == "qge_real_hardware_quantum_advantage"
+        )
+        self.assertEqual(
+            real_target["target"],
+            "Returned Moonlab hardware result plus defensible Quantum Quake "
+            "advantage evidence",
+        )
+        requirements = {item["id"]: item for item in real_target["requires"]}
+        self.assertEqual(
+            requirements["qge_real_hardware_submission_scope_ready"][
+                "event_values"],
+            ["qge_moonlab_hardware_submission_scope_ready"],
+        )
+        self.assertEqual(
+            requirements["qge_real_hardware_result_backend"]["event_values"],
+            ["qge_moonlab_hardware_ingest"],
+        )
+        self.assertEqual(
+            requirements["qge_real_hardware_result_recorded"]["event_values"],
+            ["qge_moonlab_hardware_result_recorded"],
+        )
+        self.assertEqual(
+            requirements["qge_real_hardware_comparison_artifact"][
+                "event_names"],
+            ["moonlab_hardware_comparison_file"],
+        )
+        self.assertEqual(
+            requirements["qge_real_hardware_record_hash"]["event_names"],
+            ["hardware_record_sha256"],
+        )
+        self.assertEqual(
+            requirements["qge_advantage_gate_backend"]["event_values"],
+            ["qge_hardware_advantage_gate"],
+        )
+        self.assertEqual(
+            requirements["qge_advantage_claim_ready"]["event_values"],
+            ["qge_hardware_advantage_claim_ready"],
+        )
+        self.assertEqual(
+            requirements["qge_advantage_claim_scope"]["event_names"],
+            [
+                "qge_hardware_advantage_claim_scope_"
+                "advantage.light_transport_qae_query_scaling.json",
+            ],
         )
 
     def test_moonlab_full_game_deployment_oracle_requires_ready_gate(self) -> None:
@@ -1288,6 +1844,54 @@ class AdvantageBenchmarkTests(unittest.TestCase):
 
 
 class PublicationPackTests(unittest.TestCase):
+    def test_shareware_selection_resolves_from_breadth_sibling(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            breadth_path = tmpdir / "breadth_evidence.json"
+            selection_path = (
+                tmpdir /
+                publication_pack.SHAREWARE_EPISODE_ONE_SELECTION_FILENAME
+            )
+            coverage = breadth_evidence.build_full_game_map_coverage(
+                breadth_evidence.QUAKE_SHAREWARE_EPISODE_ONE_MAPS,
+                map_set=breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            )
+            publication_pack.write_json(breadth_path, {
+                "schema": "qge.breadth_evidence.v0",
+                "aggregate": {
+                    "breadth_ready_for_complete_claim": True,
+                    "full_game_coverage": coverage,
+                },
+            })
+            publication_pack.write_json(selection_path, {
+                "schema": "qge.shareware_episode1_selection.v0",
+                "status": "complete",
+            })
+
+            summary = publication_pack.breadth_evidence_summary(breadth_path)
+            self.assertEqual(
+                publication_pack.resolve_shareware_selection_path(
+                    breadth_path, summary),
+                selection_path,
+            )
+
+            registered_coverage = breadth_evidence.build_full_game_map_coverage(
+                ["start"],
+                map_set=breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
+            )
+            publication_pack.write_json(breadth_path, {
+                "schema": "qge.breadth_evidence.v0",
+                "aggregate": {
+                    "breadth_ready_for_complete_claim": False,
+                    "full_game_coverage": registered_coverage,
+                },
+            })
+            registered_summary = publication_pack.breadth_evidence_summary(
+                breadth_path)
+            self.assertIsNone(
+                publication_pack.resolve_shareware_selection_path(
+                    breadth_path, registered_summary))
+
     def test_graphics_sidecar_supplies_publication_performance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmpdir = Path(tmp)
@@ -1335,6 +1939,61 @@ class PublicationPackTests(unittest.TestCase):
             perf = publication_pack.performance_summary(summary)
             self.assertFalse(publication_pack.explicit_performance_failure(perf))
             self.assertEqual(perf["render_time_ms_max"], 22.0)
+
+    def test_pack_vanilla_sidecar_rewrites_packed_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            source = tmpdir / "source"
+            pack = tmpdir / "pack"
+            source.mkdir()
+            matrix_path = source / "vanilla_capture_matrix.json"
+            icc_path = source / "qge_vanilla_icc_evidence.json"
+            matrix = {
+                "capture_dir": str(source),
+                "metrics_file": str(source / "metrics.json"),
+                "modes": [
+                    {
+                        "mode": "classic",
+                        "frame": {"path": str(source / "classic.png")},
+                    },
+                    {
+                        "mode": "quantum",
+                        "frame": {"path": str(source / "quantum.png")},
+                    },
+                ],
+                "runtime_evidence_summary": {},
+                "conformance_summary": {
+                    "ready_for_complete_claim": False,
+                    "fallback_count": 0,
+                    "qge_surface_surrogates": 0,
+                    "qge_surface_culled": 0,
+                    "classic3d_count": 0,
+                    "viewmodel_encoded": 1,
+                },
+            }
+            publication_pack.write_json(matrix_path, matrix)
+            publication_pack.write_json(icc_path, {
+                "schema": "qge.icc_evidence.v0",
+                "runtime_backend": "qge_vanilla_capture_matrix",
+                "vanilla_capture_matrix_file": str(matrix_path),
+                "icc_evidence_file": str(icc_path),
+            })
+
+            matrix_artifact, icc_artifact = (
+                publication_pack.pack_vanilla_sidecars(
+                    matrix_path,
+                    icc_path,
+                    pack,
+                )
+            )
+
+            packed_matrix = Path(matrix_artifact["packed"]["path"])
+            packed_icc = Path(icc_artifact["packed"]["path"])
+            recorded = publication_pack.load_json(packed_icc)
+            self.assertEqual(recorded["vanilla_capture_matrix_file"],
+                             str(packed_matrix))
+            self.assertEqual(recorded["icc_evidence_file"], str(packed_icc))
+            self.assertFalse(icc_artifact["source_copy"])
 
     def test_agent_stream_icc_audit_detects_stale_entries(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1804,6 +2463,22 @@ class PublicationPackTests(unittest.TestCase):
                 for item in stale_audit["directory_mismatches"]
             ))
 
+            generated_manifest = json.loads(json.dumps(stale_manifest))
+            generated_manifest["artifacts"]["sample"]["file"][
+                "source_copy"] = False
+            generated_audit = (
+                manifest_source_copy_audit.manifest_source_copy_audit(
+                    generated_manifest,
+                    required=True,
+                )
+            )
+            self.assertFalse(generated_audit["passed"])
+            self.assertEqual(generated_audit["source_copy_record_count"], 1)
+            self.assertFalse(any(
+                item.get("source") == "artifacts.sample.file"
+                for item in generated_audit["file_mismatches"]
+            ))
+
             malformed_manifest = json.loads(json.dumps(manifest))
             malformed_manifest["artifacts"]["sample"]["file"]["packed"] = {
                 "path": str(outdir / "artifact.txt"),
@@ -1886,7 +2561,8 @@ class PublicationPackTests(unittest.TestCase):
             f"{prefix}<arg>"
             for prefix in (
                 manifest_reproduce_audit.REQUIRED_REPRODUCE_COMMAND_PREFIXES)
-        ] + exact_postpack_reproduce_commands()
+        ] + exact_postpack_reproduce_commands() + (
+            exact_release_signoff_reproduce_commands())
         manifest = {
             "reproduce_commands": commands,
         }
@@ -1914,6 +2590,12 @@ class PublicationPackTests(unittest.TestCase):
             audit["postpack_command_count"],
             len(manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES),
         )
+        self.assertEqual(
+            audit["release_signoff_command_count"],
+            len(
+                manifest_reproduce_audit
+                .RELEASE_SIGNOFF_REPRODUCE_COMMAND_PREFIXES),
+        )
         self.assertEqual(audit["unexpected_commands"], [])
         self.assertEqual(audit["duplicate_command_prefix_extra_count"], 0)
 
@@ -1922,6 +2604,8 @@ class PublicationPackTests(unittest.TestCase):
             command for command in commands
             if not command.startswith("tools/qge_moonlab_deployment_gate.py ")
             and not command.startswith("tools/qge_postpack_audit.py ")
+            and not command.startswith(
+                "tools/qge_shareware_release_candidate_gate.py ")
         ]
         stale_manifest["reproduce_commands"].append(commands[0])
         stale_manifest["reproduce_commands"].append(commands[0])
@@ -1939,6 +2623,10 @@ class PublicationPackTests(unittest.TestCase):
         self.assertIn(
             "tools/qge_postpack_audit.py ",
             stale_audit["missing_postpack_commands"],
+        )
+        self.assertIn(
+            "tools/qge_shareware_release_candidate_gate.py ",
+            stale_audit["missing_release_signoff_commands"],
         )
         self.assertIn(commands[0], stale_audit["duplicate_commands"])
         self.assertTrue(any(
@@ -2080,6 +2768,25 @@ class PublicationPackTests(unittest.TestCase):
                 "--markdown /tmp/qge_moonlab_deployment_gate.md "
                 "--icc-json /tmp/qge_moonlab_deployment_gate_icc_evidence.json"
             ),
+            "tools/qge_moonlab_shareware_deployment_gate.py ": (
+                "tools/qge_moonlab_shareware_deployment_gate.py <pack_dir> "
+                "--out /tmp/qge_moonlab_shareware_deployment_gate.json "
+                "--markdown /tmp/qge_moonlab_shareware_deployment_gate.md "
+                "--icc-json /tmp/qge_moonlab_shareware_deployment_gate_icc_evidence.json"
+            ),
+            "tools/qge_noesis_release_gate.py ": (
+                "tools/qge_noesis_release_gate.py <pack_dir> "
+                "--out /tmp/qge_noesis_release_gate.json "
+                "--markdown /tmp/qge_noesis_release_gate.md "
+                "--icc-json /tmp/qge_noesis_release_gate_icc_evidence.json"
+            ),
+            "tools/qge_shareware_release_candidate_gate.py ": (
+                "tools/qge_shareware_release_candidate_gate.py <pack_dir> "
+                "--postpack /tmp/qge_postpack_audit.json "
+                "--out /tmp/qge_shareware_release_candidate_gate.json "
+                "--markdown /tmp/qge_shareware_release_candidate_gate.md "
+                "--icc-json /tmp/qge_shareware_release_candidate_gate_icc_evidence.json"
+            ),
         }
         for prefix in manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES:
             exact_commands[prefix] = exact_postpack_reproduce_command(prefix)
@@ -2087,7 +2794,9 @@ class PublicationPackTests(unittest.TestCase):
             exact_commands.get(prefix, f"{prefix}<arg>")
             for prefix in (
                 manifest_reproduce_audit.REQUIRED_REPRODUCE_COMMAND_PREFIXES +
-                manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES)
+                manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES +
+                manifest_reproduce_audit
+                .RELEASE_SIGNOFF_REPRODUCE_COMMAND_PREFIXES)
         ]
         manifest = {
             "source_inputs": {
@@ -3231,7 +3940,7 @@ class PublicationPackTests(unittest.TestCase):
                 manifest)
             self.assertTrue(audit["passed"])
             self.assertEqual(audit["mismatch_count"], 0)
-            self.assertEqual(audit["check_count"], 20)
+            self.assertEqual(audit["check_count"], 21)
 
             stale_manifest = json.loads(json.dumps(manifest))
             stale_manifest["source_inputs"]["capture_dir"] = str(
@@ -4669,7 +5378,8 @@ class PublicationPackTests(unittest.TestCase):
                     for prefix in (
                         manifest_reproduce_audit
                         .REQUIRED_REPRODUCE_COMMAND_PREFIXES)
-                ] + exact_postpack_reproduce_commands()
+                ] + exact_postpack_reproduce_commands() + (
+                    exact_release_signoff_reproduce_commands())
             ),
             "artifacts": {
                 "oracle": {
@@ -5298,6 +6008,25 @@ class PublicationPackTests(unittest.TestCase):
                 "--markdown /tmp/qge_moonlab_deployment_gate.md "
                 "--icc-json /tmp/qge_moonlab_deployment_gate_icc_evidence.json"
             ),
+            "tools/qge_moonlab_shareware_deployment_gate.py ": (
+                "tools/qge_moonlab_shareware_deployment_gate.py <pack_dir> "
+                "--out /tmp/qge_moonlab_shareware_deployment_gate.json "
+                "--markdown /tmp/qge_moonlab_shareware_deployment_gate.md "
+                "--icc-json /tmp/qge_moonlab_shareware_deployment_gate_icc_evidence.json"
+            ),
+            "tools/qge_noesis_release_gate.py ": (
+                "tools/qge_noesis_release_gate.py <pack_dir> "
+                "--out /tmp/qge_noesis_release_gate.json "
+                "--markdown /tmp/qge_noesis_release_gate.md "
+                "--icc-json /tmp/qge_noesis_release_gate_icc_evidence.json"
+            ),
+            "tools/qge_shareware_release_candidate_gate.py ": (
+                "tools/qge_shareware_release_candidate_gate.py <pack_dir> "
+                "--postpack /tmp/qge_postpack_audit.json "
+                "--out /tmp/qge_shareware_release_candidate_gate.json "
+                "--markdown /tmp/qge_shareware_release_candidate_gate.md "
+                "--icc-json /tmp/qge_shareware_release_candidate_gate_icc_evidence.json"
+            ),
         }
         for prefix in manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES:
             exact_commands[prefix] = exact_postpack_reproduce_command(prefix)
@@ -5305,7 +6034,9 @@ class PublicationPackTests(unittest.TestCase):
             exact_commands[prefix]
             for prefix in (
                 manifest_reproduce_audit.REQUIRED_REPRODUCE_COMMAND_PREFIXES +
-                manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES)
+                manifest_reproduce_audit.POSTPACK_REPRODUCE_COMMAND_PREFIXES +
+                manifest_reproduce_audit
+                .RELEASE_SIGNOFF_REPRODUCE_COMMAND_PREFIXES)
         ]
         icc = publication_pack.build_icc_evidence(
             manifest,
@@ -5354,7 +6085,7 @@ class PublicationPackTests(unittest.TestCase):
         self.assertEqual(icc["completion_reason"], "qge_publication_artifact_pack_complete")
         self.assertTrue(icc["manifest_source_input_audit_passed"])
         self.assertTrue(icc["manifest_source_input_recorded"])
-        self.assertEqual(icc["manifest_source_input_check_count"], 20)
+        self.assertEqual(icc["manifest_source_input_check_count"], 21)
         self.assertEqual(icc["manifest_source_input_mismatch_count"], 0)
         self.assertFalse(icc["manifest_source_copy_audit_available"])
         self.assertIsNone(icc["manifest_source_copy_audit_passed"])
@@ -6434,6 +7165,341 @@ class PublicationPackTests(unittest.TestCase):
             self.assertFalse(
                 cli_icc["whole_game_hardware_execution_claimed"])
 
+    def test_moonlab_hardware_result_audit_strict_mode_blocks_zero_rows(self) -> None:
+        packet = {
+            "schema": "qge.moonlab_submission_packet.v0",
+            "candidate_jobs": [
+                {
+                    "job_id": "qge.light_transport_qae_benchmark.mlae.v0",
+                    "candidate_digest": "candidate-digest",
+                    "missing_required_artifacts": [],
+                },
+            ],
+        }
+        results = {
+            "schema": "qge.moonlab_job_results.v0",
+            "overall_status": "simulator_complete_hardware_not_submitted",
+            "hardware_submitted_job_count": 0,
+            "completed_hardware_job_count": 0,
+            "jobs": [
+                {
+                    "job_id": "qge.light_transport_qae_benchmark.mlae.v0",
+                    "backend_results": [
+                        {
+                            "backend_kind": "moonlab_hardware_candidate",
+                            "status": "not_submitted",
+                        },
+                    ],
+                },
+            ],
+        }
+
+        non_strict = (
+            moonlab_hardware_result_audit.hardware_result_ledger_audit(
+                packet,
+                results,
+            )
+        )
+        self.assertTrue(non_strict["passed"], non_strict)
+
+        strict = moonlab_hardware_result_audit.hardware_result_ledger_audit(
+            packet,
+            results,
+            strict_real_campaign=True,
+        )
+        self.assertFalse(strict["passed"], strict)
+        self.assertIn(
+            "hardware_result_job_count",
+            strict["strict_real_campaign_mismatches"],
+        )
+        icc = moonlab_hardware_result_audit.build_icc_evidence(strict)
+        self.assertEqual(
+            icc["completion_reason"],
+            "qge_moonlab_hardware_result_audit_blocked",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            packet_path = tmpdir / "packet.json"
+            results_path = tmpdir / "results.json"
+            out_path = tmpdir / "audit.json"
+            icc_path = tmpdir / "audit_icc.json"
+            publication_pack.write_json(packet_path, packet)
+            publication_pack.write_json(results_path, results)
+            self.assertEqual(
+                moonlab_hardware_result_audit.main([
+                    str(packet_path),
+                    str(results_path),
+                    "--out",
+                    str(out_path),
+                    "--icc-out",
+                    str(icc_path),
+                    "--strict-real-campaign",
+                ]),
+                0,
+            )
+            self.assertEqual(
+                moonlab_hardware_result_audit.main([
+                    str(packet_path),
+                    str(results_path),
+                    "--strict-real-campaign",
+                    "--fail-on-mismatch",
+                ]),
+                1,
+            )
+            cli_icc = publication_pack.load_json(icc_path)
+            self.assertEqual(
+                cli_icc["completion_reason"],
+                "qge_moonlab_hardware_result_audit_blocked",
+            )
+
+    def test_hardware_advantage_gate_requires_real_hardware_and_baselines(self) -> None:
+        job_id = "qge.light_transport_qae_benchmark.mlae.v0"
+        advantage_problem_id = (
+            hardware_advantage_gate.CLAIM_ID +
+            ":e1m1:test:light_transport.soft_shadow_visibility"
+        )
+        packet = {
+            "schema": "qge.moonlab_submission_packet.v0",
+            "candidate_jobs": [
+                {
+                    "job_id": job_id,
+                    "domain": "light_transport_qae_benchmark",
+                    "kind": "moonlab_qae_kernel",
+                    "submission_status": (
+                        "ready_for_hardware_submission_metadata"),
+                    "candidate_digest": "candidate-digest",
+                    "missing_required_artifacts": [],
+                    "resource": {"shots": 384},
+                },
+            ],
+        }
+        results = {
+            "schema": "qge.moonlab_job_results.v0",
+            "blocked_job_count": 0,
+            "hardware_submitted_job_count": 0,
+            "completed_hardware_job_count": 0,
+            "jobs": [
+                {
+                    "job_id": job_id,
+                    "domain": "light_transport_qae_benchmark",
+                    "kind": "moonlab_qae_kernel",
+                    "result_status": (
+                        "simulator_completed_hardware_not_submitted"),
+                    "hardware_submission_status": "not_submitted",
+                    "backend_results": [
+                        {
+                            "backend_id": (
+                                "moonlab-simulator-local/qge-test"),
+                            "backend_kind": "moonlab_simulator",
+                            "status": "completed",
+                        },
+                        {
+                            "backend_kind": "moonlab_hardware_candidate",
+                            "status": "not_submitted",
+                        },
+                    ],
+                    "observations": {
+                        "advantage_problem_id": advantage_problem_id,
+                        "reference_value": 0.5,
+                        "oracle_eval_count": 864,
+                        "shots": 384,
+                        "rmse": 0.003,
+                    },
+                },
+            ],
+        }
+        record = {
+            "schema": "qge.moonlab_hardware_record.v0",
+            "job_id": job_id,
+            "candidate_digest": "candidate-digest",
+            "backend_id": "moonlab-hardware/test-qpu",
+            "backend_kind": "moonlab_hardware",
+            "status": "completed",
+            "run_id": "moonlab-hw-run-advantage-001",
+            "submitted_utc": "2026-06-26T03:00:00Z",
+            "completed_utc": "2026-06-26T03:01:00Z",
+            "shot_schedule": {
+                "shots": 384,
+                "batches": 4,
+                "schedule_id": "qge-mlae-384-test",
+            },
+            "readout_metadata": {
+                "shots_completed": 384,
+                "readout_format": "expectation_value",
+                "mitigation": "none",
+            },
+            "observations": {
+                "mean_value": 0.503,
+                "shots": 384,
+                "readout_error": 0.004,
+            },
+            "hardware_quantum_advantage_claimed": False,
+            "whole_game_hardware_execution_claimed": False,
+            "dense_70000_qubit_state_claimed": False,
+        }
+        updated, comparison = moonlab_hardware_ingest.ingest_hardware_record(
+            packet,
+            results,
+            record,
+        )
+        audit = moonlab_hardware_result_audit.hardware_result_ledger_audit(
+            packet,
+            updated,
+            {
+                "schema": "qge.moonlab_hardware_submission_scope.v0",
+                "candidate_digests": {job_id: "candidate-digest"},
+            },
+            strict_real_campaign=True,
+        )
+        self.assertTrue(audit["passed"], audit)
+        metrics = {
+            "advantage_problem_id": advantage_problem_id,
+            "claim_posture": {
+                "claim_id": hardware_advantage_gate.CLAIM_ID,
+            },
+            "classical_baselines": [
+                {"algorithm": "classical_mc"},
+                {"algorithm": "stratified_vdc"},
+            ],
+            "oracle": {
+                "implementation_status": "simulator_model",
+                "readout_model": "finite_shot_mlae",
+                "qram_assumption": "none",
+                "state_prep_cost": 409,
+            },
+            "comparison": {
+                "best_classical": {
+                    "algorithm": "classical_mc",
+                    "trial_count": 3,
+                    "oracle_eval_count": 128,
+                    "rmse": 0.011,
+                },
+                "best_qae": {
+                    "algorithm": "mlae_simulator",
+                    "trial_count": 3,
+                    "oracle_eval_count": 864,
+                    "shots": 384,
+                    "rmse": 0.0035,
+                },
+                "mc_loglog_delta_slope": -0.43,
+                "stratified_loglog_delta_slope": -0.28,
+                "qae_loglog_delta_slope": -0.75,
+            },
+        }
+        metrics_audit = {
+            "passed": True,
+            "recorded": True,
+            "mismatch_count": 0,
+            "missing_artifacts": [],
+            "build_errors": [],
+            "overclaim_flags": [],
+        }
+        claims = {
+            "claims": [
+                {
+                    "claim_id": hardware_advantage_gate.CLAIM_ID,
+                    "claim_type": "sample_complexity",
+                    "status": "partial",
+                    "disallowed_wording": (
+                        "Quantum Quake proves practical rendering advantage, "
+                        "hardware speedup, or full-frame quantum rendering."),
+                },
+            ],
+        }
+
+        gate = hardware_advantage_gate.build_gate(
+            metrics,
+            updated,
+            comparison,
+            audit,
+            metrics_audit,
+            claims,
+        )
+        self.assertTrue(gate["ready"], gate)
+        self.assertTrue(gate["bounded_qae_query_scaling_claim_allowed"])
+        self.assertFalse(gate["hardware_quantum_advantage_claim_allowed"])
+        self.assertEqual(gate["failed_criterion_count"], 0)
+        icc = hardware_advantage_gate.build_icc_evidence(gate)
+        self.assertEqual(
+            icc["completion_reason"],
+            "qge_hardware_advantage_claim_ready",
+        )
+
+        blocked_audit = dict(audit)
+        blocked_audit["passed"] = False
+        blocked_audit["completed_hardware_result_count"] = 0
+        blocked_audit["strict_real_campaign_mismatches"] = [
+            "completed_hardware_result_count"
+        ]
+        blocked_gate = hardware_advantage_gate.build_gate(
+            metrics,
+            updated,
+            comparison,
+            blocked_audit,
+            metrics_audit,
+            claims,
+        )
+        self.assertFalse(blocked_gate["ready"])
+        failed_ids = {
+            item["id"] for item in blocked_gate["failed_criteria"]
+        }
+        self.assertIn("strict_hardware_result_audit", failed_ids)
+        blocked_icc = hardware_advantage_gate.build_icc_evidence(blocked_gate)
+        self.assertEqual(
+            blocked_icc["completion_reason"],
+            "qge_hardware_advantage_claim_blocked",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            metrics_path = tmpdir / "advantage_metrics.json"
+            results_path = tmpdir / "qge_moonlab_job_results.hardware.json"
+            comparison_path = tmpdir / "qge_moonlab_hardware_comparison.json"
+            audit_path = tmpdir / "qge_moonlab_hardware_result_audit.json"
+            metrics_audit_path = tmpdir / "qge_advantage_metrics_audit.json"
+            claims_path = tmpdir / "qge_claims.json"
+            gate_path = tmpdir / "qge_hardware_advantage_gate.json"
+            icc_path = tmpdir / "qge_hardware_advantage_gate_icc.json"
+            publication_pack.write_json(metrics_path, metrics)
+            publication_pack.write_json(results_path, updated)
+            publication_pack.write_json(comparison_path, comparison)
+            publication_pack.write_json(audit_path, audit)
+            publication_pack.write_json(metrics_audit_path, metrics_audit)
+            publication_pack.write_json(claims_path, claims)
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(
+                    hardware_advantage_gate.main([
+                        "--advantage-metrics",
+                        str(metrics_path),
+                        "--job-results",
+                        str(results_path),
+                        "--hardware-comparison",
+                        str(comparison_path),
+                        "--hardware-result-audit",
+                        str(audit_path),
+                        "--advantage-metrics-audit",
+                        str(metrics_audit_path),
+                        "--claims",
+                        str(claims_path),
+                        "--out",
+                        str(gate_path),
+                        "--icc-out",
+                        str(icc_path),
+                    ]),
+                    0,
+                )
+            self.assertIn("QGE_HARDWARE_ADVANTAGE_GATE", stdout.getvalue())
+            cli_icc = publication_pack.load_json(icc_path)
+            self.assertEqual(
+                cli_icc["completion_reason"],
+                "qge_hardware_advantage_claim_ready",
+            )
+            claim_scope_path = (
+                tmpdir / hardware_advantage_gate.CLAIM_SCOPE_MARKER_NAME)
+            self.assertTrue(claim_scope_path.is_file())
+
     def test_moonlab_full_game_plan_tracks_asset_blockers(self) -> None:
         coverage = breadth_evidence.build_full_game_map_coverage(
             ["start", "e1m1"])
@@ -6752,6 +7818,207 @@ class PublicationPackTests(unittest.TestCase):
                 "blocked_copy_plan",
             )
 
+    def test_moonlab_shareware_deployment_gate_allows_shareware_only(
+        self,
+    ) -> None:
+        shareware_maps = map_sets.QUAKE_SHAREWARE_EPISODE_ONE_MAPS
+        coverage = breadth_evidence.build_full_game_map_coverage(
+            shareware_maps,
+            map_set=map_sets.SHAREWARE_EPISODE_ONE_MAP_SET,
+        )
+        inventory = {
+            "schema": "qge.asset_inventory.v0",
+            "map_set": map_sets.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "status": "complete",
+            "target_map_count": len(shareware_maps),
+            "available_map_count": len(shareware_maps),
+            "missing_map_count": 0,
+            "invalid_bsp_count": 0,
+            "registered_full_game_scope": False,
+            "shareware_episode_one_asset_ready": True,
+        }
+        requirements = {
+            "schema": "qge.asset_requirements.v0",
+            "map_set": map_sets.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "status": "complete",
+            "target_map_count": len(shareware_maps),
+            "present_map_count": len(shareware_maps),
+            "missing_map_count": 0,
+            "claim_posture": {
+                "asset_requirements_satisfied": True,
+                "shareware_episode_one_requirements_satisfied": True,
+                "whole_game_moonlab_deployment_claimed": False,
+                "whole_game_hardware_execution_claimed": False,
+                "hardware_quantum_advantage_claimed": False,
+                "dense_70000_qubit_state_claimed": False,
+            },
+        }
+        breadth = {
+            "schema": "qge.breadth_evidence.v0",
+            "aggregate": {
+                "breadth_ready_for_complete_claim": True,
+                "full_game_map_set": map_sets.SHAREWARE_EPISODE_ONE_MAP_SET,
+                "full_game_map_coverage_status": "complete",
+                "matrix_run_count": len(shareware_maps),
+                "ready_matrix_run_count": len(shareware_maps),
+                "route_contract_authority_ready_run_count": len(
+                    shareware_maps),
+                "route_contract_authority_blocker_count": 0,
+                "required_runtime_backend_probe_targets": [
+                    "qge_context_get_or_create_render_acceleration",
+                    "qge_dwt_render",
+                    "qge_metal_init_common",
+                ],
+                "runtime_backend_probe_native_targets": [
+                    "qge_context_get_or_create_render_acceleration",
+                    "qge_dwt_render",
+                    "qge_metal_init_common",
+                ],
+                "runtime_backend_probe_missing_targets": [],
+                "runtime_backend_probe_paths": [
+                    "native_sparse_dwt_render_bridge"],
+                "total_native_bridge_count": 9,
+                "total_fallback_count": 0,
+                "total_surrogate_count": 0,
+                "total_cpu_idwt_count": 0,
+            },
+            "matrix_runs": [
+                {
+                    "map": name,
+                    "ready_for_complete_claim": True,
+                    "route_contract_authority_ready": True,
+                }
+                for name in shareware_maps
+            ],
+        }
+        vanilla = {
+            "schema": "qge.vanilla_capture_matrix.v0",
+            "conformance_summary": {
+                "ready_for_complete_claim": True,
+                "qge_asset_ownership_complete": True,
+                "moonlab_authority_ready": True,
+                "qge_performance_status": "pass",
+            },
+        }
+        performance = {
+            "schema": "qge.performance_summary.v0",
+            "status": "pass",
+            "aggregate": {"metric_evidence_present": True},
+        }
+        job_results = {
+            "schema": "qge.moonlab_job_results.v0",
+            "overall_status": "simulator_complete_hardware_not_submitted",
+            "selected_job_count": 4,
+            "completed_simulator_job_count": 4,
+            "completed_native_replay_job_count": 2,
+            "blocked_job_count": 0,
+            "hardware_candidate_job_count": 1,
+            "hardware_submitted_job_count": 0,
+            "jobs": moonlab_selected_job_result_jobs(
+                coverage,
+                inventory,
+                requirements,
+            ),
+        }
+        submission_bundle = {
+            "schema": "qge.moonlab_submission_bundle.v0",
+            "status": "ready_for_control_plane_submission",
+            "ready_for_control_plane_submission_count": 1,
+        }
+        hardware_submission_scope = {
+            "schema": "qge.moonlab_hardware_submission_scope.v0",
+            "status": "ready_for_control_plane_submission",
+            "hardware_submission_scope_ready": True,
+            "passing_check_count": 9,
+        }
+        native_backend_boundary = {
+            "schema": "qge.native_backend_boundary.v0",
+            "status": "pass",
+            "required_target_count": 3,
+            "passed_target_count": 3,
+        }
+        full_gate = {
+            "schema": "qge.moonlab_deployment_gate.v0",
+            "status": "blocked",
+            "blocker_count": 4,
+            "whole_game_moonlab_deployment_claim_allowed": False,
+            "whole_game_hardware_execution_claim_allowed": False,
+            "hardware_quantum_advantage_claim_allowed": False,
+            "dense_70000_qubit_state_claim_allowed": False,
+        }
+
+        gate = moonlab_shareware_deployment_gate.build_gate(
+            coverage,
+            inventory,
+            requirements,
+            breadth,
+            vanilla,
+            performance,
+            job_results,
+            submission_bundle,
+            hardware_submission_scope,
+            native_backend_boundary,
+            full_gate,
+            source_path=Path("shareware-pack"),
+        )
+
+        self.assertEqual(
+            gate["status"],
+            "ready_for_shareware_moonlab_simulator_deployment_claim",
+        )
+        self.assertTrue(
+            gate["shareware_moonlab_deployment_claim_allowed"])
+        self.assertFalse(
+            gate["whole_game_moonlab_deployment_claim_allowed"])
+        self.assertFalse(gate["hardware_quantum_advantage_claim_allowed"])
+        self.assertEqual(gate["blocker_count"], 0)
+        self.assertEqual(gate["summary"]["map_set"],
+                         map_sets.SHAREWARE_EPISODE_ONE_MAP_SET)
+        self.assertEqual(
+            gate["summary"]["full_game_deployment_gate_status"],
+            "blocked",
+        )
+        markdown = moonlab_shareware_deployment_gate.markdown_report(gate)
+        self.assertIn("shareware Episode 1", markdown)
+        self.assertIn("Full-game gate remains: blocked", markdown)
+        icc = moonlab_shareware_deployment_gate.build_icc_evidence(
+            gate,
+            out_path=Path("qge_moonlab_shareware_deployment_gate.json"),
+        )
+        self.assertEqual(
+            icc["runtime_backend"],
+            "qge_moonlab_shareware_deployment_gate",
+        )
+        self.assertEqual(
+            icc["completion_reason"],
+            "qge_moonlab_shareware_deployment_gate_ready",
+        )
+        self.assertTrue(
+            icc["shareware_moonlab_deployment_claim_allowed"])
+        self.assertEqual(
+            icc["full_game_deployment_gate_status"], "blocked")
+
+        stale_full_gate = json.loads(json.dumps(full_gate))
+        stale_full_gate[
+            "whole_game_moonlab_deployment_claim_allowed"] = True
+        blocked_gate = moonlab_shareware_deployment_gate.build_gate(
+            coverage,
+            inventory,
+            requirements,
+            breadth,
+            vanilla,
+            performance,
+            job_results,
+            submission_bundle,
+            hardware_submission_scope,
+            native_backend_boundary,
+            stale_full_gate,
+        )
+        self.assertEqual(blocked_gate["status"], "blocked")
+        self.assertIn(
+            "no_shareware_overclaim",
+            {item["id"] for item in blocked_gate["blockers"]},
+        )
 
     def test_moonlab_deployment_gate_blocks_until_full_game_ready(self) -> None:
         partial_coverage = breadth_evidence.build_full_game_map_coverage(
@@ -9590,6 +10857,988 @@ class BreadthEvidenceTests(unittest.TestCase):
                 breadth_evidence.DEFAULT_FULL_GAME_MAP_SET,
             )
 
+    def test_shareware_effects_inventory_parses_entities_and_materials(
+        self,
+    ) -> None:
+        data = bsp_bytes_with_entities_and_textures(
+            "\n".join([
+                '{"classname" "worldspawn"}',
+                '{"classname" "monster_ogre"}',
+                '{"classname" "weapon_rocketlauncher"}',
+                '{"classname" "item_rockets"}',
+                '{"classname" "trigger_teleport"}',
+                '{"classname" "ambient_drip"}',
+            ]),
+            ["*teleport", "*water", "*lava", "*slime", "sky1", "START01"],
+        )
+
+        parsed = shareware_effects_inventory.parse_bsp_map(data)
+        entity = parsed["entity"]
+        self.assertEqual(entity["monster_class_counts"], {"monster_ogre": 1})
+        self.assertEqual(
+            entity["weapon_pickup_counts"],
+            {"weapon_rocketlauncher": 1},
+        )
+        self.assertEqual(entity["ammo_pickup_counts"], {"item_rockets": 1})
+        self.assertEqual(entity["trigger_counts"], {"trigger_teleport": 1})
+        surface_counts = parsed["materials"]["surface_counts"]
+        self.assertEqual(surface_counts["teleport"], 1)
+        self.assertEqual(surface_counts["water"], 1)
+        self.assertEqual(surface_counts["lava"], 1)
+        self.assertEqual(surface_counts["slime"], 1)
+        self.assertEqual(surface_counts["sky"], 1)
+        self.assertEqual(surface_counts["ordinary"], 1)
+        self.assertEqual(surface_counts["fullbright"], 1)
+        self.assertTrue(parsed["flags"]["has_slipgate_surfaces"])
+        self.assertTrue(parsed["flags"]["has_teleport_triggers"])
+        self.assertTrue(parsed["flags"]["has_liquids"])
+        self.assertTrue(parsed["flags"]["has_sky"])
+
+    def test_shareware_effects_inventory_builds_complete_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            asset_root = Path(tmp) / "id1"
+            asset_root.mkdir(parents=True)
+            shareware_maps = breadth_evidence.QUAKE_SHAREWARE_EPISODE_ONE_MAPS
+            bsp_payload = bsp_bytes_with_entities_and_textures(
+                "\n".join([
+                    '{"classname" "worldspawn"}',
+                    '{"classname" "monster_knight"}',
+                    '{"classname" "weapon_nailgun"}',
+                    '{"classname" "trigger_changelevel"}',
+                    '{"classname" "trigger_teleport"}',
+                ]),
+                ["*teleport", "*water", "sky1", "START01"],
+            )
+            payloads = {
+                f"maps/{name}.bsp": bsp_payload
+                for name in shareware_maps
+            }
+            write_pak(
+                asset_root / "pak0.pak",
+                [
+                    *[f"maps/{name}.bsp" for name in shareware_maps],
+                    "sound/ambience/water1.wav",
+                    "progs/s_explod.spr",
+                ],
+                payloads=payloads,
+            )
+
+            inventory = shareware_effects_inventory.build_inventory(
+                asset_root=asset_root,
+                map_set=breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            )
+            self.assertEqual(
+                inventory["schema"],
+                "qge.shareware_effects_inventory.v0",
+            )
+            self.assertEqual(inventory["status"], "complete")
+            self.assertEqual(inventory["target_map_count"], 9)
+            self.assertEqual(inventory["inventoried_map_count"], 9)
+            self.assertEqual(inventory["missing_map_count"], 0)
+            self.assertTrue(inventory["shareware_episode_one_scope"])
+            self.assertFalse(inventory["registered_full_game_scope"])
+            aggregate = inventory["aggregate"]
+            self.assertEqual(
+                aggregate["monster_class_counts"],
+                {"monster_knight": 9},
+            )
+            self.assertEqual(
+                aggregate["weapon_pickup_counts"],
+                {"weapon_nailgun": 9},
+            )
+            self.assertEqual(
+                aggregate["maps_with_slipgate_surfaces"],
+                shareware_maps,
+            )
+            self.assertEqual(inventory["assets"]["sound_asset_count"], 1)
+            self.assertEqual(inventory["assets"]["sprite_asset_count"], 1)
+
+            icc = shareware_effects_inventory.build_icc_evidence(
+                inventory,
+                Path("diagnostics/shareware_effects/test/inventory.json"),
+            )
+            self.assertEqual(
+                icc["runtime_backend"],
+                "qge_shareware_effects_inventory",
+            )
+            self.assertEqual(
+                icc["completion_reason"],
+                "qge_shareware_effects_inventory_complete",
+            )
+            self.assertEqual(
+                icc["runtime_backend_scope_map_set"],
+                breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            )
+            self.assertEqual(
+                icc["shareware_effects_inventory_slipgate_map_count"],
+                9,
+            )
+            markdown = shareware_effects_inventory.markdown_report(inventory)
+            self.assertIn("QGE Shareware Effects Inventory", markdown)
+            self.assertIn("monster_knight", markdown)
+
+    def test_shareware_effects_matrix_builds_compact_icc_evidence(
+        self,
+    ) -> None:
+        shareware_maps = breadth_evidence.QUAKE_SHAREWARE_EPISODE_ONE_MAPS
+        inventory = {
+            "map_set": breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "status": "complete",
+            "target_map_count": len(shareware_maps),
+            "inventoried_map_count": len(shareware_maps),
+            "aggregate": {
+                "maps_with_slipgate_surfaces": ["start"],
+                "material_surface_counts": {},
+                "monster_class_counts": {},
+                "weapon_pickup_counts": {},
+            },
+        }
+        breadth = {
+            "runtime_backend_scope_map_set":
+                breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "runtime_backend_scope_coverage_status": "complete",
+            "runtime_backend_scope_covered_map_count": len(shareware_maps),
+        }
+        runtime = {
+            "trace_count": 1,
+            "trace_index": [{
+                "path": "diagnostics/quake_stream/run/qge_trace_summary.json",
+                "map": "start",
+                "material_slipgate_phase_count": 3,
+            }],
+            "maps_with_trace": shareware_maps,
+            "maps_with_noesis_pass": ["start"],
+            "material_totals": {
+                "operator_count": 3,
+                "water_decoherence_count": 0,
+                "lava_phase_count": 0,
+                "slipgate_phase_count": 3,
+                "world_surface": 1,
+            },
+            "totals": {
+                "ai_decision_count": 0,
+                "audio_ready_count": 1,
+                "projectile_ready_count": 0,
+                "projectile_save_demo_boundary_count": 0,
+                "render_native_bridge_count": 1,
+                "visibility_ready_count": 1,
+                "weapon_operation_count": 0,
+                "noesis_pass_count": 1,
+            },
+        }
+
+        matrix = shareware_effects_matrix.build_matrix(
+            inventory=inventory,
+            breadth_icc=breadth,
+            runtime=runtime,
+        )
+
+        self.assertNotIn("traces", matrix["runtime"])
+        self.assertEqual(matrix["runtime"]["trace_index"][0]["map"], "start")
+        criteria = {item["id"]: item for item in matrix["criteria"]}
+        self.assertEqual(criteria["map_coverage"]["status"], "pass")
+        self.assertEqual(criteria["slipgate_material"]["status"], "pass")
+        self.assertEqual(criteria["audio_classes"]["status"], "pass")
+
+        icc = shareware_effects_matrix.build_icc_evidence(
+            matrix,
+            Path("diagnostics/shareware_effects/test/"
+                 "qge_shareware_effects_matrix.json"),
+        )
+        self.assertEqual(
+            icc["runtime_backend"],
+            "qge_shareware_effects_matrix",
+        )
+        self.assertEqual(
+            icc["shareware_effects_map_coverage_completion"],
+            "complete",
+        )
+        self.assertEqual(
+            icc["shareware_slipgate_effect_evidence_completion"],
+            "present",
+        )
+        self.assertEqual(
+            icc["shareware_audio_effect_evidence_completion"],
+            "complete",
+        )
+        self.assertNotIn("qge_shareware_complete_effects_ready", icc)
+
+    def test_shareware_effects_matrix_collects_compact_runtime_index(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            stream_root = Path(tmp)
+            run_dir = stream_root / "20260625-compact"
+            run_dir.mkdir()
+            (run_dir / "README.txt").write_text(
+                "Map: e1m1\n",
+                encoding="utf-8",
+            )
+            (run_dir / "qge_trace_summary.json").write_text(
+                json.dumps({
+                    "runtime_evidence": {
+                        "ai": {
+                            "decision_count": 7,
+                            "enemy_class_counts": {"monster_ogre": 7},
+                            "enemy_type_counts": {"2": 7},
+                        },
+                        "audio": {"ready": True},
+                        "material": {
+                            "class_counts": {"water": 2},
+                            "operator_count": 5,
+                            "water_decoherence_count": 2,
+                            "lava_phase_count": 1,
+                            "slipgate_phase_count": 3,
+                            "flags": {"world_surface": True},
+                            "large_unneeded_payload": ["x"] * 100,
+                        },
+                        "projectile": {
+                            "ready": True,
+                            "save_demo_boundary_count": 4,
+                        },
+                        "render": {"native_bridge_count": 6},
+                        "visibility": {"ready": True},
+                        "weapon": {
+                            "class_counts": {"weapon_nailgun": 2},
+                            "operation_measurement_count": 8,
+                        },
+                    },
+                }),
+                encoding="utf-8",
+            )
+            (run_dir / "quantum_quake.log").write_text(
+                "\n".join([
+                    "QGE render frame=1 sprites=1 sprite_billboards=1 "
+                    "own_sprites=1 snapshot_particles=64 "
+                    "encoded_particles=3 own_particles=1",
+                    "QGE physics frame=1 impacts=1 qparticle_spawns=2",
+                ]),
+                encoding="utf-8",
+            )
+            (run_dir / "frame_001.png").write_bytes(b"qge-test-frame")
+            (run_dir / "qge_noesis_summary.json").write_text(
+                json.dumps({
+                    "status": "pass",
+                    "quality_gates": {"run_completed": True},
+                    "gameplay": {
+                        "exists": True,
+                        "sample_count": 3,
+                        "route": {"total_distance": 42.0},
+                        "combat": {"enemy_contact_frames": 2},
+                        "pickup": {"pickup_count": 1.0},
+                    },
+                }),
+                encoding="utf-8",
+            )
+
+            runtime = shareware_effects_matrix.collect_runtime_evidence(
+                stream_root)
+
+        self.assertEqual(runtime["trace_count"], 1)
+        self.assertNotIn("traces", runtime)
+        self.assertEqual(runtime["maps_with_trace"], ["e1m1"])
+        self.assertEqual(runtime["maps_with_noesis_pass"], ["e1m1"])
+        self.assertEqual(runtime["maps_with_noesis_evidence"], ["e1m1"])
+        self.assertEqual(runtime["maps_with_footage"], ["e1m1"])
+        self.assertEqual(
+            runtime["material_totals"]["slipgate_phase_count"],
+            3,
+        )
+        self.assertEqual(runtime["material_class_counts"], {"water": 2})
+        self.assertEqual(
+            runtime["weapon_class_counts"],
+            {"weapon_nailgun": 2},
+        )
+        self.assertEqual(runtime["totals"]["audio_ready_count"], 1)
+        self.assertEqual(
+            runtime["enemy_class_counts"],
+            {"monster_ogre": 7},
+        )
+        self.assertEqual(runtime["enemy_type_counts"], {"2": 7})
+        self.assertEqual(
+            runtime["effect_log_totals"]["render_sprite_billboard_frame_count"],
+            1,
+        )
+        self.assertEqual(
+            runtime["effect_log_totals"]["render_encoded_particle_frame_count"],
+            1,
+        )
+        self.assertEqual(
+            runtime["effect_log_totals"]["physics_qparticle_spawn_frame_count"],
+            1,
+        )
+        self.assertEqual(runtime["totals"]["noesis_evidence_count"], 1)
+        self.assertEqual(runtime["totals"]["noesis_pickup_count"], 1)
+        self.assertEqual(runtime["totals"]["footage_capture_count"], 1)
+        index = runtime["trace_index"][0]
+        self.assertEqual(index["map"], "e1m1")
+        self.assertEqual(index["ai_decision_count"], 7)
+        self.assertEqual(
+            index["ai_enemy_class_counts"],
+            {"monster_ogre": 7},
+        )
+        self.assertEqual(index["material_class_counts"], {"water": 2})
+        self.assertEqual(
+            index["weapon_class_counts"],
+            {"weapon_nailgun": 2},
+        )
+        self.assertEqual(index["projectile_save_demo_boundary_count"], 4)
+        self.assertEqual(index["footage_frame_count"], 1)
+        self.assertNotIn("material", index)
+
+    def test_shareware_effects_matrix_completes_with_effect_runtime_evidence(
+        self,
+    ) -> None:
+        shareware_maps = breadth_evidence.QUAKE_SHAREWARE_EPISODE_ONE_MAPS
+        inventory = {
+            "map_set": breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "status": "complete",
+            "target_map_count": len(shareware_maps),
+            "inventoried_map_count": len(shareware_maps),
+            "aggregate": {
+                "maps_with_slipgate_surfaces": [],
+                "material_surface_counts": {},
+                "monster_class_counts": {},
+                "weapon_pickup_counts": {},
+            },
+        }
+        breadth = {
+            "runtime_backend_scope_map_set":
+                breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "runtime_backend_scope_coverage_status": "complete",
+            "runtime_backend_scope_covered_map_count": len(shareware_maps),
+        }
+        runtime = {
+            "trace_count": 1,
+            "trace_index": [],
+            "maps_with_trace": shareware_maps,
+            "maps_with_noesis_pass": ["start"],
+            "maps_with_noesis_evidence": shareware_maps,
+            "maps_with_footage": ["e1m1"],
+            "footage_index": [{"map": "e1m1", "frame_count": 1}],
+            "material_totals": {},
+            "effect_log_totals": {
+                "render_sprite_billboard_frame_count": 1,
+                "render_own_sprite_frame_count": 1,
+                "render_snapshot_particle_frame_count": 1,
+                "render_encoded_particle_frame_count": 1,
+                "physics_qparticle_spawn_frame_count": 1,
+                "physics_impact_frame_count": 1,
+            },
+            "totals": {
+                "ai_decision_count": 0,
+                "audio_ready_count": 1,
+                "projectile_ready_count": 1,
+                "projectile_save_demo_boundary_count": 1,
+                "render_native_bridge_count": 1,
+                "visibility_ready_count": 1,
+                "weapon_operation_count": 0,
+                "noesis_pass_count": 1,
+                "noesis_evidence_count": len(shareware_maps),
+                "noesis_route_sample_count": 1,
+                "noesis_combat_sample_count": 1,
+                "noesis_pickup_count": 1,
+                "footage_capture_count": 1,
+            },
+        }
+
+        matrix = shareware_effects_matrix.build_matrix(
+            inventory=inventory,
+            breadth_icc=breadth,
+            runtime=runtime,
+        )
+
+        criteria = {item["id"]: item for item in matrix["criteria"]}
+        self.assertEqual(criteria["particles_sprites"]["status"], "pass")
+        self.assertEqual(criteria["noesis_replay"]["status"], "pass")
+        self.assertEqual(criteria["footage"]["status"], "pass")
+        self.assertEqual(matrix["status"], "complete")
+        icc = shareware_effects_matrix.build_icc_evidence(
+            matrix,
+            Path("diagnostics/shareware_effects/test/"
+                 "qge_shareware_effects_matrix.json"),
+        )
+        self.assertTrue(icc["qge_shareware_complete_effects_ready"])
+
+    def test_shareware_complete_effects_gate_emits_oracle_keys(self) -> None:
+        matrix_path = Path(
+            "diagnostics/shareware_effects/test/"
+            "qge_shareware_effects_matrix.json")
+        inventory_path = Path(
+            "diagnostics/shareware_effects/test/"
+            "qge_shareware_effects_inventory.json")
+        footage_path = Path(
+            "diagnostics/shareware_effects/test/"
+            "qge_shareware_effects_footage_manifest.json")
+        gate_path = Path(
+            "diagnostics/shareware_effects/test/"
+            "qge_shareware_complete_effects_gate.json")
+        matrix = {
+            "status": "complete",
+            "map_set": breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "summary": {
+                "runtime_footage_capture_count": 2,
+            },
+            "runtime": {
+                "maps_with_footage": ["e1m1"],
+                "footage_index": [
+                    {"map": "e1m1", "frame_count": 1},
+                    {"map": "e1m1", "frame_count": 2},
+                ],
+            },
+            "criteria": [
+                {"id": "map_coverage", "status": "pass"},
+                {"id": "footage", "status": "pass"},
+            ],
+        }
+        inventory = {"status": "complete"}
+
+        footage = shareware_complete_effects_gate.build_footage_manifest(
+            matrix, matrix_path)
+        gate = shareware_complete_effects_gate.build_gate(
+            matrix=matrix,
+            matrix_path=matrix_path,
+            inventory=inventory,
+            inventory_path=inventory_path,
+            footage_manifest=footage,
+            footage_manifest_path=footage_path,
+        )
+        icc = shareware_complete_effects_gate.build_icc_evidence(
+            gate,
+            gate_path,
+            matrix_path,
+            inventory_path,
+            footage_path,
+        )
+
+        self.assertEqual(footage["status"], "complete")
+        self.assertEqual(gate["status"],
+                         "ready_for_shareware_complete_effects_claim")
+        self.assertEqual(icc["runtime_backend"],
+                         "qge_shareware_complete_effects")
+        self.assertEqual(icc["completion_reason"],
+                         "qge_shareware_complete_effects_ready")
+        self.assertEqual(
+            icc["qge_shareware_complete_effects_gate.json"],
+            str(gate_path),
+        )
+        self.assertEqual(
+            icc["qge_shareware_effects_footage_manifest.json"],
+            str(footage_path),
+        )
+        self.assertTrue(icc["qge_shareware_complete_effects_ready"])
+
+    def test_shareware_effects_matrix_default_icc_sidecar_name(self) -> None:
+        self.assertEqual(
+            shareware_effects_matrix.MATRIX_ICC_EVIDENCE_NAME,
+            "qge_shareware_effects_icc_evidence.json",
+        )
+
+    def test_shareware_effects_matrix_blocks_only_missing_enemy_classes(
+        self,
+    ) -> None:
+        shareware_maps = breadth_evidence.QUAKE_SHAREWARE_EPISODE_ONE_MAPS
+        inventory = {
+            "map_set": breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "status": "complete",
+            "target_map_count": len(shareware_maps),
+            "inventoried_map_count": len(shareware_maps),
+            "aggregate": {
+                "maps_with_slipgate_surfaces": [],
+                "material_surface_counts": {},
+                "monster_class_counts": {
+                    "monster_ogre": 1,
+                    "monster_zombie": 1,
+                },
+                "weapon_pickup_counts": {},
+            },
+        }
+        breadth = {
+            "runtime_backend_scope_map_set":
+                breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "runtime_backend_scope_coverage_status": "complete",
+            "runtime_backend_scope_covered_map_count": len(shareware_maps),
+        }
+        runtime = {
+            "trace_count": 1,
+            "trace_index": [],
+            "maps_with_trace": [],
+            "maps_with_noesis_pass": [],
+            "enemy_class_counts": {"monster_ogre": 5},
+            "material_totals": {},
+            "totals": {
+                "ai_decision_count": 5,
+                "audio_ready_count": 0,
+                "projectile_save_demo_boundary_count": 0,
+            },
+        }
+
+        matrix = shareware_effects_matrix.build_matrix(
+            inventory=inventory,
+            breadth_icc=breadth,
+            runtime=runtime,
+        )
+
+        enemy = next(
+            item for item in matrix["criteria"]
+            if item["id"] == "enemy_classes")
+        self.assertEqual(enemy["status"], "blocked")
+        self.assertEqual(enemy["observed_classes"], ["monster_ogre"])
+        self.assertEqual(enemy["missing_classes"], ["monster_zombie"])
+        self.assertEqual(matrix["summary"]["runtime_enemy_class_count"], 1)
+        self.assertEqual(matrix["summary"]["missing_enemy_class_count"], 1)
+
+    def test_shareware_effects_matrix_blocks_only_missing_material_classes(
+        self,
+    ) -> None:
+        shareware_maps = breadth_evidence.QUAKE_SHAREWARE_EPISODE_ONE_MAPS
+        inventory = {
+            "map_set": breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "status": "complete",
+            "target_map_count": len(shareware_maps),
+            "inventoried_map_count": len(shareware_maps),
+            "aggregate": {
+                "maps_with_slipgate_surfaces": [],
+                "material_surface_counts": {
+                    "lava": 1,
+                    "slime": 1,
+                    "water": 1,
+                },
+                "monster_class_counts": {},
+                "weapon_pickup_counts": {},
+            },
+        }
+        breadth = {
+            "runtime_backend_scope_map_set":
+                breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "runtime_backend_scope_coverage_status": "complete",
+            "runtime_backend_scope_covered_map_count": len(shareware_maps),
+        }
+        runtime = {
+            "trace_count": 1,
+            "trace_index": [],
+            "maps_with_trace": [],
+            "maps_with_noesis_pass": [],
+            "material_class_counts": {"water": 3},
+            "material_totals": {},
+            "totals": {
+                "ai_decision_count": 0,
+                "audio_ready_count": 0,
+                "projectile_save_demo_boundary_count": 0,
+            },
+        }
+
+        matrix = shareware_effects_matrix.build_matrix(
+            inventory=inventory,
+            breadth_icc=breadth,
+            runtime=runtime,
+        )
+
+        material = next(
+            item for item in matrix["criteria"]
+            if item["id"] == "material_classes")
+        self.assertEqual(material["status"], "blocked")
+        self.assertEqual(material["observed_material_classes"], ["water"])
+        self.assertEqual(
+            material["missing_material_classes"],
+            ["lava", "slime"],
+        )
+        self.assertEqual(matrix["summary"]["runtime_material_class_count"], 1)
+        self.assertEqual(matrix["summary"]["missing_material_class_count"], 2)
+
+    def test_shareware_effects_matrix_blocks_only_missing_weapon_classes(
+        self,
+    ) -> None:
+        shareware_maps = breadth_evidence.QUAKE_SHAREWARE_EPISODE_ONE_MAPS
+        inventory = {
+            "map_set": breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "status": "complete",
+            "target_map_count": len(shareware_maps),
+            "inventoried_map_count": len(shareware_maps),
+            "aggregate": {
+                "maps_with_slipgate_surfaces": [],
+                "material_surface_counts": {},
+                "monster_class_counts": {},
+                "weapon_pickup_counts": {
+                    "weapon_nailgun": 1,
+                    "weapon_rocketlauncher": 1,
+                    "weapon_supernailgun": 1,
+                },
+            },
+        }
+        breadth = {
+            "runtime_backend_scope_map_set":
+                breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "runtime_backend_scope_coverage_status": "complete",
+            "runtime_backend_scope_covered_map_count": len(shareware_maps),
+        }
+        runtime = {
+            "trace_count": 1,
+            "trace_index": [],
+            "maps_with_trace": [],
+            "maps_with_noesis_pass": [],
+            "material_totals": {},
+            "weapon_class_counts": {"weapon_nailgun": 5},
+            "totals": {
+                "ai_decision_count": 0,
+                "audio_ready_count": 0,
+                "projectile_ready_count": 1,
+                "projectile_save_demo_boundary_count": 3,
+            },
+        }
+
+        matrix = shareware_effects_matrix.build_matrix(
+            inventory=inventory,
+            breadth_icc=breadth,
+            runtime=runtime,
+        )
+
+        weapon = next(
+            item for item in matrix["criteria"]
+            if item["id"] == "weapon_projectile_classes")
+        self.assertEqual(weapon["status"], "blocked")
+        self.assertEqual(weapon["observed_weapon_classes"], ["weapon_nailgun"])
+        self.assertEqual(
+            weapon["missing_weapon_classes"],
+            ["weapon_rocketlauncher", "weapon_supernailgun"],
+        )
+        self.assertTrue(weapon["projectile_core_ready"])
+        self.assertEqual(matrix["summary"]["runtime_weapon_class_count"], 1)
+        self.assertEqual(matrix["summary"]["missing_weapon_class_count"], 2)
+
+    def test_shareware_effects_capture_queue_targets_matrix_gaps(self) -> None:
+        inventory = {
+            "map_set": breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "aggregate": {
+                "monster_class_counts": {
+                    "monster_ogre": 1,
+                    "monster_zombie": 1,
+                },
+                "weapon_pickup_counts": {
+                    "weapon_grenadelauncher": 1,
+                    "weapon_nailgun": 1,
+                },
+                "material_surface_counts": {
+                    "lava": 1,
+                    "teleport": 2,
+                    "water": 1,
+                },
+            },
+            "maps": [
+                {
+                    "map": "start",
+                    "entity": {
+                        "monster_class_counts": {"monster_zombie": 1},
+                        "weapon_pickup_counts": {"weapon_nailgun": 1},
+                    },
+                    "materials": {
+                        "surface_counts": {
+                            "teleport": 1,
+                            "water": 1,
+                        },
+                    },
+                },
+                {
+                    "map": "e1m2",
+                    "entity": {
+                        "monster_class_counts": {"monster_ogre": 1},
+                        "weapon_pickup_counts": {
+                            "weapon_grenadelauncher": 1,
+                        },
+                    },
+                    "materials": {
+                        "surface_counts": {
+                            "lava": 1,
+                            "teleport": 1,
+                        },
+                    },
+                },
+            ],
+        }
+        matrix = {
+            "map_set": breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "status": "blocked",
+            "failed_criterion_count": 7,
+            "criteria": [
+                {
+                    "id": "slipgate_material",
+                    "status": "blocked",
+                    "missing_maps": ["start", "e1m2"],
+                },
+                {"id": "enemy_classes", "status": "blocked"},
+                {"id": "material_classes", "status": "blocked"},
+                {"id": "weapon_projectile_classes", "status": "blocked"},
+                {"id": "particles_sprites", "status": "blocked"},
+                {"id": "noesis_replay", "status": "blocked"},
+                {"id": "footage", "status": "blocked"},
+            ],
+        }
+
+        queue = shareware_effects_capture_queue.build_queue(
+            matrix=matrix,
+            inventory=inventory,
+            frames=6,
+            wait_frames=35,
+        )
+
+        self.assertEqual(queue["status"], "pending")
+        jobs = {job["id"]: job for job in queue["jobs"]}
+        self.assertIn("slipgate_material_start", jobs)
+        self.assertIn("slipgate_material_e1m2", jobs)
+        self.assertIn("enemy_class_monster_ogre_e1m2", jobs)
+        self.assertIn("enemy_class_monster_zombie_start", jobs)
+        self.assertIn("material_class_lava_e1m2", jobs)
+        self.assertIn("material_class_water_start", jobs)
+        self.assertIn("weapon_projectile_weapon_grenadelauncher_e1m2", jobs)
+        self.assertIn("weapon_projectile_weapon_nailgun_start", jobs)
+        self.assertIn("particles_sprites_e1m1", jobs)
+        self.assertIn("noesis_replay_matrix_join", jobs)
+        self.assertIn("shareware_effects_footage_manifest", jobs)
+
+        start_env = jobs["slipgate_material_start"]["env"]
+        self.assertEqual(start_env["QGE_STREAM_MAP"], "start")
+        self.assertEqual(start_env["QGE_NOESIS_PLAN"], "start-hub-route")
+        self.assertEqual(start_env["QGE_STREAM_TRACE"], "1")
+        e1m2_env = jobs["slipgate_material_e1m2"]["env"]
+        self.assertEqual(e1m2_env["QGE_STREAM_MAP"], "e1m2")
+        self.assertEqual(e1m2_env["QGE_NOESIS_PLAN"], "map-scout")
+        self.assertIn("tools/quake_graphics_stream.sh",
+                      jobs["slipgate_material_e1m2"]["command"])
+        zombie_env = jobs["enemy_class_monster_zombie_start"]["env"]
+        self.assertEqual(zombie_env["QGE_NOESIS_ASSIST"], "2")
+        self.assertEqual(zombie_env["QGE_NOESIS_AUTONOMOUS"], "1")
+        self.assertEqual(zombie_env["QGE_NOESIS_MIN_CAPTURE_WAIT"], "120")
+        self.assertEqual(zombie_env["QGE_STREAM_SKILL"], "2")
+        self.assertEqual(
+            zombie_env["QGE_NOESIS_TARGET_CLASS"], "monster_zombie")
+        weapon_env = jobs[
+            "weapon_projectile_weapon_nailgun_start"]["env"]
+        self.assertEqual(weapon_env["QGE_NOESIS_START_WAIT"], "0")
+        self.assertEqual(weapon_env["QGE_STREAM_FIRE_TEST"], "1")
+        self.assertEqual(
+            weapon_env["QGE_NOESIS_WEAPON_TARGET"], "weapon_nailgun")
+        self.assertEqual(weapon_env["QGE_STREAM_FRAMES"], "72")
+        self.assertEqual(weapon_env["QGE_STREAM_WAIT_FRAMES"], "90")
+
+        script = "\n".join(
+            shareware_effects_capture_queue.script_lines(queue))
+        self.assertIn("QGE_SHAREWARE_EFFECTS_CAPTURE_QUEUE", script)
+        self.assertIn("slipgate_material_start", script)
+        self.assertIn("QGE_SHAREWARE_EFFECTS_QUEUE_SLEEP_SECONDS", script)
+
+    def test_shareware_effects_capture_queue_uses_missing_enemy_classes(
+        self,
+    ) -> None:
+        inventory = {
+            "map_set": breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "aggregate": {
+                "monster_class_counts": {
+                    "monster_ogre": 1,
+                    "monster_zombie": 1,
+                },
+            },
+            "maps": [
+                {
+                    "map": "start",
+                    "entity": {
+                        "monster_class_counts": {"monster_zombie": 1},
+                    },
+                },
+                {
+                    "map": "e1m2",
+                    "entity": {
+                        "monster_class_counts": {"monster_ogre": 1},
+                    },
+                },
+            ],
+        }
+        matrix = {
+            "map_set": breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "criteria": [{
+                "id": "enemy_classes",
+                "status": "blocked",
+                "missing_classes": ["monster_zombie"],
+            }],
+        }
+
+        queue = shareware_effects_capture_queue.build_queue(
+            matrix=matrix,
+            inventory=inventory,
+            frames=6,
+            wait_frames=35,
+        )
+
+        jobs = {job["id"] for job in queue["jobs"]}
+        self.assertEqual(jobs, {"enemy_class_monster_zombie_start"})
+        job = queue["jobs"][0]
+        self.assertEqual(job["env"]["QGE_NOESIS_ASSIST"], "2")
+        self.assertEqual(job["env"]["QGE_NOESIS_AUTONOMOUS"], "1")
+        self.assertEqual(job["env"]["QGE_NOESIS_MIN_CAPTURE_WAIT"], "120")
+        self.assertEqual(job["env"]["QGE_STREAM_SKILL"], "2")
+        self.assertEqual(
+            job["env"]["QGE_NOESIS_TARGET_CLASS"], "monster_zombie")
+
+    def test_shareware_effects_capture_queue_uses_missing_material_classes(
+        self,
+    ) -> None:
+        inventory = {
+            "map_set": breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "aggregate": {
+                "material_surface_counts": {
+                    "lava": 1,
+                    "water": 1,
+                },
+            },
+            "maps": [
+                {
+                    "map": "start",
+                    "materials": {
+                        "surface_counts": {"water": 1},
+                    },
+                },
+                {
+                    "map": "e1m2",
+                    "materials": {
+                        "surface_counts": {"lava": 1},
+                    },
+                },
+            ],
+        }
+        matrix = {
+            "map_set": breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "criteria": [{
+                "id": "material_classes",
+                "status": "blocked",
+                "missing_material_classes": ["lava"],
+            }],
+        }
+
+        queue = shareware_effects_capture_queue.build_queue(
+            matrix=matrix,
+            inventory=inventory,
+            frames=6,
+            wait_frames=35,
+        )
+
+        jobs = {job["id"] for job in queue["jobs"]}
+        self.assertEqual(jobs, {"material_class_lava_e1m2"})
+
+    def test_shareware_effects_capture_queue_uses_missing_weapon_classes(
+        self,
+    ) -> None:
+        inventory = {
+            "map_set": breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "aggregate": {
+                "weapon_pickup_counts": {
+                    "weapon_nailgun": 1,
+                    "weapon_rocketlauncher": 1,
+                },
+            },
+            "maps": [
+                {
+                    "map": "start",
+                    "entity": {
+                        "weapon_pickup_counts": {"weapon_nailgun": 1},
+                    },
+                },
+                {
+                    "map": "e1m2",
+                    "entity": {
+                        "weapon_pickup_counts": {
+                            "weapon_rocketlauncher": 1,
+                        },
+                    },
+                },
+            ],
+        }
+        matrix = {
+            "map_set": breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "criteria": [{
+                "id": "weapon_projectile_classes",
+                "status": "blocked",
+                "missing_weapon_classes": ["weapon_rocketlauncher"],
+            }],
+        }
+
+        queue = shareware_effects_capture_queue.build_queue(
+            matrix=matrix,
+            inventory=inventory,
+            frames=6,
+            wait_frames=35,
+        )
+
+        jobs = {job["id"] for job in queue["jobs"]}
+        self.assertEqual(
+            jobs,
+            {"weapon_projectile_weapon_rocketlauncher_e1m2"},
+        )
+
+    def test_shareware_effects_capture_queue_cli_writes_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            inventory_path = tmpdir / "inventory.json"
+            matrix_path = tmpdir / "matrix.json"
+            out_path = tmpdir / "queue.json"
+            markdown_path = tmpdir / "queue.md"
+            script_path = tmpdir / "run_queue.sh"
+            icc_path = tmpdir / "queue_icc.json"
+            shareware_effects_capture_queue.write_json(inventory_path, {
+                "map_set": breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+                "aggregate": {
+                    "monster_class_counts": {},
+                    "weapon_pickup_counts": {},
+                    "material_surface_counts": {},
+                },
+                "maps": [],
+            })
+            shareware_effects_capture_queue.write_json(matrix_path, {
+                "map_set": breadth_evidence.SHAREWARE_EPISODE_ONE_MAP_SET,
+                "status": "blocked",
+                "failed_criterion_count": 1,
+                "criteria": [{
+                    "id": "slipgate_material",
+                    "status": "blocked",
+                    "missing_maps": ["start"],
+                }],
+            })
+
+            self.assertEqual(
+                shareware_effects_capture_queue.main([
+                    "--matrix",
+                    str(matrix_path),
+                    "--inventory",
+                    str(inventory_path),
+                    "--out",
+                    str(out_path),
+                    "--markdown",
+                    str(markdown_path),
+                    "--script",
+                    str(script_path),
+                    "--icc-json",
+                    str(icc_path),
+                ]),
+                2,
+            )
+
+            queue = json.loads(out_path.read_text(encoding="utf-8"))
+            self.assertEqual(queue["job_count"], 1)
+            self.assertEqual(
+                queue["jobs"][0]["id"],
+                "slipgate_material_start",
+            )
+            self.assertTrue(markdown_path.is_file())
+            self.assertTrue(script_path.is_file())
+            self.assertTrue(script_path.stat().st_mode & 0o111)
+            icc = json.loads(icc_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                icc["runtime_backend"],
+                "qge_shareware_effects_capture_queue",
+            )
+            self.assertEqual(
+                icc["shareware_effects_capture_queue_job_count"],
+                1,
+            )
+
     def test_asset_inventory_reports_registered_map_availability(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             asset_root = Path(tmp) / "id1"
@@ -11964,7 +14213,7 @@ class NoesisSummaryTests(unittest.TestCase):
                             "save_demo_branch_count": 1,
                             "save_demo_collision_oracle_count": 1,
                             "save_demo_trace_id_xor": 0xAA55,
-                            "flags_or": 0x70000000,
+                            "flags_or": 0xF0000000,
                             "off_reason": "none",
                             "branch_selected_probability_max": 0.875,
                             "preimpact_selected_probability_max": 0.75,
@@ -12433,6 +14682,1449 @@ class NoesisSummaryTests(unittest.TestCase):
             self.assertEqual(blocked["status"], "blocked")
             self.assertIn(str(commands_path), blocked["inputs"]["missing_inputs"])
             self.assertIn("commands_present", blocked["failures"])
+
+    def test_noesis_release_gate_allows_bounded_autonomous_diagnostics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            stream = Path(tmp) / "agent_stream"
+            (stream / "noesis").mkdir(parents=True)
+            (stream / "input").mkdir()
+            paths = noesis_release_gate.noesis_paths(stream)
+            paths["manifest"].write_text(
+                json.dumps({
+                    "status": "complete",
+                    "noesis": {
+                        "status": "complete",
+                        "summary_file": str(paths["summary"]),
+                        "icc_evidence_file": str(paths["icc_evidence"]),
+                        "gameplay_outcomes_file": str(
+                            paths["gameplay_outcomes"]),
+                    },
+                }),
+                encoding="utf-8",
+            )
+            paths["actions"].write_text("", encoding="utf-8")
+            paths["commands"].write_text(
+                "echo QGE_NOESIS_PLAYER start\nwait\n"
+                "echo QGE_NOESIS_PLAYER done\n",
+                encoding="utf-8",
+            )
+            paths["gameplay_outcomes"].write_text(
+                "\n".join([
+                    json.dumps({
+                        "schema": "qge.gameplay_outcome.v0",
+                        "type": "sample",
+                        "frame": 1,
+                    }),
+                    json.dumps({
+                        "schema": "qge.gameplay_outcome.v0",
+                        "type": "sample",
+                        "frame": 2,
+                    }),
+                ]) + "\n",
+                encoding="utf-8",
+            )
+            claims_path = Path(tmp) / "qge_claims.json"
+            claims_path.write_text(
+                json.dumps({
+                    "claims": [{
+                        "claim_id": noesis_release_gate.CLAIM_ID,
+                        "allowed_wording": (
+                            noesis_release_gate.ALLOWED_WORDING),
+                        "disallowed_wording": (
+                            noesis_release_gate.DISALLOWED_WORDING),
+                    }],
+                }),
+                encoding="utf-8",
+            )
+            summary = {
+                "schema": "qge.noesis_summary.v0",
+                "status": "pass",
+                "map": "e1m1",
+                "player": "noesis",
+                "plan": "adaptive",
+                "inputs": {
+                    "claim_scope": "server_autonomous",
+                    "noesis_scripted": 0,
+                    "noesis_autonomous": 1,
+                    "autonomous_control": True,
+                },
+                "actions": {
+                    "exists": True,
+                    "line_count": 0,
+                    "movement_action_count": 0,
+                    "combat_action_count": 0,
+                    "route_action_count": 0,
+                    "policy_marker_count": 0,
+                    "verb_counts": {},
+                },
+                "commands": {
+                    "exists": True,
+                    "line_count": 3,
+                    "policy_marker_count": 0,
+                    "player_start_present": True,
+                    "player_done_present": True,
+                },
+                "frames": {"frame_count": 3},
+                "run": {"status": "ok", "success": 1},
+                "gameplay": {
+                    "exists": True,
+                    "sample_count": 2,
+                    "parse_error_count": 0,
+                    "route": {
+                        "total_distance": 128.0,
+                        "max_displacement_from_start": 96.0,
+                        "terminal_stall": False,
+                    },
+                    "player": {"survived": True},
+                    "combat": {
+                        "visible_enemy_frames": 4,
+                        "attack_active_frames": 2,
+                        "damage_dealt_inferred": 18.0,
+                        "kills": 1.0,
+                    },
+                    "assist": {
+                        "telemetry_sample_count": 2,
+                        "active_sample_count": 2,
+                        "target_locked_sample_count": 1,
+                        "target_visible_sample_count": 1,
+                        "movement_injected_sample_count": 2,
+                        "view_injected_sample_count": 1,
+                    },
+                },
+                "gameplay_score": {
+                    "score": 80.0,
+                    "grade": "strong_smoke",
+                    "blocking_gates": [],
+                    "outcome_telemetry_present": True,
+                    "assist_telemetry_present": True,
+                },
+                "trace": {"ai_decision_count": 9},
+                "claim_gates": {"unassisted_claim_supported": False},
+                "failures": [],
+            }
+            paths["summary"].write_text(
+                json.dumps(summary, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            paths["icc_evidence"].write_text(
+                json.dumps([
+                    {
+                        "kind": "runtime_backend",
+                        "name": "runtime_backend",
+                        "value": "qge_noesis_summary",
+                    },
+                    {
+                        "kind": "completion_condition",
+                        "name": "completion_reason",
+                        "value": "qge_noesis_summary_complete",
+                    },
+                    {
+                        "kind": "runtime_state",
+                        "name": "noesis_summary_status",
+                        "value": "pass",
+                    },
+                    {
+                        "kind": "runtime_state",
+                        "name": "noesis_failure_free",
+                        "value": True,
+                    },
+                    {
+                        "kind": "runtime_state",
+                        "name": "noesis_scripted",
+                        "value": False,
+                    },
+                    {
+                        "kind": "runtime_state",
+                        "name": "noesis_autonomous",
+                        "value": True,
+                    },
+                    {
+                        "kind": "runtime_state",
+                        "name": "noesis_autonomous_control",
+                        "value": True,
+                    },
+                    {
+                        "kind": "runtime_state",
+                        "name": "noesis_gameplay_outcome_sample_count",
+                        "value": 2,
+                    },
+                    {
+                        "kind": "runtime_state",
+                        "name": "noesis_gameplay_total_distance",
+                        "value": 128.0,
+                    },
+                    {
+                        "kind": "runtime_state",
+                        "name": "noesis_gameplay_terminal_stall",
+                        "value": False,
+                    },
+                ]),
+                encoding="utf-8",
+            )
+
+            gate = noesis_release_gate.build_gate_from_agent_stream(
+                stream,
+                claims_path=claims_path,
+            )
+
+            self.assertEqual(gate["schema"], "qge.noesis_release_gate.v0")
+            self.assertEqual(
+                gate["status"],
+                noesis_release_gate.READY_STATUS,
+            )
+            self.assertTrue(
+                gate["noesis_autonomous_diagnostics_claim_allowed"])
+            self.assertFalse(gate["learned_play_claim_allowed"])
+            self.assertFalse(
+                gate["robust_map_level_world_model_claim_allowed"])
+            self.assertIn(
+                "bounded no-script autonomous diagnostics",
+                noesis_release_gate.markdown_report(gate),
+            )
+            icc = noesis_release_gate.build_icc_evidence(
+                gate,
+                out_path=Path("agent_stream/noesis/qge_noesis_release_gate.json"),
+            )
+            self.assertEqual(icc["runtime_backend"], "qge_noesis_release_gate")
+            self.assertEqual(
+                icc["completion_reason"],
+                "qge_noesis_release_gate_ready",
+            )
+            self.assertEqual(
+                icc["noesis_gameplay_quality_score"],
+                80.0,
+            )
+
+            blocked_summary = json.loads(json.dumps(summary))
+            blocked_summary["inputs"]["noesis_scripted"] = 1
+            paths["summary"].write_text(
+                json.dumps(blocked_summary, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            blocked_gate = noesis_release_gate.build_gate_from_agent_stream(
+                stream,
+                claims_path=claims_path,
+            )
+            self.assertEqual(blocked_gate["status"], "blocked")
+            self.assertIn(
+                "noesis_no_script_autonomous_scope",
+                [item["id"] for item in blocked_gate["blockers"]],
+            )
+
+    def test_shareware_release_candidate_gate_composes_release_evidence(self) -> None:
+        manifest = {
+            "schema": "qge.publication_pack.v0",
+            "status": "success",
+            "runtime_summary": {
+                "publication_ready_for_complete_claim": True,
+                "shareware_episode_one_scope": True,
+                "registered_full_game_scope": False,
+            },
+            "claim_posture": {
+                "allowed_wording": (
+                    "This pack contains reproducible Quantum Quake artifact "
+                    "evidence for shareware Episode 1."
+                ),
+                "disallowed_wording": (
+                    "This pack proves practical hardware speedup, full-frame "
+                    "quantum rendering, or unrestricted quantum advantage."
+                ),
+            },
+            "advantage_summary": {
+                "moonlab_deployment_gate_summary": {
+                    "whole_game_moonlab_deployment_claim_allowed": False,
+                    "whole_game_hardware_execution_claim_allowed": False,
+                    "hardware_quantum_advantage_claim_allowed": False,
+                    "dense_70000_qubit_state_claim_allowed": False,
+                },
+            },
+        }
+        publication_icc = {
+            "schema": "qge.icc_evidence.v0",
+            "runtime_backend": "qge_publication_pack",
+            "completion_reason": "qge_publication_artifact_pack_complete",
+        }
+        postpack = {
+            "schema": "qge.postpack_audit.v0",
+            "passed": True,
+            "failed_count": 0,
+            "mismatch_count_total": 0,
+            "load_error_count": 0,
+            "stale_output_error_count": 0,
+            "manifest_postpack_command_count": 31,
+            "default_child_audit_count": 30,
+        }
+        shareware_gate = {
+            "schema": "qge.moonlab_shareware_deployment_gate.v0",
+            "status": moonlab_shareware_deployment_gate.READY_STATUS,
+            "map_set": map_sets.SHAREWARE_EPISODE_ONE_MAP_SET,
+            "shareware_moonlab_deployment_claim_allowed": True,
+            "whole_game_moonlab_deployment_claim_allowed": False,
+            "whole_game_hardware_execution_claim_allowed": False,
+            "hardware_quantum_advantage_claim_allowed": False,
+            "dense_70000_qubit_state_claim_allowed": False,
+            "blocker_count": 0,
+            "summary": {
+                "target_map_count": 9,
+                "covered_map_count": 9,
+                "total_native_bridge_count": 945,
+                "total_fallback_count": 0,
+                "total_surrogate_count": 0,
+                "total_cpu_idwt_count": 0,
+            },
+        }
+        noesis_gate = {
+            "schema": "qge.noesis_release_gate.v0",
+            "status": noesis_release_gate.READY_STATUS,
+            "noesis_autonomous_diagnostics_claim_allowed": True,
+            "learned_play_claim_allowed": False,
+            "robust_map_level_world_model_claim_allowed": False,
+            "unassisted_general_play_claim_allowed": False,
+            "blocker_count": 0,
+            "summary": {
+                "claim_scope": "server_autonomous",
+                "claim_allowed_wording": noesis_release_gate.ALLOWED_WORDING,
+                "claim_disallowed_wording": (
+                    noesis_release_gate.DISALLOWED_WORDING),
+                "gameplay_quality_score": 84.0,
+                "gameplay_quality_grade": "strong_smoke",
+                "gameplay_outcome_sample_count": 284,
+                "total_distance": 7558.0,
+                "kills": 3,
+            },
+        }
+        full_gate = {
+            "schema": "qge.moonlab_deployment_gate.v0",
+            "status": "blocked",
+            "blocker_count": 4,
+            "whole_game_moonlab_deployment_claim_allowed": False,
+            "whole_game_hardware_execution_claim_allowed": False,
+            "hardware_quantum_advantage_claim_allowed": False,
+            "dense_70000_qubit_state_claim_allowed": False,
+            "summary": {"asset_inventory_missing_map_count": 23},
+        }
+
+        gate = shareware_release_gate.build_gate(
+            manifest,
+            publication_icc,
+            postpack,
+            shareware_gate,
+            noesis_gate,
+            full_gate,
+            source_path=Path("publication_manifest.json"),
+        )
+
+        self.assertEqual(gate["schema"],
+                         "qge.shareware_release_candidate_gate.v0")
+        self.assertEqual(gate["status"], shareware_release_gate.READY_STATUS)
+        self.assertTrue(gate["shareware_release_candidate_claim_allowed"])
+        self.assertTrue(gate["shareware_moonlab_deployment_claim_allowed"])
+        self.assertTrue(gate["noesis_autonomous_diagnostics_claim_allowed"])
+        self.assertFalse(gate["whole_game_moonlab_deployment_claim_allowed"])
+        self.assertFalse(gate["hardware_quantum_advantage_claim_allowed"])
+        self.assertFalse(gate["learned_play_claim_allowed"])
+        self.assertEqual(gate["blocker_count"], 0)
+        self.assertEqual(
+            gate["summary"]["registered_full_game_gate_status"], "blocked")
+        self.assertTrue(gate["summary"]["postpack_passed"])
+        markdown = shareware_release_gate.markdown_report(gate)
+        self.assertIn("QGE Shareware Release Candidate Gate", markdown)
+        self.assertIn("registered full-game gate | blocked", markdown)
+
+        icc = shareware_release_gate.build_icc_evidence(
+            gate,
+            out_path=Path("qge_shareware_release_candidate_gate.json"),
+        )
+        self.assertEqual(
+            icc["runtime_backend"],
+            "qge_shareware_release_candidate_gate",
+        )
+        self.assertEqual(
+            icc["completion_reason"],
+            "qge_shareware_release_candidate_gate_ready",
+        )
+        self.assertTrue(
+            icc["shareware_release_candidate_claim_allowed"])
+        self.assertEqual(icc["map_set"],
+                         map_sets.SHAREWARE_EPISODE_ONE_MAP_SET)
+        self.assertEqual(
+            icc["runtime_backend_scope_map_set"],
+            map_sets.SHAREWARE_EPISODE_ONE_MAP_SET,
+        )
+        self.assertEqual(
+            icc["registered_full_game_deployment_gate_status"], "blocked")
+
+        stale_full_gate = json.loads(json.dumps(full_gate))
+        stale_full_gate["whole_game_moonlab_deployment_claim_allowed"] = True
+        blocked_full = shareware_release_gate.build_gate(
+            manifest,
+            publication_icc,
+            postpack,
+            shareware_gate,
+            noesis_gate,
+            stale_full_gate,
+        )
+        self.assertEqual(blocked_full["status"], "blocked")
+        self.assertIn(
+            "registered_full_game_not_claimed",
+            {item["id"] for item in blocked_full["blockers"]},
+        )
+
+        stale_noesis_gate = json.loads(json.dumps(noesis_gate))
+        stale_noesis_gate["learned_play_claim_allowed"] = True
+        blocked_noesis = shareware_release_gate.build_gate(
+            manifest,
+            publication_icc,
+            postpack,
+            shareware_gate,
+            stale_noesis_gate,
+            full_gate,
+        )
+        self.assertEqual(blocked_noesis["status"], "blocked")
+        self.assertIn(
+            "noesis_bounded_diagnostics_ready",
+            {item["id"] for item in blocked_noesis["blockers"]},
+        )
+
+    def test_shareware_release_bundle_archives_ready_pack(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pack = root / "publication_pack"
+            (pack / "release").mkdir(parents=True)
+            (pack / "resource").mkdir()
+            (pack / "agent_stream_release" / "noesis").mkdir(parents=True)
+            (pack / "notes").mkdir()
+            (pack / "notes" / "release.txt").write_text(
+                "shareware evidence\n",
+                encoding="utf-8",
+            )
+            executable_script = pack / "resource" / "run_missing_maps.sh"
+            executable_script.write_text(
+                "#!/bin/sh\nexit 0\n",
+                encoding="utf-8",
+            )
+            executable_script.chmod(0o755)
+            (pack / "publication_manifest.json").write_text(
+                json.dumps({
+                    "schema": "qge.publication_pack.v0",
+                    "status": "success",
+                    "runtime_summary": {
+                        "publication_ready_for_complete_claim": True,
+                    },
+                }),
+                encoding="utf-8",
+            )
+            (pack / "qge_publication_icc_evidence.json").write_text(
+                json.dumps({
+                    "schema": "qge.icc_evidence.v0",
+                    "runtime_backend": "qge_publication_pack",
+                    "completion_reason": (
+                        "qge_publication_artifact_pack_complete"),
+                }),
+                encoding="utf-8",
+            )
+            (pack / "qge_postpack_audit.json").write_text(
+                json.dumps({
+                    "schema": "qge.postpack_audit.v0",
+                    "passed": True,
+                    "failed_count": 0,
+                    "mismatch_count_total": 0,
+                }),
+                encoding="utf-8",
+            )
+            rc_summary = {
+                "shareware_gate_status": (
+                    moonlab_shareware_deployment_gate.READY_STATUS),
+                "noesis_gate_status": noesis_release_gate.READY_STATUS,
+                "registered_full_game_gate_status": "blocked",
+                "shareware_covered_map_count": 9,
+                "shareware_target_map_count": 9,
+                "shareware_native_bridge_count": 945,
+                "noesis_quality_score": 84.0,
+                "noesis_quality_grade": "strong_smoke",
+            }
+            (pack / "release" /
+             "qge_shareware_release_candidate_gate.json").write_text(
+                json.dumps({
+                    "schema": "qge.shareware_release_candidate_gate.v0",
+                    "status": shareware_release_gate.READY_STATUS,
+                    "shareware_release_candidate_claim_allowed": True,
+                    "whole_game_moonlab_deployment_claim_allowed": False,
+                    "hardware_quantum_advantage_claim_allowed": False,
+                    "learned_play_claim_allowed": False,
+                    "blocker_count": 0,
+                    "summary": rc_summary,
+                }),
+                encoding="utf-8",
+            )
+            (pack / "release" /
+             "qge_shareware_release_candidate_gate.md").write_text(
+                "# gate\n",
+                encoding="utf-8",
+            )
+            (pack / "release" /
+             "qge_shareware_release_candidate_gate_icc_evidence.json"
+             ).write_text(
+                json.dumps({
+                    "schema": "qge.icc_evidence.v0",
+                    "runtime_backend": (
+                        "qge_shareware_release_candidate_gate"),
+                    "completion_reason": (
+                        "qge_shareware_release_candidate_gate_ready"),
+                    "runtime_backend_scope_map_set": (
+                        map_sets.SHAREWARE_EPISODE_ONE_MAP_SET),
+                }),
+                encoding="utf-8",
+            )
+            for path in (
+                pack / "resource" /
+                "qge_moonlab_shareware_deployment_gate.json",
+                pack / "agent_stream_release" / "noesis" /
+                "qge_noesis_release_gate.json",
+                pack / "resource" / "qge_moonlab_deployment_gate.json",
+            ):
+                path.write_text("{}\n", encoding="utf-8")
+
+            bundle = shareware_release_bundle.build_bundle(
+                pack,
+                outdir=root / "bundle",
+                name="test-shareware",
+            )
+
+            self.assertEqual(
+                bundle["schema"], "qge.shareware_release_bundle.v0")
+            self.assertEqual(
+                bundle["status"],
+                shareware_release_bundle.READY_STATUS,
+            )
+            self.assertTrue(bundle["shareware_release_bundle_ready"])
+            self.assertEqual(bundle["blocker_count"], 0)
+            archive = Path(bundle["archive"]["path"])
+            self.assertTrue(archive.is_file())
+            self.assertEqual(
+                bundle["archive"]["sha256"],
+                shareware_release_bundle.sha256_file(archive),
+            )
+            script_entry = next(
+                item for item in bundle["file_manifest"]
+                if item["path"] == "resource/run_missing_maps.sh"
+            )
+            self.assertEqual(script_entry["archive_mode"], "0755")
+            with zipfile.ZipFile(archive) as zip_file:
+                names = set(zip_file.namelist())
+                script_info = zip_file.getinfo(
+                    "publication_pack/resource/run_missing_maps.sh")
+            self.assertIn(
+                "publication_pack/publication_manifest.json",
+                names,
+            )
+            self.assertIn(
+                "publication_pack/release/"
+                "qge_shareware_release_candidate_gate.json",
+                names,
+            )
+            self.assertEqual(
+                (script_info.external_attr >> 16) & 0o777,
+                0o755,
+            )
+            markdown = shareware_release_bundle.markdown_report(bundle)
+            self.assertIn("archive sha256", markdown)
+            checksum_record = shareware_release_bundle.archive_checksum_record(
+                bundle)
+            self.assertEqual(
+                checksum_record["kind"],
+                "artifact",
+            )
+            self.assertEqual(
+                checksum_record["name"],
+                "shareware_release_bundle_archive_checksum_file",
+            )
+            self.assertEqual(
+                checksum_record["archive_sha256"],
+                bundle["archive"]["sha256"],
+            )
+            icc = shareware_release_bundle.build_icc_evidence(
+                bundle,
+                manifest_path=root / "bundle" /
+                "qge_shareware_release_bundle.json",
+                archive_checksum_path=root / "bundle" /
+                "qge_shareware_release_bundle_archive_checksum.json",
+            )
+            self.assertEqual(
+                icc["runtime_backend"],
+                "qge_shareware_release_bundle",
+            )
+            self.assertEqual(
+                icc["completion_reason"],
+                "qge_shareware_release_bundle_ready",
+            )
+            self.assertEqual(
+                icc["runtime_backend_scope_map_set"],
+                map_sets.SHAREWARE_EPISODE_ONE_MAP_SET,
+            )
+            self.assertEqual(
+                icc["shareware_release_bundle_archive_checksum_file"],
+                str(root / "bundle" /
+                    "qge_shareware_release_bundle_archive_checksum.json"),
+            )
+            self.assertTrue(icc["shareware_release_bundle_ready"])
+
+    def test_shareware_playability_gate_composes_no_exception_release(self) -> None:
+        ownership = {
+            field: 1 for field in
+            shareware_playability_gate.REQUIRED_OWNERSHIP_FIELDS
+        }
+        asset_inventory = {
+            "schema": "qge.asset_inventory.v0",
+            "status": "complete",
+            "shareware_episode_one_scope": True,
+            "shareware_episode_one_asset_ready": True,
+            "available_map_count": 9,
+            "target_map_count": 9,
+            "missing_map_count": 0,
+            "invalid_bsp_count": 0,
+            "extra_map_count": 12,
+            "pak_count": 1,
+        }
+        pak_report = {
+            "entry_count": 339,
+            "extension_counts": {
+                "bsp": 21,
+                "dat": 1,
+                "lmp": 56,
+                "mdl": 61,
+                "spr": 3,
+                "wad": 1,
+                "wav": 190,
+            },
+            "missing_required_entries": [],
+            "unknown_extensions": [],
+            "read_errors": [],
+        }
+        release_candidate = {
+            "schema": "qge.shareware_release_candidate_gate.v0",
+            "status": shareware_release_gate.READY_STATUS,
+            "shareware_release_candidate_claim_allowed": True,
+            "whole_game_moonlab_deployment_claim_allowed": False,
+            "hardware_quantum_advantage_claim_allowed": False,
+            "learned_play_claim_allowed": False,
+            "blocker_count": 0,
+        }
+        release_bundle = {
+            "schema": "qge.shareware_release_bundle.v0",
+            "status": shareware_release_bundle.READY_STATUS,
+            "shareware_release_bundle_ready": True,
+            "blocker_count": 0,
+            "archive": {
+                "path": "quantum-quake-shareware.zip",
+                "sha256": "a" * 64,
+                "size_bytes": 1024,
+            },
+            "sidecars": {
+                "archive_checksum_file": (
+                    "qge_shareware_release_bundle_archive_checksum.json"),
+            },
+            "summary": {
+                "shareware_covered_map_count": 9,
+                "shareware_target_map_count": 9,
+            },
+        }
+        shareware_gate = {
+            "schema": "qge.moonlab_shareware_deployment_gate.v0",
+            "status": moonlab_shareware_deployment_gate.READY_STATUS,
+            "shareware_moonlab_deployment_claim_allowed": True,
+            "blocker_count": 0,
+            "criteria": [{"id": "shareware_map_coverage_complete",
+                          "status": "pass"}],
+            "summary": {
+                "covered_map_count": 9,
+                "target_map_count": 9,
+                "total_native_bridge_count": 945,
+                "total_fallback_count": 0,
+                "total_surrogate_count": 0,
+                "total_cpu_idwt_count": 0,
+            },
+        }
+        matrix_summary = {
+            "missing_enemy_class_count": 0,
+            "missing_material_class_count": 0,
+            "missing_weapon_class_count": 0,
+            "missing_noesis_evidence_map_count": 0,
+            "runtime_enemy_class_count": 9,
+            "runtime_material_class_count": 8,
+            "runtime_footage_capture_count": 342,
+        }
+        effects_gate = {
+            "schema": "qge.shareware_complete_effects_gate.v0",
+            "status": "ready_for_shareware_complete_effects_claim",
+            "summary": {
+                "ready_for_complete_effects_claim": True,
+                "matrix_summary": matrix_summary,
+            },
+        }
+        effects_matrix = {
+            "status": "complete",
+            "failed_criterion_count": 0,
+            "criteria": [{"id": "map_coverage", "status": "pass"}],
+        }
+        effects_inventory = {
+            "status": "complete",
+            "aggregate": {
+                "trigger_counts": {
+                    "trigger_changelevel": 14,
+                    "trigger_teleport": 77,
+                },
+                "item_counts": {
+                    "item_sigil": 1,
+                },
+            },
+        }
+        vanilla_matrix = {
+            "conformance_summary": {
+                "ready_for_complete_claim": True,
+                "qge_asset_ownership_complete": True,
+                "qge_asset_ownership": ownership,
+                "moonlab_domain_readiness": {
+                    "render_quantum_workload": {
+                        "required": True,
+                        "ready": True,
+                    },
+                    "ai_authority": {
+                        "required": False,
+                        "ready": True,
+                    },
+                },
+                "classic3d_latest": 0,
+                "classic2d_latest": 0,
+                "fallback_count": 0,
+                "viewmodel_encoded": 1,
+            },
+        }
+        gate = shareware_playability_gate.build_gate(
+            pack_dir=Path("diagnostics/publication_pack/pack"),
+            asset_inventory=asset_inventory,
+            pak_report=pak_report,
+            release_candidate=release_candidate,
+            release_bundle=release_bundle,
+            shareware_gate=shareware_gate,
+            effects_gate=effects_gate,
+            effects_matrix=effects_matrix,
+            effects_inventory=effects_inventory,
+            vanilla_matrix=vanilla_matrix,
+        )
+        self.assertEqual(
+            gate["status"], shareware_playability_gate.READY_STATUS)
+        self.assertTrue(gate["shareware_user_playable_release_ready"])
+        self.assertEqual(gate["blocker_count"], 0)
+        icc = shareware_playability_gate.build_icc_evidence(
+            gate,
+            out_path=Path("qge_shareware_playability_gate.json"),
+        )
+        self.assertEqual(
+            icc["runtime_backend"], "qge_shareware_playability_gate")
+        self.assertEqual(
+            icc["completion_reason"],
+            "qge_shareware_user_playable_release_ready",
+        )
+        self.assertEqual(
+            icc["qge_shareware_playability_gate.json"],
+            "qge_shareware_playability_gate.json",
+        )
+        self.assertEqual(
+            icc["qge_shareware_release_bundle_archive_checksum.json"],
+            "qge_shareware_release_bundle_archive_checksum.json",
+        )
+
+        blocked = shareware_playability_gate.build_gate(
+            pack_dir=Path("diagnostics/publication_pack/pack"),
+            asset_inventory=asset_inventory,
+            pak_report={
+                **pak_report,
+                "missing_required_entries": ["gfx/mainmenu.lmp"],
+            },
+            release_candidate=release_candidate,
+            release_bundle=release_bundle,
+            shareware_gate=shareware_gate,
+            effects_gate=effects_gate,
+            effects_matrix=effects_matrix,
+            effects_inventory=effects_inventory,
+            vanilla_matrix=vanilla_matrix,
+        )
+        self.assertEqual(blocked["status"], "blocked")
+        self.assertIn(
+            "shareware_pak_content_complete",
+            {item["id"] for item in blocked["blockers"]},
+        )
+
+    def test_shareware_user_package_builds_player_archive(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            app = root / "QuantumQuake.app"
+            macos = app / "Contents" / "MacOS"
+            frameworks = (
+                app / "Contents" / "Frameworks" / "SDL2.framework")
+            current = frameworks / "Versions" / "A"
+            macos.mkdir(parents=True)
+            current.mkdir(parents=True)
+            binary = macos / "quantum_quake"
+            binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            binary.chmod(0o755)
+            (app / "Contents" / "Info.plist").write_text(
+                "<plist></plist>\n",
+                encoding="utf-8",
+            )
+            (current / "SDL2").write_text("framework\n", encoding="utf-8")
+            os.symlink("A", frameworks / "Versions" / "Current")
+            os.symlink("Versions/Current/SDL2", frameworks / "SDL2")
+
+            pak = root / "assets" / "id1" / "pak0.pak"
+            pak.parent.mkdir(parents=True)
+            pak.write_bytes(b"PACKshareware")
+            playability_gate_path = root / "qge_shareware_playability_gate.json"
+            publication_pack.write_json(playability_gate_path, {
+                "schema": "qge.shareware_playability_gate.v0",
+                "status": (
+                    shareware_playability_gate.READY_STATUS),
+                "shareware_user_playable_release_ready": True,
+                "blocker_count": 0,
+                "criteria": [
+                    {
+                        "id": "complete_effects_and_content_runtime",
+                        "status": "pass",
+                    },
+                ],
+                "summary": {
+                    "runtime_covered_map_count": 9,
+                    "runtime_target_map_count": 9,
+                    "pak_entry_count": 339,
+                    "effects_gate_status": (
+                        "ready_for_shareware_complete_effects_claim"),
+                    "effects_footage_capture_count": 342,
+                },
+            })
+            effects_gate_path = (
+                root / "qge_shareware_complete_effects_gate.json")
+            publication_pack.write_json(effects_gate_path, {
+                "schema": "qge.shareware_complete_effects_gate.v0",
+                "status": "ready_for_shareware_complete_effects_claim",
+                "summary": {
+                    "ready_for_complete_effects_claim": True,
+                    "matrix_summary": {
+                        "missing_enemy_class_count": 0,
+                        "missing_material_class_count": 0,
+                        "missing_weapon_class_count": 0,
+                        "missing_noesis_evidence_map_count": 0,
+                        "runtime_footage_capture_count": 342,
+                    },
+                },
+            })
+
+            package = shareware_user_package.build_package(
+                app=app,
+                pak=pak,
+                playability_gate_path=playability_gate_path,
+                effects_gate_path=effects_gate_path,
+                outdir=root / "out",
+                name="TestPackage",
+            )
+
+            self.assertEqual(
+                package["status"], shareware_user_package.READY_STATUS)
+            self.assertTrue(package["shareware_user_package_ready"])
+            package_dir = Path(package["package_dir"])
+            self.assertTrue(
+                (package_dir / "QuantumQuake.app" / "Contents" /
+                 "MacOS" / "quantum_quake").is_file())
+            self.assertTrue(
+                (package_dir / "assets" / "id1" / "pak0.pak").is_file())
+            self.assertTrue(
+                (package_dir / "release_evidence" /
+                 "qge_shareware_playability_gate.json").is_file())
+            self.assertTrue(
+                (package_dir / "release_evidence" /
+                 "qge_shareware_complete_effects_gate.json").is_file())
+            self.assertFalse(
+                (package_dir / "assets" / "id1" / "autoexec.cfg").exists())
+            self.assertFalse(
+                (package_dir / "assets" / "id1" /
+                 "qge_harness_classic.cfg").exists())
+            launcher = package_dir / "Play Quantum Quake.command"
+            self.assertTrue(launcher.stat().st_mode & 0o111)
+            self.assertIn(
+                '+exec quantum_quake_release.cfg',
+                launcher.read_text(encoding="utf-8"),
+            )
+            readme = (package_dir / "README.txt").read_text(
+                encoding="utf-8",
+            )
+            self.assertIn("What makes this Quantum Quake:", readme)
+            self.assertIn("simulator branch and", readme)
+            self.assertIn("measurement events", readme)
+            self.assertIn("release_evidence directory", readme)
+            self.assertIn("does not claim hardware quantum advantage", readme)
+            self.assertIn("whole-game hardware execution", readme)
+            self.assertEqual(package["blocker_count"], 0)
+
+            archive = Path(package["archive"]["path"])
+            self.assertEqual(
+                package["archive"]["sha256"],
+                shareware_user_package.sha256_file(archive),
+            )
+            with zipfile.ZipFile(archive) as zip_file:
+                names = set(zip_file.namelist())
+                symlink_info = zip_file.getinfo(
+                    "TestPackage/QuantumQuake.app/Contents/"
+                    "Frameworks/SDL2.framework/SDL2")
+                launcher_info = zip_file.getinfo(
+                    "TestPackage/Play Quantum Quake.command")
+                symlink_target = zip_file.read(symlink_info).decode("utf-8")
+            self.assertIn(
+                "TestPackage/assets/id1/pak0.pak",
+                names,
+            )
+            self.assertIn(
+                "TestPackage/assets/id1/quantum_quake_release.cfg",
+                names,
+            )
+            self.assertIn(
+                "TestPackage/release_evidence/"
+                "qge_shareware_playability_gate.json",
+                names,
+            )
+            self.assertIn(
+                "TestPackage/release_evidence/"
+                "qge_shareware_complete_effects_gate.json",
+                names,
+            )
+            self.assertEqual(
+                (symlink_info.external_attr >> 16) & 0o170000,
+                stat.S_IFLNK,
+            )
+            self.assertEqual(symlink_target, "Versions/Current/SDL2")
+            self.assertTrue((launcher_info.external_attr >> 16) & 0o111)
+
+            checksum = shareware_user_package.archive_checksum_record(package)
+            self.assertEqual(
+                checksum["archive_sha256"],
+                package["archive"]["sha256"],
+            )
+            icc = shareware_user_package.build_icc_evidence(
+                package,
+                manifest_path=root / "out" /
+                "qge_shareware_user_package.json",
+                archive_checksum_path=root / "out" /
+                "qge_shareware_user_package_archive_checksum.json",
+            )
+            self.assertEqual(
+                icc["runtime_backend"],
+                "qge_shareware_user_package",
+            )
+            self.assertEqual(
+                icc["completion_reason"],
+                "qge_shareware_user_package_ready",
+            )
+            self.assertEqual(
+                icc["runtime_backend_scope_map_set"],
+                map_sets.SHAREWARE_EPISODE_ONE_MAP_SET,
+            )
+            self.assertEqual(
+                icc["shareware_user_package_app_bundle"],
+                str(package_dir / "QuantumQuake.app" / "Contents" /
+                    "MacOS" / "quantum_quake"),
+            )
+            self.assertEqual(
+                icc["shareware_user_package_app_bundle_completion"],
+                "present",
+            )
+            self.assertEqual(
+                icc["shareware_user_package_pak_file"],
+                str(package_dir / "assets" / "id1" / "pak0.pak"),
+            )
+            self.assertEqual(
+                icc["shareware_user_package_pak_completion"],
+                "present",
+            )
+            self.assertEqual(
+                icc["shareware_user_package_playability_gate_file"],
+                str(package_dir / "release_evidence" /
+                    "qge_shareware_playability_gate.json"),
+            )
+            self.assertEqual(
+                icc["shareware_user_package_complete_effects_gate_file"],
+                str(package_dir / "release_evidence" /
+                    "qge_shareware_complete_effects_gate.json"),
+            )
+
+    def test_shareware_user_package_blocks_without_final_gate_evidence(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            app = root / "QuantumQuake.app"
+            macos = app / "Contents" / "MacOS"
+            frameworks = (
+                app / "Contents" / "Frameworks" / "SDL2.framework")
+            current = frameworks / "Versions" / "A"
+            macos.mkdir(parents=True)
+            current.mkdir(parents=True)
+            binary = macos / "quantum_quake"
+            binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            binary.chmod(0o755)
+            (app / "Contents" / "Info.plist").write_text(
+                "<plist></plist>\n",
+                encoding="utf-8",
+            )
+            (current / "SDL2").write_text("framework\n", encoding="utf-8")
+            os.symlink("A", frameworks / "Versions" / "Current")
+            os.symlink("Versions/Current/SDL2", frameworks / "SDL2")
+
+            pak = root / "assets" / "id1" / "pak0.pak"
+            pak.parent.mkdir(parents=True)
+            pak.write_bytes(b"PACKshareware")
+            playability_gate_path = root / "qge_shareware_playability_gate.json"
+            publication_pack.write_json(playability_gate_path, {
+                "schema": "qge.shareware_playability_gate.v0",
+                "status": shareware_playability_gate.READY_STATUS,
+                "shareware_user_playable_release_ready": True,
+                "blocker_count": 0,
+                "criteria": [
+                    {
+                        "id": "complete_effects_and_content_runtime",
+                        "status": "pass",
+                    },
+                ],
+                "summary": {
+                    "runtime_covered_map_count": 9,
+                    "runtime_target_map_count": 9,
+                    "pak_entry_count": 339,
+                    "effects_gate_status": (
+                        "ready_for_shareware_complete_effects_claim"),
+                    "effects_footage_capture_count": 342,
+                },
+            })
+
+            package = shareware_user_package.build_package(
+                app=app,
+                pak=pak,
+                playability_gate_path=playability_gate_path,
+                outdir=root / "out",
+                name="TestPackage",
+            )
+
+            self.assertEqual(package["status"], "blocked")
+            self.assertFalse(package["shareware_user_package_ready"])
+            blocker_ids = {item["id"] for item in package["blockers"]}
+            self.assertIn(
+                "shareware_player_final_gate_evidence_present",
+                blocker_ids,
+            )
+            self.assertIn("shareware_player_archive_ready", blocker_ids)
+
+    def build_public_release_snapshot_fixture(
+        self,
+        root: Path,
+    ) -> tuple[
+        dict[str, Any],
+        dict[str, Any],
+        dict[str, Any],
+        dict[str, Any],
+        dict[str, Any],
+        dict[str, Any],
+    ]:
+        app = root / "QuantumQuake.app"
+        macos = app / "Contents" / "MacOS"
+        frameworks = app / "Contents" / "Frameworks" / "SDL2.framework"
+        current = frameworks / "Versions" / "A"
+        macos.mkdir(parents=True)
+        current.mkdir(parents=True)
+        binary = macos / "quantum_quake"
+        binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        binary.chmod(0o755)
+        (app / "Contents" / "Info.plist").write_text(
+            "<plist></plist>\n",
+            encoding="utf-8",
+        )
+        (current / "SDL2").write_text("framework\n", encoding="utf-8")
+        os.symlink("A", frameworks / "Versions" / "Current")
+        os.symlink("Versions/Current/SDL2", frameworks / "SDL2")
+
+        pak = root / "assets" / "id1" / "pak0.pak"
+        pak.parent.mkdir(parents=True)
+        pak.write_bytes(b"PACKshareware")
+        playability_gate = {
+            "schema": "qge.shareware_playability_gate.v0",
+            "status": shareware_playability_gate.READY_STATUS,
+            "shareware_user_playable_release_ready": True,
+            "blocker_count": 0,
+            "criteria": [
+                {
+                    "id": "complete_effects_and_content_runtime",
+                    "status": "pass",
+                },
+            ],
+            "summary": {
+                "runtime_covered_map_count": 9,
+                "runtime_target_map_count": 9,
+                "pak_entry_count": 339,
+                "effects_gate_status": (
+                    "ready_for_shareware_complete_effects_claim"),
+                "effects_footage_capture_count": 342,
+            },
+        }
+        playability_gate_path = root / "qge_shareware_playability_gate.json"
+        publication_pack.write_json(playability_gate_path, playability_gate)
+        effects_gate = {
+            "schema": "qge.shareware_complete_effects_gate.v0",
+            "status": "ready_for_shareware_complete_effects_claim",
+            "summary": {
+                "ready_for_complete_effects_claim": True,
+                "matrix_summary": {
+                    "missing_enemy_class_count": 0,
+                    "missing_material_class_count": 0,
+                    "missing_weapon_class_count": 0,
+                    "missing_noesis_evidence_map_count": 0,
+                    "runtime_footage_capture_count": 342,
+                },
+            },
+        }
+        effects_gate_path = root / "qge_shareware_complete_effects_gate.json"
+        publication_pack.write_json(effects_gate_path, effects_gate)
+        package = shareware_user_package.build_package(
+            app=app,
+            pak=pak,
+            playability_gate_path=playability_gate_path,
+            effects_gate_path=effects_gate_path,
+            outdir=root / "out",
+            name="TestPackage",
+        )
+        checksum = shareware_user_package.archive_checksum_record(package)
+        hardware_gate = {
+            "schema": "qge.hardware_advantage_gate.v0",
+            "status": "blocked",
+            "failed_criterion_count": 5,
+            "hardware_advantage_claim_allowed": None,
+            "whole_game_hardware_execution_claim_allowed": False,
+            "dense_70000_qubit_state_claim_allowed": False,
+            "summary": {
+                "completed_hardware_result_count": 0,
+                "hardware_result_job_count": 0,
+            },
+        }
+        handoff = {
+            "schema": "qge.moonlab_hardware_return_handoff.v0",
+            "status": "blocked_waiting_for_real_moonlab_hardware_record",
+            "ready": False,
+            "ready_for_hardware_ingest": False,
+            "ready_for_hardware_advantage_gate": False,
+            "missing_record_fields": ["hardware_record.run_id"],
+            "overclaim_flags": [],
+            "claim_posture": {
+                "bounded_qae_query_scaling_claim_allowed": False,
+                "hardware_quantum_advantage_claimed": False,
+                "whole_game_hardware_execution_claimed": False,
+                "dense_70000_qubit_state_claimed": False,
+            },
+        }
+        return package, checksum, playability_gate, effects_gate, hardware_gate, handoff
+
+    def test_shareware_public_release_snapshot_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (
+                package,
+                checksum,
+                playability_gate,
+                effects_gate,
+                hardware_gate,
+                handoff,
+            ) = self.build_public_release_snapshot_fixture(root)
+
+            snapshot = shareware_public_snapshot.build_snapshot(
+                repo_root=Path("/"),
+                package=package,
+                checksum=checksum,
+                playability_gate=playability_gate,
+                effects_gate=effects_gate,
+                hardware_gate=hardware_gate,
+                handoff=handoff,
+            )
+
+            self.assertEqual(
+                snapshot["status"],
+                shareware_public_snapshot.READY_STATUS,
+            )
+            self.assertTrue(snapshot["shareware_public_release_ready"])
+            self.assertTrue(
+                snapshot["summary"]["readme_quantum_distinction_ready"])
+            criteria = {item["id"]: item for item in snapshot["criteria"]}
+            self.assertEqual(
+                criteria[
+                    "shareware_readme_quantum_distinction_present"
+                ]["status"],
+                "pass",
+            )
+            self.assertFalse(
+                snapshot["hardware_quantum_advantage_claim_allowed"])
+            self.assertFalse(
+                snapshot["whole_game_hardware_execution_claim_allowed"])
+            self.assertFalse(
+                snapshot["dense_70000_qubit_state_claim_allowed"])
+            icc = shareware_public_snapshot.build_icc_evidence(
+                snapshot,
+                out_path=root / "qge_shareware_public_release_snapshot.json",
+            )
+            self.assertEqual(
+                icc["runtime_backend"],
+                "qge_shareware_public_release_snapshot",
+            )
+            self.assertEqual(
+                icc["completion_reason"],
+                "qge_shareware_public_release_snapshot_ready",
+            )
+            self.assertEqual(
+                icc["shareware_public_release_no_hardware_overclaim"],
+                "present",
+            )
+            self.assertEqual(
+                icc["shareware_public_release_no_hardware_overclaim_completion"],
+                "present",
+            )
+            self.assertEqual(
+                icc["shareware_public_release_archive_completion"],
+                "present",
+            )
+            self.assertEqual(
+                icc["shareware_public_release_readme_completion"],
+                "present",
+            )
+            package_manifest_path = root / "qge_shareware_user_package.json"
+            archive_checksum_path = (
+                root / "qge_shareware_user_package_archive_checksum.json")
+            package_icc = shareware_user_package.build_icc_evidence(
+                package,
+                manifest_path=package_manifest_path,
+                archive_checksum_path=archive_checksum_path,
+            )
+            hardware_scope_icc = {
+                "schema": "qge.icc_evidence.v0",
+                "runtime_backend": "qge_moonlab_hardware_submission_scope",
+                "completion_reason": (
+                    "qge_moonlab_hardware_submission_scope_ready"),
+                "moonlab_hardware_submission_scope_file": str(
+                    root / "qge_moonlab_hardware_submission_scope.json"),
+            }
+            hardware_gate_icc = {
+                "schema": "qge.icc_evidence.v0",
+                "runtime_backend": "qge_hardware_advantage_gate",
+                "completion_reason": "qge_hardware_advantage_claim_blocked",
+                "hardware_advantage_gate_file": str(
+                    root / "qge_hardware_advantage_gate.json"),
+                "hardware_advantage_claim_scope_file": str(
+                    root / (
+                        "qge_hardware_advantage_claim_scope_"
+                        "advantage.light_transport_qae_query_scaling.json")),
+                "hardware_record_sha256": None,
+            }
+            trace_path = root / "release" / "current_release_trace.jsonl"
+            shareware_public_snapshot.write_publication_release_trace(
+                trace_path,
+                [package_icc, icc, hardware_scope_icc, hardware_gate_icc],
+            )
+            trace_events = [
+                json.loads(line)
+                for line in trace_path.read_text(encoding="utf-8").splitlines()
+            ]
+            event_values = {
+                (event["kind"], event["name"], event["value"])
+                for event in trace_events
+            }
+            self.assertIn(
+                (
+                    "runtime_backend",
+                    "runtime_backend",
+                    "qge_shareware_user_package",
+                ),
+                event_values,
+            )
+            self.assertIn(
+                (
+                    "runtime_backend",
+                    "runtime_backend",
+                    "qge_shareware_public_release_snapshot",
+                ),
+                event_values,
+            )
+            self.assertIn(
+                (
+                    "completion_condition",
+                    "shareware_user_package_app_bundle_completion",
+                    "present",
+                ),
+                event_values,
+            )
+            self.assertIn(
+                (
+                    "completion_condition",
+                    "shareware_public_release_readme_completion",
+                    "present",
+                ),
+                event_values,
+            )
+            self.assertIn(
+                (
+                    "artifact",
+                    "qge_shareware_user_package.json",
+                    str(package_manifest_path),
+                ),
+                event_values,
+            )
+            self.assertIn(
+                (
+                    "completion_condition",
+                    "completion_reason",
+                    "qge_moonlab_hardware_submission_scope_ready",
+                ),
+                event_values,
+            )
+            self.assertIn(
+                (
+                    "runtime_backend",
+                    "runtime_backend",
+                    "qge_hardware_advantage_gate",
+                ),
+                event_values,
+            )
+            self.assertIn(
+                (
+                    "artifact",
+                    (
+                        "qge_hardware_advantage_claim_scope_"
+                        "advantage.light_transport_qae_query_scaling.json"
+                    ),
+                    str(
+                        root / (
+                            "qge_hardware_advantage_claim_scope_"
+                            "advantage.light_transport_qae_query_scaling.json")),
+                ),
+                event_values,
+            )
+            self.assertNotIn(
+                ("artifact", "hardware_record_sha256", None),
+                event_values,
+            )
+
+    def test_shareware_public_release_snapshot_blocks_checksum_drift(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (
+                package,
+                checksum,
+                playability_gate,
+                effects_gate,
+                hardware_gate,
+                handoff,
+            ) = self.build_public_release_snapshot_fixture(root)
+            checksum = {
+                **checksum,
+                "archive_sha256": "0" * 64,
+            }
+
+            snapshot = shareware_public_snapshot.build_snapshot(
+                repo_root=Path("/"),
+                package=package,
+                checksum=checksum,
+                playability_gate=playability_gate,
+                effects_gate=effects_gate,
+                hardware_gate=hardware_gate,
+                handoff=handoff,
+            )
+
+            self.assertEqual(snapshot["status"], "blocked")
+            self.assertIn(
+                "shareware_archive_checksum_verified",
+                {item["id"] for item in snapshot["blockers"]},
+            )
+
+    def test_shareware_public_release_snapshot_blocks_missing_readme_boundary(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (
+                package,
+                checksum,
+                playability_gate,
+                effects_gate,
+                hardware_gate,
+                handoff,
+            ) = self.build_public_release_snapshot_fixture(root)
+            package_dir = Path(package["package_dir"])
+            (package_dir / "README.txt").write_text(
+                "Quantum Quake Shareware Release\n",
+                encoding="utf-8",
+            )
+
+            snapshot = shareware_public_snapshot.build_snapshot(
+                repo_root=Path("/"),
+                package=package,
+                checksum=checksum,
+                playability_gate=playability_gate,
+                effects_gate=effects_gate,
+                hardware_gate=hardware_gate,
+                handoff=handoff,
+            )
+
+            self.assertEqual(snapshot["status"], "blocked")
+            blocker_ids = {item["id"] for item in snapshot["blockers"]}
+            self.assertIn(
+                "shareware_readme_quantum_distinction_present",
+                blocker_ids,
+            )
+            icc = shareware_public_snapshot.build_icc_evidence(
+                snapshot,
+                out_path=root / "qge_shareware_public_release_snapshot.json",
+            )
+            self.assertEqual(
+                icc["shareware_public_release_readme_completion"],
+                "blocked",
+            )
+
+    def test_shareware_public_release_snapshot_blocks_hardware_overclaim(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (
+                package,
+                checksum,
+                playability_gate,
+                effects_gate,
+                hardware_gate,
+                handoff,
+            ) = self.build_public_release_snapshot_fixture(root)
+            hardware_gate = {
+                **hardware_gate,
+                "status": "ready",
+                "hardware_advantage_claim_allowed": True,
+            }
+
+            snapshot = shareware_public_snapshot.build_snapshot(
+                repo_root=Path("/"),
+                package=package,
+                checksum=checksum,
+                playability_gate=playability_gate,
+                effects_gate=effects_gate,
+                hardware_gate=hardware_gate,
+                handoff=handoff,
+            )
+
+            self.assertEqual(snapshot["status"], "blocked")
+            self.assertIn(
+                "hardware_advantage_claims_forbidden",
+                {item["id"] for item in snapshot["blockers"]},
+            )
 
     def test_autonomous_assist_counts_as_no_script_intent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -13599,6 +17291,26 @@ class NoesisSummaryTests(unittest.TestCase):
 
 
 class TraceSummaryTests(unittest.TestCase):
+    def test_weapon_id_class_map_covers_shareware_pickups(self) -> None:
+        self.assertEqual(
+            {
+                trace_summary.WEAPON_ID_CLASSES[2],
+                trace_summary.WEAPON_ID_CLASSES[4],
+                trace_summary.WEAPON_ID_CLASSES[8],
+                trace_summary.WEAPON_ID_CLASSES[16],
+                trace_summary.WEAPON_ID_CLASSES[32],
+                trace_summary.WEAPON_ID_CLASSES[64],
+            },
+            {
+                "weapon_grenadelauncher",
+                "weapon_lightning",
+                "weapon_nailgun",
+                "weapon_rocketlauncher",
+                "weapon_supernailgun",
+                "weapon_supershotgun",
+            },
+        )
+
     def test_parse_trace_state_probe_group(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             trace_path = Path(tmp) / "qge_trace.bin"
@@ -13647,7 +17359,7 @@ class TraceSummaryTests(unittest.TestCase):
                 17,      # enemy id
                 2,       # enemy type
                 1,       # target entnum
-                0x10,    # input flags
+                trace_summary.QGE_AI_INPUT_FLAG_ENEMY_CLASS_KNOWN | 0x10,
                 0x9,     # output flags
                 0x2,     # legal action mask
                 0x1234,  # input hash
@@ -13728,10 +17440,15 @@ class TraceSummaryTests(unittest.TestCase):
             decision = parsed["ai_decisions"][0]
             self.assertEqual(decision["enemy_id"], 17)
             self.assertEqual(decision["enemy_type"], 2)
+            self.assertTrue(decision["enemy_class_known"])
+            self.assertEqual(decision["enemy_class"], "monster_ogre")
             self.assertEqual(decision["action"], "patrol")
             self.assertEqual(decision["mapped_action"], "patrol")
             self.assertEqual(decision["legal_action_mask_or"], 0x2)
-            self.assertEqual(decision["input_flags_or"], 0x10)
+            self.assertEqual(
+                decision["input_flags_or"],
+                trace_summary.QGE_AI_INPUT_FLAG_ENEMY_CLASS_KNOWN | 0x10,
+            )
             self.assertEqual(decision["output_flags_or"], 0x9)
             self.assertEqual(decision["action_basis_xor"], 0x1)
             self.assertEqual(decision["last_entropy_offset"], 4)
@@ -13742,6 +17459,114 @@ class TraceSummaryTests(unittest.TestCase):
             self.assertEqual(probe["representation"], "sparse_dwt")
             self.assertEqual(probe["active_basis_max"], 128)
             self.assertEqual(probe["flags_or"], 0x3)
+
+    def test_ai_enemy_type_without_class_flag_is_not_coverage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            trace_path = Path(tmp) / "qge_trace.bin"
+            ai_payload = trace_summary.AI_DECISION.pack(
+                9,
+                156,
+                17,
+                0,
+                1,
+                0,
+                0x1,
+                0x2,
+                0x1234,
+                0x5,
+                0x1,
+                4,
+                1,
+                1,
+                0.125,
+                0.5,
+                0.5,
+                1.0,
+                0.25,
+            )
+            trace_path.write_bytes(
+                trace_summary.HEADER.pack(
+                    trace_summary.TRACE_MAGIC,
+                    trace_summary.TRACE_VERSION,
+                    trace_summary.HEADER.size,
+                    0,
+                    0,
+                    0x5151455F52554E31,
+                    0,
+                    0,
+                    0,
+                )
+                + trace_summary.RECORD.pack(
+                    8,
+                    trace_summary.TRACE_VERSION,
+                    len(ai_payload),
+                    0,
+                )
+                + ai_payload
+            )
+
+            parsed = trace_summary.parse_trace(str(trace_path))
+
+        decision = parsed["ai_decisions"][0]
+        self.assertFalse(decision["enemy_class_known"])
+        self.assertEqual(decision["enemy_class"], "unclassified_type_0")
+        self.assertEqual(
+            parsed["runtime_evidence"]["ai"]["enemy_class_counts"],
+            {},
+        )
+
+    def test_material_class_probe_counts_runtime_surface_class(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            trace_path = Path(tmp) / "qge_trace.bin"
+            label = b"material_class_slime"
+            probe_payload = trace_summary.STATE_PROBE.pack(
+                12,
+                240,
+                7,
+                10,
+                6,
+                0x2,
+                0xAA55,
+                0.42,
+                1.0,
+                0.42,
+                6.0,
+                6,
+                3,
+                384,
+                label + b"\0" * (32 - len(label)),
+            )
+            trace_path.write_bytes(
+                trace_summary.HEADER.pack(
+                    trace_summary.TRACE_MAGIC,
+                    trace_summary.TRACE_VERSION,
+                    trace_summary.HEADER.size,
+                    0,
+                    0,
+                    0x5151455F52554E31,
+                    0,
+                    0,
+                    0,
+                )
+                + trace_summary.RECORD.pack(
+                    5,
+                    trace_summary.TRACE_VERSION,
+                    len(probe_payload),
+                    0,
+                )
+                + probe_payload
+            )
+
+            parsed = trace_summary.parse_trace(str(trace_path))
+
+        self.assertEqual(
+            parsed["runtime_evidence"]["material"]["class_counts"],
+            {"slime": 6},
+        )
+        self.assertEqual(
+            parsed["runtime_evidence"]["material"]["observed_class_count"],
+            1,
+        )
 
     def test_runtime_evidence_groups_from_single_trace(self) -> None:
         def label_bytes(label: bytes) -> bytes:
@@ -13775,6 +17600,34 @@ class TraceSummaryTests(unittest.TestCase):
                 label_bytes(label),
             )
 
+        def measurement_payload(
+            frame: int,
+            domain: int,
+            kind: int,
+            boundary: int,
+            subject_id: int,
+            flags: int,
+            basis_index: int,
+            trace_id: int,
+        ) -> bytes:
+            return trace_summary.MEASUREMENT.pack(
+                domain,
+                kind,
+                boundary,
+                frame,
+                100 + frame,
+                subject_id,
+                flags,
+                basis_index,
+                1.0,
+                1.0,
+                0x1000 + frame,
+                trace_id,
+            )
+
+        def fallback_message(message: bytes) -> bytes:
+            return message + b"\0" * (96 - len(message))
+
         with tempfile.TemporaryDirectory() as tmp:
             trace_path = Path(tmp) / "qge_trace.bin"
             ai_payload = trace_summary.AI_DECISION.pack(
@@ -13783,7 +17636,7 @@ class TraceSummaryTests(unittest.TestCase):
                 17,
                 2,
                 1,
-                0x10,
+                trace_summary.QGE_AI_INPUT_FLAG_ENEMY_CLASS_KNOWN | 0x10,
                 0x9,
                 0x2,
                 0x1234,
@@ -13800,62 +17653,64 @@ class TraceSummaryTests(unittest.TestCase):
             )
             payloads = [
                 (8, ai_payload),
-                (4, trace_summary.MEASUREMENT.pack(
-                    2,
-                    3,
-                    2,
-                    8,
-                    108,
-                    313,
-                    0x6F0600,
-                    2,
-                    0.875,
-                    1.0,
-                    0x55,
-                    0x12345678,
-                )),
-                (4, trace_summary.MEASUREMENT.pack(
-                    2,
-                    11,
-                    7,
-                    7,
-                    109,
-                    313,
-                    0x50013F00,
+                (3, trace_summary.ENTROPY.pack(
                     1,
-                    1.0,
-                    1.0,
-                    0x101,
-                    0x202,
-                )),
-                (4, trace_summary.MEASUREMENT.pack(
-                    2,
-                    12,
-                    7,
-                    8,
-                    110,
-                    313,
-                    0x106F0600,
+                    101,
+                    6,
+                    0,
                     1,
-                    1.0,
-                    1.0,
-                    0x303,
-                    0x404,
-                )),
-                (4, trace_summary.MEASUREMENT.pack(
-                    2,
-                    13,
-                    7,
                     9,
-                    111,
-                    313,
-                    0x33933F00,
-                    1,
-                    1.0,
-                    1.0,
-                    0x505,
-                    0x606,
+                    0x5A,
+                    0x9000,
                 )),
+                (6, trace_summary.FALLBACK.pack(
+                    1,
+                    101,
+                    2,
+                    7,
+                    313,
+                    4,
+                    0.5,
+                    fallback_message(b"lab overlay fallback state"),
+                )),
+                (4, measurement_payload(
+                    2, 1, 2, 1, 17, 0x20, 1, 0x1111)),
+                (4, measurement_payload(
+                    8, 2, 3, 2, 313, 0x806F0600, 2, 0x12345678)),
+                (4, measurement_payload(
+                    3, 7, 8, 3, 42, 0x2, 3, 0x2222)),
+                (4, measurement_payload(
+                    4, 4, 5, 4, 5, 0xA, 4, 0x3333)),
+                (4, measurement_payload(
+                    5, 5, 6, 5, 17, 0x9, 5, 0x4444)),
+                (4, measurement_payload(
+                    7, 2, 11, 7, 313, 0xD0013F00, 1, 0x202)),
+                (4, measurement_payload(
+                    8, 2, 12, 7, 313, 0x906F0600, 1, 0x404)),
+                (4, measurement_payload(
+                    9, 2, 13, 7, 313, 0xB3933F00, 1, 0x606)),
+                (4, measurement_payload(
+                    6, 0, 1, 8, 117, 0x1, 6, 0x5555)),
+                (4, measurement_payload(
+                    13, 7, 8, 1, 1, 0x00FF0000, 1, 0x807)),
+                (4, measurement_payload(
+                    12, 10, 14, 3, 1, 0x01000163,
+                    (1 << 32) | 1, 0x701)),
+                (4, measurement_payload(
+                    12, 10, 14, 2, 1, 0x020001A5,
+                    (2 << 32) | 4, 0x702)),
+                (4, measurement_payload(
+                    12, 10, 14, 2, 1, 0x03000165,
+                    (3 << 32) | 32, 0x703)),
+                (4, measurement_payload(
+                    12, 10, 14, 2, 1, 0x04000165,
+                    (4 << 32) | 16, 0x704)),
+                (4, measurement_payload(
+                    12, 10, 14, 3, 1, 0x05000173,
+                    (5 << 32) | 64, 0x705)),
+                (4, measurement_payload(
+                    12, 10, 14, 3, 1, 0x06000149,
+                    (6 << 32) | 4096, 0x706)),
                 (5, state_probe_payload(
                     2, 4, 9, 3, 0x0A, b"audio_source_spatial")),
                 (5, state_probe_payload(
@@ -13875,11 +17730,55 @@ class TraceSummaryTests(unittest.TestCase):
                     7, 2, 7, 313, 0x13F00, b"projectile_writeback_decision",
                     0, 0)),
                 (5, state_probe_payload(
+                    8, 2, 4, 313, 0x13F00, b"projectile_writeback_apply",
+                    1, 1)),
+                (5, state_probe_payload(
                     8, 2, 4, 313, 0x6F0600, b"projectile_branch_state",
                     3, 2)),
                 (5, state_probe_payload(
-                    9, 2, 4, 313, 0x3933F00,
+                    8, 2, 4, 313, 0x3933F00,
                     b"projectile_preimpact_selection", 2, 1)),
+                (5, state_probe_payload(
+                    10, 7, 10, 2, 0x01000007, b"material_water", 1, 3)),
+                (5, state_probe_payload(
+                    10, 7, 10, 1, 0x02000003, b"material_lava", 2, 3)),
+                (5, state_probe_payload(
+                    10, 7, 10, 1, 0x03000003, b"material_slipgate", 3, 3)),
+                (5, state_probe_payload(
+                    11, 7, 10, 1, 0x04000009, b"material_quad", 4, 3)),
+                (5, state_probe_payload(
+                    11, 7, 10, 1, 0x05000009, b"material_ring", 5, 3)),
+                (5, state_probe_payload(
+                    11, 7, 10, 1, 0x06000009, b"material_pentagram", 6, 3)),
+                (5, state_probe_payload(
+                    11, 7, 10, 4, 0x07000009, b"material_rune", 7, 3)),
+                (5, state_probe_payload(
+                    13, 7, 1, 1, 0x00FF0000,
+                    b"shareware_interference_field", 2, 1)),
+                (5, state_probe_payload(
+                    13, 7, 10, 1, 0x00FF0000,
+                    b"shareware_decoherence_field", 2, 1)),
+                (5, state_probe_payload(
+                    13, 7, 7, 1, 0x00FF0000,
+                    b"shareware_observation_collapse", 2, 1)),
+                (5, state_probe_payload(
+                    13, 7, 10, 1, 0x00FF0000,
+                    b"shareware_material_phase", 2, 1)),
+                (5, state_probe_payload(
+                    8, 2, 4, 313, 0x0,
+                    b"shareware_projectile_kick", 2, 1)),
+                (5, state_probe_payload(
+                    12, 10, 1, 1, 0x01000163, b"weapon_shotgun", 1, 3)),
+                (5, state_probe_payload(
+                    12, 10, 6, 1, 0x020001A5, b"weapon_nailgun", 2, 3)),
+                (5, state_probe_payload(
+                    12, 10, 3, 1, 0x03000165, b"weapon_rocket", 3, 3)),
+                (5, state_probe_payload(
+                    12, 10, 4, 1, 0x04000165, b"weapon_grenade", 4, 3)),
+                (5, state_probe_payload(
+                    12, 10, 5, 1, 0x05000173, b"weapon_lightning", 5, 3)),
+                (5, state_probe_payload(
+                    12, 10, 1, 1, 0x06000149, b"weapon_axe", 6, 3)),
             ]
             data = trace_summary.HEADER.pack(
                 trace_summary.TRACE_MAGIC,
@@ -13904,9 +17803,142 @@ class TraceSummaryTests(unittest.TestCase):
 
             parsed = trace_summary.parse_trace(str(trace_path))
             evidence = parsed["runtime_evidence"]
-            self.assertEqual(parsed["records"]["measurement"], 4)
+            self.assertEqual(
+                evidence["ai"]["enemy_class_counts"],
+                {"monster_ogre": 1},
+            )
+            self.assertEqual(evidence["ai"]["enemy_type_counts"], {"2": 1})
+            self.assertEqual(
+                evidence["weapon"]["class_counts"],
+                {
+                    "weapon_grenadelauncher": 1,
+                    "weapon_lightning": 1,
+                    "weapon_nailgun": 1,
+                    "weapon_rocketlauncher": 1,
+                    "weapon_shotgun": 1,
+                },
+            )
+            self.assertEqual(evidence["weapon"]["observed_class_count"], 5)
+            self.assertEqual(parsed["records"]["measurement"], 16)
             self.assertTrue(evidence["single_trace_ready"])
+            observer = evidence["observation_boundaries"]
+            self.assertTrue(observer["all_required_boundaries"])
+            self.assertEqual(observer["missing_required_boundaries"], [])
+            self.assertEqual(observer["observed_boundary_count"], 7)
+            self.assertTrue(observer["player_visible"])
+            self.assertTrue(observer["collision"])
+            self.assertTrue(observer["damage"])
+            self.assertTrue(observer["audio_mix"])
+            self.assertTrue(observer["ai_decision"])
+            self.assertTrue(observer["save_or_demo"])
+            self.assertTrue(observer["debug_measure"])
+            self.assertEqual(observer["boundary_counts"]["player_visible"], 2)
+            self.assertEqual(observer["boundary_counts"]["collision"], 4)
+            self.assertEqual(observer["boundary_counts"]["damage"], 4)
+            self.assertEqual(observer["boundary_counts"]["audio_mix"], 1)
+            self.assertEqual(observer["boundary_counts"]["ai_decision"], 1)
+            self.assertEqual(observer["boundary_counts"]["save_or_demo"], 3)
+            self.assertEqual(observer["boundary_counts"]["debug_measure"], 1)
+            self.assertEqual(
+                observer["measurement_keys_by_boundary"]["player_visible"],
+                ["material.material_phase", "visibility.vis_surface_set"],
+            )
+            self.assertEqual(
+                observer["measurement_keys_by_boundary"]["collision"],
+                ["projectile.projectile_impact", "weapon.weapon_operation"],
+            )
+            self.assertEqual(
+                observer["measurement_keys_by_boundary"]["damage"],
+                ["material.material_phase", "weapon.weapon_operation"],
+            )
+            self.assertEqual(
+                observer["measurement_keys_by_boundary"]["audio_mix"],
+                ["audio.audio_block"],
+            )
+            self.assertEqual(
+                observer["measurement_keys_by_boundary"]["ai_decision"],
+                ["ai.ai_action"],
+            )
+            self.assertEqual(
+                observer["measurement_keys_by_boundary"]["debug_measure"],
+                ["render.render_sample"],
+            )
             self.assertEqual(evidence["ai"]["decision_count"], 1)
+            lab = evidence["lab_overlay"]
+            self.assertTrue(lab["ready"])
+            self.assertTrue(lab["non_destructive_probe_ready"])
+            self.assertTrue(lab["debug_measurement_requested"])
+            self.assertEqual(lab["state_probe_count"], 29)
+            self.assertEqual(lab["probability_probe_count"], 29)
+            self.assertEqual(lab["phase_measurement_count"], 16)
+            self.assertEqual(lab["coherence_probe_count"], 29)
+            self.assertEqual(lab["branch_weight_probe_count"], 2)
+            self.assertEqual(lab["entropy_probe_count"], 29)
+            self.assertEqual(lab["entropy_event_count"], 1)
+            self.assertEqual(lab["fallback_event_count"], 1)
+            self.assertEqual(lab["debug_measurement_count"], 1)
+            self.assertEqual(lab["non_destructive_source_count"], 31)
+            self.assertTrue(lab["required"]["probability"])
+            self.assertTrue(lab["required"]["phase"])
+            self.assertTrue(lab["required"]["coherence"])
+            self.assertTrue(lab["required"]["branch_weights"])
+            self.assertTrue(lab["required"]["entropy"])
+            self.assertTrue(lab["required"]["fallback"])
+            encounter = evidence["shareware_encounter"]
+            self.assertTrue(encounter["ready"])
+            self.assertEqual(encounter["interference_count"], 1)
+            self.assertEqual(encounter["decoherence_count"], 1)
+            self.assertEqual(encounter["observation_collapse_count"], 1)
+            self.assertEqual(encounter["material_phase_count"], 1)
+            self.assertEqual(
+                encounter["player_visible_material_phase_measurement_count"],
+                1,
+            )
+            self.assertEqual(encounter["projectile_branch_count"], 1)
+            self.assertEqual(
+                encounter["projectile_preimpact_selection_count"], 1)
+            self.assertEqual(encounter["shareware_projectile_kick_count"], 1)
+            self.assertTrue(encounter["projectile_correlation_ready"])
+            self.assertEqual(encounter["projectile_correlation_subject_id"], 313)
+            self.assertEqual(encounter["projectile_correlation_first_frame"], 8)
+            self.assertEqual(encounter["projectile_correlation_last_frame"], 8)
+            self.assertEqual(
+                encounter["projectile_impact_measurement_count"], 1)
+            self.assertEqual(encounter["projectile_writeback_apply_count"], 1)
+            self.assertEqual(encounter["measurement_trace_id_xor"], 0x807)
+            self.assertTrue(encounter["flags"]["interference"])
+            self.assertTrue(encounter["flags"]["decoherence"])
+            self.assertTrue(encounter["flags"]["observed"])
+            self.assertTrue(encounter["flags"]["material_phase"])
+            self.assertTrue(encounter["flags"]["player_visible"])
+            self.assertTrue(encounter["flags"]["e1m1"])
+            self.assertTrue(encounter["flags"]["render_feedback"])
+            self.assertTrue(encounter["required"]["interference"])
+            self.assertTrue(encounter["required"]["decoherence"])
+            self.assertTrue(encounter["required"]["observation_collapse"])
+            self.assertTrue(encounter["required"]["material_phase"])
+            self.assertTrue(encounter["required"]["player_visible_measurement"])
+            self.assertTrue(encounter["required"]["projectile_branch"])
+            self.assertTrue(encounter["required"]["projectile_preimpact"])
+            self.assertTrue(encounter["required"]["projectile_kick"])
+            self.assertTrue(encounter["required"]["projectile_correlated"])
+            self.assertTrue(encounter["required"]["projectile_gameplay_outcome"])
+            replay = evidence["replay_trace"]
+            self.assertTrue(replay["ready"])
+            self.assertTrue(replay["branch_writeback_ready"])
+            self.assertTrue(replay["save_demo_ready"])
+            self.assertEqual(replay["measurement_trace_count"], 16)
+            self.assertEqual(replay["projectile_measurement_trace_count"], 4)
+            self.assertEqual(
+                replay["projectile_save_demo_measurement_count"], 3)
+            self.assertEqual(replay["projectile_branch_replay_count"], 1)
+            self.assertEqual(replay["projectile_writeback_replay_count"], 1)
+            self.assertEqual(
+                replay["projectile_collision_oracle_replay_count"], 1)
+            self.assertEqual(replay["trace_id_xor"], 0x202 ^ 0x404 ^ 0x606)
+            self.assertTrue(replay["flags"]["save_demo_boundary"])
+            self.assertTrue(replay["flags"]["save_demo_writeback"])
+            self.assertTrue(replay["flags"]["save_demo_collision_oracle"])
             self.assertEqual(evidence["audio"]["source_spatial_count"], 1)
             self.assertTrue(evidence["audio"]["flags"]["spatial"])
             self.assertTrue(evidence["audio"]["flags"]["processed"])
@@ -13945,6 +17977,47 @@ class TraceSummaryTests(unittest.TestCase):
             self.assertFalse(
                 evidence["visibility"]["flags"]["warmup_pending"]
             )
+            self.assertEqual(evidence["material"]["operator_count"], 7)
+            self.assertEqual(
+                evidence["material"]["water_decoherence_count"], 1)
+            self.assertEqual(evidence["material"]["lava_phase_count"], 1)
+            self.assertEqual(evidence["material"]["slipgate_phase_count"], 1)
+            self.assertEqual(
+                evidence["material"]["quad_amplification_count"], 1)
+            self.assertEqual(evidence["material"]["ring_protection_count"], 1)
+            self.assertEqual(
+                evidence["material"]["pentagram_protection_count"], 1)
+            self.assertEqual(evidence["material"]["rune_phase_count"], 1)
+            self.assertTrue(evidence["material"]["flags"]["gameplay_state"])
+            self.assertTrue(evidence["material"]["flags"]["world_surface"])
+            self.assertTrue(evidence["material"]["flags"]["player_medium"])
+            self.assertTrue(evidence["material"]["flags"]["player_powerup"])
+            self.assertTrue(evidence["weapon"]["ready"])
+            self.assertEqual(evidence["weapon"]["operator_count"], 6)
+            self.assertEqual(
+                evidence["weapon"]["operation_measurement_count"], 6)
+            self.assertEqual(
+                evidence["weapon"]["shotgun_spread_measurement_count"], 1)
+            self.assertEqual(evidence["weapon"]["nail_pauli_noise_count"], 1)
+            self.assertEqual(
+                evidence["weapon"]["rocket_splash_wavefront_count"], 1)
+            self.assertEqual(evidence["weapon"]["grenade_fuse_branch_count"], 1)
+            self.assertEqual(
+                evidence["weapon"][
+                    "lightning_continuous_measurement_count"],
+                1,
+            )
+            self.assertEqual(
+                evidence["weapon"]["axe_contact_measurement_count"], 1)
+            self.assertTrue(evidence["weapon"]["flags"]["gameplay_state"])
+            self.assertTrue(evidence["weapon"]["flags"]["hitscan"])
+            self.assertTrue(evidence["weapon"]["flags"]["projectile"])
+            self.assertTrue(evidence["weapon"]["flags"]["melee"])
+            self.assertTrue(evidence["weapon"]["flags"]["continuous"])
+            self.assertTrue(evidence["weapon"]["flags"]["ammo_consumed"])
+            self.assertTrue(evidence["weapon"]["flags"]["damage_result"])
+            self.assertTrue(evidence["weapon"]["flags"]["noise_operation"])
+            self.assertTrue(evidence["weapon"]["flags"]["noncommuting"])
             self.assertEqual(
                 evidence["projectile"]["authority_gate_count"],
                 2,
@@ -13953,6 +18026,10 @@ class TraceSummaryTests(unittest.TestCase):
             self.assertEqual(evidence["projectile"]["active_projectiles_max"], 1)
             self.assertEqual(
                 evidence["projectile"]["writeback_decision_count"],
+                1,
+            )
+            self.assertEqual(
+                evidence["projectile"]["writeback_apply_count"],
                 1,
             )
             self.assertEqual(evidence["projectile"]["branch_state_count"], 1)
@@ -13978,6 +18055,9 @@ class TraceSummaryTests(unittest.TestCase):
             )
             self.assertTrue(
                 evidence["projectile"]["flags"]["physics_authoritative_cvar"]
+            )
+            self.assertTrue(
+                evidence["projectile"]["flags"]["gameplay_authority_measurement"]
             )
             self.assertTrue(evidence["projectile"]["flags"]["branch_state"])
             self.assertTrue(evidence["projectile"]["flags"]["branch_observed"])
@@ -14084,6 +18164,284 @@ class TraceSummaryTests(unittest.TestCase):
             self.assertEqual(evidence["render"]["native_bridge_count"], 0)
             self.assertEqual(evidence["render"]["native_fallback_count"], 0)
             self.assertEqual(evidence["render"]["cpu_idwt_count"], 1)
+
+
+class QuantumRulesReleaseGateTests(unittest.TestCase):
+    def make_task_plan(self) -> dict[str, Any]:
+        return {
+            "task_id": "qge_deep_quantum_ruleset",
+            "items": [
+                {
+                    "id": item_id,
+                    "status": "completed",
+                    "evidence_gates": [
+                        {
+                            "id": f"{item_id}_gate",
+                            "status": "pass",
+                        }
+                    ],
+                }
+                for item_id in quantum_rules_release_gate.REQUIRED_RULE_ITEMS
+            ],
+        }
+
+    def make_trace(
+        self,
+        *,
+        kick_count: int = 3,
+        correlated: bool = True,
+        gameplay_authority: bool = True,
+        replay_ready: bool = True,
+        slipgate_count: int = 5,
+        material_world_surface: bool = True,
+    ) -> dict[str, Any]:
+        correlation_ready = correlated and kick_count > 0
+        return {
+            "runtime_evidence": {
+                "shareware_encounter": {
+                    "ready": True,
+                    "shareware_projectile_kick_count": kick_count,
+                    "projectile_correlation_ready": correlation_ready,
+                    "projectile_correlation_subject_id": 313,
+                    "projectile_correlation_first_frame": 16,
+                    "projectile_correlation_last_frame": 24,
+                    "projectile_branch_count": 2,
+                    "projectile_preimpact_selection_count": 2,
+                    "projectile_writeback_apply_count": 2,
+                    "player_visible_material_phase_measurement_count": 4,
+                },
+                "projectile": {
+                    "flags": {
+                        "gameplay_authority_measurement": gameplay_authority,
+                    },
+                },
+                "replay_trace": {
+                    "ready": replay_ready,
+                    "save_demo_ready": replay_ready,
+                    "projectile_branch_replay_count": 2 if replay_ready else 0,
+                    "projectile_writeback_replay_count": (
+                        2 if replay_ready else 0
+                    ),
+                    "projectile_collision_oracle_replay_count": (
+                        2 if replay_ready else 0
+                    ),
+                    "trace_id_xor": 0x1234 if replay_ready else 0,
+                },
+                "material": {
+                    "slipgate_phase_count": slipgate_count,
+                    "flags": {
+                        "world_surface": material_world_surface,
+                    },
+                },
+            },
+        }
+
+    def make_noesis_summary(self) -> dict[str, Any]:
+        return {
+            "status": "pass",
+            "actions": {
+                "phase_count": 5,
+            },
+            "commands": {
+                "press_counts": {
+                    "attack": 2,
+                },
+            },
+        }
+
+    def test_gate_allows_quantum_rules_claim_with_kick_evidence(self) -> None:
+        gate = quantum_rules_release_gate.build_gate(
+            self.make_trace(),
+            noesis_summary=self.make_noesis_summary(),
+            task_plan=self.make_task_plan(),
+        )
+
+        self.assertEqual(gate["status"], "pass")
+        self.assertTrue(gate["ready"])
+        self.assertTrue(gate["quantum_rules_v0_claim_allowed"])
+        self.assertFalse(gate["registered_full_game_claim_allowed"])
+        self.assertFalse(gate["hardware_execution_claim_allowed"])
+        self.assertFalse(gate["hardware_quantum_advantage_claim_allowed"])
+        self.assertFalse(gate["noesis_learned_play_claim_allowed"])
+        self.assertEqual(
+            gate["summary"]["shareware_projectile_kick_count"],
+            3,
+        )
+        self.assertTrue(gate["summary"]["projectile_correlation_ready"])
+        self.assertTrue(
+            gate["summary"]["projectile_gameplay_authority_measurement"]
+        )
+        self.assertTrue(gate["summary"]["replay_trace_ready"])
+        self.assertTrue(gate["summary"]["material_world_surface"])
+        self.assertEqual(gate["failed_criterion_count"], 0)
+
+        icc_evidence = quantum_rules_release_gate.build_icc_evidence(gate)
+        self.assertEqual(
+            icc_evidence["completion_reason"],
+            "qge_quantum_rules_v0_ready",
+        )
+        self.assertEqual(
+            icc_evidence["shareware_projectile_kick_evidence"],
+            "present",
+        )
+        self.assertEqual(
+            icc_evidence["shareware_projectile_kick_evidence_completion"],
+            "present",
+        )
+        self.assertEqual(
+            icc_evidence["shareware_projectile_correlation_evidence"],
+            "present",
+        )
+        self.assertEqual(
+            icc_evidence[
+                "shareware_projectile_correlation_evidence_completion"
+            ],
+            "present",
+        )
+        self.assertEqual(
+            icc_evidence["projectile_gameplay_authority_evidence"],
+            "present",
+        )
+        self.assertEqual(
+            icc_evidence["projectile_gameplay_authority_evidence_completion"],
+            "present",
+        )
+        self.assertEqual(icc_evidence["replay_trace_evidence"], "present")
+        self.assertEqual(
+            icc_evidence["replay_trace_evidence_completion"],
+            "present",
+        )
+        self.assertEqual(
+            icc_evidence["material_slipgate_world_surface_evidence"],
+            "present",
+        )
+        self.assertEqual(
+            icc_evidence["material_operator_scope_evidence"],
+            "honest",
+        )
+        self.assertEqual(
+            icc_evidence["material_operator_scope_evidence_completion"],
+            "honest",
+        )
+        self.assertEqual(icc_evidence["shareware_projectile_kick_count"], 3)
+
+    def test_gate_blocks_claim_without_kick_evidence(self) -> None:
+        gate = quantum_rules_release_gate.build_gate(
+            self.make_trace(kick_count=0),
+            noesis_summary=self.make_noesis_summary(),
+            task_plan=self.make_task_plan(),
+        )
+
+        failed_ids = {
+            item["id"]
+            for item in gate["failed_criteria"]
+        }
+        self.assertEqual(gate["status"], "blocked")
+        self.assertFalse(gate["ready"])
+        self.assertFalse(gate["quantum_rules_v0_claim_allowed"])
+        self.assertIn("shareware_projectile_kick_correlated", failed_ids)
+        self.assertEqual(
+            gate["summary"]["shareware_projectile_kick_count"],
+            0,
+        )
+
+        icc_evidence = quantum_rules_release_gate.build_icc_evidence(gate)
+        self.assertEqual(
+            icc_evidence["completion_reason"],
+            "qge_quantum_rules_v0_blocked",
+        )
+        self.assertEqual(
+            icc_evidence["shareware_projectile_kick_evidence"],
+            "missing",
+        )
+        self.assertEqual(
+            icc_evidence["shareware_projectile_correlation_evidence"],
+            "missing",
+        )
+
+    def test_gate_blocks_uncorrelated_projectile_evidence(self) -> None:
+        gate = quantum_rules_release_gate.build_gate(
+            self.make_trace(correlated=False),
+            noesis_summary=self.make_noesis_summary(),
+            task_plan=self.make_task_plan(),
+        )
+
+        failed_ids = {
+            item["id"]
+            for item in gate["failed_criteria"]
+        }
+        self.assertEqual(gate["status"], "blocked")
+        self.assertIn("shareware_projectile_kick_correlated", failed_ids)
+        icc_evidence = quantum_rules_release_gate.build_icc_evidence(gate)
+        self.assertEqual(
+            icc_evidence["shareware_projectile_correlation_evidence"],
+            "missing",
+        )
+
+    def test_gate_blocks_without_authority_replay_evidence(self) -> None:
+        gate = quantum_rules_release_gate.build_gate(
+            self.make_trace(gameplay_authority=False, replay_ready=False),
+            noesis_summary=self.make_noesis_summary(),
+            task_plan=self.make_task_plan(),
+        )
+
+        failed_ids = {
+            item["id"]
+            for item in gate["failed_criteria"]
+        }
+        self.assertEqual(gate["status"], "blocked")
+        self.assertIn("projectile_gameplay_authority_replay", failed_ids)
+        icc_evidence = quantum_rules_release_gate.build_icc_evidence(gate)
+        self.assertEqual(
+            icc_evidence["projectile_gameplay_authority_evidence"],
+            "missing",
+        )
+        self.assertEqual(icc_evidence["replay_trace_evidence"], "missing")
+
+    def test_gate_blocks_without_world_surface_slipgate(self) -> None:
+        gate = quantum_rules_release_gate.build_gate(
+            self.make_trace(material_world_surface=False),
+            noesis_summary=self.make_noesis_summary(),
+            task_plan=self.make_task_plan(),
+        )
+
+        failed_ids = {
+            item["id"]
+            for item in gate["failed_criteria"]
+        }
+        self.assertEqual(gate["status"], "blocked")
+        self.assertIn("material_operator_evidence", failed_ids)
+        icc_evidence = quantum_rules_release_gate.build_icc_evidence(gate)
+        self.assertEqual(
+            icc_evidence["material_slipgate_world_surface_evidence"],
+            "missing",
+        )
+        self.assertEqual(
+            icc_evidence["material_operator_scope_evidence"],
+            "overclaim",
+        )
+
+    def test_gate_allows_absent_slipgate_without_overclaim(self) -> None:
+        gate = quantum_rules_release_gate.build_gate(
+            self.make_trace(slipgate_count=0, material_world_surface=False),
+            noesis_summary=self.make_noesis_summary(),
+            task_plan=self.make_task_plan(),
+        )
+
+        self.assertEqual(gate["status"], "pass")
+        self.assertTrue(gate["quantum_rules_v0_claim_allowed"])
+        self.assertEqual(gate["summary"]["slipgate_phase_count"], 0)
+        self.assertFalse(gate["summary"]["material_world_surface"])
+        self.assertTrue(gate["summary"]["material_slipgate_scope_honest"])
+        icc_evidence = quantum_rules_release_gate.build_icc_evidence(gate)
+        self.assertEqual(
+            icc_evidence["material_slipgate_world_surface_evidence"],
+            "missing",
+        )
+        self.assertEqual(
+            icc_evidence["material_operator_scope_evidence"],
+            "honest",
+        )
 
 
 class VanillaCaptureMatrixTests(unittest.TestCase):

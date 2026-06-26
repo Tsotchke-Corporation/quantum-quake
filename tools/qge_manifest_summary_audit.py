@@ -239,6 +239,21 @@ def expected_runtime_summary(
         "registered_full_game_progress",
         manifest_path=manifest_path,
     )
+    noesis_release_gate = load_optional_artifact_json(
+        manifest,
+        "agent_stream",
+        "noesis_release_gate",
+        manifest_path=manifest_path,
+    )
+    noesis_release_gate_summary = dict_or_empty(
+        noesis_release_gate.get("summary"))
+    shareware_selection_path = artifact_path(
+        manifest,
+        "breadth",
+        "shareware_episode1_selection",
+        packed=True,
+        manifest_path=manifest_path,
+    )
     vanilla_performance_ok = (
         conformance.get("performance_sidecars_success") is not False
     )
@@ -315,6 +330,42 @@ def expected_runtime_summary(
         "agent_stream_trace_bytes": agent_stream_summary.get("trace_bytes"),
         "agent_stream_performance_status": agent_stream_summary.get(
             "performance_status"),
+        "agent_stream_noesis_status": agent_stream_summary.get(
+            "noesis_status"),
+        "agent_stream_noesis_summary_file": agent_stream_summary.get(
+            "noesis_summary_file"),
+        "agent_stream_noesis_icc_evidence_file": agent_stream_summary.get(
+            "noesis_icc_evidence_file"),
+        "agent_stream_noesis_gameplay_outcomes_file": (
+            agent_stream_summary.get("noesis_gameplay_outcomes_file")),
+        **({
+            "noesis_release_gate": noesis_release_gate,
+            "noesis_release_gate_status": noesis_release_gate.get("status"),
+            "noesis_release_gate_blocker_count": (
+                noesis_release_gate.get("blocker_count")),
+            "noesis_autonomous_diagnostics_claim_allowed": (
+                noesis_release_gate.get(
+                    "noesis_autonomous_diagnostics_claim_allowed")),
+            "noesis_learned_play_claim_allowed": (
+                noesis_release_gate.get("learned_play_claim_allowed")),
+            "noesis_robust_map_level_world_model_claim_allowed": (
+                noesis_release_gate.get(
+                    "robust_map_level_world_model_claim_allowed")),
+            "noesis_gameplay_quality_score": (
+                noesis_release_gate_summary.get("gameplay_quality_score")),
+            "noesis_gameplay_quality_grade": (
+                noesis_release_gate_summary.get("gameplay_quality_grade")),
+            "noesis_gameplay_outcome_sample_count": (
+                noesis_release_gate_summary.get(
+                    "gameplay_outcome_sample_count")),
+            "noesis_gameplay_total_distance": (
+                noesis_release_gate_summary.get("total_distance")),
+            "noesis_gameplay_kills": (
+                noesis_release_gate_summary.get("kills")),
+            "noesis_assist_telemetry_sample_count": (
+                noesis_release_gate_summary.get(
+                    "assist_telemetry_sample_count")),
+        } if noesis_release_gate else {}),
         "performance_summary": capture_perf_summary,
         "performance_source": perf_source,
         "performance_status": capture_perf_summary.get("status"),
@@ -350,6 +401,14 @@ def expected_runtime_summary(
         "breadth_maps": breadth_summary.get("maps"),
         "full_game_map_coverage": full_game_map_coverage,
         "full_game_map_set": full_game_map_coverage.get("map_set"),
+        "map_scope": full_game_map_coverage.get("map_scope"),
+        "shareware_episode_one_scope": (
+            full_game_map_coverage.get("shareware_episode_one_scope")),
+        "registered_full_game_scope": (
+            full_game_map_coverage.get("registered_full_game_scope")),
+        "shareware_episode1_selection_file": (
+            str(shareware_selection_path)
+            if shareware_selection_path is not None else None),
         "full_game_map_coverage_status": full_game_map_coverage.get("status"),
         "full_game_map_target_count": (
             full_game_map_coverage.get("target_map_count")),
@@ -489,6 +548,9 @@ def expected_advantage_summary(
         manifest_path=manifest_path)
     moonlab_deployment_gate = load_artifact_json(
         manifest, "resource", "moonlab_deployment_gate",
+        manifest_path=manifest_path)
+    moonlab_shareware_deployment_gate = load_optional_artifact_json(
+        manifest, "resource", "moonlab_shareware_deployment_gate",
         manifest_path=manifest_path)
     comparison = dict_or_empty(metrics.get("comparison"))
     return {
@@ -820,6 +882,59 @@ def expected_advantage_summary(
                 moonlab_deployment_gate.get("summary")).get(
                     "post_install_capture_queue_script"),
         },
+        **({
+            "moonlab_shareware_deployment_gate_summary": {
+            "schema": moonlab_shareware_deployment_gate.get("schema"),
+            "status": moonlab_shareware_deployment_gate.get("status"),
+            "failed_criterion_count": (
+                moonlab_shareware_deployment_gate.get(
+                    "failed_criterion_count")),
+            "blocker_count": moonlab_shareware_deployment_gate.get(
+                "blocker_count"),
+            "shareware_moonlab_deployment_claim_allowed": (
+                moonlab_shareware_deployment_gate.get(
+                    "shareware_moonlab_deployment_claim_allowed")),
+            "whole_game_moonlab_deployment_claim_allowed": (
+                moonlab_shareware_deployment_gate.get(
+                    "whole_game_moonlab_deployment_claim_allowed")),
+            "whole_game_hardware_execution_claim_allowed": (
+                moonlab_shareware_deployment_gate.get(
+                    "whole_game_hardware_execution_claim_allowed")),
+            "hardware_quantum_advantage_claim_allowed": (
+                moonlab_shareware_deployment_gate.get(
+                    "hardware_quantum_advantage_claim_allowed")),
+            "dense_70000_qubit_state_claim_allowed": (
+                moonlab_shareware_deployment_gate.get(
+                    "dense_70000_qubit_state_claim_allowed")),
+            "map_set": dict_or_empty(
+                moonlab_shareware_deployment_gate.get("summary")).get(
+                    "map_set"),
+            "target_map_count": dict_or_empty(
+                moonlab_shareware_deployment_gate.get("summary")).get(
+                    "target_map_count"),
+            "covered_map_count": dict_or_empty(
+                moonlab_shareware_deployment_gate.get("summary")).get(
+                    "covered_map_count"),
+            "coverage_missing_map_count": dict_or_empty(
+                moonlab_shareware_deployment_gate.get("summary")).get(
+                    "coverage_missing_map_count"),
+            "moonlab_completed_simulator_job_count": dict_or_empty(
+                moonlab_shareware_deployment_gate.get("summary")).get(
+                    "moonlab_completed_simulator_job_count"),
+            "moonlab_completed_native_replay_job_count": dict_or_empty(
+                moonlab_shareware_deployment_gate.get("summary")).get(
+                    "moonlab_completed_native_replay_job_count"),
+            "moonlab_hardware_submitted_job_count": dict_or_empty(
+                moonlab_shareware_deployment_gate.get("summary")).get(
+                    "moonlab_hardware_submitted_job_count"),
+            "full_game_deployment_gate_status": dict_or_empty(
+                moonlab_shareware_deployment_gate.get("summary")).get(
+                    "full_game_deployment_gate_status"),
+            "full_game_deployment_gate_blocker_count": dict_or_empty(
+                moonlab_shareware_deployment_gate.get("summary")).get(
+                    "full_game_deployment_gate_blocker_count"),
+            },
+        } if moonlab_shareware_deployment_gate else {}),
     }
 
 

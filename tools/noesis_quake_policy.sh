@@ -5,6 +5,7 @@ noesis_dir="${QGE_NOESIS_DIR:-$HOME/Desktop/noesis}"
 plan="${QGE_NOESIS_PLAN:-adaptive}"
 map_name="${QGE_STREAM_MAP:-start}"
 fire_test="${QGE_STREAM_FIRE_TEST:-0}"
+weapon_target="${QGE_NOESIS_WEAPON_TARGET:-}"
 
 if [[ "$fire_test" == "1" && -z "${QGE_NOESIS_PLAN+x}" ]]; then
   plan="fire"
@@ -28,6 +29,79 @@ emit_common_setup() {
   emit "weapon 7"
 }
 
+emit_weapon_seed_give() {
+  emit_phase "phase=weapon_seed_give"
+  emit "wait 8"
+  emit "give 3"
+  emit "give 4"
+  emit "give 5"
+  emit "give 6"
+  emit "give 7"
+  emit "give 8"
+  emit "give s 100"
+  emit "give n 200"
+  emit "give r 100"
+  emit "give c 100"
+  emit "wait 1"
+  emit "center-view"
+}
+
+emit_targeted_weapon_smoke() {
+  local target="$1"
+  local impulse phase attack_frames settle_frames
+
+  case "$target" in
+    weapon_supershotgun)
+      impulse=3
+      phase=weapon_supershotgun
+      attack_frames=4
+      settle_frames=8
+      ;;
+    weapon_nailgun)
+      impulse=4
+      phase=weapon_nailgun
+      attack_frames=8
+      settle_frames=6
+      ;;
+    weapon_supernailgun)
+      impulse=5
+      phase=weapon_supernailgun
+      attack_frames=8
+      settle_frames=6
+      ;;
+    weapon_grenadelauncher)
+      impulse=6
+      phase=weapon_grenadelauncher
+      attack_frames=4
+      settle_frames=10
+      ;;
+    weapon_rocketlauncher)
+      impulse=7
+      phase=weapon_rocketlauncher
+      attack_frames=4
+      settle_frames=10
+      ;;
+    weapon_lightning)
+      impulse=8
+      phase=weapon_lightning
+      attack_frames=12
+      settle_frames=6
+      ;;
+    *)
+      emit_marker "unknown_weapon_target=$target fallback=full_cycle"
+      return 1
+      ;;
+  esac
+
+  emit_weapon_seed_give
+  emit_phase "phase=$phase"
+  emit "weapon $impulse"
+  emit "wait 3"
+  emit "attack $attack_frames"
+  emit "wait $settle_frames"
+  emit "clear-input 2"
+}
+
 emit_patrol() {
   emit "forward 12"
   emit "turn-right 6"
@@ -45,12 +119,17 @@ emit_scout() {
 }
 
 emit_fire() {
+  emit_phase "phase=fire_setup"
   emit_common_setup
+  emit_phase "phase=fire_weapon_ready"
   emit "wait 8"
+  emit_phase "phase=fire_first_shot"
   emit "attack 8"
   emit "wait 8"
+  emit_phase "phase=fire_second_shot"
   emit "turn-right 6"
   emit "attack 8"
+  emit_phase "phase=fire_complete"
 }
 
 emit_combat_explore() {
@@ -213,15 +292,43 @@ emit_start_hub_route() {
 }
 
 emit_weapon_cycle_smoke() {
-  emit "weapon 2"
+  if [[ -n "$weapon_target" && "$weapon_target" != "all" ]]; then
+    if emit_targeted_weapon_smoke "$weapon_target"; then
+      return
+    fi
+  fi
+
+  emit_weapon_seed_give
+  emit_phase "phase=weapon_supershotgun"
+  emit "weapon 3"
+  emit "wait 6"
+  emit "attack 3"
+  emit "wait 10"
+  emit_phase "phase=weapon_nailgun"
+  emit "weapon 4"
+  emit "wait 6"
+  emit "attack 3"
   emit "wait 4"
-  emit "attack 4"
-  emit "weapon-next"
+  emit_phase "phase=weapon_supernailgun"
+  emit "weapon 5"
+  emit "wait 6"
+  emit "attack 3"
   emit "wait 4"
-  emit "attack 4"
-  emit "weapon-prev"
-  emit "center-view"
-  emit "attack 4"
+  emit_phase "phase=weapon_grenadelauncher"
+  emit "weapon 6"
+  emit "wait 6"
+  emit "attack 3"
+  emit "wait 8"
+  emit_phase "phase=weapon_rocketlauncher"
+  emit "weapon 7"
+  emit "wait 6"
+  emit "attack 3"
+  emit "wait 8"
+  emit_phase "phase=weapon_lightning"
+  emit "weapon 8"
+  emit "wait 6"
+  emit "attack 6"
+  emit "clear-input 2"
 }
 
 emit_map_scout() {
