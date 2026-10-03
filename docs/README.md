@@ -4,9 +4,14 @@ This directory contains the working documentation for Quantum Quake and QGE.
 The docs are intentionally split by purpose: engineering contracts, current
 state, claims policy, stream/harness operation, and long-range research plans.
 
-For the project pitch, the visual showcase, and a quick build/run path, start
-with the top-level **[README](../README.md)**. This hub is the index to the
-detailed working documents.
+For the one-page statement of the project, its ecosystem position, build and
+test commands, and the architecture table, start with the repository README at
+the repository root. This hub is the curated reading path; the complete
+generated list of every tracked document under `docs/` is
+[INDEX.md](INDEX.md). The enthusiast-facing narrative and the annotated
+"what is quantum about it" showcase that the README carried until 2026-10-03
+are preserved, dated, in
+[quantum_quake_showcase.md](quantum_quake_showcase.md).
 
 ## Visual Showcase
 
