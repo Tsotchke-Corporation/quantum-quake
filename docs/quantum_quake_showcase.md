@@ -311,4 +311,3 @@ Research entry points:
 - **[Quantum-advantage research roadmap](qge_quantum_advantage_research_roadmap.md)** — bounded workloads and baseline expectations.
 - **[Quantum signal processing research](qge_quantum_signal_processing_research.md)** — QSP/QSVT context for QGE media experiments.
 - **[Hardware-advantage campaign](qge_hardware_advantage_campaign.md)** — the bounded-QAE hardware handoff plan and no-overclaim posture.
-
